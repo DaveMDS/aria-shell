@@ -1,0 +1,7 @@
+# THIS IS DUPLICATED IN ppyprojecy.toml  :(
+# but is needed by pip install -r
+PyGObject >= 3.50.0
+psutil >= 7.0.0
+
+# DEV only
+pygobject-stubs

@@ -1,0 +1,93 @@
+/*
+
+AriaShell base style
+====================
+This stylesheet is always applied to all Aria windows, and contain the
+bare minimum needed styles.
+
+This file must be as neutral as possible, to work out-of-the-box with
+all existing Gtk themes.
+
+To change the style user must provide an Aria theme css file, do not
+modify this one.
+
+TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
+
+*/
+
+
+/* Reset CSS
+Window {
+  border-radius: unset;
+}*/
+
+
+/* Aria launcher
+--------------------------------------------------------------------------------
+Window               .aria-launcher
+╰─ Box               .aria-launcher-box
+   ├─ Entry          .aria-launcher-entry
+   ╰─ Scroller
+      ╰─ ListBox     .aria-launcher-list
+*/
+.aria-launcher {
+  padding: 10px;
+}
+.aria-launcher .aria-launcher-entry {  }
+.aria-launcher .aria-launcher-list {  }
+
+
+/* Aria panel
+--------------------------------------------------------------------------------
+Window              .aria-panel
+╰─ CenterBox        .aria-panel-box
+   ├─ Box           .aria-panel-box-start
+   │  ╰─ Widget     .aria-widget .widget-<name>
+   ├─ Box           .aria-panel-box-center
+   │  ╰─ Widget     .aria-widget .widget-<name>
+   ╰─ Box           .aria-panel-box-end
+      ╰─ Widget     .aria-widget .widget-<name>
+*/
+.aria-panel {
+  border-radius: unset;  /* disable gtk theme rounded corners */
+  padding: 2px 6px;
+}
+/* all widgets */
+.aria-panel .aria-widget { }
+
+
+/* Widget: workspaces
+--------------------------------------------------------------------------------
+Widget              .aria-widget .widget-workspaces
+├─ Box              .aria-workspace[.active]
+│  ├─ label         .aria-workspace-label
+│  ├─ image         .aria-workspace-window[.active]
+│  ┊
+│  ╰─ image         .aria-workspace-window[.active]
+╰─ Box
+   ╰─ etc, for all workspaces...
+*/
+.widget-workspaces .aria-workspace {
+  border: 1px solid black;
+  /*padding: 1px 4px;*/
+  margin-right: 3px;
+}
+.widget-workspaces .aria-workspace:hover {
+  box-shadow: 0px 0px 3px 0px #000000;
+}
+.widget-workspaces .aria-workspace.active {
+  background-color: cyan;
+}
+/*.widget-workspaces .aria-workspace .aria-workspace-label {
+  font-weight: bold;
+  margin-right: 2px;
+}*/
+.widget-workspaces .aria-workspace .aria-workspace-window {
+  /*border: 1px solid transparent;*/
+}
+.widget-workspaces .aria-workspace .aria-workspace-window:hover {
+  box-shadow: 0px 0px 3px 0px #000000;
+}
+.widget-workspaces .aria-workspace .aria-workspace-window.active {
+  /*border: 1px solid green; */
+}

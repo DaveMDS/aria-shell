@@ -1,0 +1,60 @@
+[project]
+name = 'aria-shell'
+description = 'A full, user-friendly, slim and configurable shell for Wayland'
+version = '0.0.0'
+
+requires-python = '>=3.8'
+dependencies = [
+    'PyGObject >= 3.50.0',
+    'psutil >= 7.0.0',
+]
+
+authors = [
+    { name='Davide Andreoli', email='dave@gurumeditation.it' },
+]
+classifiers = [
+    'Development Status :: 3 - Alpha',
+    'Programming Language :: Python :: 3',
+    'Operating System :: POSIX',
+]
+keywords = [
+  'linux', 'wayland', 'shell',
+  'hyprland', 'sway', 'gtk', 'gtk4', 'pygobject',
+  'panel', 'dock', 'menu', 'bar', 'launcher', 'notification',
+]
+urls.Homepage = 'https://github.com/DaveMDS/aria-shell'
+urls.Documentation = 'https://github.com/DaveMDS/aria-shell/wiki'
+urls.Issues = 'https://github.com/DaveMDS/aria-shell/issues'
+urls.Repository = 'https://github.com/DaveMDS/aria-shell.git'
+urls.Changelog = 'https://github.com/DaveMDS/aria-shell/blob/master/CHANGELOG.md'
+license = 'GPL-3.0'
+license-files = ['LICENSE']
+readme = 'README.md'
+
+#[project.optional-dependencies]
+#system-status = ['psutil']
+
+
+[build-system]
+requires = ['setuptools >= 77.0.3']
+build-backend = 'setuptools.build_meta'
+
+
+[tool.setuptools]
+data-files = {'assets' = ['aria_shell/assets/*']}
+script-files = ['aria_shell/bin/aria-shell']
+
+
+#[tool.mypy]
+#python_version = '3.10'
+#packages = ['ignis', 'examples']
+#exclude = ['venv']
+#disable_error_code = [
+#    'no-redef',      # allow variable redefinition (needed for GObject.Property decorator)
+#    'method-assign', # also needed for GObject.Property
+#]
+#check_untyped_defs = true
+#
+#[[tool.mypy.overrides]]
+#module = ['gi.repository.*']
+#disable_error_code = ['assignment']

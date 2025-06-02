@@ -15,8 +15,8 @@ lots to write here... help wanted ;)
 
 TODO
 ----
-
-AriaPopup FA SCHIFO, NON FUNZIONA  !!!
+* AriaPopup need some love
+* Launcher: spawned app terminate with the shell !!
 
 Keybindings????
 How to receive commands? like:
@@ -31,11 +31,11 @@ Aria panel
  * panel autohide
  * pango markup in labels and tooltips? optional?
  * modules
+   * perf: cpu, ram, load, temps  (with top-like in popup)
    * tray + app menu (like mac menu) see ApplicationWindow
    * dark/light switch (update aria and gtk/qt config)
    * audio: volume, simple mixer (pulse) and multimedia controls (mpris?)
    * power: idle inhibitor, battery/ac status, power profiles
-   * perf: cpu (with top-like in popup), ram, temps, load?
    * help: just an icon, on click show a dialog with keybindings and basic info
            (also show on META+F1)
    * network: super simple NetworkManager, on/off ifaces, ssid list/connect

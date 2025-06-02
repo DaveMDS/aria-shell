@@ -56,22 +56,18 @@ class ClockModule(AriaModule):
 
 class ClockWidget(AriaWidget):
     def __init__(self, conf: ClockConfig):
-        super().__init__('clock')
+        super().__init__('clock', clickable=True)
         self.conf = conf
 
         self.label = Gtk.Label()
         self.popup = None
         self.append(self.label)
 
-        ges = Gtk.GestureSingle()
-        ges.connect('begin', self.on_mouse_down)
-        self.add_controller(ges)
-
     def update(self, now: datetime):
         text = now.strftime(self.conf.format)
         self.label.set_text(text)
 
-    def on_mouse_down(self, _ges, *_):
+    def on_mouse_down(self, button: int):
         self.toggle_calendar()
 
     def toggle_calendar(self):

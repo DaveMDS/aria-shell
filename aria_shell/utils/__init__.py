@@ -3,5 +3,6 @@ from ._basic import (
     Signalable,
     clamp,
     safe_format,
+    human_size,
     PerfTimer,
 )

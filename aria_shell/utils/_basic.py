@@ -53,6 +53,24 @@ def safe_format(format1: str, format2: str, **kwargs) -> str:
         return format2.format(**kwargs)
 
 
+def human_size(bites: int) -> str:
+    if bites >= 1099511627776:
+        terabytes = bites / 1099511627776.0
+        size = f'{terabytes:.1f}TB'
+    elif bites >= 1073741824:
+        gigabytes = bites / 1073741824.0
+        size = f'{gigabytes:.1f}GB'
+    elif bites >= 1048576:
+        megabytes = bites / 1048576.0
+        size = f'{megabytes:.1f}MB'
+    elif bites >= 1024:
+        kilobytes = bites / 1024.0
+        size = f'{kilobytes:.1f}KB'
+    else:
+        size = '%.0fb' % bites
+    return size
+
+
 class PerfTimer:
     def __init__(self, auto_reset=True):
         self.time = self.now()

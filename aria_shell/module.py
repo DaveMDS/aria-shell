@@ -58,8 +58,10 @@ def load_modules(names: list[str]):
             # create an instance of the module main class, es: ClockModule
             cls = getattr(pymodule, class_name)
             mod = cls()
+        except ModuleNotFoundError as e:
+            ERR(f'Cannot find module: {name}. {e}')
         except Exception as e:
-            ERR(f'Cannot load module: {name}. Exception: {e}. Full traceback follow...')
+            ERR(f'Cannot load module: {name}. {e}. Full traceback:')
             traceback.print_exc()
             return
 

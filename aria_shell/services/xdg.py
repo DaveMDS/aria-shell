@@ -1,9 +1,12 @@
+import os
+import subprocess
 from operator import attrgetter
 
 from gi.repository import Gtk, Gdk, Gio
 
 from aria_shell.config import AriaConfig
 from aria_shell.utils import Singleton, PerfTimer
+from aria_shell.utils.env import HOME
 from aria_shell.utils.logger import get_loggers
 
 
@@ -11,7 +14,7 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class DesktopApp:
-    def __init__(self, gapp: Gio.AppInfo):
+    def __init__(self, gapp: Gio.DesktopAppInfo):
         self._gapp = gapp
 
     def __repr__(self):
@@ -51,8 +54,48 @@ class DesktopApp:
     def get_icon(self) -> Gtk.Image:
         return Gtk.Image.new_from_icon_name(self.icon_name)
 
+    # def launch(self) -> bool:
+    #     """ Run the app using DesktopApp.launch()
+    #     This should be the preferred version, also support startup-notify
+    #     and other goodies. But the launched process will exit with aria-shel
+    #     Must find a way to change that behaviour
+    #     """
+    #     return self._gapp.launch()
+
+    # def launch_uwsm(self) -> None:
+    #     """
+    #     Launch the application using UWSM (Universal Wayland Session Manager).
+    #     """
+    #     self.launch(command_format="uwsm app -- %command%")
+
     def launch(self) -> bool:
-        return self._gapp.launch()
+        """ Run the app using Popen and gtk-launch """
+        DBG(f'Running app: {self.id} with executable: {self.executable}')
+
+        # use gtk-launch, it handles open in terminal and dbus activatable
+        cmd = ['gtk-launch', self.id]
+
+        # cleanup environment for the subprocess
+        custom_env = os.environ.copy()
+        custom_env.pop('VIRTUAL_ENV', None)
+        custom_env.pop('PYTHONHOME', None)
+        custom_env.pop('PYTHONPATH', None)
+        custom_env['PATH'] = os.defpath
+
+        try:
+            subprocess.Popen(
+                cmd,
+                env=custom_env,
+                cwd=HOME,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+            )
+            return True
+        except OSError:
+            ERR(f'Cannot execute command: "{self.executable}"')
+            return False
 
 
 class XDGDesktopService(metaclass=Singleton):
@@ -73,7 +116,7 @@ class XDGDesktopService(metaclass=Singleton):
                 continue
             aid = gapp.get_id() or gapp.get_name()
             aid = aid.removesuffix('.desktop').lower()
-            self.apps[aid] = DesktopApp(gapp=gapp)
+            self.apps[aid] = DesktopApp(gapp=gapp)  # noqa
         INF(f'Loaded {len(self.apps)} .desktop apps (in {t.elapsed})')
 
         # TODO: Gio.AppInfoMonitor to keep db uptodate

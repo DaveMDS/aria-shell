@@ -4,5 +4,6 @@ from ._basic import (
     clamp,
     safe_format,
     human_size,
+    exec_detached,
     PerfTimer,
 )

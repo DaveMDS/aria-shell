@@ -267,7 +267,7 @@ class ApplicationItem(LauncherItem):
     def icon_name(self):
         return self._app.icon_name
 
-    def launch(self):
+    def selected(self):
         self._app.launch()
 
 

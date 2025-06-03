@@ -1,12 +1,9 @@
-import os
-import subprocess
 from operator import attrgetter
 
 from gi.repository import Gtk, Gdk, Gio
 
 from aria_shell.config import AriaConfig
-from aria_shell.utils import Singleton, PerfTimer
-from aria_shell.utils.env import HOME
+from aria_shell.utils import Singleton, PerfTimer, exec_detached
 from aria_shell.utils.logger import get_loggers
 
 
@@ -73,29 +70,8 @@ class DesktopApp:
         DBG(f'Running app: {self.id} with executable: {self.executable}')
 
         # use gtk-launch, it handles open in terminal and dbus activatable
-        cmd = ['gtk-launch', self.id]
+        return exec_detached(['gtk-launch', self.id])
 
-        # cleanup environment for the subprocess
-        custom_env = os.environ.copy()
-        custom_env.pop('VIRTUAL_ENV', None)
-        custom_env.pop('PYTHONHOME', None)
-        custom_env.pop('PYTHONPATH', None)
-        custom_env['PATH'] = os.defpath
-
-        try:
-            subprocess.Popen(
-                cmd,
-                env=custom_env,
-                cwd=HOME,
-                start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-            )
-            return True
-        except OSError:
-            ERR(f'Cannot execute command: "{self.executable}"')
-            return False
 
 
 class XDGDesktopService(metaclass=Singleton):

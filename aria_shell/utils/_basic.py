@@ -1,6 +1,9 @@
+import os
 import time
+import subprocess
 from collections.abc import Callable
 
+from aria_shell.utils.env import HOME
 from aria_shell.utils.logger import get_loggers
 
 
@@ -51,6 +54,29 @@ def safe_format(format1: str, format2: str, **kwargs) -> str:
     except (KeyError, ValueError):
         ERR(f'Invalid format string: "{format1}". Values: {kwargs}. Using default format: "{format2}"')
         return format2.format(**kwargs)
+
+
+def exec_detached(cmd: str | list[str]) -> bool:
+    """ Run the given command detached from the aria process """
+    custom_env = os.environ.copy()
+    custom_env.pop('VIRTUAL_ENV', None)
+    custom_env.pop('PYTHONHOME', None)
+    custom_env.pop('PYTHONPATH', None)
+    custom_env['PATH'] = os.defpath
+    try:
+        subprocess.Popen(
+            cmd,
+            env=custom_env,
+            cwd=HOME,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        return True
+    except OSError:
+        ERR(f'Cannot execute command: "{cmd}"')
+        return False
 
 
 def human_size(bites: int) -> str:

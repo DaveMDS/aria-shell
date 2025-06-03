@@ -1,10 +1,17 @@
-from gi.repository import GObject, GLib, Gio, Gdk, Gtk, Gtk4LayerShell as GtkLayerShell  # noqa
+from operator import attrgetter
+
+from gi.repository import GObject, GLib, Gio, Gdk, Gtk
+from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.i18n import i18n
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
 from aria_shell.ui import AriaWindow, AriaBox
-from aria_shell.utils import clamp
+from aria_shell.utils import clamp, PerfTimer
 from aria_shell.config import AriaConfigModel
+from aria_shell.utils.logger import get_loggers
+
+
+DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class LauncherConfig(AriaConfigModel):
@@ -30,41 +37,26 @@ class LauncherConfig(AriaConfigModel):
         return clamp(val, 0, 10000)
 
 
-class ResultListItem(GObject.Object):
-    def __init__(self, app: DesktopApp):
-        super().__init__()
-        self.app = app
-
-    def match(self, search: str) -> bool:
-        """ TODO: some more fuzzy match, with score level """
-        if not search:
-            return True
-        s, a = search.lower(), self.app
-        if a.display_name and s in a.display_name.lower():
-            return True
-        if a.name and s in a.name.lower():
-            return True
-        if a.description and s in a.description.lower():
-            return True
-        return False
-
-
 class AriaLauncher(AriaWindow):
     def __init__(self, app: Gtk.Application):
         super().__init__(css_class='aria-launcher')
         self.set_application(app)
         self.conf = LauncherConfig(app.conf.section('launcher'))
-        self.xdg_service = XDGDesktopService()
         self._setup_window()
 
+        # declare internal widgets
         self.list_store = Gio.ListStore()
         self.list_view: Gtk.ListView | None = None
         self.search_entry: Gtk.Entry | None = None
         self._populate_window()
 
-        # populate the list store with all known apps
-        for a in self.xdg_service.all_apps():
-            self.list_store.append(ResultListItem(a))
+        # init all providers
+        self.providers = [
+            ApplicationsProvider(),
+        ]
+
+        # perform a first search
+        self._on_entry_changed(self.search_entry, '')
 
     def _setup_window(self):
         self.set_decorated(False)
@@ -111,13 +103,9 @@ class AriaLauncher(AriaWindow):
         list_view.add_css_class('aria-launcher-list')
         list_view.connect('activate', self.run_selected)
 
-        # filter model
-        filt = Gtk.CustomFilter.new(self._filter_item)
-        filter_model = Gtk.FilterListModel.new(self.list_store, filt)
-
         # selection model
         ssel = Gtk.SingleSelection(autoselect=True)
-        ssel.set_model(filter_model)
+        ssel.set_model(self.list_store)
         list_view.set_model(ssel)
 
         # item factory
@@ -142,30 +130,37 @@ class AriaLauncher(AriaWindow):
         item.set_child(hbox)
 
     @staticmethod
-    def _factory_item_bind(_factory, item: Gtk.ListItem()):
+    def _factory_item_bind(_factory, list_item: Gtk.ListItem):
         # fill the item object with the item data
-        app: DesktopApp = item.get_item().app
-        hbox: Gtk.Box = item.get_child()
+        item: LauncherItem = list_item.get_item()  # noqa
+
+        hbox: Gtk.Box = list_item.get_child()  # noqa
         ico: Gtk.Image = hbox.get_first_child()  # noqa
         lbl: Gtk.Label = hbox.get_last_child()  # noqa
 
-        name = app.display_name or app.name or app.id
-        name = GLib.markup_escape_text(name, -1)
-        desc = GLib.markup_escape_text(app.description or '', -1)
+        title = GLib.markup_escape_text(item.title, -1)
+        subtitle = GLib.markup_escape_text(item.subtitle or '', -1)
 
-        ico.set_from_icon_name(app.icon_name)
+        ico.set_from_icon_name(item.icon_name)
         lbl.set_markup(
-            f'{name}\n'
-            f'<span font_size="small" alpha="60%">{desc}</span>'
+            f'{title}\n'
+            f'<span font_size="small" alpha="60%">{subtitle}</span>'
         )
 
-    def _filter_item(self, item: ResultListItem) -> bool:
-        return item.match(self.get_search_text())
-
     def _on_entry_changed(self, *_):
-        # let the filter perform it's work
-        filt = self.list_view.get_model().get_model().get_filter()  # noqa
-        filt.changed(Gtk.FilterChange.DIFFERENT)
+        t = PerfTimer()
+        # get results from all providers
+        items = []
+        for provider in self.providers:
+            items.extend(provider.search(self.get_search_text()))
+
+        # repopulate the list store
+        self.list_store.remove_all()
+        for item in sorted(items, key=attrgetter('priority'), reverse=True):
+            self.list_store.append(item)
+
+        DBG(f'Found {len(items)} results in {t.elapsed}')
+
 
     def _on_win_key_pressed(self, _ec: Gtk.EventControllerKey, keyval: int,
                             _keycode: int, _state: Gdk.ModifierType):
@@ -206,10 +201,104 @@ class AriaLauncher(AriaWindow):
         self.list_view.scroll_to(0, Gtk.ListScrollFlags.SELECT)
 
     def get_search_text(self) -> str:
-        return self.search_entry.get_text().strip()
+        return self.search_entry.get_text().strip().lower()
 
     def run_selected(self, *_):
         model: Gtk.SingleSelection = self.list_view.get_model()  # noqa
-        item: ResultListItem = model.get_selected_item()  # noqa
-        item.app.launch()
+        item: LauncherItem = model.get_selected_item()  # noqa
+        item.selected()
         self.hide()
+
+
+class LauncherItem(GObject.Object):
+    """ Abstract base class for launcher items """
+    @property
+    def priority(self) -> float:
+        raise NotImplementedError
+
+    @property
+    def title(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def subtitle(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def icon_name(self) -> str:
+        raise NotImplementedError
+
+    def selected(self):
+        raise NotImplementedError
+
+    def __repr__(self):
+        return f"<LauncherItem '{self.title}' prio={self.priority}>"
+
+
+class LauncherProvider:
+    """ Base class for all items providers """
+    def search(self, text: str) -> list[LauncherItem]:
+        raise NotImplementedError
+
+
+################################################################################
+# DGX DestopApp search provider
+################################################################################
+class ApplicationItem(LauncherItem):
+    """ Items returned by the ApplicationProvider """
+    def __init__(self, app: DesktopApp, priority: float):
+        super().__init__()
+        self._app = app
+        self._priority = priority
+
+    @property
+    def priority(self):
+        return self._priority
+
+    @property
+    def title(self):
+        return self._app.display_name
+
+    @property
+    def subtitle(self):
+        return self._app.description
+
+    @property
+    def icon_name(self):
+        return self._app.icon_name
+
+    def launch(self):
+        self._app.launch()
+
+
+class ApplicationsProvider(LauncherProvider):
+    """" XDG Desktop App search provider """
+    def __init__(self):
+        self.xdg_service = XDGDesktopService()
+        self.apps = self.xdg_service.all_apps()
+
+    def search(self, search: str) -> list[LauncherItem]:
+        results = []
+        for app in self.apps:
+            prio = 0
+            if not search:
+                prio = 1
+            else:
+                for field in app.id, app.name, app.description:
+                    if not field:
+                        continue
+                    field = field.lower()
+                    if search == field:
+                        prio = 10
+                        break
+                    elif field.startswith(search):
+                        prio = 8
+                        break
+                    elif search in field:
+                        prio = 6
+                        break
+
+            if prio > 0:
+                results.append(ApplicationItem(app, priority=prio))
+
+        return results

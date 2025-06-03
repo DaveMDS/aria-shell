@@ -16,7 +16,6 @@ lots to write here... help wanted ;)
 TODO
 ----
 * AriaPopup need some love
-* Launcher: spawned app terminate with the shell !!
 
 Keybindings????
 How to receive commands? like:
@@ -50,9 +49,10 @@ Aria panel
 Aria launcher
 -------------
 - [x] search and run .desktop files
-- [ ] more fuzzy match, with score level. And remember most used to rank first
+- [x] support multiple search providers (implemented only .desktop app)
+- [ ] remember most used and rank first
 - [ ] support secondary commands (fe: Firefox new private window)
-- [ ] backandable providers support, es: files, websearch, ??
+- [ ] other search providers? es: files, websearch, ??
 
 Aria logout
 -----------

@@ -19,6 +19,7 @@ class LauncherConfig(AriaConfigModel):
     opacity: int = 100
     width: int = 400
     height: int = 400
+    grab_display: bool = False
 
     @staticmethod
     def validate_icon_size(val: int):
@@ -66,9 +67,14 @@ class AriaLauncher(AriaWindow):
         GtkLayerShell.init_for_window(self)
         GtkLayerShell.set_namespace(self, 'aria-launcher')
         GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
-        # GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.TOP, True)
-        # GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.BOTTOM, True)
-        GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+        GtkLayerShell.set_exclusive_zone(self, -1)  # !
+        if self.conf.grab_display:
+            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
+            ec = Gtk.GestureSingle(button=0)
+            ec.connect('begin', lambda *_: self.hide())
+            self.add_controller(ec)
+        else:
+            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
 
         ec = Gtk.EventControllerKey()
         ec.connect('key-pressed', self._on_win_key_pressed)

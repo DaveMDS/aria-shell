@@ -15,6 +15,10 @@ TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
 
 */
 
+:root {
+  --aria-bg-color: @theme_bg_color;
+  --aria-window-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
+}
 
 /* Reset CSS
 Window {
@@ -31,6 +35,12 @@ Window               .aria-launcher
       ╰─ ListBox     .aria-launcher-list
 */
 .aria-launcher {
+  background-color: transparent;
+  padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
+}
+.aria-launcher .aria-launcher-box {
+  background-color: var(--aria-bg-color);
+  box-shadow: var(--aria-window-shadow);
   padding: 10px;
 }
 .aria-launcher .aria-launcher-entry {  }
@@ -45,12 +55,10 @@ Window               .aria-terminal
 Window.aria-terminal {
   background-color: transparent;
   padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
-  /*border: 1px solid green;*/
 }
 Window.aria-terminal .aria-terminal {
-  box-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
+  box-shadow: var(--aria-window-shadow);
   padding: 6px;
-  /*border: 1px solid red;*/
 }
 
 
@@ -66,6 +74,7 @@ Window              .aria-panel
       ╰─ Widget     .aria-widget .widget-<name>
 */
 .aria-panel {
+  background-color: var(--aria-bg-color);
   border-radius: unset;  /* disable gtk theme rounded corners */
   padding: 2px 6px;
 }

@@ -196,6 +196,9 @@ class AriaLauncher(AriaWindow):
     def hide(self):
         super().hide()
 
+    def toggle(self):
+        self.hide() if self.is_visible() else self.show()
+
     def reset(self):
         self.search_entry.set_text('')
         self.list_view.scroll_to(0, Gtk.ListScrollFlags.SELECT)

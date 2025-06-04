@@ -5,7 +5,7 @@ import os
 # Environment
 UID = os.getuid()
 HOME = Path.home()
-
+SHELL = os.getenv('SHELL') or '/bin/sh'
 
 #
 # XDG basedir

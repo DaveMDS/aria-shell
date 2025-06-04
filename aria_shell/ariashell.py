@@ -19,10 +19,11 @@ from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
 from aria_shell.module import load_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
-from aria_shell.components.panel import AriaPanel
-from aria_shell.components.launcher import AriaLauncher
 from aria_shell.components.commands import AriaCommands
 from aria_shell.components.cmd_socket import AriaCommandSocket
+from aria_shell.components.panel import AriaPanel
+from aria_shell.components.launcher import AriaLauncher
+from aria_shell.components.terminal import AriaTerminal
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -38,8 +39,9 @@ class AriaShell(Gtk.Application):
 
         # components instances
         self.command_socket: AriaCommandSocket | None = None
-        self.launcher: AriaLauncher | None = None
         self.commands: AriaCommands | None = None
+        self.launcher: AriaLauncher | None = None
+        self.terminal: AriaTerminal | None = None
 
         # app lifecycle
         self.connect('startup', self._on_app_startup)
@@ -104,6 +106,13 @@ class AriaShell(Gtk.Application):
         # init the launcher
         self.launcher = AriaLauncher(app)
         # self.launcher.show()
+
+        # init the terminal
+        try:
+            self.terminal = AriaTerminal(app)
+            # self.terminal.show()
+        except RuntimeError:
+            WRN('Vte4 not available, embedded terminal is disabled!')
 
         return 0
 

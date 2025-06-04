@@ -36,11 +36,12 @@ Aria panel
    * [x] workspaces: show workspaces and windows (hyprland only, sway coming soon)
    * [x] button: custom widget built in config (label+icon->command/exec on click)
    * [ ] tray + app menu (like mac menu) see ApplicationWindow
+   * [ ] screenshot / screenrecorder
    * [ ] dark/light switch (update aria and gtk/qt config)
    * [ ] audio: volume, simple mixer (pulse) and multimedia controls (mpris?)
    * [ ] power: idle inhibitor, battery/ac status, power profiles
    * [ ] help: just an icon, on click show a dialog with keybindings and basic info
-           (also show on META+F1)
+          (also show on META+F1)
    * [ ] network: super simple NetworkManager, on/off ifaces, ssid list/connect
    * [ ] bluetooth: ???
    * [ ] logout: just a button to run AriaLogout
@@ -57,6 +58,16 @@ Aria launcher
 - [ ] remember most used and rank first
 - [ ] support secondary commands (fe: Firefox new private window)
 - [ ] other search providers? es: files, websearch, ??
+
+Aria terminal
+-------------
+- [x] simple persistant terminal that show/hide from the top on command
+- [x] configurable opacity, font, size, shell and behaviours
+- [x] only available if vte4 is installed
+- [x] optionally grab the disaply when the terminal is visible
+- [ ] configurable color palette
+- [ ] show/hide animation ala quake console
+- [ ] find more cool fonts for the default config (ship one in pkg?)
 
 Aria logout
 -----------

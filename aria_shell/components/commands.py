@@ -31,26 +31,6 @@ class AriaCommands(metaclass=Singleton):
                 return f'ERROR: {e}'
 
         return f'Unknown command: {command}'
-        # match command:
-        #
-        #     case 'show':
-        #         if len(params) != 1:
-        #             response = 'invalid params'
-        #         elif params[0] == 'launcher':
-        #             if self.app.launcher:
-        #                 self.app.launcher.show()
-        #             else:
-        #                 WRN('Launcher not available')
-        #         else:
-        #             response = f'invalid param: {params[0]}'
-        #
-        #     case 'ping':
-        #         response = command.replace('i', 'o', 1)
-        #
-        #     case _:
-        #         response =
-        #
-        # return response
 
     @staticmethod
     def _cmd_ping(_params: list[str]):
@@ -63,10 +43,16 @@ class AriaCommands(metaclass=Singleton):
 
         match params[0]:
             case 'launcher':
-                if not self.app.launcher:
-                    raise RuntimeError('launcher not available')
-                self.app.launcher.show()
-                return 'OK'
+                if self.app.launcher:
+                    self.app.launcher.toggle()
+                    return 'OK'
+                raise RuntimeError('launcher not available')
+
+            case 'terminal':
+                if self.app.terminal:
+                    self.app.terminal.toggle()
+                    return 'OK'
+                raise RuntimeError('terminal not available')
 
             case _:
                 raise RuntimeError(f'unknown component: {params[0]}')

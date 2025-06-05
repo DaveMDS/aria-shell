@@ -65,6 +65,7 @@ Aria terminal
 - [x] configurable opacity, font, size, shell and behaviours
 - [x] only available if vte4 is installed
 - [x] optionally grab the disaply when the terminal is visible
+- [x] emulate fullscreen using Ctrl+F
 - [ ] configurable color palette
 - [ ] show/hide animation ala quake console
 - [ ] find more cool fonts for the default config (ship one in pkg?)

@@ -50,6 +50,7 @@ class AriaTerminal(AriaWindow):
         self.set_application(app)
         self.conf = TerminalConfig(app.conf.section('terminal'))
         self.terminal: Vte.Terminal | None = None
+        self._fullscreen: bool = False
         self._setup_window(app)
 
     def _setup_window(self, app: Gtk.Application):
@@ -69,6 +70,14 @@ class AriaTerminal(AriaWindow):
             self.add_controller(ec)
         else:
             GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+
+    def _toggle_fullscreen(self):
+        """ Emulate fullscreen using LayerShell """
+        self._fullscreen = fs = not self._fullscreen
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.TOP, True)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.BOTTOM, fs)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, fs)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, fs)
 
     def _create_terminal(self):
         term = Vte.Terminal()
@@ -92,10 +101,9 @@ class AriaTerminal(AriaWindow):
             None,   # callback
         )
 
-        if self.conf.hide_on_esc:
-            ec = Gtk.EventControllerKey()
-            ec.connect('key-pressed', self._on_key_pressed)
-            term.add_controller(ec)
+        ec = Gtk.EventControllerKey()
+        ec.connect('key-pressed', self._on_key_pressed)
+        term.add_controller(ec)
 
         self.terminal = term
         self.set_child(term)
@@ -119,7 +127,17 @@ class AriaTerminal(AriaWindow):
         self.set_child(None)
         self.terminal = None
 
-    def _on_key_pressed(self, _ec: Gtk.EventControllerKey, keyval: int,
-                       _keycode: int, _state: Gdk.ModifierType):
-        if keyval == Gdk.KEY_Escape:
-            self.hide()
+    def _on_key_pressed(self, _ec: Gtk.EventControllerKey,
+                        keyval: int, _keycode: int, state: Gdk.ModifierType
+                        ) -> bool:
+        match keyval:
+            case Gdk.KEY_Escape:
+                if self.conf.hide_on_esc:
+                    self.hide()
+                    return True
+            case Gdk.KEY_f:
+                if state & Gdk.ModifierType.CONTROL_MASK:
+                    self._toggle_fullscreen()
+                    return True
+
+        return False

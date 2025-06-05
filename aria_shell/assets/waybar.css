@@ -17,7 +17,12 @@ AUTOCONFIG:
 */
 
 :root {
-  --bg-color: rgba(43, 48, 59, .5);
+  --aria-bg-color: rgba(43, 48, 59, .5);
+  --aria-fg-color: white;
+
+  --inset-border: inset 0 -3px rgba(100, 114, 125, 0.5);
+  --normal-border: 3px solid rgba(100, 114, 125, 0.5);
+
   --color-gray: #64727D;
   --color-green: #2ecc71;
 }
@@ -29,21 +34,22 @@ AUTOCONFIG:
 }
 
 /* All the aria windows */
-Window {
+/*Window {
   background-color: var(--bg-color);
-
-  /* Use box-shadow instead of border-bottom so there is no offset */
-  /* A big thanks to waybar devs for this trick ;) */
-  /*border-bottom: 3px solid rgba(100, 114, 125, 0.5);*/
-  box-shadow: inset 0 -3px rgba(100, 114, 125, 0.5);
-}
+  border-bottom: var(--normal-border);
+  box-shadow: var(--inset-border);
+}*/
 
 
 /* Aria panel */
 .aria-panel {
-  color: white;
+  color: var(--aria-fg-color);
   padding: 0;
-  min-height: 26px;  /* TODO REMOVE ME */
+  min-height: 26px;
+  /* Use box-shadow instead of border-bottom so there is no offset */
+  /* A big thanks to waybar devs for this trick ;) */
+  /*border-bottom: var(--normal-border);*/
+  box-shadow: var(--inset-border);
 }
 .aria-panel .aria-panel-box {
   /*outline: 3px solid rgba(100, 114, 125, 0.5);*/
@@ -95,3 +101,8 @@ Window {
   background-color: var(--bg-color);
   box-shadow: inset 0 -3px rgba(100, 114, 125, 0.5);
 }*/
+
+/* Aria Terminal */
+Window.aria-terminal .aria-terminal {
+  border-bottom: var(--normal-border);
+}

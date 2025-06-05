@@ -17,6 +17,7 @@ TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
 
 :root {
   --aria-bg-color: @theme_bg_color;
+  --aria-fg-color: @theme_fg_color;  /*not-tested*/
   --aria-window-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
 }
 

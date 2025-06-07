@@ -24,17 +24,56 @@ class Singleton(type):
 
 class Signalable:
     """ Make a class able to emit signals to registered clients """
-    def __init__(self):
-        # 'signal-name' => (callback, *args, **kargs)
-        self._handlers: dict[str, list[tuple[Callable, tuple, dict]]] = {}
+    # 'signal-name' => [(callback, *args, **kargs), ...]
+    _handlers: dict[str, list[tuple[Callable, tuple, dict]]]
 
-    def connect(self, signal: str, handler: Callable, *args, **kargs):
-        handlers = self._handlers.setdefault(signal, [])
-        handlers.append((handler, args, kargs))
+    def __new__(cls, *a, **ka):
+        instance = super().__new__(cls)
+        instance._handlers = {}
+        return instance
+
+    def connect(self, signal: str, handler: Callable, *a, **ka):
+        self._handlers.setdefault(signal, []).append((handler, a, ka))
 
     def emit(self, signal: str, *args):
-        for h, a, k in self._handlers.get(signal, []):
-            h(*args, *a, *k)
+        for h, a, ka in self._handlers.get(signal, []):
+            h(*args, *a, *ka)
+
+
+class Observable:
+    """ Make the class properties able to be watched and binded.
+    Can be used on: classes, dataclasses, GObjects (probably more)
+
+    Usage:
+    > class User(Observable):
+    >     name = 'John Doe'
+    >     age = 21
+    >
+    > user = User()
+    > user.watch('name', lambda name: print(f'new name: {name}'))
+    > user.name = 'Mary'  # this will trigger the watcher and print the new name
+    """
+    # 'prop_name' => [(callback, **kargs), ...]
+    _observers: dict[str, list[tuple[Callable, dict]]]
+
+    def __new__(cls, *a, **ka):
+        instance = super().__new__(cls)
+        instance._observers = {}
+        return instance
+
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        for h, ka in self._observers.get(name, []):
+            h(value, **ka)
+
+    def watch(self, prop_name: str, handler: Callable,
+              immediate: bool = True, **ka):
+        self._observers.setdefault(prop_name, []).append((handler, ka))
+        if immediate:
+            handler(getattr(self, prop_name), **ka)
+
+    # def bind(self):
+    #     TODO
 
 
 def clamp(val, low, high):
@@ -150,3 +189,48 @@ class PerfTimer:
             return '%.5f sec' % delta
         else:
             return '%.3f sec' % delta
+
+
+# class ReactiveValue:
+#     """
+#     Funziona molto bene, semplice. ma bisogna sempre usare set() e get() !
+#     o i suoi surrogati più brevi...quasi hack
+#
+#     name = ReactiveValue('Mary')
+#     name.get()  or  utente.name.value
+#     name.set('John')
+#     name.watch(lambda name: print(f'new name: {name}'))
+#     name.bind(....)
+#
+#     volendo anche:
+#     name()     -> get
+#     name(val)  -> set
+#
+#     class Utente:
+#         __init__(name):
+#             self.name = ReactiveValue(name)
+#     """
+#     def __init__(self, default=None):
+#         # WRN(f'__init__ {self}')
+#         self._listeners = []
+#         self.value = default
+#
+#     def get(self):
+#         # WRN(f'__get {self}')
+#         return self.value
+#
+#     def set(self, value):
+#         # WRN(f'__set {self} {value}')
+#         if value != self.value:
+#             self.value = value
+#             for handler in self._listeners:
+#                 handler(value)
+#
+#     def watch(self, listener: Callable, immediate: bool = False):
+#         self._listeners.append(listener)
+#         if immediate:
+#             listener(self.value)
+#
+#     def __call__(self, value = None) -> Any:
+#         # WRN(f'__call__ {value}')
+#         return self.value

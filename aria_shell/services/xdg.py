@@ -97,10 +97,17 @@ class XDGDesktopService(metaclass=Singleton):
 
         # TODO: Gio.AppInfoMonitor to keep db uptodate
 
-    @staticmethod
-    def get_icon(icon_name: str) -> Gtk.Image:
-        """ Create an icon by icon name, respect XDG IconTheme """
-        return Gtk.Image.new_from_icon_name(icon_name)
+    def get_icon(self, icon_name: str | list[str]) -> Gtk.Image:
+        """ Create an icon by icon name(s), respect XDG IconTheme
+        NOTE: icon_name can be a list of icon names to try in order.
+        """
+        if isinstance(icon_name, list):
+            for name in icon_name:
+                if name and self.icon_theme.has_icon(name):
+                    return Gtk.Image.new_from_icon_name(name)
+        elif isinstance(icon_name, str):
+            return Gtk.Image.new_from_icon_name(icon_name)
+        return Gtk.Image.new_from_icon_name('icon-not-found')
 
     def get_icon_for_window_class(self, class_name: str) -> Gtk.Image:
         """ Search an icon for the given window class """

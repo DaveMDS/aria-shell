@@ -18,10 +18,13 @@ venv-down:  # THIS DOES NOT WORK, must find another way...
 	deactivate
 
 
-.PHONY: deps run build install clean
+.PHONY: deps test run build install clean
 
 deps:  # TODO: A better method?
 	python -m pip install --require-virtualenv -r requirements.txt
+
+test:
+	pytest tests/ -s -v
 
 run:
 	python aria_shell/bin/aria-shell

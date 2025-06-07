@@ -45,6 +45,11 @@ data-files = {'assets' = ['aria_shell/assets/*']}
 script-files = ['aria_shell/bin/aria-shell']
 
 
+# pytest
+[tool.pytest.ini_options]
+pythonpath = ['.']  # ensure tests can find the aria_shell pkg
+
+
 #[tool.mypy]
 #python_version = '3.10'
 #packages = ['ignis', 'examples']

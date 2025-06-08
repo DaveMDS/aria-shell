@@ -3,6 +3,8 @@ import time
 import subprocess
 from collections.abc import Callable
 
+from gi.repository import GLib
+
 from aria_shell.utils.env import HOME
 from aria_shell.utils.logger import get_loggers
 
@@ -134,6 +136,36 @@ def human_size(bites: int) -> str:
     else:
         size = '%.0fb' % bites
     return size
+
+
+def pack_variant(data) -> GLib.Variant:
+    """ Pack a python object into a GLib Variant """
+    if isinstance(data, str):
+        return GLib.Variant.new_string(data)
+    elif isinstance(data, bool):
+        return GLib.Variant.new_boolean(data)
+    elif isinstance(data, int):
+        return GLib.Variant.new_int32(data)
+    elif isinstance(data, float):
+        return GLib.Variant.new_double(data)
+    elif isinstance(data, (list, tuple, set)):
+        builder = GLib.VariantBuilder(GLib.VariantType('av'))
+        for item in data:
+            builder.add_value(GLib.Variant.new_variant(pack_variant(item)))
+        return builder.end()
+    elif isinstance(data, dict):
+        builder = GLib.VariantBuilder(GLib.VariantType('a{sv}'))
+        for key, val in data.items():
+            if key is not None or val is not None:
+                builder.add_value(
+                    GLib.Variant.new_dict_entry(
+                        GLib.Variant.new_string(str(key)),
+                        GLib.Variant.new_variant(pack_variant(val))
+                    )
+                )
+        return builder.end()
+    else:
+        raise TypeError(f'Dunno how to convert {type(data)} to Variant')
 
 
 class PerfTimer:

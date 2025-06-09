@@ -8,7 +8,7 @@ class AriaWindow(Gtk.Window):
     Base class for all Aria windows
     """
     def __init__(self, css_class: str = None, **kargs):
-        super().__init__(css_name='Window', **kargs)
+        super().__init__(**kargs)
         if css_class:
             self.add_css_class(css_class)
 
@@ -19,7 +19,7 @@ class AriaBox(Gtk.Box):
     Use this when your box should be "visible" in css syles.
     """
     def __init__(self, css_class: str = None, **kargs):
-        super().__init__(css_name='Box', **kargs)
+        super().__init__(**kargs)
         if css_class:
             self.add_css_class(css_class)
 
@@ -46,7 +46,7 @@ class AriaWidget(Gtk.Box):
     A widget is an entity that can be placed in panels, docks, etc...
     """
     def __init__(self, name: str, clickable=False):
-        super().__init__(css_name='Widget')
+        super().__init__(css_name='Gadget')
         self.add_css_class('aria-widget')
         self.add_css_class(f'widget-{name}')
         self.name = name

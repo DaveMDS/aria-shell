@@ -105,6 +105,6 @@ AUTOCONFIG:
 }*/
 
 /* Aria Terminal */
-Window.aria-terminal .aria-terminal {
+window.aria-terminal .aria-terminal {
   border-bottom: var(--normal-border);
 }

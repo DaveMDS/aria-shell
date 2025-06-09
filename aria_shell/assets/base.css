@@ -22,18 +22,18 @@ TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
 }
 
 /* Reset CSS
-Window {
+window {
   border-radius: unset;
 }*/
 
 
 /* Aria launcher
 --------------------------------------------------------------------------------
-Window               .aria-launcher
-╰─ Box               .aria-launcher-box
-   ├─ Entry          .aria-launcher-entry
-   ╰─ Scroller
-      ╰─ ListBox     .aria-launcher-list
+window               .aria-launcher
+╰─ box               .aria-launcher-box
+   ├─ entry          .aria-launcher-entry
+   ╰─ scroller
+      ╰─ listbox     .aria-launcher-list
 */
 .aria-launcher {
   background-color: transparent;
@@ -50,14 +50,14 @@ Window               .aria-launcher
 
 /* Aria terminal
 --------------------------------------------------------------------------------
-Window               .aria-terminal
-╰─ Terminal          .aria-terminal
+window               .aria-terminal
+╰─ terminal          .aria-terminal
 */
-Window.aria-terminal {
+window.aria-terminal {
   background-color: transparent;
   padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
 }
-Window.aria-terminal .aria-terminal {
+window.aria-terminal .aria-terminal {
   box-shadow: var(--aria-window-shadow);
   padding: 6px;
 }
@@ -65,14 +65,14 @@ Window.aria-terminal .aria-terminal {
 
 /* Aria panel
 --------------------------------------------------------------------------------
-Window              .aria-panel
-╰─ CenterBox        .aria-panel-box
-   ├─ Box           .aria-panel-box-start
-   │  ╰─ Widget     .aria-widget .widget-<name>
-   ├─ Box           .aria-panel-box-center
-   │  ╰─ Widget     .aria-widget .widget-<name>
-   ╰─ Box           .aria-panel-box-end
-      ╰─ Widget     .aria-widget .widget-<name>
+window              .aria-panel
+╰─ centerbox        .aria-panel-box
+   ├─ box           .aria-panel-box-start
+   │  ╰─ Gadget     .aria-widget .widget-<name>
+   ├─ box           .aria-panel-box-center
+   │  ╰─ Gadget     .aria-widget .widget-<name>
+   ╰─ box           .aria-panel-box-end
+      ╰─ Gadget     .aria-widget .widget-<name>
 */
 .aria-panel {
   background-color: var(--aria-bg-color);
@@ -85,13 +85,13 @@ Window              .aria-panel
 
 /* Widget: workspaces
 --------------------------------------------------------------------------------
-Widget              .aria-widget .widget-workspaces
-├─ Box              .aria-workspace[.active]
+Gadget              .aria-widget .widget-workspaces
+├─ box              .aria-workspace[.active]
 │  ├─ label         .aria-workspace-label
 │  ├─ image         .aria-workspace-window[.active]
 │  ┊
 │  ╰─ image         .aria-workspace-window[.active]
-╰─ Box
+╰─ box
    ╰─ etc, for all workspaces...
 */
 .widget-workspaces .aria-workspace {

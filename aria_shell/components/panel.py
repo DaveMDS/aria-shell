@@ -125,7 +125,7 @@ class AriaPanel(AriaWindow):
         # End Wayland code
 
         # create the left/center/right boxes, in a CenterBox
-        cbox = Gtk.CenterBox(css_name='CenterBox')
+        cbox = Gtk.CenterBox()
         cbox.add_css_class('aria-panel-box')
         s = self.conf.spacing
         self._box1 = AriaBox(css_class='aria-panel-box-start', spacing=s)

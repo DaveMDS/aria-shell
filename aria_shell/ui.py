@@ -57,58 +57,25 @@ class AriaWidget(Gtk.Box):
     #     raise NotImplementedError('TODO')
 
 
-class AriaPopup_Popover:
-    def __init__(self, content: Gtk.Widget, parent: Gtk.Widget, on_destroy: Callable = None):
-        self._popo = Gtk.Popover()
+class AriaPopup(Gtk.Popover):
+    def __init__(self, content: Gtk.Widget, parent: Gtk.Widget,
+                       on_destroy: Callable = None):
+        super().__init__()
         self._on_destroy = on_destroy
-        self._popo.set_parent(parent)
-        self._popo.set_child(content)
-        self._popo.set_autohide(True)  # TODO config (general or per panel? per widget?)
-        # self._popo.set_has_arrow(False) # TODO config
+        self.set_parent(parent)
+        self.set_child(content)
+        self.set_autohide(True)  # TODO config (or pin icon in a corner?)
+        self.set_has_arrow(True)  # TODO config
+        self.connect('closed', self._on_closed)
+        # self.connect('destroy', lambda _: print("!!! DESTROY !!!  \o/"))
+        self.popup()
 
-        self._popo.connect('hide', self._on_hide)
-        self._popo.connect('destroy', lambda p: print("!!! DESTROY !!!", self))
+    def close(self):
+        self.popdown()
 
-        # if on_destroy:
-        #     popo.connect('hide', lambda p: on_destroy(self))
-
-        # popo.set_pointing_to(parent)
-        # popo.set_relative_to(parent)
-        # popo.set_default_widget(parent)
-        # popo.set_position(Gtk.PositionType.TOP)  # Do not work in sway :(
-        # popo.set_constrain_to(Gtk.PopoverConstraint.WINDOW)  # WINDOW / NONE
-        # content.show()
-
-        # print(popo.get_toplevel())
-        # from gi.repository import GtkLayerShell
-        # win = popo.get_toplevel()
-        # GtkLayerShell.init_for_window(win)
-
-        # show
-        # self._popo.show()  # no animation
-        self._popo.popup()  # with animation
-
-    def _on_hide(self, _popo):
-        print('_on_hide()')
-        self.destroy()
-
-    def destroy(self):
-        self._popo.popdown()
-        if self._popo:
-            print('UNPARENT')
-            if self._on_destroy:
-                self._on_destroy(self)
-            # self._popo.hide()
-            self._popo.unparent()
-            del self._popo
-            self._popo = None
-
-
-    # def _on_hide(self, popo):
-    #     self.destroy()
-
-
-
-
-
-AriaPopup = AriaPopup_Popover
+    def _on_closed(self, _popover):
+        if self._on_destroy:
+            self._on_destroy(self)
+        self.set_child(None)
+        self.unparent()
+        # self.run_dispose()

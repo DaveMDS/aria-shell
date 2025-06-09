@@ -75,7 +75,7 @@ class ClockWidget(AriaWidget):
             calendar = Gtk.Calendar()
             self.popup = AriaPopup(calendar, self, self.on_popup_destroy)
         else:
-            self.popup.destroy()
+            self.popup.close()
 
     def on_popup_destroy(self, _popup):
         self.popup = None

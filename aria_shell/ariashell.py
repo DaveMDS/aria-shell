@@ -2,8 +2,8 @@
 from pathlib import Path
 import argparse
 
-# For GTK4 Layer Shell to get linked before libwayland-client we must
-# explicitly load it before importing with gi
+# For GTK4 Layer Shell to get linked before libwayland-client
+# we must explicitly load it before importing with gi
 from ctypes import CDLL
 CDLL('libgtk4-layer-shell.so')
 

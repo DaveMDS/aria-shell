@@ -181,7 +181,7 @@ class PerfWidget(AriaWidget):
 
     def toggle_popup(self):
         if self.popup:
-            self.popup.destroy()
+            self.popup.close()
         else:
             lbl = Gtk.Label()
             self.popup = AriaPopup(lbl, self, self.on_popup_destroy)

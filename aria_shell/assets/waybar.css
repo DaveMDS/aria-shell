@@ -59,41 +59,41 @@ AUTOCONFIG:
 }
 
 /* all windgets */
-.aria-widget {
+.aria-gadget {
   padding: 0 10px;
   background-color: transparent;
   margin: 0;
 }
-/* widget: workspaces */
-.widget-workspaces{
+/* gadget: workspaces */
+.gadget-workspaces{
   padding: 0;
 }
-.widget-workspaces .aria-workspace {
+.gadget-workspaces .aria-workspace {
   padding: 0 5px;
   border: unset;
   margin: 0;
 }
-.widget-workspaces .aria-workspace:hover {
+.gadget-workspaces .aria-workspace:hover {
   /* TODO find a way to not have to unset! in base theme? don't load base? */
   border: unset;
   box-shadow: unset;
 }
-.widget-workspaces .aria-workspace.active {
+.gadget-workspaces .aria-workspace.active {
   border: unset;
   background-color: var(--color-gray);
   box-shadow: inset 0 -3px #ffffff;
 }
-.widget-workspaces .aria-workspace-window {
+.gadget-workspaces .aria-workspace-window {
 
 }
-.widget-workspaces .aria-workspace-window.active {
+.gadget-workspaces .aria-workspace-window.active {
   box-shadow: inset 0 3px #ffffff;
 }
 
-.widget-clock {
+.gadget-clock {
   background-color: var(--color-gray);
 }
-.widget-cpu {
+.gadget-cpu {
   background-color: var(--color-green);
   color: black;
 }

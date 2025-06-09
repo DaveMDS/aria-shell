@@ -68,24 +68,24 @@ window.aria-terminal .aria-terminal {
 window              .aria-panel
 ╰─ centerbox        .aria-panel-box
    ├─ box           .aria-panel-box-start
-   │  ╰─ Gadget     .aria-widget .widget-<name>
+   │  ╰─ Gadget     .aria-gadget .gadget-<name>
    ├─ box           .aria-panel-box-center
-   │  ╰─ Gadget     .aria-widget .widget-<name>
+   │  ╰─ Gadget     .aria-gadget .gadget-<name>
    ╰─ box           .aria-panel-box-end
-      ╰─ Gadget     .aria-widget .widget-<name>
+      ╰─ Gadget     .aria-gadget .gadget-<name>
 */
 .aria-panel {
   background-color: var(--aria-bg-color);
   border-radius: unset;  /* disable gtk theme rounded corners */
   padding: 2px 6px;
 }
-/* all widgets */
-.aria-panel .aria-widget { }
+/* all gadgets */
+.aria-panel .aria-gadget { }
 
 
-/* Widget: workspaces
+/* Gadget: workspaces
 --------------------------------------------------------------------------------
-Gadget              .aria-widget .widget-workspaces
+Gadget              .aria-gadget .gadget-workspaces
 ├─ box              .aria-workspace[.active]
 │  ├─ label         .aria-workspace-label
 │  ├─ image         .aria-workspace-window[.active]
@@ -94,27 +94,27 @@ Gadget              .aria-widget .widget-workspaces
 ╰─ box
    ╰─ etc, for all workspaces...
 */
-.widget-workspaces .aria-workspace {
+.gadget-workspaces .aria-workspace {
   border: 1px solid black;
   /*padding: 1px 4px;*/
   margin-right: 3px;
 }
-.widget-workspaces .aria-workspace:hover {
+.gadget-workspaces .aria-workspace:hover {
   box-shadow: 0px 0px 3px 0px #000000;
 }
-.widget-workspaces .aria-workspace.active {
+.gadget-workspaces .aria-workspace.active {
   background-color: cyan;
 }
-/*.widget-workspaces .aria-workspace .aria-workspace-label {
+/*.gadget-workspaces .aria-workspace .aria-workspace-label {
   font-weight: bold;
   margin-right: 2px;
 }*/
-.widget-workspaces .aria-workspace .aria-workspace-window {
+.gadget-workspaces .aria-workspace .aria-workspace-window {
   /*border: 1px solid transparent;*/
 }
-.widget-workspaces .aria-workspace .aria-workspace-window:hover {
+.gadget-workspaces .aria-workspace .aria-workspace-window:hover {
   box-shadow: 0px 0px 3px 0px #000000;
 }
-.widget-workspaces .aria-workspace .aria-workspace-window.active {
+.gadget-workspaces .aria-workspace .aria-workspace-window.active {
   /*border: 1px solid green; */
 }

@@ -47,8 +47,8 @@ class AriaGadget(Gtk.Box):
     """
     def __init__(self, name: str, clickable=False):
         super().__init__(css_name='Gadget')
-        self.add_css_class('aria-widget')
-        self.add_css_class(f'widget-{name}')
+        self.add_css_class('aria-gadget')
+        self.add_css_class(f'gadget-{name}')
         self.name = name
 
         if clickable:

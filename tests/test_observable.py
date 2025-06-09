@@ -44,7 +44,9 @@ def test_observable(user: Observable):
     user.watch('age', lambda val: immediate_ages.append(val), immediate=True)
 
     user.name = 'Mary'
+    # user.name = 'Mary'
     user.age = 22
+    # user.name = 'Mary'
     user.name = 'Doe'
     user.age = 23
 

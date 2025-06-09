@@ -142,16 +142,16 @@ class AriaPanel(AriaWindow):
             self.conf.inthecenter = ['clock']
         # populate left
         for module_name in self.conf.ontheleft:
-            if widget := instance_module_by_name(module_name, self.monitor):
-                self._box1.append(widget)
+            if gadget := instance_module_by_name(module_name, self.monitor):
+                self._box1.append(gadget)
         # populate center
         for module_name in self.conf.inthecenter:
-            if widget := instance_module_by_name(module_name, self.monitor):
-                self._box2.append(widget)
+            if gadget := instance_module_by_name(module_name, self.monitor):
+                self._box2.append(gadget)
         # populate right
         for module_name in self.conf.ontheright:
-            if widget := instance_module_by_name(module_name, self.monitor):
-                self._box3.append(widget)
+            if gadget := instance_module_by_name(module_name, self.monitor):
+                self._box3.append(gadget)
 
     def destroy(self):
         DBG(f'panel destroy {self}')

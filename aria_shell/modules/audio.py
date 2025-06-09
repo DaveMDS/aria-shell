@@ -7,7 +7,7 @@ from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
-from aria_shell.ui import AriaWidget, AriaPopup, AriaSlider
+from aria_shell.ui import AriaGadget, AriaPopup, AriaSlider
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup
 )
@@ -33,10 +33,10 @@ class AudioModule(AriaModule):
     def module_instance_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
         super().module_instance_new(user_settings, monitor)
         conf = AudioConfig(user_settings)
-        return AudioWidget(conf)
+        return AudioGadget(conf)
 
 
-class AudioWidget(AriaWidget):
+class AudioGadget(AriaGadget):
     def __init__(self, conf: AudioConfig):
         super().__init__('audio', clickable=True)
         self.conf = conf

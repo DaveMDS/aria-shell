@@ -4,7 +4,7 @@ import psutil
 
 from gi.repository import GLib, Gdk, Gtk
 
-from aria_shell.ui import AriaWidget, AriaPopup
+from aria_shell.ui import AriaGadget, AriaPopup
 from aria_shell.utils import safe_format, human_size
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
@@ -84,7 +84,7 @@ class PerfModule(AriaModule):
             self.start_timer(conf.interval)
 
         # create and populate the widget
-        instance = PerfWidget(conf)
+        instance = PerfGadget(conf)
         instance.update(self.info)
         return instance
 
@@ -133,7 +133,7 @@ class PerfModule(AriaModule):
         return True
 
 
-class PerfWidget(AriaWidget):
+class PerfGadget(AriaGadget):
     def __init__(self, conf: PerfConfig):
         super().__init__('cpu', clickable=True)
         self.conf = conf

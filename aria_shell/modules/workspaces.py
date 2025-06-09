@@ -2,7 +2,7 @@ from typing import Mapping
 
 from gi.repository import Gtk, Gdk
 
-from aria_shell.ui import AriaWidget, AriaBox
+from aria_shell.ui import AriaGadget, AriaBox
 from aria_shell.services.wm import WindowManagerService, Workspace, Window
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.utils.logger import get_loggers
@@ -23,7 +23,7 @@ class WorkspacesModule(AriaModule):
     def __init__(self):
         super().__init__()
         self.wm_service: WindowManagerService | None = None
-        self.instances: list[WorkspacesWidget] = [] # just for typing
+        self.instances: list[WorkspacesGadget] = [] # just for typing
 
     def module_init(self):
         super().module_init()
@@ -38,7 +38,7 @@ class WorkspacesModule(AriaModule):
         super().module_instance_new(user_settings, monitor)
         DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
         conf = WorkspacesConfig(user_settings)
-        return WorkspacesWidget(conf, monitor.get_connector())
+        return WorkspacesGadget(conf, monitor.get_connector())
 
     def wm_event_cb(self, event):
         if event == 'changed':
@@ -57,7 +57,7 @@ class WorkspacesModule(AriaModule):
                     instance.set_active_workspace(win.workspace_id)
 
 
-class WorkspacesWidget(AriaWidget):
+class WorkspacesGadget(AriaGadget):
     def __init__(self, conf: WorkspacesConfig, monitor_name: str):
         super().__init__('workspaces')
         self.conf = conf

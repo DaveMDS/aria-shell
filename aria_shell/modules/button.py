@@ -7,7 +7,7 @@ from aria_shell.utils import exec_detached
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
-from aria_shell.ui import AriaWidget
+from aria_shell.ui import AriaGadget
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -24,10 +24,10 @@ class ButtonModule(AriaModule):
     def module_instance_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
         super().module_instance_new(user_settings, monitor)
         conf = ButtonConfig(user_settings)
-        return ButtonWidget(conf)
+        return ButtonGadget(conf)
 
 
-class ButtonWidget(AriaWidget):
+class ButtonGadget(AriaGadget):
     def __init__(self, conf: ButtonConfig):
         super().__init__('button', clickable=True)
         self.conf = conf

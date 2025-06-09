@@ -40,7 +40,7 @@ class AriaSlider(Gtk.Scale):
         super().set_value(value)
 
 
-class AriaWidget(Gtk.Box):
+class AriaGadget(Gtk.Box):
     """
     Base class for all widgets
     A widget is an entity that can be placed in panels, docks, etc...
@@ -59,7 +59,7 @@ class AriaWidget(Gtk.Box):
             self.set_cursor_from_name('pointer')
 
     def __repr__(self):
-        return f'<AriaWidget {self.name}>'
+        return f'<AriaGadget {self.name}>'
 
     def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
         self.on_mouse_down(ec.get_current_button())

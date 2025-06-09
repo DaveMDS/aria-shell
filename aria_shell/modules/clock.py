@@ -7,7 +7,7 @@ from gi.repository import GLib, Gtk, Gdk
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
-from aria_shell.ui import AriaPopup, AriaWidget
+from aria_shell.ui import AriaPopup, AriaGadget
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -39,7 +39,7 @@ class ClockModule(AriaModule):
         super().module_instance_new(user_settings, monitor)
         DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
         conf = ClockConfig(user_settings)
-        instance = ClockWidget(conf)
+        instance = ClockGadget(conf)
         self.timer_cb(instance)  # perform a first update
         return instance
 
@@ -54,7 +54,7 @@ class ClockModule(AriaModule):
         return True
 
 
-class ClockWidget(AriaWidget):
+class ClockGadget(AriaGadget):
     def __init__(self, conf: ClockConfig):
         super().__init__('clock', clickable=True)
         self.conf = conf

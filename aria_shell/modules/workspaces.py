@@ -23,7 +23,7 @@ class WorkspacesModule(AriaModule):
     def __init__(self):
         super().__init__()
         self.wm_service: WindowManagerService | None = None
-        self.instances: list[WorkspacesGadget] = [] # just for typing
+        self.gadgets: list[WorkspacesGadget] = [] # just for typing
 
     def module_init(self):
         super().module_init()
@@ -42,7 +42,7 @@ class WorkspacesModule(AriaModule):
 
     def wm_event_cb(self, event):
         if event == 'changed':
-            for instance in self.instances:
+            for instance in self.gadgets:
                 instance.update(
                     self.wm_service.monitors,
                     self.wm_service.workspaces,
@@ -51,7 +51,7 @@ class WorkspacesModule(AriaModule):
         elif event.startswith('activewin ') and len(event) > 10:
             _, wid = event.split()
             win = self.wm_service.windows.get(wid)
-            for instance in self.instances:
+            for instance in self.gadgets:
                 instance.set_active_window(wid)
                 if win and win.workspace_id:
                     instance.set_active_workspace(win.workspace_id)

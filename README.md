@@ -1,5 +1,4 @@
-Aria desktop shell for Wayland
-==============================
+# Aria desktop shell for Wayland
 
 > [!WARNING]
 > 
@@ -13,20 +12,25 @@ Aria desktop shell for Wayland
 
 lots to write here... help wanted ;)
 
-TODO
-----
-* AriaPopup need some love
 
-Keybindings????
-How to receive commands? like:
- - show-launcher
- - show-locker
- - show-logout
- - restart
- - reload-config
- 
-Aria panel
-----------
+## Dependencies
+
+### System dependency
+```
+Gtk4
+Gtk4LayerShell
+vte4 (optional, for the embedded terminal)
+libwireplumber (optional, for the audio gadget)
+```
+
+### python dependency
+```
+PyGObject >= 3.50.0
+psutil (optional, for the perf gadget)
+```
+
+
+## Aria panel
  * [x] fully customizable from config file
  * [x] pango markup in labels and tooltips
  * [ ] panel autohide
@@ -55,16 +59,16 @@ Aria panel
    * [ ] places: menu with usefull location, like home, favorites, devices
    * [ ] brightness: set monitor bright....how?
 
-Aria launcher
--------------
+
+## Aria launcher
 - [x] search and run .desktop files
 - [x] support multiple search providers (implemented only .desktop app)
 - [ ] remember most used and rank first
 - [ ] support secondary commands (fe: Firefox new private window)
 - [ ] other search providers? es: files, websearch, ??
 
-Aria terminal
--------------
+
+## Aria terminal
 - [x] simple persistant terminal that show/hide from the top on command
 - [x] configurable opacity, font, size, shell and behaviours
 - [x] only available if vte4 is installed
@@ -74,29 +78,27 @@ Aria terminal
 - [ ] show/hide animation ala quake console
 - [ ] find more cool fonts for the default config (ship one in pkg?)
 
-Aria logout
------------
+
+## Aria logout
 - see wlogout
 
-Aria lockidle
--------------
+
+## Aria lockidle
 - see swaylock
 - see hypridle
 
-AriaNotify
-----------
+
+## AriaNotify
 - see mako/swaync
 
 
-PyGObject references
-====================
+## REFERENCES
 https://lazka.github.io/pgi-docs
 https://api.pygobject.gnome.org
 https://docs.gtk.org/gtk4/visual_index.html
 
 
-CREDITS
-=======
+# CREDITS
 - https://github.com/Fabric-Development/fabric
 - https://github.com/linkfrg/ignis  usa socket.socket (blocca sui comandi) e un thread per gli eventi
 - waybar for the style

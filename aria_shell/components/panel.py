@@ -155,5 +155,5 @@ class AriaPanel(AriaWindow):
 
     def destroy(self):
         DBG(f'panel destroy {self}')
-        # TODO more cleanups? remove all instances?
+        # TODO more cleanups? remove all gadgets?
         super().destroy()

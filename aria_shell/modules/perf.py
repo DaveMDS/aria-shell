@@ -125,8 +125,8 @@ class PerfModule(AriaModule):
         info.mem_available = mem.available
         info.mem_percent = mem.percent
 
-        # redraw all the instances
-        for instance in self.instances:
+        # redraw all the gadgets
+        for instance in self.gadgets:
             instance.update(self.info)
 
         # DBG(self.info)

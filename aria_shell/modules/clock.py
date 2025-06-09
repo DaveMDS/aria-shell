@@ -49,7 +49,7 @@ class ClockModule(AriaModule):
             instance.update(now)
         else:
             # print("Timer", now)
-            for instance in self.instances:
+            for instance in self.gadgets:
                 instance.update(now)
         return True
 

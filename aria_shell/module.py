@@ -19,7 +19,7 @@ _loaded_modules: dict[str, AriaModule] = {}  # es: {'clock': ClockModule,...}
 class AriaModule:
     """ Base class for all Aria modules """
     def __init__(self):
-        self.instances: list[Gtk.Widget] = []
+        self.gadgets: list[Gtk.Widget] = []
         self.initialized = False
 
     def __repr__(self):
@@ -107,6 +107,6 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> Optional[Gtk.Widge
         traceback.print_exc()
         return None
 
-    # keep track of instances inside the module class
-    mod.instances.append(instance)
+    # keep track of gadgets inside the module class
+    mod.gadgets.append(instance)
     return instance

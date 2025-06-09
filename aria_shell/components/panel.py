@@ -5,7 +5,7 @@ from gi.repository import Gdk, Gtk, Gtk4LayerShell as GtkLayerShell  # noqa
 
 from aria_shell.ui import AriaBox, AriaWindow
 from aria_shell.utils import clamp
-from aria_shell.module import instance_module_by_name
+from aria_shell.module import request_module_gadget
 from aria_shell.config import AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
@@ -142,15 +142,15 @@ class AriaPanel(AriaWindow):
             self.conf.inthecenter = ['clock']
         # populate left
         for module_name in self.conf.ontheleft:
-            if gadget := instance_module_by_name(module_name, self.monitor):
+            if gadget := request_module_gadget(module_name, self.monitor):
                 self._box1.append(gadget)
         # populate center
         for module_name in self.conf.inthecenter:
-            if gadget := instance_module_by_name(module_name, self.monitor):
+            if gadget := request_module_gadget(module_name, self.monitor):
                 self._box2.append(gadget)
         # populate right
         for module_name in self.conf.ontheright:
-            if gadget := instance_module_by_name(module_name, self.monitor):
+            if gadget := request_module_gadget(module_name, self.monitor):
                 self._box3.append(gadget)
 
     def destroy(self):

@@ -35,8 +35,8 @@ class ClockModule(AriaModule):
             self.timer = 0
         super().module_shutdown()
 
-    def module_instance_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_instance_new(user_settings, monitor)
+    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
+        super().module_gadget_new(user_settings, monitor)
         DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
         conf = ClockConfig(user_settings)
         instance = ClockGadget(conf)

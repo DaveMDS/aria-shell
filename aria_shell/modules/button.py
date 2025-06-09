@@ -21,8 +21,8 @@ class ButtonConfig(AriaConfigModel):
 
 
 class ButtonModule(AriaModule):
-    def module_instance_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_instance_new(user_settings, monitor)
+    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
+        super().module_gadget_new(user_settings, monitor)
         conf = ButtonConfig(user_settings)
         return ButtonGadget(conf)
 

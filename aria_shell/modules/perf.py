@@ -71,8 +71,8 @@ class PerfModule(AriaModule):
         self.stop_timer()
         super().module_shutdown()
 
-    def module_instance_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_instance_new(user_settings, monitor)
+    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
+        super().module_gadget_new(user_settings, monitor)
         conf = PerfConfig(user_settings)
 
         # recreate the timer if this instance need a shorter interval

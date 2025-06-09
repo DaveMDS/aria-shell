@@ -32,12 +32,13 @@ class AriaModule:
     def module_shutdown(self):
         DBG(f'Module shutdown: {self}')
 
-    def module_instance_new(self, user_settings: Mapping, monitor: Gdk.Monitor) -> Optional[Gtk.Widget]:
-        # DBG(f'AriaModule module_instance_new: {self}')
+    def module_gadget_new(self, user_settings: Mapping,
+                          monitor: Gdk.Monitor) -> Gtk.Widget | None:
+        # DBG(f'AriaModule module_gadget_new: {self}')
         pass
 
 #
-# def get_module_by_name(name: str) -> Optional[AriaModule]:
+# def get_module_by_name(name: str) -> AriaModule | None:
 #     return _loaded_modules.get(name, None)
 
 
@@ -78,7 +79,7 @@ def unload_all_modules():
             traceback.print_exc()
 
 
-def instance_module_by_name(name: str, monitor: Gdk.Monitor) -> Optional[Gtk.Widget]:
+def request_module_gadget(name: str, monitor: Gdk.Monitor) -> Optional[Gtk.Widget]:
     if ':' in name:
         mod_name = name.split(':')[0]
     else:
@@ -100,7 +101,7 @@ def instance_module_by_name(name: str, monitor: Gdk.Monitor) -> Optional[Gtk.Wid
     # request a new instance from the module
     instance_conf = AriaConfig().section(name)
     try:
-        instance = mod.module_instance_new(instance_conf, monitor)
+        instance = mod.module_gadget_new(instance_conf, monitor)
     except Exception as e:
         ERR(f'Cannot create instance of module: {name}. Exception: {e}. Full traceback follow...')
         traceback.print_exc()

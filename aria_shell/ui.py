@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 
-from gi.repository import Gtk
+from gi.repository import Gtk, GObject
 
 
 class AriaWindow(Gtk.Window):
@@ -24,6 +22,22 @@ class AriaBox(Gtk.Box):
         super().__init__(css_name='Box', **kargs)
         if css_class:
             self.add_css_class(css_class)
+
+
+class AriaSlider(Gtk.Scale):
+    """
+    Don't know why Gtk.Scale doesn't provide the 'value' property.
+    This class add the 'value' property, so it can be binded.
+    """
+    __gtype_name__ = 'AriaSlider'
+
+    @GObject.Property(type=float)
+    def value(self):
+        return super().get_value()
+
+    @value.setter
+    def value(self, value: float):
+        super().set_value(value)
 
 
 class AriaWidget(Gtk.Box):

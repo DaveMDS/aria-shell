@@ -35,10 +35,14 @@ Aria panel
    * [x] perf: cpu, ram, load, temps  (with top-like in popup)
    * [x] workspaces: show workspaces and windows (hyprland only, sway coming soon)
    * [x] button: custom widget built in config (label+icon->command/exec on click)
+   * [x] audio: main volume control, simple mixer and multimedia controls
+     * [x] Use WirePlumber gAPI to provide multichannel mixer controls
+     * [ ] MPRIS2 for player controls
+     * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
+     * [ ] show default mic volume in gadget (optional)
    * [ ] tray + app menu (like mac menu) see ApplicationWindow
    * [ ] screenshot / screenrecorder
    * [ ] dark/light switch (update aria and gtk/qt config)
-   * [ ] audio: volume, simple mixer (pulse) and multimedia controls (mpris?)
    * [ ] power: idle inhibitor, battery/ac status, power profiles
    * [ ] help: just an icon, on click show a dialog with keybindings and basic info
           (also show on META+F1)
@@ -82,6 +86,13 @@ Aria lockidle
 AriaNotify
 ----------
 - see mako/swaync
+
+
+PyGObject references
+====================
+https://lazka.github.io/pgi-docs
+https://api.pygobject.gnome.org
+https://docs.gtk.org/gtk4/visual_index.html
 
 
 CREDITS

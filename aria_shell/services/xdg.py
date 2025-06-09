@@ -97,11 +97,11 @@ class XDGDesktopService(metaclass=Singleton):
 
         # TODO: Gio.AppInfoMonitor to keep db uptodate
 
-    def get_icon(self, icon_name: str | list[str]) -> Gtk.Image:
+    def get_icon(self, icon_name: str | list[str] | tuple[str, ...]) -> Gtk.Image:
         """ Create an icon by icon name(s), respect XDG IconTheme
         NOTE: icon_name can be a list of icon names to try in order.
         """
-        if isinstance(icon_name, list):
+        if isinstance(icon_name, (list, tuple)):
             for name in icon_name:
                 if name and self.icon_theme.has_icon(name):
                     return Gtk.Image.new_from_icon_name(name)

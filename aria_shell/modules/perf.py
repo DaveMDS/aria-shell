@@ -26,7 +26,7 @@ class PerfConfig(AriaConfigModel):
 
 @dataclass
 class SysInfo:
-    """ Container updated by the timer, and used to populate each widget """
+    """ Container updated by the timer, and used to populate each gadget """
     cpu_count: int = 0
     cpu_percent: float = 0
     cpu_freq: float = 0
@@ -83,7 +83,7 @@ class PerfModule(AriaModule):
         if not self.timer:
             self.start_timer(conf.interval)
 
-        # create and populate the widget
+        # create and populate the gadget
         instance = PerfGadget(conf)
         instance.update(self.info)
         return instance

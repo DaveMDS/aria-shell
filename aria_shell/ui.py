@@ -42,8 +42,8 @@ class AriaSlider(Gtk.Scale):
 
 class AriaGadget(Gtk.Box):
     """
-    Base class for all widgets
-    A widget is an entity that can be placed in panels, docks, etc...
+    Base class for all gadgets
+    A gadget is an entity that can be placed in panels, docks, etc...
     """
     def __init__(self, name: str, clickable=False):
         super().__init__(css_name='Gadget')

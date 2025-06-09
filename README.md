@@ -34,11 +34,11 @@ psutil (optional, for the perf gadget)
  * [x] fully customizable from config file
  * [x] pango markup in labels and tooltips
  * [ ] panel autohide
- * widgets:
+ * gadgets:
    * [x] clock: show current time and a simple calendar on click
    * [x] perf: cpu, ram, load, temps  (with top-like in popup)
    * [x] workspaces: show workspaces and windows (hyprland only, sway coming soon)
-   * [x] button: custom widget built in config (label+icon->command/exec on click)
+   * [x] button: custom gadget built in config (label+icon->command/exec on click)
    * [x] audio: main volume control, simple mixer and multimedia controls
      * [x] Use WirePlumber gAPI to provide multichannel mixer controls
      * [ ] MPRIS2 for player controls

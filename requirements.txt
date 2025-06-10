@@ -2,6 +2,7 @@
 # but is needed by pip install -r requirements.txt
 PyGObject >= 3.50.0
 pycairo
+dasbus
 
 # perf gadget:
 psutil >= 7.0.0

@@ -26,6 +26,7 @@ libwireplumber (optional, for the audio gadget)
 ### python dependency
 ```
 PyGObject >= 3.50.0
+dasbus
 psutil (optional, for the perf gadget)
 ```
 
@@ -41,7 +42,7 @@ psutil (optional, for the perf gadget)
    * [x] button: custom gadget built in config (label+icon->command/exec on click)
    * [x] audio: main volume control, simple mixer and multimedia controls
      * [x] Use WirePlumber gAPI to provide multichannel mixer controls
-     * [ ] MPRIS2 for player controls
+     * [x] MPRIS2 for media player controls
      * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
      * [ ] show default mic volume in gadget (optional)
    * [ ] tray + app menu (like mac menu) see ApplicationWindow
@@ -93,6 +94,7 @@ psutil (optional, for the perf gadget)
 
 
 ## REFERENCES
+https://github.com/davidmalcolm/pygobject
 https://lazka.github.io/pgi-docs
 https://api.pygobject.gnome.org
 https://docs.gtk.org/gtk4/visual_index.html

@@ -2,7 +2,8 @@
 
 High level audio service to be used by all aria components
 
-The service manage a Gio.ListStore of observable AudioChannels
+The service manage two Gio.ListStore of observable
+AudioChannels and MediaPlayers
 
 Usage:
 > aas = AriaAudioService()
@@ -39,8 +40,9 @@ class AudioChannelGroup(StrEnum):
 
 
 class AudioChannel(GObject.Object):
+    __gtype_name__ = 'AudioChannel'
 
-    # "reactive" props that can be binded. TRY TO USE Observable instead!!
+    # "reactive" props that can be watched/binded
     volume = GObject.Property(type=float, minimum=0, maximum=1.5)
     muted = GObject.Property(type=bool, default=False)
 
@@ -76,6 +78,43 @@ class AudioChannel(GObject.Object):
         raise NotImplemented('Must be implemented in backend')
 
 
+class MediaPlayer(GObject.Object):
+    __gtype_name__ = 'MediaPlayer'
+
+    # "reactive" props that can be watched/binded
+    name = GObject.Property(type=str, default='')
+    status = GObject.Property(type=str, default='Stopped')
+    can_seek = GObject.Property(type=bool, default=False)
+    can_go_next = GObject.Property(type=bool, default=True)
+    can_go_prev = GObject.Property(type=bool, default=True)
+    volume = GObject.Property(type=float, minimum=0, maximum=1.5)
+    title = GObject.Property(type=str, default='')
+    artist = GObject.Property(type=str, default='')
+    album = GObject.Property(type=str, default='')
+    cover = GObject.Property(type=str, default='')
+
+    def __init__(self, pid: str):
+        super().__init__()
+        self.pid = pid
+
+    def __repr__(self):
+        return (
+            f"<MediaPlayer '{self.pid}' name='{self.name}' status={self.status}>"
+        )
+
+    def set_volume(self, volume: float):
+        raise NotImplemented('Must be implemented in backend')
+
+    def play(self):
+        raise NotImplemented('Must be implemented in backend')
+
+    def prev(self):
+        raise NotImplemented('Must be implemented in backend')
+
+    def next(self):
+        raise NotImplemented('Must be implemented in backend')
+
+
 _sort_weights = {
     AudioChannelGroup.OUTPUT: 1,
     AudioChannelGroup.INPUT: 2,
@@ -91,9 +130,13 @@ class AudioService(Signalable, metaclass=Singleton):
         super().__init__()
         self._cancellable = Gio.Cancellable()  # TODO use on shutdown !!!
 
-        # AudioChannels list store, with dict index for faster access by id
+        # AudioChannel list store, with dict index for faster access by id
         self._channels = Gio.ListStore()
         self._ch_index: dict[str, AudioChannel] = {}  # cid => AudioChannel
+
+        # AudioPlayer list store, with dict index for faster access by id
+        self._players = Gio.ListStore()
+        self._pl_index: dict[str, MediaPlayer] = {}  # pid => AudioPlayer
 
         # try to load the pipewire backend
         try:
@@ -102,14 +145,28 @@ class AudioService(Signalable, metaclass=Singleton):
         except Exception as e:
             ERR(e)
 
+        # try to load the mpris backend
+        try:
+            from .audio_mpris2 import Mpris2Backend
+            Mpris2Backend(self, self._cancellable)
+        except Exception as e:
+            ERR(e)
+
     #
     # public API
     @property
-    def channels(self) -> Gio.ListStore:
+    def channels(self) -> Gio.ListStore:  # AudioChannel store
         return self._channels
 
     def channel_by_id(self, cid: str) -> AudioChannel | None:
         return self._ch_index.get(cid, None)
+
+    @property
+    def players(self) -> Gio.ListStore:  # MediaPlayer store
+        return self._players
+
+    def player_by_id(self, pid: str) -> MediaPlayer | None:
+        return self._pl_index.get(pid, None)
 
     #
     # backends API
@@ -129,9 +186,30 @@ class AudioService(Signalable, metaclass=Singleton):
 
         # find position in store (needed to remove, hmm...somethig faster?)
         res, pos = self._channels.find(cha)
-        if not res or pos < 1:
+        if not res or pos < 0:
             ERR(f'Cannot find channel to remove: {cha_id}')
             return
 
         # remove from the store
         self._channels.remove(pos)
+
+    def player_added(self, player: MediaPlayer):
+        DBG(f'AAS: Player added {player}')
+        self._players.append(player)
+        self._pl_index[player.pid] = player
+
+    def player_removed(self, pid: str):
+        # pop the Player from the index
+        player = self._pl_index.pop(pid, None)
+        if not player:
+            ERR(f'Removed not existant player: {repr(pid)}')
+            return
+
+        # find position in store (needed to remove, hmm...somethig faster?)
+        res, pos = self._players.find(player)
+        if not res or pos < 0:
+            ERR(f'Cannot find player to remove: {repr(pid)}')
+            return
+
+        # remove from the store
+        self._players.remove(pos)

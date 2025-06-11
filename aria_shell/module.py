@@ -1,10 +1,9 @@
 from __future__ import annotations
-from typing import Mapping, Optional
 
 import importlib
 import traceback
 
-from gi.repository import Gtk, Gdk
+from gi.repository import Gdk
 
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.gadget import AriaGadget
@@ -40,7 +39,7 @@ class AriaModule:
         check if the module can run (rise RuntimeError otherwise)
 
         """
-        DBG(f'Module pre-load: {self}')
+        DBG(f'Module __init__: {self}')
         self.initialized = False
         self.gadgets: list[AriaGadget] = []
 
@@ -97,11 +96,11 @@ def load_modules(names: list[str]):
         if name in _loaded_modules:
             continue
 
-        INF(f'Pre-loading module: {name}')
         # TODO: if the module is a full path then import directly,
         #       needed to support external modules
-        module_name = 'aria_shell.modules.' + name
-        class_name = name.capitalize() + 'Module'
+        module_name = f'aria_shell.modules.{name.lower()}'
+        class_name = f'{name}Module'
+        INF(f"Pre-loading module '{name}' from {module_name}.{class_name}")
         try:
             # import the python module, es: aria_shell.modules.clock
             pymodule = importlib.import_module(module_name)
@@ -127,13 +126,17 @@ def unload_all_modules():
             traceback.print_exc()
 
 
-def request_module_gadget(name: str, monitor: Gdk.Monitor) -> Optional[Gtk.Widget]:
+def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
+    # name of the gadget can contain config instance id, es: "Clock:2"
     if ':' in name:
-        mod_name = name.split(':')[0]
+        mod_name = name.split(':', 1)[0]
     else:
         mod_name = name
+
+    # find the preloaded module
     mod = _loaded_modules.get(mod_name, None)
-    if not mod:
+    if mod is None:
+        ERR(f'Cannot find module "{mod_name}" for gadget "{name}"')
         return None
 
     # lazy initialization of modules: module_init is called just before the

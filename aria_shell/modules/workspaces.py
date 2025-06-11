@@ -1,5 +1,3 @@
-from typing import Mapping
-
 from gi.repository import Gtk, Gdk
 
 from aria_shell.gadget import AriaGadget
@@ -20,13 +18,13 @@ class WorkspacesConfigModel(AriaConfigModel):
     focus_window_on_click: bool = False
 
 
-class WorkspacesModule(AriaModule):
+class WorkSpacesModule(AriaModule):
     config_model_class = WorkspacesConfigModel
 
     def __init__(self):
         super().__init__()
         self.wm_service: WindowManagerService | None = None
-        self.gadgets: list[WorkspacesGadget] = [] # just for typing
+        self.gadgets: list[WorkSpacesGadget] = [] # just for typing
 
     def module_init(self):
         super().module_init()
@@ -39,7 +37,7 @@ class WorkspacesModule(AriaModule):
 
     def gadget_new(self, conf: WorkspacesConfigModel, monitor: Gdk.Monitor):
         super().gadget_new(conf, monitor)
-        return WorkspacesGadget(conf, monitor.get_connector())
+        return WorkSpacesGadget(conf, monitor.get_connector())
 
     def wm_event_cb(self, event):
         if event == 'changed':
@@ -58,7 +56,7 @@ class WorkspacesModule(AriaModule):
                     instance.set_active_workspace(win.workspace_id)
 
 
-class WorkspacesGadget(AriaGadget):
+class WorkSpacesGadget(AriaGadget):
     def __init__(self, conf: WorkspacesConfigModel, monitor_name: str):
         super().__init__('workspaces')
         self.conf = conf

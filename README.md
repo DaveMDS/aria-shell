@@ -1,4 +1,7 @@
 # Aria desktop shell for Wayland
+![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DDaveMDS%2Faria-shell%26branch%3Dmain%26ignored%3Dtests%26languages%3DPython&logo=python&label=Lines%20of%20code&color=75a8d3)
+![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DDaveMDS%2Faria-shell%26branch%3Dmain%26ignored%3Dtests%26languages%3DCSS&label=CSS&color=ff3c78)
+
 
 > [!WARNING]
 > 

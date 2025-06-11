@@ -78,7 +78,7 @@ class XDGDesktopService(metaclass=Singleton):
     """ Implement XDG DesktopFile and XDGIcons """
     def __init__(self):
         # hack for clients with unusual window class
-        self.apps_class_map = AriaConfig().section('apps_class_map')
+        self.apps_class_map = AriaConfig().section_dict('apps_class_map')
 
         # init icon theme
         self.icon_theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())

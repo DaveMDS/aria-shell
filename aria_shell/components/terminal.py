@@ -12,7 +12,7 @@ from gi.repository import Gtk4LayerShell as GtkLayerShell
 from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp
 from aria_shell.utils.env import HOME, SHELL
-from aria_shell.config import AriaConfigModel
+from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
 
@@ -48,7 +48,7 @@ class AriaTerminal(AriaWindow):
             raise RuntimeError('Vte not available')
         super().__init__(css_class='aria-terminal')
         self.set_application(app)
-        self.conf = TerminalConfig(app.conf.section('terminal'))
+        self.conf = AriaConfig().section('terminal', TerminalConfig)
         self.terminal: Vte.Terminal | None = None
         self._fullscreen: bool = False
         self._setup_window(app)

@@ -24,7 +24,7 @@ class AriaModule:
     Modules can provide gadgets by implementing the gadget_new() method.
 
     Attributes:
-        config_model_class: AriaConfigModel class to use
+        config_model_class: AriaConfigModel class to use for parsing config section
         initialized: True after module_init() has been called
         gadgets: list of active AriaGadgets, list is aria-managed, do not edit!
 
@@ -151,8 +151,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
 
     # prepare the gadget config, using the model in config_model_class
     if mod.config_model_class:
-        raw_conf = AriaConfig().section(name)
-        conf = mod.config_model_class(raw_conf)
+        conf = AriaConfig().section(name, mod.config_model_class)
     else:
         conf = None
 

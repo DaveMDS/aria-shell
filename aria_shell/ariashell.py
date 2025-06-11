@@ -21,7 +21,7 @@ from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
 from aria_shell.components.commands import AriaCommands
 from aria_shell.components.cmd_socket import AriaCommandSocket
-from aria_shell.components.panel import AriaPanel
+from aria_shell.components.panel import AriaPanel, PanelConfig
 from aria_shell.components.launcher import AriaLauncher
 from aria_shell.components.terminal import AriaTerminal
 
@@ -76,7 +76,7 @@ class AriaShell(Gtk.Application):
         self.commands = AriaCommands(app)
 
         # load and init all requested modules
-        load_modules(self.conf.get_list('general', 'modules'))
+        load_modules(self.conf.general.modules)
 
     def _on_app_shutdown(self, _app: Gtk.Application):
         INF(f'Shutting down... {self}')
@@ -125,7 +125,7 @@ class AriaShell(Gtk.Application):
             self._load_css_file(user_css)
 
         # load style from config (can be named and searched in sys dirs)
-        style = self.conf.get_str('general', 'style')
+        style = self.conf.general.style
         if style:
             if not style.endswith('.css'):
                 style += '.css'
@@ -174,12 +174,13 @@ class AriaShell(Gtk.Application):
         output_name = monitor.get_connector()
         DBG(f'Creating panels for monitor {output_name}')
         for section in sorted(self.conf.sections('panel')):
-            outputs = self.conf.get_list(section, 'outputs')
+            panel_conf = self.conf.section(section, PanelConfig)
+            outputs = panel_conf.outputs
             if (not outputs) or ('all' in outputs) or (output_name in outputs):
                 if ':' in section and not section.endswith(':'):
                     panel_name = section.split(':')[1]
                 else:
                     panel_name = 'Aria Panel'
                 INF(f'Running panel "{panel_name}" on monitor {output_name}')
-                panel = AriaPanel(panel_name, self.conf.section(section), monitor, self)
+                panel = AriaPanel(panel_name, panel_conf, monitor, self)
                 self.panels.setdefault(output_name, []).append(panel)

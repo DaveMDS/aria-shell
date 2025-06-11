@@ -7,7 +7,7 @@ from aria_shell.i18n import i18n
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
 from aria_shell.ui import AriaWindow, AriaBox
 from aria_shell.utils import clamp, PerfTimer
-from aria_shell.config import AriaConfigModel
+from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
 
@@ -42,7 +42,7 @@ class AriaLauncher(AriaWindow):
     def __init__(self, app: Gtk.Application):
         super().__init__(css_class='aria-launcher')
         self.set_application(app)
-        self.conf = LauncherConfig(app.conf.section('launcher'))
+        self.conf = AriaConfig().section('launcher', LauncherConfig)
         self._setup_window()
 
         # declare internal widgets

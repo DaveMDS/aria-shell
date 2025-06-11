@@ -1,7 +1,5 @@
-from __future__ import annotations
-from typing import Mapping, Optional
-
-from gi.repository import Gdk, Gtk, Gtk4LayerShell as GtkLayerShell  # noqa
+from gi.repository import Gdk, Gtk
+from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.ui import AriaBox, AriaWindow
 from aria_shell.utils import clamp
@@ -78,16 +76,16 @@ class PanelConfig(AriaConfigModel):
 
 
 class AriaPanel(AriaWindow):
-    def __init__(self, name: str, user_settings: Mapping[str, str], monitor: Gdk.Monitor, app):
+    def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app):
         super().__init__(title='Aria panel')
         self.set_application(app)
-        self._box1: Optional[Gtk.Box] = None
-        self._box2: Optional[Gtk.Box] = None
-        self._box3: Optional[Gtk.Box] = None
+        self._box1: Gtk.Box | None = None
+        self._box2: Gtk.Box | None = None
+        self._box3: Gtk.Box | None = None
 
         self.name = name
+        self.conf = conf
         self.monitor = monitor
-        self.conf = PanelConfig(user_settings)
         self.setup_window()
         self.populate()
 

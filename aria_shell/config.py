@@ -74,7 +74,7 @@ class AriaConfig(metaclass=Singleton):
 
 
 class AriaConfigModel:
-    """ Base class for modules configs """
+    """ Base class for annotated config sections """
     def __init__(self, conf_data: Mapping[str, str]):
         # Config classes must be annotated
         if not hasattr(self, '__annotations__'):

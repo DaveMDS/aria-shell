@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Mapping
 import psutil
 
 from gi.repository import GLib, Gdk, Gtk
 
-from aria_shell.ui import AriaGadget, AriaPopup
+from aria_shell.gadget import AriaGadget
+from aria_shell.ui import AriaPopup
 from aria_shell.utils import safe_format, human_size
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
@@ -14,7 +14,7 @@ from aria_shell.utils.logger import get_loggers
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class PerfConfig(AriaConfigModel):
+class PerfConfigModel(AriaConfigModel):
     """ Configuration model """
     format: str = ' {cpu:2.0f}%   {mem:2.0f}%'
     interval: int = 2
@@ -57,6 +57,8 @@ class SysInfo:
 
 
 class PerfModule(AriaModule):
+    config_model_class = PerfConfigModel
+
     def __init__(self):
         super().__init__()
         self.timer: int = 0
@@ -71,9 +73,8 @@ class PerfModule(AriaModule):
         self.stop_timer()
         super().module_shutdown()
 
-    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_gadget_new(user_settings, monitor)
-        conf = PerfConfig(user_settings)
+    def gadget_new(self, conf: PerfConfigModel, monitor: Gdk.Monitor):
+        super().gadget_new(conf, monitor)
 
         # recreate the timer if this instance need a shorter interval
         if self.interval and conf.interval < self.interval:
@@ -134,7 +135,7 @@ class PerfModule(AriaModule):
 
 
 class PerfGadget(AriaGadget):
-    def __init__(self, conf: PerfConfig):
+    def __init__(self, conf: PerfConfigModel):
         super().__init__('cpu', clickable=True)
         self.conf = conf
 
@@ -150,7 +151,7 @@ class PerfGadget(AriaGadget):
 
         # update label
         text = safe_format(
-            self.conf.format, PerfConfig.format,
+            self.conf.format, PerfConfigModel.format,
             cpu=info.cpu_percent,
             mem=info.mem_percent,
             load1=info.load1_percent,

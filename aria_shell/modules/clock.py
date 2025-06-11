@@ -7,18 +7,21 @@ from gi.repository import GLib, Gtk, Gdk
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
-from aria_shell.ui import AriaPopup, AriaGadget
+from aria_shell.gadget import AriaGadget
+from aria_shell.ui import AriaPopup
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class ClockConfig(AriaConfigModel):
+class ClockConfigModel(AriaConfigModel):
     format: str = '%H:%M'
     tooltip_format: str = '%A %d %B %Y'
 
 
 class ClockModule(AriaModule):
+    config_model_class = ClockConfigModel
+
     def __init__(self):
         super().__init__()
         self.timer: int = 0
@@ -35,10 +38,9 @@ class ClockModule(AriaModule):
             self.timer = 0
         super().module_shutdown()
 
-    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_gadget_new(user_settings, monitor)
+    def gadget_new(self, conf: ClockConfigModel, monitor: Gdk.Monitor):
+        super().gadget_new(conf, monitor)
         DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
-        conf = ClockConfig(user_settings)
         instance = ClockGadget(conf)
         self.timer_cb(instance)  # perform a first update
         return instance
@@ -55,7 +57,7 @@ class ClockModule(AriaModule):
 
 
 class ClockGadget(AriaGadget):
-    def __init__(self, conf: ClockConfig):
+    def __init__(self, conf: ClockConfigModel):
         super().__init__('clock', clickable=True)
         self.conf = conf
 

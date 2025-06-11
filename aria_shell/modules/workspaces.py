@@ -2,7 +2,8 @@ from typing import Mapping
 
 from gi.repository import Gtk, Gdk
 
-from aria_shell.ui import AriaGadget, AriaBox
+from aria_shell.gadget import AriaGadget
+from aria_shell.ui import AriaBox
 from aria_shell.services.wm import WindowManagerService, Workspace, Window
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.utils.logger import get_loggers
@@ -13,13 +14,15 @@ from aria_shell.config import AriaConfigModel
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class WorkspacesConfig(AriaConfigModel):
+class WorkspacesConfigModel(AriaConfigModel):
     show_windows: bool = True
     all_monitors: bool = False
     focus_window_on_click: bool = False
 
 
 class WorkspacesModule(AriaModule):
+    config_model_class = WorkspacesConfigModel
+
     def __init__(self):
         super().__init__()
         self.wm_service: WindowManagerService | None = None
@@ -34,10 +37,8 @@ class WorkspacesModule(AriaModule):
         # TODO shutdown WindowManagerService
         super().module_shutdown()
 
-    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_gadget_new(user_settings, monitor)
-        DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
-        conf = WorkspacesConfig(user_settings)
+    def gadget_new(self, conf: WorkspacesConfigModel, monitor: Gdk.Monitor):
+        super().gadget_new(conf, monitor)
         return WorkspacesGadget(conf, monitor.get_connector())
 
     def wm_event_cb(self, event):
@@ -58,7 +59,7 @@ class WorkspacesModule(AriaModule):
 
 
 class WorkspacesGadget(AriaGadget):
-    def __init__(self, conf: WorkspacesConfig, monitor_name: str):
+    def __init__(self, conf: WorkspacesConfigModel, monitor_name: str):
         super().__init__('workspaces')
         self.conf = conf
         self.monitor_name = monitor_name

@@ -7,7 +7,8 @@ from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
-from aria_shell.ui import AriaGadget, AriaPopup, AriaSlider
+from aria_shell.gadget import AriaGadget
+from aria_shell.ui import AriaPopup, AriaSlider
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup, MediaPlayer
 )
@@ -16,11 +17,13 @@ from aria_shell.services.audio import (
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class AudioConfig(AriaConfigModel):
+class AudioConfigModel(AriaConfigModel):
     mixer_command: str = ''
 
 
 class AudioModule(AriaModule):
+    config_model_class = AudioConfigModel
+
     def __init__(self):
         super().__init__()
 
@@ -30,14 +33,13 @@ class AudioModule(AriaModule):
     def module_shutdown(self):
         super().module_shutdown()
 
-    def module_gadget_new(self, user_settings: Mapping[str, str], monitor: Gdk.Monitor):
-        super().module_gadget_new(user_settings, monitor)
-        conf = AudioConfig(user_settings)
+    def gadget_new(self, conf: AudioConfigModel, monitor: Gdk.Monitor):
+        super().gadget_new(conf, monitor)
         return AudioGadget(conf)
 
 
 class AudioGadget(AriaGadget):
-    def __init__(self, conf: AudioConfig):
+    def __init__(self, conf: AudioConfigModel):
         super().__init__('audio', clickable=True)
         self.conf = conf
         self.popup: AriaPopup | None = None

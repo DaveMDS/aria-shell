@@ -98,6 +98,7 @@ https://github.com/davidmalcolm/pygobject
 https://lazka.github.io/pgi-docs
 https://api.pygobject.gnome.org
 https://docs.gtk.org/gtk4/visual_index.html
+https://docs.gtk.org/gtk4/css-properties.html
 
 
 # CREDITS

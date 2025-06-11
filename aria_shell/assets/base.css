@@ -16,10 +16,20 @@ TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
 */
 
 :root {
-  --aria-bg-color: @theme_bg_color;
-  --aria-fg-color: @theme_fg_color;  /*not-tested*/
+  /* https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-22/gtk/theme/Adwaita/_colors-public.scss */
+  --aria-bg-color: @theme_bg_color;      /* widget base background color */
+  --aria-fg-color: @theme_fg_color;      /* widget text/foreground color */
+  --aria-text-color: @theme_text_color;  /* text color for entries, views and content in general */
+  --aria-base-color: @theme_base_color;  /* text widgets and the like base background color */
+  --aria-border-color: @borders;         /* widgets main borders color */
+  --aria-warning-color: @warning_color;  /*  */
+  --aria-error-color: @error_color;      /*  */
+  --aria-success-color: @success_color;  /*  */
+
   --aria-window-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
 }
+
+/*@define-color theme_bg_color red;*/
 
 /* Reset CSS
 window {
@@ -62,6 +72,14 @@ window.aria-terminal .aria-terminal {
   padding: 6px;
 }
 
+/* Aria Popup
+popover    .aria-popup
+├─ contents
+╰─ arrow
+*/
+.aria-popup contents {
+  /*background-color: red;*/
+}
 
 /* Aria panel
 --------------------------------------------------------------------------------
@@ -69,6 +87,7 @@ window              .aria-panel
 ╰─ centerbox        .aria-panel-box
    ├─ box           .aria-panel-box-start
    │  ╰─ Gadget     .aria-gadget .gadget-<name>
+   │     ╰─ popover .aria-popup
    ├─ box           .aria-panel-box-center
    │  ╰─ Gadget     .aria-gadget .gadget-<name>
    ╰─ box           .aria-panel-box-end

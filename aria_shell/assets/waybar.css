@@ -18,8 +18,20 @@ AUTOCONFIG:
 
 */
 
+@define-color theme_fg_color white;
+@define-color theme_bg_color rgba(43, 48, 59, 1.0);
+@define-color theme_base_color red;
+@define-color theme_unfocused_bg_color red;
+@define-color theme_unfocused_base_color red;
+@define-color theme_unfocused_bg_color red;
+@define-color unfocused_insensitive_color red;
+@define-color content_view_bg red;
+@define-color text_view_bg red;
+
+
+/*@define-color menu_color red;*/
+
 :root {
-  --aria-bg-color: rgba(43, 48, 59, .5);
   --aria-fg-color: white;
 
   --inset-border: inset 0 -3px rgba(100, 114, 125, 0.5);
@@ -27,6 +39,7 @@ AUTOCONFIG:
 
   --color-gray: #64727D;
   --color-green: #2ecc71;
+  --color-yellow: #f1c40f;
 }
 
 * {
@@ -42,6 +55,20 @@ AUTOCONFIG:
   box-shadow: var(--inset-border);
 }*/
 
+
+.aria-popup arrow {
+  background-color: @theme_bg_color;
+}
+.aria-popup contents {
+  background-color: @theme_bg_color;
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--inset-border);
+}
+
+list, listview {
+  background-color: transparent;
+}
 
 /* Aria panel */
 .aria-panel {
@@ -95,6 +122,10 @@ AUTOCONFIG:
 }
 .gadget-cpu {
   background-color: var(--color-green);
+  color: black;
+}
+.gadget-audio {
+  background-color: var(--color-yellow);
   color: black;
 }
 

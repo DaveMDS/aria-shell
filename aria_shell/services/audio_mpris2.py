@@ -30,12 +30,12 @@ class Mpris2Backend(metaclass=Singleton):
         self.aas = aas
         self.bus = SessionMessageBus()
 
-        # build the list of players
+        # build the list of connected players
         for name in self.bus.proxy.ListNames():
             if name.startswith(self.BASE_PATH):
                 self.player_add(name)
 
-        # and keep the list updated when names changes
+        # and keep the list updated when new names appear/vanish
         self.bus.proxy.NameOwnerChanged.connect(self.name_owner_changed_cb)
 
     def name_owner_changed_cb(self, name: str, _old_owner: str, new_owner: str):
@@ -46,10 +46,12 @@ class Mpris2Backend(metaclass=Singleton):
                 self.player_del(name)
 
     def player_add(self, obj_path: str):
+        DBG(f'MPRIS New player at path: {obj_path}')
         player = Mpris2Player(self.bus, obj_path)
         self.aas.player_added(player)
 
     def player_del(self, obj_path: str):
+        DBG(f'MPRIS Player is gone: {obj_path}')
         self.aas.player_removed(obj_path)
 
 
@@ -75,33 +77,36 @@ class Mpris2Player(MediaPlayer):
         self._on_props_changed(self.PLAYER_IFACE, self._init_props, [])
 
     def _on_props_changed(self, iface: str, props: dict|set, invalidated: list):
-        # print('Changed', iface, props, invalidated)
-        if iface == self.PLAYER_IFACE:
-            if 'Identity' in props:
-                self.name = self._proxy.Identity
-            if 'PlaybackStatus' in props:
-                self.status = self._proxy.PlaybackStatus
-            if 'Volume' in props:
-                self.volume = self._proxy.Volume
-            if 'CanSeek' in props:
-                self.can_seek = self._proxy.CanSeek
-            if 'CanGoNext' in props:
-                self.can_go_next = self._proxy.CanGoNext
-            if 'CanGoPrevious' in props:
-                self.can_go_prev = self._proxy.CanGoPrevious
-            if 'Metadata' in props:
-                metadata = self._proxy.Metadata
-                if 'xesam:title' in metadata:
-                    self.title = metadata['xesam:title'].unpack()
-                if 'xesam:album' in metadata:
-                    self.album = metadata['xesam:album'].unpack()
-                if 'xesam:artist' in metadata:
-                    artist = metadata['xesam:artist'].unpack()
-                    if isinstance(artist, list):
-                        artist = ', '.join(artist)
-                    self.artist = artist
-                if 'mpris:artUrl' in metadata:
-                    self.cover = metadata['mpris:artUrl'].unpack()
+        print('Changed', self, iface, props, invalidated)
+        try:
+            if iface == self.PLAYER_IFACE:
+                if 'Identity' in props:
+                    self.name = self._proxy.Identity
+                if 'PlaybackStatus' in props:
+                    self.status = self._proxy.PlaybackStatus
+                if 'Volume' in props:
+                    self.volume = self._proxy.Volume
+                if 'CanSeek' in props:
+                    self.can_seek = self._proxy.CanSeek
+                if 'CanGoNext' in props:
+                    self.can_go_next = self._proxy.CanGoNext
+                if 'CanGoPrevious' in props:
+                    self.can_go_prev = self._proxy.CanGoPrevious
+                if 'Metadata' in props:
+                    metadata = self._proxy.Metadata
+                    if 'xesam:title' in metadata:
+                        self.title = metadata['xesam:title'].unpack()
+                    if 'xesam:album' in metadata:
+                        self.album = metadata['xesam:album'].unpack()
+                    if 'xesam:artist' in metadata:
+                        artist = metadata['xesam:artist'].unpack()
+                        if isinstance(artist, list):
+                            artist = ', '.join(artist)
+                        self.artist = artist
+                    if 'mpris:artUrl' in metadata:
+                        self.cover = metadata['mpris:artUrl'].unpack()
+        except Exception as e:
+            ERR(f'Cannot read player properties. Error: {e}. {self}')
 
     def play(self):
         self._proxy.PlayPause()

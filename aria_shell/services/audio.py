@@ -143,14 +143,14 @@ class AudioService(Signalable, metaclass=Singleton):
             from .audio_pipewire import PipeWireBackend
             PipeWireBackend(self, self._cancellable)
         except Exception as e:
-            ERR(e)
+            ERR(f'Cannot load PipeWire audio backend. Error: {e}')
 
         # try to load the mpris backend
         try:
             from .audio_mpris2 import Mpris2Backend
             Mpris2Backend(self, self._cancellable)
         except Exception as e:
-            ERR(e)
+            ERR(f'Cannot load Mpris2 audio backend. Error: {e}')
 
     #
     # public API

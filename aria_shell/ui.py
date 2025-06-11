@@ -80,6 +80,7 @@ class AriaPopup(Gtk.Popover):
         self.set_child(content)
         self.set_autohide(True)  # TODO config (or pin icon in a corner?)
         self.set_has_arrow(True)  # TODO config
+        self.add_css_class('aria-popup')
         self.connect('closed', self._on_closed)
         # self.connect('destroy', lambda _: print("!!! DESTROY !!!  \o/"))
         self.popup()

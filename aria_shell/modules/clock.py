@@ -1,10 +1,8 @@
-from typing import Mapping
-
 from datetime import datetime
 
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk
 
-from aria_shell.module import AriaModule
+from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
 from aria_shell.ui import AriaPopup
@@ -37,8 +35,8 @@ class ClockModule(AriaModule):
             self.timer = None
         super().module_shutdown()
 
-    def gadget_new(self, conf: ClockConfigModel, monitor: Gdk.Monitor):
-        super().gadget_new(conf, monitor)
+    def gadget_new(self, conf: ClockConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(conf, ctx)
         DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
         instance = ClockGadget(conf)
         self.timer_cb(instance)  # perform a first update

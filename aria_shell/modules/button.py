@@ -1,9 +1,9 @@
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk
 
 from aria_shell.components.commands import AriaCommands
 from aria_shell.utils import exec_detached
 from aria_shell.utils.logger import get_loggers
-from aria_shell.module import AriaModule
+from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
 
@@ -21,8 +21,8 @@ class ButtonConfigModel(AriaConfigModel):
 class ButtonModule(AriaModule):
     config_model_class = ButtonConfigModel
 
-    def gadget_new(self, conf: ButtonConfigModel, monitor: Gdk.Monitor):
-        super().gadget_new(conf, monitor)
+    def gadget_new(self, conf: ButtonConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(conf, ctx)
         return ButtonGadget(conf)
 
 

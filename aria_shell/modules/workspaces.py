@@ -1,11 +1,11 @@
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk
 
 from aria_shell.gadget import AriaGadget
 from aria_shell.ui import AriaBox
 from aria_shell.services.wm import WindowManagerService, Workspace, Window
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.utils.logger import get_loggers
-from aria_shell.module import AriaModule
+from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 
 
@@ -35,9 +35,9 @@ class WorkSpacesModule(AriaModule):
         # TODO shutdown WindowManagerService
         super().module_shutdown()
 
-    def gadget_new(self, conf: WorkspacesConfigModel, monitor: Gdk.Monitor):
-        super().gadget_new(conf, monitor)
-        return WorkSpacesGadget(conf, monitor.get_connector())
+    def gadget_new(self, conf: WorkspacesConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(conf, ctx)
+        return WorkSpacesGadget(conf, ctx.monitor.get_connector())
 
     def wm_event_cb(self, event):
         if event == 'changed':

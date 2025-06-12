@@ -1,8 +1,8 @@
-from gi.repository import Gtk, Gdk, GObject
+from gi.repository import Gtk, GObject
 
 from aria_shell.utils import exec_detached
 from aria_shell.utils.logger import get_loggers
-from aria_shell.module import AriaModule
+from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.gadget import AriaGadget
@@ -40,8 +40,8 @@ class AudioModule(AriaModule):
     def module_shutdown(self):
         super().module_shutdown()
 
-    def gadget_new(self, conf: AudioConfigModel, monitor: Gdk.Monitor):
-        super().gadget_new(conf, monitor)
+    def gadget_new(self, conf: AudioConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(conf, ctx)
         return AudioGadget(conf)
 
 

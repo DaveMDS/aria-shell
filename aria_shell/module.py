@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import importlib
 import traceback
 
@@ -15,6 +16,17 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 # index of loaded modules: {'clock': ClockModule,...}
 _loaded_modules: dict[str, AriaModule] = {}
+
+
+@dataclass
+class GadgetRunContext:
+    """ Context data received in AriaModule.gadget_new()
+    Attributes:
+        config: The config section model for the gadget
+        monitor: The monitor where the gadget has been requested
+    """
+    config: AriaConfigModel
+    monitor: Gdk.Monitor
 
 
 class AriaModule:
@@ -73,14 +85,15 @@ class AriaModule:
 
     def gadget_new(self,
                    conf: AriaConfigModel,
-                   monitor: Gdk.Monitor
+                   ctx: GadgetRunContext,
                    ) -> AriaGadget | None:
+        # TODO: remove conf param, is already in ctx !
         """
         Create a new AriaGadget instance.
 
         Args:
             conf: The config section for this instance
-            monitor: The monitor where the gadget has been requested
+            ctx: Context data for the gadget
 
         Returns:
             A newly created AriaGadget or None in case of failure
@@ -162,7 +175,8 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
 
     # request a new gadget instance from the module
     try:
-        instance = mod.gadget_new(conf, monitor)
+        ctx = GadgetRunContext(config=conf, monitor=monitor)
+        instance = mod.gadget_new(conf, ctx)
         assert isinstance(instance, AriaGadget)
     except Exception as e:
         ERR(f'Cannot create instance of module: {name}. Exception: {e}. Full traceback follow...')

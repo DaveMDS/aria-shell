@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 import psutil
 
-from gi.repository import GLib, Gdk, Gtk
+from gi.repository import GLib, Gtk
 
 from aria_shell.gadget import AriaGadget
 from aria_shell.ui import AriaPopup
 from aria_shell.utils import safe_format, human_size
-from aria_shell.module import AriaModule
+from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
@@ -73,8 +73,8 @@ class PerfModule(AriaModule):
         self.stop_timer()
         super().module_shutdown()
 
-    def gadget_new(self, conf: PerfConfigModel, monitor: Gdk.Monitor):
-        super().gadget_new(conf, monitor)
+    def gadget_new(self, conf: PerfConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(conf, ctx)
 
         # recreate the timer if this instance need a shorter interval
         if self.interval and conf.interval < self.interval:

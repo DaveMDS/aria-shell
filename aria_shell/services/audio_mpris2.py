@@ -72,20 +72,28 @@ class Mpris2Player(MediaPlayer):
         # get a proxy for the Player object (on all ifaces)
         self._proxy = bus.get_proxy(service_name, self.OBJ_PATH)
 
-        # watch properties for changes (and update now)
+        # read all props (on both ifaces)
+        props = self._proxy.GetAll(self.MAIN_IFACE)
+        self._on_props_changed(self.MAIN_IFACE, props, [])
+        props = self._proxy.GetAll(self.PLAYER_IFACE)
+        self._on_props_changed(self.PLAYER_IFACE, props, [])
+
+        # watch properties for changes (on all ifaces!)
         self._proxy.PropertiesChanged.connect(self._on_props_changed)
-        self._on_props_changed(self.PLAYER_IFACE, self._init_props, [])
 
     def _on_props_changed(self, iface: str, props: dict|set, invalidated: list):
-        print('Changed', self, iface, props, invalidated)
+        # print('Changed', self, iface, props, invalidated)
         try:
-            if iface == self.PLAYER_IFACE:
+            if iface == self.MAIN_IFACE:
                 if 'Identity' in props:
                     self.name = self._proxy.Identity
+            elif iface == self.PLAYER_IFACE:
                 if 'PlaybackStatus' in props:
                     self.status = self._proxy.PlaybackStatus
                 if 'Volume' in props:
                     self.volume = self._proxy.Volume
+                    if self.has_volume is False:  # stupid firefox dont have Volume
+                        self.has_volume = True
                 if 'CanSeek' in props:
                     self.can_seek = self._proxy.CanSeek
                 if 'CanGoNext' in props:

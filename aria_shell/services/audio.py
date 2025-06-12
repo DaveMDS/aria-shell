@@ -87,6 +87,7 @@ class MediaPlayer(GObject.Object):
     can_seek = GObject.Property(type=bool, default=False)
     can_go_next = GObject.Property(type=bool, default=True)
     can_go_prev = GObject.Property(type=bool, default=True)
+    has_volume = GObject.Property(type=bool, default=False)
     volume = GObject.Property(type=float, minimum=0, maximum=1.5)
     title = GObject.Property(type=str, default='')
     artist = GObject.Property(type=str, default='')

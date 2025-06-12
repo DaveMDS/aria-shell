@@ -1,5 +1,3 @@
-from typing import Mapping
-
 from gi.repository import Gtk, Gdk, GObject
 
 from aria_shell.utils import exec_detached
@@ -12,6 +10,15 @@ from aria_shell.ui import AriaPopup, AriaSlider
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup, MediaPlayer
 )
+
+# from edgar:
+# __gadget_name__ = 'Audio'
+# __gadget_vers__ = '0.2'
+# __gadget_auth__ = 'DaveMDS'
+# __gadget_mail__ = 'dave@gurumeditation.it'
+# __gadget_desc__ = 'The complete audio gadget.'
+# __gadget_vapi__ = 2
+# __gadget_opts__ = {'popup_on_desktop': True}
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)

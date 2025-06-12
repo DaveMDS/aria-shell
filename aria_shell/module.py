@@ -21,7 +21,7 @@ class AriaModule:
     """
     Base class for all Aria modules.
 
-    Modules can provide gadgets by implementing the gadget_new() method.
+    A Module can provide gadgets by implementing the gadget_new() method.
 
     Attributes:
         config_model_class: AriaConfigModel class to use for parsing config section
@@ -29,7 +29,7 @@ class AriaModule:
         gadgets: list of active AriaGadgets, list is aria-managed, do not edit!
 
     """
-    config_model_class = AriaConfigModel
+    config_model_class = AriaConfigModel  # must be overridden in subclasses
 
     def __init__(self):
         """
@@ -37,6 +37,9 @@ class AriaModule:
 
         Do not make any intensive work here! Just define variables and
         check if the module can run (rise RuntimeError otherwise)
+
+        raise:
+            RuntimeError if the module cannot be started
 
         """
         DBG(f'Module __init__: {self}')
@@ -90,8 +93,9 @@ class AriaModule:
 #     return _loaded_modules.get(name, None)
 
 
-def load_modules(names: list[str]):
-    for name in names:
+def preload_all_modules():
+    """ Preload all the modules listed in config file """
+    for name in AriaConfig().general.modules:
         # never import twice
         if name in _loaded_modules:
             continue
@@ -118,7 +122,8 @@ def load_modules(names: list[str]):
 
 
 def unload_all_modules():
-    for name, mod in _loaded_modules.items():
+    while _loaded_modules:
+        name, mod = _loaded_modules.popitem()
         try:
             mod.module_shutdown()
         except Exception as e:

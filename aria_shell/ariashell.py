@@ -11,12 +11,12 @@ import gi
 gi.require_version('Gdk', '4.0')
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
-from gi.repository import Gio, Gdk, Gtk, Gtk4LayerShell as LayerShell  # noqa
+from gi.repository import Gdk, Gtk
 
 from aria_shell.i18n import setup_locale
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
-from aria_shell.module import load_modules, unload_all_modules
+from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
 from aria_shell.components.commands import AriaCommands
@@ -75,8 +75,8 @@ class AriaShell(Gtk.Application):
         # init commands
         self.commands = AriaCommands(app)
 
-        # load and init all requested modules
-        load_modules(self.conf.general.modules)
+        # preload all modules
+        preload_all_modules()
 
     def _on_app_shutdown(self, _app: Gtk.Application):
         INF(f'Shutting down... {self}')

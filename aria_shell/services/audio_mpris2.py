@@ -81,52 +81,77 @@ class Mpris2Player(MediaPlayer):
         # watch properties for changes (on all ifaces!)
         self._proxy.PropertiesChanged.connect(self._on_props_changed)
 
-    def _on_props_changed(self, iface: str, props: dict|set, invalidated: list):
+    def _on_props_changed(self, iface: str, props: dict, invalidated: list):
         # print('Changed', self, iface, props, invalidated)
         try:
             if iface == self.MAIN_IFACE:
                 if 'Identity' in props:
-                    self.name = self._proxy.Identity
+                    if (val := props['Identity'].unpack()) != self.name:
+                        self.name = val
             elif iface == self.PLAYER_IFACE:
                 if 'PlaybackStatus' in props:
-                    self.status = self._proxy.PlaybackStatus
+                    if (val := props['PlaybackStatus'].unpack()) != self.status:
+                        self.status = val
                 if 'Volume' in props:
-                    self.volume = self._proxy.Volume
-                    if self.has_volume is False:  # stupid firefox dont have Volume
+                    if (val := props['Volume'].unpack()) != self.volume:
+                        self.volume = val
+                    # stupid firefox do not have Volume
+                    if self.has_volume is False:
                         self.has_volume = True
                 if 'CanSeek' in props:
-                    self.can_seek = self._proxy.CanSeek
+                    if (val := props['CanSeek'].unpack()) != self.can_seek:
+                        self.can_seek = val
                 if 'CanGoNext' in props:
-                    self.can_go_next = self._proxy.CanGoNext
+                    if (val := props['CanGoNext'].unpack()) != self.can_go_next:
+                        self.can_go_next = val
                 if 'CanGoPrevious' in props:
-                    self.can_go_prev = self._proxy.CanGoPrevious
+                    if (val := props['CanGoPrevious'].unpack()) != self.can_go_prev:
+                        self.can_go_prev = val
                 if 'Metadata' in props:
-                    metadata = self._proxy.Metadata
+                    metadata = props['Metadata'].unpack()
+                    # print("META", metadata)
                     if 'xesam:title' in metadata:
-                        self.title = metadata['xesam:title'].unpack()
+                        if (val := metadata['xesam:title']) != self.title:
+                            self.title = val
                     if 'xesam:album' in metadata:
-                        self.album = metadata['xesam:album'].unpack()
+                        if (val := metadata['xesam:album']) != self.album:
+                            self.album = val
                     if 'xesam:artist' in metadata:
-                        artist = metadata['xesam:artist'].unpack()
-                        if isinstance(artist, list):
-                            artist = ', '.join(artist)
-                        self.artist = artist
+                        val = metadata['xesam:artist']
+                        if isinstance(val, list):
+                            val = ', '.join(val)
+                        if self.artist != val:
+                            self.artist = val
                     if 'mpris:artUrl' in metadata:
-                        self.cover = metadata['mpris:artUrl'].unpack()
+                        if (val := metadata['mpris:artUrl']) != self.cover:
+                            self.cover = val
         except Exception as e:
             ERR(f'Cannot read player properties. Error: {e}. {self}')
 
     def play(self):
-        self._proxy.PlayPause()
+        try:
+            self._proxy.PlayPause()
+        except Exception as e:
+            ERR(f'Cannot execute PlayPause. Error: {e}')
 
     def next(self):
-        self._proxy.Next()
+        try:
+            self._proxy.Next()
+        except Exception as e:
+            ERR(f'Cannot execute Next. Error: {e}')
 
     def prev(self):
-        self._proxy.Previous()
+        try:
+            self._proxy.Previous()
+        except Exception as e:
+            ERR(f'Cannot execute Previous. Error: {e}')
 
     def set_volume(self, volume: float):
-        self._proxy.Volume = volume
+        if volume != self.volume:
+            try:
+                self._proxy.Volume = volume
+            except Exception as e:
+                ERR(f'Cannot set Volume property. Error: {e}')
 
     # def rais(self):
     #     self.proxy.Raise(dbus_interface=self.MAIN_IFACE)

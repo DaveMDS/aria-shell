@@ -21,8 +21,9 @@ class ButtonConfigModel(AriaConfigModel):
 class ButtonModule(AriaModule):
     config_model_class = ButtonConfigModel
 
-    def gadget_new(self, conf: ButtonConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_new(conf, ctx)
+    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(ctx)
+        conf: ButtonConfigModel = ctx.config  # noqa
         return ButtonGadget(conf)
 
 

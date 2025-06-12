@@ -35,9 +35,9 @@ class ClockModule(AriaModule):
             self.timer = None
         super().module_shutdown()
 
-    def gadget_new(self, conf: ClockConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_new(conf, ctx)
-        DBG(f'AriaModule module_instance_new {self.__class__.__name__}')
+    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(ctx)
+        conf: ClockConfigModel = ctx.config  # noqa
         instance = ClockGadget(conf)
         self.timer_cb(instance)  # perform a first update
         return instance

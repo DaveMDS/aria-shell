@@ -35,8 +35,9 @@ class WorkSpacesModule(AriaModule):
         # TODO shutdown WindowManagerService
         super().module_shutdown()
 
-    def gadget_new(self, conf: WorkspacesConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_new(conf, ctx)
+    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(ctx)
+        conf: WorkspacesConfigModel = ctx.config  # noqa
         return WorkSpacesGadget(conf, ctx.monitor.get_connector())
 
     def wm_event_cb(self, event):

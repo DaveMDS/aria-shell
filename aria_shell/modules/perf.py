@@ -73,8 +73,9 @@ class PerfModule(AriaModule):
         self.stop_timer()
         super().module_shutdown()
 
-    def gadget_new(self, conf: PerfConfigModel, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_new(conf, ctx)
+    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_new(ctx)
+        conf: PerfConfigModel = ctx.config  # noqa
 
         # recreate the timer if this instance need a shorter interval
         if self.interval and conf.interval < self.interval:

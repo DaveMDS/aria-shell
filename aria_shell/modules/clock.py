@@ -2,13 +2,14 @@ from typing import Mapping
 
 from datetime import datetime
 
-from gi.repository import GLib, Gtk, Gdk
+from gi.repository import Gtk, Gdk
 
-from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
 from aria_shell.ui import AriaPopup
+from aria_shell.utils.logger import get_loggers
+from aria_shell.utils import Timer
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -24,18 +25,16 @@ class ClockModule(AriaModule):
 
     def __init__(self):
         super().__init__()
-        self.timer: int = 0
+        self.timer: Timer | None = None
 
     def module_init(self):
         super().module_init()
-        self.timer = GLib.timeout_add_seconds(
-            1, self.timer_cb, priority=GLib.PRIORITY_LOW  # noqa
-        )
+        self.timer = Timer(1, self.timer_cb)
 
     def module_shutdown(self):
         if self.timer:
-            GLib.source_remove(self.timer)
-            self.timer = 0
+            self.timer.stop()
+            self.timer = None
         super().module_shutdown()
 
     def gadget_new(self, conf: ClockConfigModel, monitor: Gdk.Monitor):

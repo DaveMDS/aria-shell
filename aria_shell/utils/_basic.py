@@ -78,6 +78,66 @@ class Observable:
     #     TODO
 
 
+class Timer:
+    """ Simple Timer class on top of GLib timeout_add
+
+    Params:
+        interval (always in seconds) can be int or float:
+            float -> create hi resolution timer, for subseconds precision
+            int -> create a low resolution, cheaper timer
+        callback: Callable to call on each timer tick, must return:
+            True: to continue executing the timer
+            False: to stop the timer
+        autostart: if False the timer will not start on init
+        *a *ka: positional and named params to be passed in callback
+    """
+    def __init__(self,
+                 interval: int | float,
+                 callback: Callable[[...], [bool]],
+                 autostart=True,
+                 *a, **ka):
+        if not isinstance(interval, int | float):
+            raise TypeError('Timer.interval must be int or float')
+        if not isinstance(callback, Callable):
+            raise TypeError('Timer.callback must be callable')
+        if isinstance(interval, float) and interval > 5:
+            WRN('for low resolution timer use an int interval !!!')
+        self.interval = interval
+        self.cb_info = (callback, a, ka)
+        self.timeout_id = 0
+        if autostart:
+            self.start()
+
+    def __repr__(self):
+        return f'<Timer #{self.timeout_id} cb={self.cb_info[0]}>'
+
+    def start(self):
+        if self.timeout_id == 0:
+            if isinstance(self.interval, int):
+                self.timeout_id = GLib.timeout_add_seconds(
+                    self.interval, self._timeout_cb,
+                    priority=GLib.PRIORITY_LOW  # noqa
+                )
+            elif isinstance(self.interval, float):
+                self.timeout_id = GLib.timeout_add(
+                    int(self.interval * 1000), self._timeout_cb,
+                    priority=GLib.PRIORITY_DEFAULT  # noqa
+                )
+        else:
+            ERR(f'Timer already started {self}')
+
+    def stop(self):
+        if self.timeout_id:
+            GLib.source_remove(self.timeout_id)
+            self.timeout_id = 0
+        else:
+            ERR(f'Timer not started {self}')
+
+    def _timeout_cb(self):
+        callback, a, ka = self.cb_info
+        return callback(*a, **ka)
+
+
 def clamp(val, low, high):
     """ Return val clamped between low and high """
     if val < low:

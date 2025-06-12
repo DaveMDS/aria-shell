@@ -1,4 +1,4 @@
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk, GLib, GObject
 
 from aria_shell.utils import exec_detached
 from aria_shell.utils.logger import get_loggers
@@ -152,58 +152,67 @@ class AudioGadget(AriaGadget):
         row = Gtk.ListBoxRow(selectable=False, activatable=False)
         # row.connect('destroy', lambda *_: print('DESTROY....'*6))
 
-        # main grid in a frame
-        grid = Gtk.Grid()
+        # main vbox in a frame
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         frame = Gtk.Frame(label=player.name, label_xalign=0.5)
         frame.set_size_request(200, -1)
-        frame.set_child(grid)
+        frame.set_child(vbox)
         row.set_child(frame)
 
+        # cover + metadata in a vbox
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        vbox.append(hbox)
+
         # cover image
+        img = Gtk.Image(pixel_size=80)
         def cover_to_file(_, cover: str) -> str | None:
-            if cover.startswith('file://'):
+            if not cover:
+                return None
+            elif cover.startswith('file://'):
                 return cover[7:]
             else:  # TODO: write an AriaImage that support urls
-                WRN(f'Unsupported cover art url {cover}  TODO!!')
-        img = Gtk.Image(pixel_size=80)
+                WRN(f'Unsupported cover art url "{cover}"  TODO!!')
+                return None
         player.bind_property(
+            # set file on cover change
             'cover', img, 'file',
             GObject.BindingFlags.SYNC_CREATE,
             transform_to=cover_to_file
         )
-        grid.attach(img, 0, 0 , 1, 3)
+        player.bind_property(
+            # hide image if cover not available
+            'cover', img, 'visible',
+            GObject.BindingFlags.SYNC_CREATE,
+            transform_to=lambda _, cover: cover and cover.startswith('file://')
+        )
+        hbox.append(img)
 
-        # Metadata: title
-        lbl_props = {
-            'hexpand': True, 'xalign': 0.0, 'wrap': True, 'max_width_chars': 40
-        }
-        lbl = Gtk.Label(**lbl_props)
+        # Metadata label
+        def metadata_to_markup(_, _title):
+            markup: list[str] = []
+            if player.title:
+                title = GLib.markup_escape_text(player.title)
+                markup.append(f'<b>{title}</b>')
+            if player.artist:
+                artist = GLib.markup_escape_text(player.artist)
+                markup.append(f'<span>{artist}</span>')
+            if player.album:
+                album = GLib.markup_escape_text(player.album)
+                markup.append(f'<span>{album}</span>')
+            return '\n'.join(markup)
+        lbl = Gtk.Label(hexpand=True, xalign=0.0, yalign=0.0,
+                        wrap=True, max_width_chars=40, use_markup=True)
         player.bind_property(
             'title', lbl, 'label',
             GObject.BindingFlags.SYNC_CREATE,
+            transform_to=metadata_to_markup,
         )
-        grid.attach(lbl, 1, 0, 1, 1)
-
-        # Metadata: artist
-        lbl = Gtk.Label(**lbl_props)
-        player.bind_property(
-            'artist', lbl, 'label',
-            GObject.BindingFlags.SYNC_CREATE,
-        )
-        grid.attach(lbl, 1, 1, 1, 1)
-
-        # Metadata: album
-        lbl = Gtk.Label(**lbl_props)
-        player.bind_property(
-            'album', lbl, 'label',
-            GObject.BindingFlags.SYNC_CREATE,
-        )
-        grid.attach(lbl, 1, 2, 1, 1)
+        hbox.append(lbl)
 
         # 3 buttons in a row
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
                        halign=Gtk.Align.CENTER)
-        grid.attach(hbox, 0, 3, 2, 1)
+        vbox.append(hbox)
 
         # button: previous
         btn = Gtk.Button(icon_name='media-skip-backward')
@@ -243,14 +252,18 @@ class AudioGadget(AriaGadget):
 
         # volume slider
         sli = AriaSlider(hexpand=True)
-        # sli.connect('destroy', lambda *_: print('---' * 30))
         sli.set_range(0, 1.0)  # TODO 1.5 (configurabile)
         sli.connect('value-changed', lambda o: player.set_volume(o.props.value))
+        player.bind_property(
+            # only show the slider if the player support Volume
+            'has_volume', sli, 'visible',
+            GObject.BindingFlags.SYNC_CREATE,
+        )
         player.bind_property(
             # keep slider in sync with player.volume
             'volume', sli, 'value',
             GObject.BindingFlags.SYNC_CREATE,
         )
-        grid.attach(sli, 0, 4, 2, 1)
+        vbox.append(sli)
 
         return row

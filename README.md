@@ -67,6 +67,7 @@ psutil (optional, for the perf gadget)
 ## Aria launcher
 - [x] search and run .desktop files
 - [x] support multiple search providers (implemented only .desktop app)
+- [ ] keep apps list updated when install/uninstall apps
 - [ ] remember most used and rank first
 - [ ] support secondary commands (fe: Firefox new private window)
 - [ ] other search providers? es: files, websearch, ??

@@ -3,13 +3,15 @@
 TODO DOC a little bit
 
 """
+from typing import Literal
+
 from dasbus.server.interface import dbus_interface, dbus_signal
 from dasbus.server.interface import accepts_additional_arguments
 from dasbus.client.observer import DBusObserver
 from dasbus.typing import Bool, Int, Str, List
 from dasbus.connection import SessionMessageBus
 
-from gi.repository import Gtk, GObject, Gio, GLib
+from gi.repository import Gtk, GObject, Gio, GLib, Graphene
 
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
@@ -58,9 +60,27 @@ class TrayIcon(Gtk.Overlay):
         self.image = Gtk.Image()
         self.set_child(self.image)
         self._binds: list[GObject.Binding] = []
+        self._sni: StatusNotifierItem | None = None
+
+        self.set_cursor_from_name('pointer')  # TODO giusto? ci piace?
+
+        # EventController to receive mouse clicks
+        ec = Gtk.GestureSingle(button=0)
+        ec.connect('begin', self._on_mouse_down)
+        self.add_controller(ec)
+
+        # EventController to receive mouse wheel events
+        ec = Gtk.EventControllerScroll.new(
+            Gtk.EventControllerScrollFlags.VERTICAL
+            | Gtk.EventControllerScrollFlags.DISCRETE
+        )
+        ec.connect('scroll', self._on_scroll)
+        self.add_controller(ec)
 
     def bind(self, item: 'StatusNotifierItem'):
         print('BIND', self)
+        if self._binds is not None:  # should never happend
+            self.unbind()
         self._binds.append(
             item.bind_property(
                'icon_name', self.image, 'icon_name',
@@ -73,17 +93,42 @@ class TrayIcon(Gtk.Overlay):
                 GObject.BindingFlags.SYNC_CREATE,
             )
         )
+        self._sni = item
 
     def unbind(self):
         print('UNBIND', self)
         while self._binds and (bind := self._binds.pop()):
             bind.unbind()
+        self._sni = None
 
+    def _on_scroll(self, _ec: Gtk.EventControllerScroll, dx: float, dy: float):
+        if self._sni:
+            if dy != 0:
+                self._sni.scroll(int(dy), 'vertical')
+            elif dx != 0:
+                self._sni.scroll(int(dx), 'horizontal')
+
+    def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
+        # ...ok, on wayland is not really possible to get absolute pos
+        # needed by Activate. Will use point relative to the parent win.
+        # When the panel is on top this should work more or less...
+        if self._sni:
+            win = self.get_native()
+            _, x, y = ec.get_point()
+            _, p = self.compute_point(win, Graphene.Point(x, y)) # noqa
+            x, y = int(x), int(y)
+            match ec.get_current_button():
+                case 1:
+                    self._sni.activate(x, y)
+                case 2:
+                    self._sni.secondary_activate(x, y)
+                case 3:
+                    self._sni.context_menu(x, y)
 
 
 class TrayGadget(AriaGadget):
     def __init__(self, conf: TrayConfigModel):
-        super().__init__('tray', clickable=True)
+        super().__init__('tray')
 
         factory = Gtk.SignalListItemFactory()
         factory.connect('setup', self._factory_item_setup)
@@ -119,8 +164,6 @@ class TrayGadget(AriaGadget):
         tico: TrayIcon = list_item.get_child()  # noqa
         tico.unbind()
 
-    def on_mouse_down(self, button: int):
-        print('click:', button)
 
 
 ################################################################################
@@ -206,7 +249,7 @@ class StatusNotifierItem(GObject.Object):
             )
 
     def __repr__(self):
-        return f"<SNI id='{self.id}' status='{self.status}' icon='{self.icon_name}'>"
+        return f"<SNI id='{self.id}' status='{self.status}' icon='{self.icon_name}' menu='{self.menu}'>"
 
     # keep track of prop Get async requests, to not request the same prop
     # while it is already being requested. The set keep the names of props.
@@ -297,6 +340,30 @@ class StatusNotifierItem(GObject.Object):
                 if val != self.attention_icon_name:
                     self.attention_icon_name = val
 
+    def activate(self, x: int, y: int):
+        try:
+            self._proxy.Activate(x, y)
+        except AttributeError:
+            pass
+
+    def context_menu(self, x: int, y: int):
+        # TODO use dbus menu here if available, otherwise call ContextMenu
+        try:
+            self._proxy.ContextMenu(x, y)
+        except AttributeError:
+            pass
+
+    def secondary_activate(self, x: int, y: int):
+        try:
+            self._proxy.SecondaryActivate(x, y)
+        except AttributeError:
+            pass
+
+    def scroll(self, delta: int, orientation: Literal['horizontal', 'vertical']):
+        try:
+            self._proxy.Scroll(delta, orientation)
+        except AttributeError:
+            pass
 
 ITEMS_STORE = Gio.ListStore(item_type=StatusNotifierItem)
 

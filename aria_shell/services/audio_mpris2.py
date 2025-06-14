@@ -62,11 +62,6 @@ class Mpris2Player(MediaPlayer):
     MAIN_IFACE = 'org.mpris.MediaPlayer2'
     PLAYER_IFACE = 'org.mpris.MediaPlayer2.Player'
 
-    _init_props = {
-        'Identity', 'PlaybackStatus', 'Volume', 'CanSeek',
-        'CanGoNext', 'CanGoPrevious', 'Metadata'
-    }
-
     def __init__(self, bus: SessionMessageBus, service_name):
         super().__init__(pid=service_name)
         # get a proxy for the Player object (on all ifaces)

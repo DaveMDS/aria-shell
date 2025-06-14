@@ -137,3 +137,11 @@ Gadget              .aria-gadget .gadget-workspaces
 .gadget-workspaces .aria-workspace .aria-workspace-window.active {
   /*border: 1px solid green; */
 }
+
+/* Gadget: Tray
+--------------------------------------------------------------------------------
+TODO !!!!
+*/
+.gadget-tray .aria-tray-item {
+  padding: 0 3px;
+}

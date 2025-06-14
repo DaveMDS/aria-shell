@@ -9,7 +9,7 @@ from dasbus.client.observer import DBusObserver
 from dasbus.typing import Bool, Int, Str, List
 from dasbus.connection import SessionMessageBus
 
-from gi.repository import Gtk, GObject, Gio
+from gi.repository import Gtk, GObject, Gio, GLib
 
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
@@ -49,31 +49,75 @@ class TrayModule(AriaModule):
         return TrayGadget(conf)
 
 
+class TrayIcon(Gtk.Overlay):
+    """ A Gtk.Widget that is able to show a single StatusNotifierItem """
+    __gtype_name__ = 'TrayIcon'
+
+    def __init__(self):
+        super().__init__(css_classes=['aria-tray-item'])
+        self.image = Gtk.Image()
+        self.set_child(self.image)
+        self._binds: list[GObject.Binding] = []
+
+    def bind(self, item: 'StatusNotifierItem'):
+        print('BIND', self)
+        self._binds.append(
+            item.bind_property(
+               'icon_name', self.image, 'icon_name',
+                GObject.BindingFlags.SYNC_CREATE,
+            )
+        )
+        self._binds.append(
+            item.bind_property(
+                'tooltip', self, 'tooltip_markup',
+                GObject.BindingFlags.SYNC_CREATE,
+            )
+        )
+
+    def unbind(self):
+        print('UNBIND', self)
+        while self._binds and (bind := self._binds.pop()):
+            bind.unbind()
+
+
+
 class TrayGadget(AriaGadget):
     def __init__(self, conf: TrayConfigModel):
         super().__init__('tray', clickable=True)
 
-        lbl = Gtk.Label(label='Tray')
-        self.append(lbl)
-
         factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self._factory_item_setup)
-        factory.connect("bind", self._factory_item_bind)
-        model = Gtk.SingleSelection.new(ITEMS_STORE)
-        list_view = Gtk.ListView(model=model, factory=factory,
-                                 orientation=Gtk.Orientation.HORIZONTAL)
+        factory.connect('setup', self._factory_item_setup)
+        factory.connect('bind', self._factory_item_bind)
+        factory.connect('unbind', self._factory_item_unbind)
+
+        model = Gtk.SingleSelection(model=ITEMS_STORE, autoselect=False)
+        list_view = Gtk.ListView(
+            model=model,
+            factory=factory,
+            orientation=Gtk.Orientation.HORIZONTAL,
+        )
         self.append(list_view)
 
-    def _factory_item_setup(self, factory, list_item):
-        print("setup", list_item, self)
-        lbl = Gtk.Label(label='asd')
-        list_item.set_child(lbl)
+    @staticmethod
+    def _factory_item_setup(_, list_item: Gtk.ListItem):
+        """ create a new for the list item """
+        # create a new TrayIcon and attach to ListItem
+        list_item.set_child(TrayIcon())
+        list_item.set_activatable(False)
+        list_item.set_selectable(False)
 
-    def _factory_item_bind(self, factory, list_item):
-        print("bind", list_item, self)
-        item = list_item.get_item()
-        label = list_item.get_child()
-        label.set_label(item.id)
+    @staticmethod
+    def _factory_item_bind(_, list_item: Gtk.ListItem):
+        """ bind the previously created TrayIcon with the StatusNotifierItem """
+        item: StatusNotifierItem = list_item.get_item()  # noqa
+        tico: TrayIcon = list_item.get_child()  # noqa
+        tico.bind(item)
+
+    @staticmethod
+    def _factory_item_unbind(_, list_item: Gtk.ListItem):
+        """ unbind the previously binded StatusNotifierItem """
+        tico: TrayIcon = list_item.get_child()  # noqa
+        tico.unbind()
 
     def on_mouse_down(self, button: int):
         print('click:', button)
@@ -94,23 +138,164 @@ STATUS_NOTIFIER_WATCHER_PATH = '/StatusNotifierWatcher'
 
 
 class StatusNotifierItem(GObject.Object):
-    """ TODO IMPLEMENT """
+    """ Implement the remote object StatusNotifierItem """
+    __gtype_name__ = 'StatusNotifierItem'
+
+    IFACE = 'org.kde.StatusNotifierItem'
+
+    # "reactive" properties that can be watched/binded
+    id = GObject.Property(type=str)
+    status = GObject.Property(type=str)  # Literal['Passive','Active','NeedsAttention']
+    category = GObject.Property(type=str)
+    title = GObject.Property(type=str, default='')
+    tooltip = GObject.Property(type=str, default='')
+    # item_is_menu = GObject.Property(type=Bool, default=False) # not usefull
+    menu = GObject.Property(type=str, default='')
+    # TODO WindowId  ??
+    icon_name = GObject.Property(type=str, default='')
+    overlay_icon_name = GObject.Property(type=str, default='')
+    attention_icon_name = GObject.Property(type=str, default='')
+    # TODO IconPixmap
+    # TODO OverlayIconPixmap
+    # TODO AttentionIconPixmap
+    # TODO AttentionMovieName !!
+
     def __init__(self, full_path: str):
         super().__init__()
 
-        # :1.12520/org/ayatana/NotificationItem/nm_applet
+        # full_path: ":1.12520/org/ayatana/NotificationItem/nm_applet"
         i = full_path.index('/')
         bus_name, object_path = full_path[:i], full_path[i:]
 
-        self._proxy = SESSION_BUS.get_proxy(
-            bus_name,  # service_name  es :1.4
-            object_path,  # object_path
-            'org.kde.StatusNotifierItem', # interface_name
-        )
+        # create the object proxy for this path
+        self._proxy = SESSION_BUS.get_proxy(bus_name, object_path)
 
-    @property
-    def id(self) -> str:
-        return self._proxy.Id
+        # async read all the properties from the remote object
+        self._proxy.GetAll(
+            self.IFACE,
+            callback=self._get_all_callback,
+            # timeout=2000,
+        )
+        # self.connect('destroy', lambda *_: print("DESTROY -- "*10))
+        # watch properties for changes (NEEDED?)
+        # if hasattr(self._proxy, 'PropertiesChanged'):
+        #     self._proxy.PropertiesChanged.connect(
+        #         lambda ifa, props, inv: self._sync_properties(props.keys())
+        #     )
+
+        # connect to all various New* signals
+        if hasattr(self._proxy, 'NewStatus'):
+            self._proxy.NewStatus.connect(
+                lambda: self._request_properties(['Status']),
+            )
+        if hasattr(self._proxy, 'NewTitle'):
+            self._proxy.NewTitle.connect(
+                lambda: self._request_properties(['Title'])
+            )
+        if hasattr(self._proxy, 'NewToolTip'):
+            self._proxy.NewToolTip.connect(
+                lambda: self._request_properties(['ToolTip'])
+            )
+        if hasattr(self._proxy, 'NewIcon'):
+            self._proxy.NewIcon.connect(
+                lambda: self._request_properties(['IconName', 'IconPixmap'])
+            )
+        if hasattr(self._proxy, 'NewAttentionIcon'):
+            self._proxy.NewAttentionIcon.connect(
+                lambda: self._request_properties(['AttentionIconName', 'AttentionIconPixmap'])
+            )
+
+    def __repr__(self):
+        return f"<SNI id='{self.id}' status='{self.status}' icon='{self.icon_name}'>"
+
+    # keep track of prop Get async requests, to not request the same prop
+    # while it is already being requested. The set keep the names of props.
+    _alive_async_requests = set()
+
+    def _request_properties(self, props: list[str]):
+        """ request the given properties from the remote object """
+        INF(f'SyncProps: {props} {self.id}')
+        for prop_name in props:
+            if prop_name not in self._alive_async_requests:
+                self._proxy.Get(self.IFACE, prop_name,
+                                callback=self._get_callback,
+                                callback_args=(prop_name,),
+                                timeout=100)  # ms!
+                self._alive_async_requests.add(prop_name)
+            else:
+                WRN(f'PROP ALREADY REQUESTED {prop_name}')
+
+    def _get_all_callback(self, call):
+        """ async props GetAll() method response """
+        try:
+            vals: dict = call()
+        except Exception as e:
+            ERR(f'XXX {e} {self.id}')
+            return
+        for prop_name, variant_val in vals.items():
+            # reuse the callback for single prop get
+            self._get_callback(None, prop_name, variant_val)
+
+    def _get_callback(self, call, prop_name, val=None):
+        """ async prop Get() method response """
+        self._alive_async_requests.discard(prop_name)
+        if callable(call):
+            try:
+                INF(f'Get {prop_name} _')
+                val = call()
+                INF(f'Get {prop_name} VAL {repr(val)})')
+            except Exception as e:
+                ERR(f'YYY {e} {self.id} {prop_name}')
+                return
+
+        if val is not None:
+            self._update_internal_property(prop_name, val)
+
+    def _update_internal_property(self, prop_name: str, val):
+        """ Update our "reactive" properties with new values """
+        if val is None:
+            return
+
+        if isinstance(val, GLib.Variant):
+            val = val.unpack()
+
+        match prop_name:
+            case 'Id':
+                if val != self.id:
+                    self.id = val
+            case 'Category':
+                if val != self.category:
+                    self.category = val
+            case 'Status':
+                if val != self.status:
+                    self.status = val
+            case 'Title':
+                if val != self.title:
+                    self.title = val
+            case 'Menu':
+                if val != self.menu:
+                    self.menu = val
+            case 'ToolTip':
+                # ToolTip: (icon_name, icon_data, title, descriptive_text)
+                if isinstance(val, tuple) and len(val) == 4:
+                    title, text = val[2:4]
+                    if title and text:
+                        full = f'<b>{title}</b>\n{text}'
+                    else:
+                        full = title or text or ''
+                    if full != self.tooltip:
+                        self.tooltip = full
+                elif self.tooltip:
+                    self.tooltip = ''
+            case 'IconName':
+                if val != self.icon_name:
+                    self.icon_name = val
+            case 'OverlayIconName':
+                if val != self.overlay_icon_name:
+                    self.overlay_icon_name = val
+            case 'AttentionIconName':
+                if val != self.attention_icon_name:
+                    self.attention_icon_name = val
 
 
 ITEMS_STORE = Gio.ListStore(item_type=StatusNotifierItem)

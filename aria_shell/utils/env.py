@@ -43,5 +43,4 @@ def lookup_config_file(filename: str, prefix='aria-shell') -> Path | None:
         if file.exists():
             return file
     file = ARIA_ASSETS_DIR / filename
-    if file.exists():
-        return file
+    return file if file.exists() else None

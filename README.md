@@ -1,7 +1,6 @@
 # Aria desktop shell for Wayland
-![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DDaveMDS%2Faria-shell%26branch%3Dmain%26ignored%3Dtests%26languages%3DPython&logo=python&label=Lines%20of%20code&color=75a8d3)
-![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Floc-counter.onrender.com%2F%3Frepo%3DDaveMDS%2Faria-shell%26branch%3Dmain%26ignored%3Dtests%26languages%3DCSS&label=CSS&color=ff3c78)
-
+![](https://img.shields.io/endpoint?label=LOC&color=blue&logo=python&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.py)
+![](https://img.shields.io/endpoint?label=CSS&color=pink&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.css)
 
 > [!WARNING]
 > 
@@ -48,7 +47,9 @@ psutil (optional, for the perf gadget)
      * [x] MPRIS2 for media player controls
      * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
      * [ ] show default mic volume in gadget (optional)
-   * [ ] tray + app menu (like mac menu) see ApplicationWindow
+   * [x] tray: use (K)StatusNotifierItem protocol
+     *  [ ] full dbus menu support
+     *  [ ] support for pixmap icons over dbus
    * [ ] screenshot / screenrecorder
    * [ ] dark/light switch (update aria and gtk/qt config)
    * [ ] power: idle inhibitor, battery/ac status, power profiles

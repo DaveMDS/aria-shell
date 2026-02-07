@@ -19,6 +19,7 @@ lots to write here... help wanted ;)
 
 ### System dependency
 ```
+Gio 2.0 (GioUnix 2.0)
 Gtk4
 Gtk4LayerShell
 vte4 (optional, for the embedded terminal)

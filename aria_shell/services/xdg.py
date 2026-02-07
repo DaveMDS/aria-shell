@@ -1,6 +1,6 @@
 from operator import attrgetter
 
-from gi.repository import Gtk, Gdk, Gio
+from gi.repository import Gtk, Gdk, Gio, GioUnix
 
 from aria_shell.config import AriaConfig
 from aria_shell.utils import Singleton, PerfTimer, exec_detached
@@ -11,7 +11,7 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class DesktopApp:
-    def __init__(self, gapp: Gio.DesktopAppInfo):
+    def __init__(self, gapp: GioUnix.DesktopAppInfo):
         self._gapp = gapp
 
     def __repr__(self):

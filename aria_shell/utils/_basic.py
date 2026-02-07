@@ -289,7 +289,7 @@ class PerfTimer:
 #     o i suoi surrogati più brevi...quasi hack
 #
 #     name = ReactiveValue('Mary')
-#     name.get()  or  utente.name.value
+#     name.get()  or  name.value
 #     name.set('John')
 #     name.watch(lambda name: print(f'new name: {name}'))
 #     name.bind(....)
@@ -298,7 +298,7 @@ class PerfTimer:
 #     name()     -> get
 #     name(val)  -> set
 #
-#     class Utente:
+#     class User:
 #         __init__(name):
 #             self.name = ReactiveValue(name)
 #     """

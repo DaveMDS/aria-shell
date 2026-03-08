@@ -137,7 +137,7 @@ class AriaPanel(AriaWindow):
     def populate(self):
         # add a clock in the center for empty configs
         if not self.conf.ontheleft and not self.conf.ontheright and not self.conf.inthecenter:
-            self.conf.inthecenter = ['clock']
+            self.conf.inthecenter = ['Clock']
         # populate left
         for module_name in self.conf.ontheleft:
             if gadget := request_module_gadget(module_name, self.monitor):

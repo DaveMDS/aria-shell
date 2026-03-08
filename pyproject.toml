@@ -3,7 +3,7 @@ name = 'aria-shell'
 description = 'A full, user-friendly, slim and configurable shell for Wayland'
 version = '0.0.0'
 
-requires-python = '>=3.8'
+requires-python = '>=3.14'
 dependencies = [
     'PyGObject >= 3.50.0',
     'pycairo',

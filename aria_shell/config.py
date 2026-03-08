@@ -2,6 +2,7 @@ from typing import Mapping, TypeVar
 
 import configparser
 from pathlib import Path
+from annotationlib import get_annotations
 
 from aria_shell.utils import Singleton
 from aria_shell.utils.logger import get_loggers
@@ -15,7 +16,9 @@ class AriaConfigModel:
     """ Base class for annotated config sections """
     def __init__(self, conf_data: Mapping[str, str]):
         # Config classes must be annotated
-        if not hasattr(self, '__annotations__'):
+        try:
+            annotations = get_annotations(self.__class__)
+        except TypeError:
             return
 
         # fill the class with values in conf_data, validating using annotation
@@ -28,34 +31,40 @@ class AriaConfigModel:
             if not str_val:
                 continue
 
-            # get the annotation string for this attribute (mandatory)
-            annot: str = self.__annotations__.get(key)
-            if annot is None:
-                ERR(f'Param {self.__class__.__name__}.{key} miss type annotation!')
+            # get the annotation for this attribute (mandatory)
+            annot = annotations.get(key)
+            if not annot:
+                ERR(f'Attribute {self.__class__.__name__}.{key} miss type annotation!')
                 continue
 
             # DBG(f'§ key: {key}  val: {str_val}  annot: {repr(annot)}')
-            if annot in (str, 'str'):
+            if annot == str:
                 val = str_val
 
-            elif annot in (int, 'int'):
+            elif annot == int:
                 try:
                     val = int(str_val)
                 except (TypeError, ValueError):
-                    ERR(f'Invalid value: {str_val} for key: {key}. Must be integer')
+                    ERR(f'Invalid value: {str_val} for key: {key}. Must be a valid integer')
                     continue
 
-            elif annot in (float, 'float'):
+            elif annot == float:
                 try:
                     val = float(str_val)
                 except (TypeError, ValueError):
-                    ERR(f'Invalid value: {str_val} for key: {key}. Must be float')
+                    ERR(f'Invalid value: {str_val} for key: {key}. Must be a valid float')
                     continue
 
-            elif annot in (bool, 'bool'):
-                val = str_val.lower() in ('true', '1', 'yes')
+            elif annot == bool:
+                if str_val in ('true', '1', 'yes'):
+                    val = True
+                elif str_val in ('false', '0', 'no'):
+                    val = False
+                else:
+                    ERR(f'Invalid value: {str_val} for key: {key}. Must be a valid boolean')
+                    continue
 
-            elif annot in (list[str], 'list[str]'):
+            elif annot == list[str]:
                 val = str_val.split()
 
             else:
@@ -71,6 +80,7 @@ class AriaConfigModel:
                     ERR(e)
                     continue
 
+            # store the validated value
             setattr(self, key, val)
 
     def dump(self):

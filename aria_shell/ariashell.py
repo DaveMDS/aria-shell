@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import argparse
+import platform
 
 # For GTK4 Layer Shell to get linked before libwayland-client
 # we must explicitly load it before importing with gi
@@ -21,6 +22,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 
 from gi.repository import Gdk, Gtk, GLib
+print(f'Python: {platform.python_version()}')
 print(f'PyGObject: {gi.__version__}')
 print(f'GLib {'.'.join(map(str, GLib.glib_version))}')
 print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}')

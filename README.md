@@ -19,6 +19,7 @@ lots to write here... help wanted ;)
 
 ### System dependency
 ```
+Python >= 3.14
 Gio 2.0 (GioUnix 2.0)
 Gtk4
 Gtk4LayerShell

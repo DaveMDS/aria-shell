@@ -21,7 +21,7 @@ lots to write here... help wanted ;)
 ```
 Python >= 3.14
 Gio 2.0 (GioUnix 2.0)
-Gtk4
+Gtk >= 4.14
 Gtk4LayerShell
 vte4 (optional, for the embedded terminal)
 libwireplumber (optional, for the audio gadget)

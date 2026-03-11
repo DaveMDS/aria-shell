@@ -6,25 +6,31 @@ This stylesheet is always applied to all Aria windows, and contain the
 bare minimum needed styles.
 
 This file must be as neutral as possible, to work out-of-the-box with
-all existing Gtk themes.
+existing Gtk themes.
 
 To change the style user must provide an Aria theme css file, do not
 modify this one.
 
-TIP: GTK_DEBUG=interactive to run the usefull GTK Inspector
+TIP: GTK_DEBUG=interactive to run the GTK Inspector
 
+https://docs.gtk.org/gtk4/css-overview.html
+https://docs.gtk.org/gtk4/css-properties.html
+https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-22/gtk/theme/Adwaita/_colors-public.scss
 */
 
 :root {
-  /* https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-22/gtk/theme/Adwaita/_colors-public.scss */
   --aria-bg-color: @theme_bg_color;      /* widget base background color */
   --aria-fg-color: @theme_fg_color;      /* widget text/foreground color */
   --aria-text-color: @theme_text_color;  /* text color for entries, views and content in general */
-  --aria-base-color: @theme_base_color;  /* text widgets and the like base background color */
+  --aria-base-color: @theme_base_color;  /* base bg color (panel, text widgets) */
   --aria-border-color: @borders;         /* widgets main borders color */
-  --aria-warning-color: @warning_color;  /*  */
-  --aria-error-color: @error_color;      /*  */
-  --aria-success-color: @success_color;  /*  */
+
+  --aria-accent-color: @theme_selected_bg_color;
+  --aria-on-accent-color: @theme_selected_fg_color;
+
+  --aria-warning-color: @warning_color;  /* */
+  --aria-error-color: @error_color;      /* */
+  --aria-success-color: @success_color;  /* */
 
   --aria-window-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
 }
@@ -49,13 +55,15 @@ window               .aria-launcher
   background-color: transparent;
   padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
 }
-.aria-launcher .aria-launcher-box {
+.aria-launcher-box {
   background-color: var(--aria-bg-color);
   box-shadow: var(--aria-window-shadow);
   padding: 10px;
 }
-.aria-launcher .aria-launcher-entry {  }
-.aria-launcher .aria-launcher-list {  }
+.aria-launcher-entry {  }
+.aria-launcher-list {
+  background-color: unset;
+}
 
 
 /* Aria terminal
@@ -94,15 +102,24 @@ window              .aria-panel
       ╰─ Gadget     .aria-gadget .gadget-<name>
 */
 .aria-panel {
-  background-color: var(--aria-bg-color);
-  border-radius: unset;  /* disable gtk theme rounded corners */
-  padding: 2px 6px;
+  min-height: 26px;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 2px 0;
+  background: var(--aria-base-color);
+  color: var(--aria-text-color);
 }
-/* all gadgets */
-.aria-panel .aria-gadget { }
+.aria-gadget {
+  padding: 0 8px;
+}
 
+/* Clock */
+.gadget-clock {
+  font-weight: bold;
+}
 
-/* Gadget: workspaces
+/* Workspaces
 --------------------------------------------------------------------------------
 Gadget              .aria-gadget .gadget-workspaces
 ├─ box              .aria-workspace[.active]
@@ -113,29 +130,26 @@ Gadget              .aria-gadget .gadget-workspaces
 ╰─ box
    ╰─ etc, for all workspaces...
 */
+.gadget-workspaces {
+  padding: 0;
+}
 .gadget-workspaces .aria-workspace {
-  border: 1px solid black;
-  /*padding: 1px 4px;*/
-  margin-right: 3px;
+  padding: 0px 6px;
 }
 .gadget-workspaces .aria-workspace:hover {
-  box-shadow: 0px 0px 3px 0px #000000;
+  box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
 }
 .gadget-workspaces .aria-workspace.active {
-  background-color: cyan;
+  background: rgba(0, 0, 0, .15);  /* TODO: something better? */
 }
-/*.gadget-workspaces .aria-workspace .aria-workspace-label {
-  font-weight: bold;
-  margin-right: 2px;
-}*/
 .gadget-workspaces .aria-workspace .aria-workspace-window {
   /*border: 1px solid transparent;*/
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window:hover {
-  box-shadow: 0px 0px 3px 0px #000000;
+  box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window.active {
-  /*border: 1px solid green; */
+  /*box-shadow: 0px 0px 3px 0px #000000;*/
 }
 
 /* Gadget: Tray
@@ -143,5 +157,5 @@ Gadget              .aria-gadget .gadget-workspaces
 TODO !!!!
 */
 .gadget-tray .aria-tray-item {
-  padding: 0 3px;
+  /*padding: 0 3px;*/
 }

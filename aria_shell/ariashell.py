@@ -133,7 +133,7 @@ class AriaShell(Gtk.Application):
         return 0
 
     def _load_css_styles(self, user_css: Path | None):
-        # load base.css from python package only (base shoud never be edited)
+        # load base.css from python package only (base should never be edited)
         self._load_css_file(ARIA_ASSETS_DIR / 'base.css')
 
         # load stylesheet given on command line (file path)

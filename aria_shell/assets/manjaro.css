@@ -35,7 +35,7 @@ Gadget.gadget-clock {
 /* 'main menu' button and clock use reversed colors*/
 Gadget.gadget-clock,
 Gadget.gadget-button {  /* TODO: Gadget.gadget-custom-search !! non tutti i custom */
-  color: var(--aria-on-accent-color);
+  color: var(--aria-bg-color);
   background-color: var(--aria-accent-color);
 }
 
@@ -48,7 +48,7 @@ Gadget.gadget-button {  /* TODO: Gadget.gadget-custom-search !! non tutti i cust
   box-shadow: none;
 }
 .gadget-workspaces .aria-workspace.active {
-  color: var(--aria-on-accent-color);
+  color: var(--aria-bg-color);
   background-color: var(--aria-accent-color);
   box-shadow: unset;
 }

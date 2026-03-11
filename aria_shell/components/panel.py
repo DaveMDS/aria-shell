@@ -110,6 +110,13 @@ class AriaPanel(AriaWindow):
         if self.conf.size == 'fill':
             GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
             GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, True)
+        elif self.conf.size == 'min' and self.conf.align == 'left':
+            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
+            # TODO: this is only in GtkLayerShell >= 1.4 (not yet released)
+            #       should fix the auto-exclusive zone not working in the corners
+            # GtkLayerShell.set_exclusive_edge_enabled(self, GtkLayerShell.Edge.TOP, True)
+        elif self.conf.size == 'min' and self.conf.align == 'right':
+            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, True)
         if self.conf.margin and self.conf.position == 'top':
             GtkLayerShell.set_margin(self, GtkLayerShell.Edge.BOTTOM, self.conf.margin)
         if self.conf.margin and self.conf.position == 'bottom':

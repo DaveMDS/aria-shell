@@ -28,7 +28,7 @@ def test_singleton(cls):
     assert instance1 == instance2
     assert instance1 is instance2
 
-    # just to be sure, but the 'instance1 is instance2' should be enought
+    # just to be sure, but the 'instance1 is instance2' should be enough
     assert instance1.value == instance2.value == 1
     instance1.value = 3
     assert instance1.value == instance2.value == 3

@@ -35,7 +35,6 @@ class PanelConfig(AriaConfigModel):
     size: str = 'fill'
     align: str = 'center'
     margin: int = 0
-    spacing: int = 6
     opacity: int = 80
     ontheleft: list[str] = []
     inthecenter: list[str] = []
@@ -44,10 +43,6 @@ class PanelConfig(AriaConfigModel):
     @staticmethod
     def validate_opacity(val: int):
         return clamp(val, 0, 100)
-
-    @staticmethod
-    def validate_spacing(val: int):
-        return clamp(val, 0, 9999)
 
     @staticmethod
     def validate_margin(val: int):
@@ -125,10 +120,9 @@ class AriaPanel(AriaWindow):
         # create the left/center/right boxes, in a CenterBox
         cbox = Gtk.CenterBox()
         cbox.add_css_class('aria-panel-box')
-        s = self.conf.spacing
-        self._box1 = AriaBox(css_class='aria-panel-box-start', spacing=s)
-        self._box2 = AriaBox(css_class='aria-panel-box-center', spacing=s)
-        self._box3 = AriaBox(css_class='aria-panel-box-end', spacing=s)
+        self._box1 = AriaBox(css_class='aria-panel-box-start')
+        self._box2 = AriaBox(css_class='aria-panel-box-center')
+        self._box3 = AriaBox(css_class='aria-panel-box-end')
         cbox.set_start_widget(self._box1)
         cbox.set_center_widget(self._box2)
         cbox.set_end_widget(self._box3)

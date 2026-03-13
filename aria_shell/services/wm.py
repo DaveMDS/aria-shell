@@ -101,6 +101,9 @@ class WMBackendBase:
     def __init__(self):
         self.listeners: list[Callable] = []
 
+    def __str__(self):
+        return f'<{self.__class__.__name__}>'
+
     def watch_events(self, callback: Callable):
         self.listeners.append(callback)
 

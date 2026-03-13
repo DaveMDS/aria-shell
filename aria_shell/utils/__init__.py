@@ -5,6 +5,7 @@ from ._basic import (
     Timer,
     clamp,
     safe_format,
+    elli,
     human_size,
     pack_variant,
     exec_detached,

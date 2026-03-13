@@ -26,7 +26,7 @@ class Singleton(type):
 
 class Signalable:
     """ Make a class able to emit signals to registered clients """
-    # 'signal-name' => [(callback, *args, **kargs), ...]
+    # 'signal-name' => [(callback, *args, **kwargs), ...]
     _handlers: dict[str, list[tuple[Callable, tuple, dict]]]
 
     def __new__(cls, *a, **ka):
@@ -93,7 +93,7 @@ class Timer:
     """
     def __init__(self,
                  interval: int | float,
-                 callback: Callable[[...], [bool]],
+                 callback: Callable[..., bool],
                  autostart=True,
                  *a, **ka):
         if not isinstance(interval, int | float):
@@ -178,6 +178,13 @@ def exec_detached(cmd: str | list[str]) -> bool:
     except OSError:
         ERR(f'Cannot execute command: "{cmd}"')
         return False
+
+
+def elli(s: str|bytes, pos=50) -> str|bytes:
+    """ Cut the given string at pos and add ellipsis ... """
+    if len(s) <= pos:
+        return s
+    return s[:pos] + ('...' if isinstance(s, str) else b'...')
 
 
 def human_size(bites: int) -> str:

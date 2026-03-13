@@ -32,8 +32,8 @@ class ColorFormatter(logging.Formatter):
         logging.CRITICAL: STX + RED + BOLD + ETX,
     }
 
-    def __init__(self, *args, **kargs):
-        super().__init__(*args, **kargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         if sys.stdout.isatty():
             self.format = self.colored_format
 

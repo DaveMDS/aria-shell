@@ -48,6 +48,7 @@ class WorkSpacesModule(AriaModule):
                     self.wm_service.workspaces,
                     self.wm_service.windows,
                 )
+
         elif event.startswith('activewin ') and len(event) > 10:
             _, wid = event.split()
             win = self.wm_service.windows.get(wid)
@@ -55,6 +56,13 @@ class WorkSpacesModule(AriaModule):
                 instance.set_active_window(wid)
                 if win and win.workspace_id:
                     instance.set_active_workspace(win.workspace_id)
+
+        elif event.startswith('active_ws ') and len(event) > 10:
+            _, wid = event.split()
+            ws = self.wm_service.workspaces.get(wid)
+            for instance in self.gadgets:
+                instance.set_active_window(None)
+                instance.set_active_workspace(ws.id)
 
 
 class WorkSpacesGadget(AriaGadget):
@@ -85,7 +93,7 @@ class WorkSpacesGadget(AriaGadget):
         else:
             mon_id = None
 
-        for ws_id in sorted(workspaces):
+        for ws_id in workspaces:
             ws = workspaces[ws_id]
 
             # skip workspaces from other monitors
@@ -142,19 +150,23 @@ class WorkSpacesGadget(AriaGadget):
         self.wm_service.activate_window(win.id)
         ges.set_state(Gtk.EventSequenceState.CLAIMED)
 
-    def set_active_workspace(self, wid):
-        # deactivate old workspace object
+    def set_active_workspace(self, wid: str|None):
+        # deactivate currently active workspace object
         if obj := self._ws_index.get(self._active_ws_id):
             obj.remove_css_class('active')
+            self._active_ws_id = None
+
         # activate new workspace object
         if obj := self._ws_index.get(wid):
             obj.add_css_class('active')
             self._active_ws_id = wid
 
-    def set_active_window(self, wid):
-        # deactivate old window object
+    def set_active_window(self, wid: str|None):
+        # deactivate currently active window object
         if obj := self._win_index.get(self._active_win_id):
             obj.remove_css_class('active')
+            self._active_win_id = None
+
         # activate new window object
         if obj := self._win_index.get(wid):
             obj.add_css_class('active')

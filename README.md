@@ -42,7 +42,7 @@ psutil (optional, for the perf gadget)
  * gadgets:
    * [x] clock: show current time and a simple calendar on click
    * [x] perf: cpu, ram, load, temps  (with top-like in popup)
-   * [x] workspaces: show workspaces and windows (hyprland only, sway coming soon)
+   * [x] workspaces: show workspaces and windows (hyprland and sway supported)
    * [x] button: custom gadget built in config (label+icon->command/exec on click)
    * [x] audio: main volume control, simple mixer and multimedia controls
      * [x] Use WirePlumber gAPI to provide multichannel mixer controls

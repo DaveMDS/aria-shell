@@ -125,7 +125,6 @@ class AriaShell(Gtk.Application):
 
         # init the exiter (logout menu)
         self.exiter = AriaExiter(app)
-        self.exiter.show()
 
         # init the terminal
         try:

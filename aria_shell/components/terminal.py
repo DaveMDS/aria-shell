@@ -46,30 +46,22 @@ class AriaTerminal(AriaWindow):
     def __init__(self, app: Gtk.Application):
         if not _vte_available:
             raise RuntimeError('Vte not available')
-        super().__init__(css_class='aria-terminal')
-        self.set_application(app)
+
         self.conf = AriaConfig().section('terminal', TerminalConfig)
+
+        super().__init__(
+            app=app,
+            namespace='aria-terminal',
+            title='Aria terminal',
+            layer = AriaWindow.Layer.OVERLAY,
+            grab_display=self.conf.grab_display,
+            opacity=self.conf.opacity / 100.0,
+            anchors=[AriaWindow.Edge.TOP],
+            exclusive_zone=-1,
+        )
+
         self.terminal: Vte.Terminal | None = None
         self._fullscreen: bool = False
-        self._setup_window(app)
-
-    def _setup_window(self, app: Gtk.Application):
-        self.set_opacity(self.conf.opacity / 100.0)
-
-        GtkLayerShell.init_for_window(self)
-        GtkLayerShell.set_namespace(self, 'aria-terminal')
-        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
-        GtkLayerShell.set_exclusive_zone(self, -1)  # !
-        # GtkLayerShell.set_margin(self, GtkLayerShell.Edge.TOP, 0)
-        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.TOP, True)
-
-        if self.conf.grab_display:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
-            ec = Gtk.GestureSingle(button=0)
-            ec.connect('begin', lambda *_: self.hide())
-            self.add_controller(ec)
-        else:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
 
     def _toggle_fullscreen(self):
         """ Emulate fullscreen using LayerShell """

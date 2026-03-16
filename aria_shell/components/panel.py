@@ -1,5 +1,4 @@
 from gi.repository import Gdk, Gtk
-from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.ui import AriaBox, AriaWindow
 from aria_shell.utils import clamp
@@ -12,14 +11,14 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 POSITIONS = {
-    'top': GtkLayerShell.Edge.TOP,
-    'bottom': GtkLayerShell.Edge.BOTTOM,
+    'top': AriaWindow.Edge.TOP,
+    'bottom': AriaWindow.Edge.BOTTOM,
 }
 
 LAYERS = {
-    'top': GtkLayerShell.Layer.TOP,
-    'bottom': GtkLayerShell.Layer.BOTTOM,
-    'overlay': GtkLayerShell.Layer.OVERLAY,
+    'top': AriaWindow.Layer.TOP,
+    'bottom': AriaWindow.Layer.BOTTOM,
+    'overlay': AriaWindow.Layer.OVERLAY,
 }
 
 SIZES = {
@@ -72,8 +71,38 @@ class PanelConfig(AriaConfigModel):
 
 class AriaPanel(AriaWindow):
     def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app):
-        super().__init__(title='Aria panel')
-        self.set_application(app)
+
+        anchors = [POSITIONS.get(conf.position)]
+        if conf.size == 'fill':
+            anchors.extend([AriaWindow.Edge.LEFT, AriaWindow.Edge.RIGHT])
+        elif conf.size == 'min' and conf.align == 'left':
+            anchors.append(AriaWindow.Edge.LEFT)
+            # TODO: this is only in GtkLayerShell >= 1.4 (not yet released)
+            #  should fix the auto-exclusive zone not working in the corners
+            #  GtkLayerShell.set_exclusive_edge_enabled(self, GtkLayerShell.Edge.TOP, True)
+        elif conf.size == 'min' and conf.align == 'right':
+            anchors.append(AriaWindow.Edge.RIGHT)
+
+        margins = (  # top, right, bottom, left
+            conf.margin if conf.margin and conf.position == 'bottom' else 0,
+            0,
+            conf.margin if conf.margin and conf.position == 'top' else 0,
+            0,
+        )
+
+        super().__init__(
+            app=app,
+            namespace='aria-panel',
+            title='Aria panel',
+            layer=LAYERS.get(conf.layer),
+            anchors=anchors,
+            margins=margins,
+            auto_exclusive_zone=True,
+            keyboard_mode=AriaWindow.KeyboardMode.NONE,
+            monitor=monitor,
+            opacity=conf.opacity / 100.0,
+            # decorated=False,
+        )
         self._box1: Gtk.Box | None = None
         self._box2: Gtk.Box | None = None
         self._box3: Gtk.Box | None = None
@@ -91,39 +120,6 @@ class AriaPanel(AriaWindow):
         return f'<AriaPanel name="{self.name}" on="{self.monitor.get_connector()}">'
 
     def setup_window(self):
-        # configure the window
-        self.set_opacity(self.conf.opacity / 100.0)
-        self.set_decorated(False)
-        self.add_css_class('aria-panel')
-
-        if self.conf.size == 'fill':
-            geom = self.monitor.get_geometry()
-            self.set_size_request(geom.width, -1)
-
-        # GtkLayerShell stuff (this is the only Wayland code for now)
-        GtkLayerShell.init_for_window(self)
-        GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.NONE)
-        GtkLayerShell.set_monitor(self, self.monitor)
-        GtkLayerShell.set_namespace(self, 'aria-panel')
-        GtkLayerShell.set_layer(self, LAYERS.get(self.conf.layer))
-        GtkLayerShell.set_anchor(self, POSITIONS.get(self.conf.position), True)
-        if self.conf.size == 'fill':
-            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
-            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, True)
-        elif self.conf.size == 'min' and self.conf.align == 'left':
-            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
-            # TODO: this is only in GtkLayerShell >= 1.4 (not yet released)
-            #       should fix the auto-exclusive zone not working in the corners
-            # GtkLayerShell.set_exclusive_edge_enabled(self, GtkLayerShell.Edge.TOP, True)
-        elif self.conf.size == 'min' and self.conf.align == 'right':
-            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, True)
-        if self.conf.margin and self.conf.position == 'top':
-            GtkLayerShell.set_margin(self, GtkLayerShell.Edge.BOTTOM, self.conf.margin)
-        if self.conf.margin and self.conf.position == 'bottom':
-            GtkLayerShell.set_margin(self, GtkLayerShell.Edge.TOP, self.conf.margin)
-        GtkLayerShell.auto_exclusive_zone_enable(self)
-        # End Wayland code
-
         # create the left/center/right boxes, in a CenterBox
         cbox = Gtk.CenterBox()
         cbox.add_css_class('aria-panel-box')

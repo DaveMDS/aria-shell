@@ -1,7 +1,6 @@
 from operator import attrgetter
 
 from gi.repository import GObject, GLib, Gio, Gdk, Gtk
-from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.i18n import i18n
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
@@ -40,16 +39,31 @@ class LauncherConfig(AriaConfigModel):
 
 class AriaLauncher(AriaWindow):
     def __init__(self, app: Gtk.Application):
-        super().__init__(css_class='aria-launcher')
-        self.set_application(app)
+        # get launcher config
         self.conf = AriaConfig().section('launcher', LauncherConfig)
-        self._setup_window()
 
         # declare internal widgets
         self.list_store = Gio.ListStore()
         self.list_view: Gtk.ListView | None = None
         self.search_entry: Gtk.Entry | None = None
+
+        # crete the window
+        super().__init__(
+            app=app,
+            namespace='aria-launcher',
+            title='Aria launcher',
+            layer=AriaWindow.Layer.OVERLAY,
+            grab_display=self.conf.grab_display,
+            opacity=self.conf.opacity / 100.0,
+            size_request=(self.conf.width, self.conf.height),
+            # decorated=False,
+        )
         self._populate_window()
+
+        # request keyboard events
+        ec = Gtk.EventControllerKey()
+        ec.connect('key-pressed', self._on_win_key_pressed)
+        self.add_controller(ec)
 
         # init all providers
         self.providers = [
@@ -58,27 +72,6 @@ class AriaLauncher(AriaWindow):
 
         # perform a first search
         self._on_entry_changed(self.search_entry, '')
-
-    def _setup_window(self):
-        self.set_decorated(False)
-        self.set_opacity(self.conf.opacity / 100.0)
-        self.set_size_request(self.conf.width, self.conf.height)
-
-        GtkLayerShell.init_for_window(self)
-        GtkLayerShell.set_namespace(self, 'aria-launcher')
-        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
-        GtkLayerShell.set_exclusive_zone(self, -1)  # !
-        if self.conf.grab_display:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
-            ec = Gtk.GestureSingle(button=0)
-            ec.connect('begin', lambda *_: self.hide())
-            self.add_controller(ec)
-        else:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
-
-        ec = Gtk.EventControllerKey()
-        ec.connect('key-pressed', self._on_win_key_pressed)
-        self.add_controller(ec)
 
     def _populate_window(self):
         vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL, spacing=12)

@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 from gi.repository import Gtk
-from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.ui import AriaWindow, AriaDialog
 from aria_shell.utils import clamp, exec_detached, Timer
@@ -88,29 +87,24 @@ class ExiterButton(Gtk.Button):
 
 class AriaExiter(AriaWindow):
     def __init__(self, app: Gtk.Application):
-        super().__init__(css_class='aria-exiter', hide_on_escape=True)
-        self.set_application(app)
         self.config = AriaConfig().section('exiter', ExiterConfig)
 
-        self.countdown = 0
-        self.timer: Timer | None = None
+        super().__init__(
+            app=app,
+            namespace='aria-exiter',
+            title='Aria exiter',
+            hide_on_escape=True,
+            layer=AriaWindow.Layer.TOP,
+            grab_display=self.config.grab_display,
+            opacity=self.config.opacity / 100.0,
+            # decorated=False,
+        )
+
         self.dialog: AriaDialog | None = None
+        self.timer: Timer | None = None
+        self.countdown = 0
 
-        self.setup_window()
         self.populate_window()
-
-    def setup_window(self):
-        self.set_decorated(False)
-        self.set_opacity(self.config.opacity / 100.0)
-
-        GtkLayerShell.init_for_window(self)
-        GtkLayerShell.set_namespace(self, 'aria-exiter')
-        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
-        GtkLayerShell.set_exclusive_zone(self, -1)
-        if self.config.grab_display:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
-        else:
-            GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
 
     def populate_window(self):
         flow = Gtk.FlowBox(

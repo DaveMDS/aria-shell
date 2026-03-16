@@ -144,7 +144,7 @@ class AriaExiter(AriaWindow):
         self.cleanup_and_close_confirm_dialog()
         self.dialog = AriaDialog(
             parent=self,
-            title=i18n(f'exiter.confirm_{button.name}1'),
+            heading=i18n(f'exiter.confirm_{button.name}1'),
             buttons=[i18n('cancel'), i18n(button.name)],
             callback=self.confirm_dialog_response,
             button=button,
@@ -169,6 +169,7 @@ class AriaExiter(AriaWindow):
 
     def timer_cb(self, dialog: AriaDialog, button: ExiterButton) -> bool:
         self.countdown -= 1
+        DBG('Exiter countdown %d', self.countdown)
         if self.countdown < 1:
             # the countdown has expired
             self.cleanup_and_close_confirm_dialog()

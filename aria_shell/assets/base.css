@@ -101,6 +101,7 @@ window.aria-terminal .aria-terminal {
   padding: 6px;
 }
 
+
 /* Aria Popup
 popover    .aria-popup
 ├─ contents
@@ -109,6 +110,29 @@ popover    .aria-popup
 .aria-popup contents {
   /*background-color: red;*/
 }
+
+
+/* Aria Dialog
+window            .aria-dialog
+╰─ box            .vertical
+   ├─ label       .aria-dialog-heading
+   ├─ label       .aria-dialog-body
+   ╰─ box         .horizontal
+      ├─ button   .aria-dialog-button
+      ┊
+      ╰─ button   .aria-dialog-button
+*/
+window.aria-dialog {
+  padding: 16px;
+}
+label.aria-dialog-heading,
+label.aria-dialog-body {
+  padding-bottom: 16px;
+}
+button.aria-dialog-button {
+  margin: 0px 8px;
+}
+
 
 /* Aria panel
 --------------------------------------------------------------------------------

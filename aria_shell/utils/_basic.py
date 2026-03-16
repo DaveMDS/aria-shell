@@ -163,6 +163,8 @@ def safe_format(format1: str, format2: str, **kwargs) -> str:
 
 def exec_detached(cmd: str | list[str]) -> bool:
     """ Run the given command detached from the aria process """
+    if isinstance(cmd, str):
+        cmd = cmd.split()
     custom_env = os.environ.copy()
     custom_env.pop('VIRTUAL_ENV', None)
     custom_env.pop('PYTHONHOME', None)
@@ -170,7 +172,7 @@ def exec_detached(cmd: str | list[str]) -> bool:
     custom_env['PATH'] = os.defpath
     try:
         subprocess.Popen(
-            cmd,
+            cmd.split() if isinstance(cmd, str) else cmd,
             env=custom_env,
             cwd=HOME,
             start_new_session=True,
@@ -179,8 +181,8 @@ def exec_detached(cmd: str | list[str]) -> bool:
             stdin=subprocess.DEVNULL,
         )
         return True
-    except OSError:
-        ERR(f'Cannot execute command: "{cmd}"')
+    except OSError as e:
+        ERR('Cannot execute command: "%s" Error: %s', cmd, e)
         return False
 
 

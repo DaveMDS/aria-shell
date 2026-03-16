@@ -28,7 +28,6 @@ print(f'GLib {'.'.join(map(str, GLib.glib_version))}')
 print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}')
 
 
-
 from aria_shell.i18n import setup_locale
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
@@ -106,7 +105,7 @@ class AriaShell(Gtk.Application):
 
         # prevent multiple instances
         if self.first_instance_created:
-            return
+            return 0
         self.first_instance_created = True
 
         # inspect connected monitors, and create needed panels

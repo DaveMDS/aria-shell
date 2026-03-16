@@ -114,12 +114,6 @@ class AriaTerminal(AriaWindow):
         super().show()
         self.terminal.grab_focus()
 
-    def hide(self):
-        super().hide()
-
-    def toggle(self):
-        self.hide() if self.is_visible() else self.show()
-
     def _on_child_exited(self, term, status: int):
         # shell exited, hide the window and destroy the terminal,
         # a new one will be recreated on next show()

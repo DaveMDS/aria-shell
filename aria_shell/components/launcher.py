@@ -19,7 +19,7 @@ class LauncherConfig(AriaConfigModel):
     opacity: int = 100
     width: int = 400
     height: int = 400
-    grab_display: bool = False
+    grab_display: bool = True
 
     @staticmethod
     def validate_icon_size(val: int):
@@ -198,12 +198,7 @@ class AriaLauncher(AriaWindow):
     def show(self):
         self.reset()
         super().show()
-
-    def hide(self):
-        super().hide()
-
-    def toggle(self):
-        self.hide() if self.is_visible() else self.show()
+        super().grab_focus()
 
     def reset(self):
         self.search_entry.set_text('')

@@ -1,16 +1,36 @@
 from collections.abc import Callable
 
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk, Gdk, Gio, GObject
 
 
 class AriaWindow(Gtk.Window):
     """
     Base class for all Aria windows
     """
-    def __init__(self, css_class: str = None, **kargs):
-        super().__init__(**kargs)
+    def __init__(self,
+                 css_class: str = None,
+                 hide_on_escape: bool = False,
+                 **kwargs):
+        super().__init__(**kwargs)
+
         if css_class:
             self.add_css_class(css_class)
+
+        if hide_on_escape:
+            ec = Gtk.EventControllerKey()
+            ec.connect('key-pressed', self._key_pressed)
+            self.add_controller(ec)
+
+    def toggle(self):
+        self.hide() if self.is_visible() else self.show()
+
+    def _key_pressed(self, _ec: Gtk.EventControllerKey, keyval: int,
+                     _keycode: int, _state: Gdk.ModifierType):
+        if keyval == Gdk.KEY_Escape:
+            self.hide()
+            return True  # handled, stop event propagation
+        else:
+            return False  # not handled, continue propagation
 
 
 class AriaBox(Gtk.Box):

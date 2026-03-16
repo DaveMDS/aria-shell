@@ -11,25 +11,25 @@ from aria_shell.gadget import AriaGadget
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class ButtonConfigModel(AriaConfigModel):
+class CustomConfigModel(AriaConfigModel):
     label: str = ''
     icon: str = ''
     command: str = ''
     exec: str = ''
 
 
-class ButtonModule(AriaModule):
-    config_model_class = ButtonConfigModel
+class CustomModule(AriaModule):
+    config_model_class = CustomConfigModel
 
     def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
         super().gadget_new(ctx)
-        conf: ButtonConfigModel = ctx.config  # noqa
-        return ButtonGadget(conf)
+        conf: CustomConfigModel = ctx.config  # noqa
+        return CustomGadget(conf)
 
 
-class ButtonGadget(AriaGadget):
-    def __init__(self, conf: ButtonConfigModel):
-        super().__init__('button', clickable=True)
+class CustomGadget(AriaGadget):
+    def __init__(self, conf: CustomConfigModel):
+        super().__init__('custom', clickable=True)
         self.conf = conf
         if conf.icon:
             ico = Gtk.Image.new_from_icon_name(conf.icon)

@@ -5,6 +5,8 @@ from string import Template
 
 from aria_shell.utils.logger import get_loggers
 
+from .en import __CATALOG__ as __EN_CATALOG__
+
 """ 
 Super simple internationalization for the AriaShell
 
@@ -25,7 +27,7 @@ catalog format:
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
-_CATALOG = {}
+_CATALOG = {'en': __EN_CATALOG__}
 DEFAULT_LANG = 'en'
 CURRENT_LANG = 'en'
 
@@ -46,15 +48,18 @@ def setup_locale():
         WRN(f'Cannot detect system locale, using default translations')
 
 
-def i18n(key: str, lang: str = None, **kargs) -> str:
+def i18n(key: str, lang: str = None, **kwargs) -> str:
     """ Translate the given key """
     if lang is None:
         lang = CURRENT_LANG
 
     # load the locale file, if not done already
     if not lang in _CATALOG:
-        mod = importlib.import_module(f'aria_shell.i18n.{lang}')
-        _CATALOG[lang] = getattr(mod, '__CATALOG__')
+        try:
+            mod = importlib.import_module(f'aria_shell.i18n.{lang}')
+            _CATALOG[lang] = getattr(mod, '__CATALOG__')
+        except Exception as e:
+            ERR('Cannot find message catalog for lang: %s. Error: %s', lang, e)
 
     # search the translated key in 'lang' catalog, fallback to 'en'
     trans = _CATALOG.get(lang, {}).get(key) or \
@@ -63,7 +68,7 @@ def i18n(key: str, lang: str = None, **kargs) -> str:
         return key
 
     # handle pluralization
-    count = kargs.get('count')
+    count = kwargs.get('count')
     if count is not None and type(trans) == dict:
         if count == 0 and 'zero' in trans:
             trans = trans['zero']
@@ -72,5 +77,5 @@ def i18n(key: str, lang: str = None, **kargs) -> str:
         if 'many' in trans:
             trans = trans['many']
 
-    # return translated string with placeholders applyed
-    return Template(trans).safe_substitute(**kargs)
+    # return translated string with placeholders applied
+    return Template(trans).safe_substitute(**kwargs)

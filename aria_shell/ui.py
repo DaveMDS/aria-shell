@@ -195,7 +195,6 @@ class AriaDialog(AriaWindow):
         self.heading_label.add_css_class('title-1')
         vbox.append(self.heading_label)
 
-class AriaDialog(Gtk.AlertDialog):
         self.body_label = Gtk.Label(label=body)
         self.body_label.add_css_class('aria-dialog-body')
         vbox.append(self.body_label)
@@ -248,26 +247,18 @@ class AriaDialogGTK(Gtk.AlertDialog):
     """
     def __init__(self,
                  parent: Gtk.Window,
-                 title: str = None,
                  heading: str = None,
                  body: str = None,
                  buttons: list[str] = None,
                  callback: Callable[[str, ...], None] = None, **kwargs
                  ):
         super().__init__(
-            message=title,
             message=heading,
             detail='TODO: Gtk.Alert dialog cannot update this text for the countdown :(',
             buttons=buttons,
-            default_button=1,
-            cancel_button=0,
             modal=True,
         )
 
-        def _choose_cb(dialog: AriaDialog, result: Gio.AsyncResult):
-            btn_id = dialog.choose_finish(result)
-            if btn_id and callable(callback):
-                callback(f'button-{btn_id+1}', **kwargs)
         def _choose_cb(dialog: AriaDialogGTK, result: Gio.AsyncResult):
             try:
                 btn_num = dialog.choose_finish(result)
@@ -277,11 +268,9 @@ class AriaDialogGTK(Gtk.AlertDialog):
             if callable(callback):
                 callback(btn_id, **kwargs)
 
-        self.choose(parent, callback=_choose_cb)
         self._cancellable = Gio.Cancellable()
         self.choose(parent, callback=_choose_cb, cancellable=self._cancellable)
 
-    def close(self):
     def set_heading(self, text: str):
         super().set_message(text)
 
@@ -290,8 +279,6 @@ class AriaDialogGTK(Gtk.AlertDialog):
         # super().set_detail(body)
         pass
 
-    def set_title(self, title: str):
-        super().set_message(title)
     def close(self):
         if not self._cancellable.is_cancelled():
             self._cancellable.cancel()
@@ -299,7 +286,83 @@ class AriaDialogGTK(Gtk.AlertDialog):
 
 
 
-    def set_body(self, body: str):
-        # TODO: questo non funziona...desktop-portal maledetto...  GRRR!!!
-        super().set_detail(body)
-
+# class AriaDialogGTKDeprecated(Gtk.MessageDialog):
+#     def __init__(self,
+#                  parent: Gtk.Window,
+#                  title: str = None,
+#                  body: str = None,
+#                  buttons: list[str] = None,
+#                  callback: Callable = None  # TODO type
+#                  ):
+#         # super().__init__(
+#         Gtk.MessageDialog.__init__(
+#             self,
+#             # parent=parent,
+#             use_header_bar=1,
+#             use_markup=False,
+#
+#             text=title,
+#             secondary_text=body,
+#             # buttons=buttons,
+#             # default_button=0,
+#             # cancel_button=1,
+#             modal=True,
+#         )
+#         self.show()
+#
+#     @property
+#     def title(self):
+#         return self.text
+#
+#     @title.setter
+#     def title(self, title: str):
+#         # NON FUNZIONA !!!!!!!!1111
+#         self.set_markup(title)
+#
+#     @property
+#     def body(self):
+#         return self.get_detail()
+#
+#     @body.setter
+#     def body(self, body: str):
+#         # NON FUNZIONA !!!!!!!!1
+#         self.text = body
+#         # self.set_secondary_text(body)
+#         # self.set_mark
+#
+#
+#
+# import gi
+# gi.require_version('Adw', '1')  # TODO move in main
+# from gi.repository import Adw
+#
+# class AriaDialogAdw(Adw.AlertDialog):
+#     """TODO DOC"""
+#     def __init__(self,
+#                  parent: Gtk.Window,
+#                  heading: str = None,
+#                  body: str = None,
+#                  buttons: list[str] = None,
+#                  callback: Callable[[str, ...], None] = None, **kwargs
+#                  ):
+#         super().__init__()
+#         if heading:
+#             super().set_heading(heading)
+#         if body:
+#             super().set_body(body)
+#
+#         for i, label in enumerate(buttons or []):
+#             self.add_response(f'button-{i+1}', label)
+#
+#         def _choose_cb(dialog: AriaDialogAdw, result: Gio.AsyncResult):
+#             btn_id = dialog.choose_finish(result)
+#             if btn_id and callable(callback):
+#                 callback(btn_id, **kwargs)
+#
+#         self.choose(parent, callback=_choose_cb)
+#
+#     def set_heading(self, text: str | None = None):
+#         super().set_heading(text)
+#
+#     def set_body__(self, body: str):
+#         super().set_body(body)

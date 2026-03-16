@@ -83,3 +83,43 @@ class AriaPopup(Gtk.Popover):
         self.set_child(None)
         self.unparent()
         # self.run_dispose()
+
+
+#######################################################################
+#######################################################################
+#######################################################################
+
+class AriaDialog(Gtk.AlertDialog):
+    def __init__(self,
+                 parent: Gtk.Window,
+                 title: str = None,
+                 body: str = None,
+                 buttons: list[str] = None,
+                 callback: Callable[[str, ...], None] = None, **kwargs
+                 ):
+        super().__init__(
+            message=title,
+            detail='TODO: Gtk.Alert dialog cannot update this text for the countdown :(',
+            buttons=buttons,
+            default_button=1,
+            cancel_button=0,
+            modal=True,
+        )
+
+        def _choose_cb(dialog: AriaDialog, result: Gio.AsyncResult):
+            btn_id = dialog.choose_finish(result)
+            if btn_id and callable(callback):
+                callback(f'button-{btn_id+1}', **kwargs)
+
+        self.choose(parent, callback=_choose_cb)
+
+    def close(self):
+        pass
+
+    def set_title(self, title: str):
+        super().set_message(title)
+
+    def set_body(self, body: str):
+        # TODO: questo non funziona...desktop-portal maledetto...  GRRR!!!
+        super().set_detail(body)
+

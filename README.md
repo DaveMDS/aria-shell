@@ -75,6 +75,11 @@ psutil (optional, for the perf gadget)
 - [ ] support secondary commands (fe: Firefox new private window)
 - [ ] other search providers? es: files, websearch, ??
 
+## Aria exiter
+- [x] dialog menu to lock, suspend, hibernate, logout, reboot and shutdown
+- [x] all commands can be changed in config file
+- [x] confirm dangerous actions with an auto-expiring dialog (configurable)
+- [ ] automatic logout command. How to make logout work on every wm?
 
 ## Aria terminal
 - [x] simple persistant terminal that show/hide from the top on command

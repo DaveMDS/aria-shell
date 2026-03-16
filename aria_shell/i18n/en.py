@@ -9,8 +9,24 @@ __CATALOG__ = {
     'many': '${count} items'
 },
 
+# Generic
+'cancel': 'Cancel ***',
+'lock': 'Lock',
+'suspend': 'Suspend',
+'hibernate': 'Hibernate',
+'logout': 'Logout',
+'reboot': 'Reboot',
+'shutdown': 'Shutdown',
+
 # Launcher
 'launcher.search': 'Type to search...',
 
+# Exiter
+'exiter.confirm_logout1': 'Are you sure you want to logout?',
+'exiter.confirm_logout2': 'The session will close automatically in ${countdown} seconds.',
+'exiter.confirm_reboot1': 'Are you sure you want to reboot?',
+'exiter.confirm_reboot2': 'The computer will reboot automatically in ${countdown} seconds.',
+'exiter.confirm_shutdown1': 'Are you sure you want to shutdown?',
+'exiter.confirm_shutdown2': 'The computer will poweroff automatically in ${countdown} seconds.',
 
 }

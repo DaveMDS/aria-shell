@@ -66,6 +66,27 @@ window               .aria-launcher
 }
 
 
+/* Aria exiter
+--------------------------------------------------------------------------------
+window               .aria-exiter
+╰─ flowbox           .aria-exiter-flowbox
+   ├─ button         .aria-exiter-button flat
+   │  ├─ image       .aria-exiter-button-icon
+   │  ╰─ label       .aria-exiter-button-label
+   ╰─ button... etc, for all six buttons
+*/
+window.aria-exiter {
+  padding: 8px;
+}
+image.aria-exiter-button-icon {
+  padding: 8px 16px;
+  -gtk-icon-size: 64px;
+  -gtk-icon-style: symbolic;
+}
+label.aria-exiter-button-label {
+  font-weight: bold;
+}
+
 /* Aria terminal
 --------------------------------------------------------------------------------
 window               .aria-terminal

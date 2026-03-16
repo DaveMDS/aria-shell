@@ -89,12 +89,14 @@ class Timer:
             True: to continue executing the timer
             False: to stop the timer
         autostart: if False the timer will not start on init
+        immediate: call the callback one time at creation
         *a *ka: positional and named params to be passed in callback
     """
     def __init__(self,
                  interval: int | float,
                  callback: Callable[..., bool],
                  autostart=True,
+                 immediate=False,
                  *a, **ka):
         if not isinstance(interval, int | float):
             raise TypeError('Timer.interval must be int or float')
@@ -107,6 +109,8 @@ class Timer:
         self.timeout_id = 0
         if autostart:
             self.start()
+        if immediate:
+            callback(*a, **ka)
 
     def __repr__(self):
         return f'<Timer #{self.timeout_id} cb={self.cb_info[0]}>'

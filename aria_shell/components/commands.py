@@ -54,5 +54,11 @@ class AriaCommands(metaclass=Singleton):
                     return 'OK'
                 raise RuntimeError('terminal not available')
 
+            case 'exiter':
+                if self.app.exiter:
+                    self.app.exiter.toggle()
+                    return 'OK'
+                raise RuntimeError('exiter not available')
+
             case _:
                 raise RuntimeError(f'unknown component: {params[0]}')

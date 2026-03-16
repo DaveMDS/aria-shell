@@ -39,6 +39,7 @@ from aria_shell.components.cmd_socket import AriaCommandSocket
 from aria_shell.components.panel import AriaPanel, PanelConfig
 from aria_shell.components.launcher import AriaLauncher
 from aria_shell.components.terminal import AriaTerminal
+from aria_shell.components.exiter import AriaExiter
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -57,6 +58,7 @@ class AriaShell(Gtk.Application):
         self.commands: AriaCommands | None = None
         self.launcher: AriaLauncher | None = None
         self.terminal: AriaTerminal | None = None
+        self.exiter: AriaExiter | None = None
 
         # app lifecycle
         self.connect('startup', self._on_app_startup)
@@ -120,12 +122,14 @@ class AriaShell(Gtk.Application):
 
         # init the launcher
         self.launcher = AriaLauncher(app)
-        # self.launcher.show()
+
+        # init the exiter (logout menu)
+        self.exiter = AriaExiter(app)
+        self.exiter.show()
 
         # init the terminal
         try:
             self.terminal = AriaTerminal(app)
-            # self.terminal.show()
         except RuntimeError:
             WRN('Vte4 not available, embedded terminal is disabled!')
 

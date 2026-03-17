@@ -56,9 +56,9 @@ class AriaConfigModel:
                     continue
 
             elif annot == bool:
-                if str_val in ('true', '1', 'yes'):
+                if str_val in ('1', 'on', 'yes', 'true'):
                     val = True
-                elif str_val in ('false', '0', 'no'):
+                elif str_val in ('0', 'off', 'no', 'false'):
                     val = False
                 else:
                     ERR(f'Invalid value: {str_val} for key: {key}. Must be a valid boolean')

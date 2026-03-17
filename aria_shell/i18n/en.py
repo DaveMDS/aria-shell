@@ -29,4 +29,11 @@ __CATALOG__ = {
 'exiter.confirm_shutdown1': 'Are you sure you want to shutdown?',
 'exiter.confirm_shutdown2': 'The computer will poweroff automatically in ${countdown} seconds.',
 
+# Themes
+'themes.light': 'Use light theme',
+'themes.dark': 'Use dark theme',
+'themes.favorite': 'Favorite themes',
+'themes.user': 'User themes',
+'themes.system': 'System themes',
+
 }

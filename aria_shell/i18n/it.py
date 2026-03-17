@@ -20,4 +20,11 @@ __CATALOG__ = {
 'exiter.confirm_shutdown1': 'Sei sicuro di voler spegner il computer?',
 'exiter.confirm_shutdown2': 'Il computer si spegnerà automaticamente in ${countdown} secondi.',
 
+# Themes
+'themes.light': 'Usa tema chiaro',
+'themes.dark': 'Usa tema scuro',
+'themes.favorite': 'Temi preferiti',
+'themes.user': 'Temi dell\'utente',
+'themes.system': 'Temi di sistema',
+
 }

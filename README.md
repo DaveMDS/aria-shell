@@ -43,7 +43,7 @@ psutil (optional, for the perf gadget)
    * [x] clock: show current time and a simple calendar on click
    * [x] perf: cpu, ram, load, temps  (with top-like in popup)
    * [x] workspaces: show workspaces and windows (hyprland and sway supported)
-   * [x] button: custom gadget built in config (label+icon->command/exec on click)
+   * [x] custom: custom gadget built in config (label+icon->command/exec on click)
    * [x] audio: main volume control, simple mixer and multimedia controls
      * [x] Use WirePlumber gAPI to provide multichannel mixer controls
      * [x] MPRIS2 for media player controls
@@ -53,13 +53,19 @@ psutil (optional, for the perf gadget)
      *  [ ] full dbus menu support
      *  [ ] support for pixmap icons over dbus
    * [ ] screenshot / screenrecorder
-   * [ ] dark/light switch (update aria and gtk/qt config)
+   * [x] theme selector:
+     * [x] show a menu with the list of preferred, user and system themes (fully configurable)
+     * [x] support "special" light/dark themes
+     * [ ] apply icon-theme and cursor-theme from the "index.theme" file
+     * [ ] copy the theme gtk-4.0 folder in ~/.config/gtk4.0 ?? seems totally wrong...
+     * [ ] group themes with same name prefix under a submenu
+     * [ ] show the active theme in the menu, check box?
    * [ ] power: idle inhibitor, battery/ac status, power profiles
    * [ ] help: just an icon, on click show a dialog with keybindings and basic info
           (also show on META+F1)
    * [ ] network: super simple NetworkManager, on/off ifaces, ssid list/connect
    * [ ] bluetooth: ???
-   * [ ] logout: just a button to run AriaLogout
+   * [x] logout: just a button to run Aria Exiter
    * [ ] apps: fixed list of apps to run (like a dock)
    * [ ] home: open a menu (cinnamom style) with app categories and search, AriaLauncher?
    * [ ] fileman: filemanager in a tree of menus?

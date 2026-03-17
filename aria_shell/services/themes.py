@@ -87,8 +87,9 @@ class ThemesService(metaclass=Singleton):
         if not isinstance(theme, DesktopTheme):
             try:
                 theme = DesktopTheme(theme)
-            except FileNotFoundError as e:
-                ERR('Cannot parse theme: %s', theme)
+            except FileNotFoundError:
+                ERR('Cannot find theme: %s', theme)
+                return
         meta = theme.get_metadata()
 
         # apply icon theme

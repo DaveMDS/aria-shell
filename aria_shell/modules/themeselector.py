@@ -20,7 +20,8 @@ class ThemeSelectorConfigModel(AriaConfigModel):
     show_user_themes: bool = True
     show_system_themes: bool = True
     show_icon_themes: bool = True
-    icon_theme: str = ''  # force icon theme, or 'ignore' to not touch icons
+    light_icon_theme: str = ''  # force icon theme, or 'ignore' to not touch icons
+    dark_icon_theme: str = ''   # force icon theme, or 'ignore' to not touch icons
     icon_name: str = 'preferences-color'
 
 
@@ -33,8 +34,7 @@ class ThemeSelectorModule(AriaModule):
 
 
 class ThemeSelectorGadget(AriaGadget):
-    ACTION_GROUP = 'menu-items'
-    ACTION_NAME = 'action1'
+    ACTION_GROUP = 'menu-actions'
 
     def __init__(self, config: ThemeSelectorConfigModel):
         super().__init__('themes_selector', clickable=True)
@@ -45,28 +45,32 @@ class ThemeSelectorGadget(AriaGadget):
         self.icon = Gtk.Image.new_from_icon_name(self.config.icon_name)
         self.append(self.icon)
 
-        # the action called by all menu items
+        # create the 4 actions called by the menu items
         actions = Gio.SimpleActionGroup()
-        action = Gio.SimpleAction.new(self.ACTION_NAME, GLib.VariantType('s'))
-        action.connect('activate', self.on_menu_item_activate)
-        actions.add_action(action)
+        for action_name in ('gtk-theme', 'icon-theme', 'dark', 'light'):
+            action = Gio.SimpleAction.new(action_name, GLib.VariantType('s'))
+            action.connect('activate', self.on_menu_item_activate, action_name)
+            actions.add_action(action)
         self.insert_action_group(self.ACTION_GROUP, actions)
 
-    def on_menu_item_activate(self, _action: Gio.SimpleAction, theme: GLib.Variant):
+    def on_menu_item_activate(self, _, theme: GLib.Variant, action: str):
         theme: str = theme.get_string()
-        if theme.startswith('icon:'):
-            # change the icon theme
-            self.themes_service.set_icon_theme(Path(theme[5:]))
-        else:
-            # change the whole desktop theme
-            self.themes_service.set_active_theme(
-                theme, icon_theme=self.config.icon_theme
-            )
+        match action:
+            case 'gtk-theme' | 'light':
+                self.themes_service.set_active_theme(
+                    theme, icon_theme=self.config.light_icon_theme
+                )
+            case 'dark':
+                self.themes_service.set_active_theme(
+                    theme, icon_theme=self.config.dark_icon_theme
+                )
+            case 'icon-theme':
+                self.themes_service.set_icon_theme(Path(theme))
 
-    def make_menu_item(self, label: str, name: str, append_to: Gio.Menu):
-        item = Gio.MenuItem.new(label, f'{self.ACTION_GROUP}.{self.ACTION_NAME}')
-        item.set_attribute_value('target', GLib.Variant('s', name))
-        append_to.append_item(item)
+    def make_menu_item(self, menu: Gio.Menu, label: str, value: str, action: str):
+        item = Gio.MenuItem.new(label, f'{self.ACTION_GROUP}.{action}')
+        item.set_attribute_value('target', GLib.Variant('s', value))
+        menu.append_item(item)
 
     def build_menu_model(self) -> Gio.Menu:
         menu = Gio.Menu()
@@ -74,15 +78,15 @@ class ThemeSelectorGadget(AriaGadget):
 
         # light/dark themes - from config file
         if self.config.light_theme:
-            make_item(i18n('themes.light'), self.config.light_theme, menu)
+            make_item(menu, i18n('themes.light'), self.config.light_theme, 'light')
         if self.config.dark_theme:
-            make_item(i18n('themes.dark'), self.config.dark_theme, menu)
+            make_item(menu, i18n('themes.dark'), self.config.dark_theme, 'dark')
 
         # favorites - from config file
         if self.config.favorites:
             section = Gio.Menu()
             for theme in self.config.favorites:
-                make_item(theme, theme, section)
+                make_item(section, theme, theme, 'gtk-theme')
             menu.append_section(i18n('themes.favorite'), section)
 
         # user themes - from ~/.themes
@@ -90,7 +94,7 @@ class ThemeSelectorGadget(AriaGadget):
             if themes := self.themes_service.get_user_themes():
                 section = Gio.Menu()
                 for theme in themes:
-                    make_item(theme.name, theme.folder.name, section)
+                    make_item(section, theme.name, theme.folder.name, 'gtk-theme')
                 menu.append_section(i18n('themes.user'), section)
 
         # system themes - from /usr/share/themes
@@ -98,7 +102,7 @@ class ThemeSelectorGadget(AriaGadget):
             if themes := self.themes_service.get_system_themes():
                 section = Gio.Menu()
                 for theme in themes:
-                    make_item(theme.name, theme.folder.name, section)
+                    make_item(section, theme.name, theme.folder.name, 'gtk-theme')
                 menu.append_section(i18n('themes.system'), section)
 
         # icon themes - all
@@ -106,7 +110,7 @@ class ThemeSelectorGadget(AriaGadget):
             if icon_themes := self.themes_service.get_icon_themes():
                 section = Gio.Menu()
                 for icon_theme in icon_themes:
-                    make_item(icon_theme.name, f'icon:{icon_theme}', section)
+                    make_item(section, icon_theme.name, str(icon_theme), 'icon-theme')
                 menu.append_section(i18n('themes.icon_themes'), section)
 
         return menu

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from gi.repository import Gtk, Gio, GLib
 
 from aria_shell.i18n import i18n
@@ -17,6 +19,8 @@ class ThemeSelectorConfigModel(AriaConfigModel):
     favorites: list[str] = []
     show_user_themes: bool = True
     show_system_themes: bool = True
+    show_icon_themes: bool = True
+    icon_theme: str = ''  # force icon theme, or 'ignore' to not touch icons
     icon_name: str = 'preferences-color'
 
 
@@ -49,7 +53,15 @@ class ThemeSelectorGadget(AriaGadget):
         self.insert_action_group(self.ACTION_GROUP, actions)
 
     def on_menu_item_activate(self, _action: Gio.SimpleAction, theme: GLib.Variant):
-        self.themes_service.set_active_theme(theme.get_string())
+        theme: str = theme.get_string()
+        if theme.startswith('icon:'):
+            # change the icon theme
+            self.themes_service.set_icon_theme(Path(theme[5:]))
+        else:
+            # change the whole desktop theme
+            self.themes_service.set_active_theme(
+                theme, icon_theme=self.config.icon_theme
+            )
 
     def make_menu_item(self, label: str, name: str, append_to: Gio.Menu):
         item = Gio.MenuItem.new(label, f'{self.ACTION_GROUP}.{self.ACTION_NAME}')
@@ -88,6 +100,14 @@ class ThemeSelectorGadget(AriaGadget):
                 for theme in themes:
                     make_item(theme.name, theme.folder.name, section)
                 menu.append_section(i18n('themes.system'), section)
+
+        # icon themes - all
+        if self.config.show_icon_themes:
+            if icon_themes := self.themes_service.get_icon_themes():
+                section = Gio.Menu()
+                for icon_theme in icon_themes:
+                    make_item(icon_theme.name, f'icon:{icon_theme}', section)
+                menu.append_section(i18n('themes.icon_themes'), section)
 
         return menu
 

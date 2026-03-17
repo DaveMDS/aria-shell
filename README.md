@@ -56,7 +56,8 @@ psutil (optional, for the perf gadget)
    * [x] theme selector:
      * [x] show a menu with the list of preferred, user and system themes (fully configurable)
      * [x] support "special" light/dark themes
-     * [ ] apply icon-theme and cursor-theme from the "index.theme" file
+     * [x] list and apply icon-theme (manually or from the desktop theme)
+     * [ ] list and apply cursor-theme (manually or from the desktop theme)
      * [ ] copy the theme gtk-4.0 folder in ~/.config/gtk4.0 ?? seems totally wrong...
      * [ ] group themes with same name prefix under a submenu
      * [ ] show the active theme in the menu, check box?

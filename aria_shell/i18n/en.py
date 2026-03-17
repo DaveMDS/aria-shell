@@ -35,5 +35,6 @@ __CATALOG__ = {
 'themes.favorite': 'Favorite themes',
 'themes.user': 'User themes',
 'themes.system': 'System themes',
+'themes.icon_themes': 'Icon themes',
 
 }

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from gi.repository import Gio
+from gi.repository import GLib, Gio
 
 from aria_shell.utils import Singleton
 from aria_shell.utils.env import HOME
@@ -12,6 +12,9 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 USER_THEMES_DIR = HOME / '.themes'
 SYSTEM_THEMES_DIR = Path('/usr/share/themes')
+
+USER_ICONS_DIR = HOME / '.icons'
+SYSTEM_ICONS_DIR = Path('/usr/share/icons')
 
 
 class ThemesService(metaclass=Singleton):
@@ -66,7 +69,9 @@ class ThemesService(metaclass=Singleton):
         except FileNotFoundError:
             return None
 
-    def set_active_theme(self, theme: DesktopTheme | Path | str):
+    def set_active_theme(self, theme: DesktopTheme | Path | str,
+                         icon_theme = '',   # Icon theme name or 'ignore'
+                         ):
         """Change the current theme."""
         if isinstance(theme, DesktopTheme):
             gtk_theme = theme.folder.name
@@ -75,13 +80,49 @@ class ThemesService(metaclass=Singleton):
         else:
             gtk_theme = theme
 
-        INF('Setting system theme: %s', gtk_theme)
+        INF('Setting gtk-theme to: %s', gtk_theme)
         self.gsettings.set_string('gtk-theme', gtk_theme)
 
-        # TODO parse index.theme and appy icons and cursors!
+        # read theme metadata
+        if not isinstance(theme, DesktopTheme):
+            try:
+                theme = DesktopTheme(theme)
+            except FileNotFoundError as e:
+                ERR('Cannot parse theme: %s', theme)
+        meta = theme.get_metadata()
+
+        # apply icon theme
+        if icon_theme != 'ignore':
+            if not icon_theme:
+                icon_theme = meta.get('IconTheme', '')
+            if icon_theme:
+                self.set_icon_theme(icon_theme)
 
         # TODO copy the gtk-4.0 folder from theme in ~/.config/gtk-4.0
         # seems totally wrong to me....
+
+    #------------------
+    # Icon themes
+    #------------------
+    @staticmethod
+    def get_icon_themes() -> list[Path]:
+        """Get the list of all available Icon themes."""
+        icon_themes = []
+        for directory in (USER_ICONS_DIR, SYSTEM_ICONS_DIR):
+            for path in sorted(directory.iterdir()):
+                if path.name != 'default':
+                    index_file = path / 'index.theme'
+                    if index_file.exists():
+                        icon_themes.append(path)
+        return icon_themes
+
+    def set_icon_theme(self, icon_theme: Path | str):
+        """Apply the given Icon theme."""
+        if isinstance(icon_theme, Path):
+            icon_theme = icon_theme.name
+        INF('Setting icon-theme to: %s', icon_theme)
+        self.gsettings.set_string('icon-theme', icon_theme)
+        # TODO check exist before setting!
 
 
 class DesktopTheme:
@@ -95,6 +136,7 @@ class DesktopTheme:
     """
     def __init__(self, theme: Path | str):
         theme = Path(theme) if isinstance(theme, str) else theme
+        self._metadata: dict[str, str] | None = None
 
         if theme.is_absolute():
             # full path given, check the index.theme file
@@ -119,3 +161,21 @@ class DesktopTheme:
     @property
     def name(self) -> str:
         return self._folder.name
+
+    def get_metadata(self) -> dict[str, str]:
+        if self._metadata is not None:
+            return self._metadata
+
+        metadata = {}
+        index_file = str(self._folder / 'index.theme')
+        try:
+            keyfile = GLib.KeyFile()
+            keyfile.load_from_file(index_file, GLib.KeyFileFlags.NONE)
+            keys, _ = keyfile.get_keys('X-GNOME-Metatheme')
+            for key in keys:
+                metadata[key] = keyfile.get_string('X-GNOME-Metatheme', key) or ''
+        except Exception as e:
+            ERR('Cannot parse theme file: %s. Error: %s', index_file, e)
+
+        self._metadata = metadata
+        return metadata

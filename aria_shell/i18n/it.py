@@ -26,5 +26,6 @@ __CATALOG__ = {
 'themes.favorite': 'Temi preferiti',
 'themes.user': 'Temi dell\'utente',
 'themes.system': 'Temi di sistema',
+'themes.icon_themes': 'Temi per le icone',
 
 }

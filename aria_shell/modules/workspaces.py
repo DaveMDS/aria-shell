@@ -13,6 +13,7 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class WorkspacesConfigModel(AriaConfigModel):
+    show_name: bool = True
     show_windows: bool = True
     all_monitors: bool = False
     focus_window_on_click: bool = False
@@ -111,11 +112,12 @@ class WorkSpacesGadget(AriaGadget):
             box.add_controller(ges)
 
             # the workspace label
-            label = Gtk.Label()
-            label.add_css_class('aria-workspace-label')
-            label.set_tooltip_text(f'Workspace\n{ws.id}: {ws.name}')
-            label.set_text(ws.name)
-            box.append(label)
+            if self.conf.show_name:
+                label = Gtk.Label()
+                label.add_css_class('aria-workspace-label')
+                label.set_tooltip_text(f'Workspace\n{ws.id}: {ws.name}')
+                label.set_text(ws.name)
+                box.append(label)
 
             # the workspace windows
             if self.conf.show_windows:

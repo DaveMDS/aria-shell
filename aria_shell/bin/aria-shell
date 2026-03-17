@@ -60,7 +60,7 @@ def main() -> int:
         help='set log verbosity',
     )
     parser.add_argument(
-        '--log-format', default='{relativeCreated:.2f} {levelname} [{name}:{lineno}] {message}',
+        '--log-format', default='{relativeCreated:.2f} {levelname} [{filename}:{lineno}] {message}',
         help='set the log format',
     )
     parser.add_argument(

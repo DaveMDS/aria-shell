@@ -10,6 +10,10 @@ from aria_shell.gadget import AriaGadget
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
+# NOTE:
+# when going further on this, try to keep compatibility with waybar custom
+# lots of example in manjaro-sway:
+#   /usr/share/sway/templates/waybar/config.jsonc
 
 class CustomConfigModel(AriaConfigModel):
     label: str = ''

@@ -1,6 +1,6 @@
-from gi.repository import GLib, Gdk, Gio
+from gi.repository import Gdk, Gio
 
-from aria_shell.utils import Singleton, Signalable
+from aria_shell.utils import Singleton, Signalable, Timer
 from aria_shell.utils.logger import get_loggers
 
 
@@ -13,43 +13,53 @@ class DisplayService(Signalable, metaclass=Singleton):
 
     Signals:
       'monitor-added'(monitor: Gdk.Monitor)
-      'monitor-removed'(name: str)
+      'monitor-removed'(monitor: Gdk.Monitor)
     """
     def __init__(self):
         super().__init__()
+
+        # get the monitors list-model from the default display
         display = Gdk.Display.get_default()
-        self._monitors: Gio.ListModel = display.get_monitors()
-        self._monitors.connect('items-changed', self._on_listmodel_changed)
-        self._map_pos_name = {}  # model-pos => name
+        self._list_model: Gio.ListModel = display.get_monitors()
+
+        # keep an internal list of connected monitors
+        self._monitors: list[Gdk.Monitor] = []
+        for monitor in self._list_model:
+            self._monitors.append(monitor)  # noqa
+
+        # stay informed about monitors connected/disconnected
+        self._list_model.connect('items-changed', self._on_listmodel_changed)
 
     @property
-    def monitors(self):
+    def monitors(self) -> list[Gdk.Monitor]:
         return self._monitors
 
-    def _on_listmodel_changed(self, monitors: Gio.ListStore,
+    def _on_listmodel_changed(self, monitors: Gio.ListModel,
                               pos: int, removed: int, added: int):
-        if added:
-            mon: Gdk.Monitor = monitors.get_item(pos)  # noqa
-            name = mon.get_connector()
-            if mon.is_valid() and name:
+        DBG('Monitors changed pos=%d remove=%d added=%d', pos, removed, added)
+
+        # handle added monitors
+        for i in range(added):
+            monitor: Gdk.Monitor = monitors.get_item(pos + i)  # noqa
+            if monitor and monitor.is_valid() and monitor.get_connector():
                 # ok, monitor already populated
-                self._map_pos_name[pos] = name
-                self.emit('monitor-added', pos, mon)
-            else:
-                # HACK: under hyperland monitor is added with all properties
+                self._monitors.insert(pos + i, monitor)
+                self.emit('monitor-added', monitor)
+            elif monitor:
+                # HACK: under hyprland monitor is added with all properties
                 # not set (empty), and are populated asynchrony...
                 # hard to find a way to know when is all populated.
                 # Going for this ugly hack for the moment:
-                self.timer = GLib.timeout_add(500, self._delayed_added, pos, mon)
-        if removed:
-            if name := self._map_pos_name.pop(pos, None):
-                self.emit('monitor-removed', name)
+                self.timer = Timer(0.1, self._delayed_added, pos, monitor)
 
-    def _delayed_added(self, pos: int,  mon: Gdk.Monitor):
-        name = mon.get_connector()
-        if mon and mon.is_valid() and name:
-            self._map_pos_name[pos] = name
-            self.emit('monitor-added', mon)
-        else:
-            CRI('Cannot get monitor info (after the ugly delay hack)')
+        # handle removed monitors
+        for i in range(removed):
+            if pos < len(self._monitors):
+                monitor = self._monitors.pop(pos)
+                self.emit('monitor-removed', monitor)
+
+    def _delayed_added(self, pos: int,  monitor: Gdk.Monitor) -> bool:
+        if monitor and monitor.is_valid() and monitor.get_connector():
+            self._monitors.insert(pos, monitor)
+            self.emit('monitor-added', monitor)
         return False

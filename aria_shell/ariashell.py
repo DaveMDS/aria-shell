@@ -171,26 +171,26 @@ class AriaShell(Gtk.Application):
 
     def _on_monitor_added(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()
-        geom = monitor.get_geometry()
-
-        DBG(f'==== MONITOR ADDED {monitor}')
-        DBG(f'MONITOR: {monitor.get_model()} - {output_name} - scale={monitor.get_scale_factor()} valid={monitor.is_valid()}')
-        DBG(f'GEOMETRY: size={geom.width}x{geom.height} x={geom.x} y={geom.y}')
-
         if not output_name:
-            CRI(f'Cannot find monitor name for monitor {monitor}')
+            CRI('Cannot find monitor name for monitor %s', monitor)
             return
+
+        INF('Monitor connected %s', output_name)
+        # geom = monitor.get_geometry()
+        # DBG(f'MONITOR: {monitor.get_model()} - {output_name} - scale={monitor.get_scale_factor()} valid={monitor.is_valid()}')
+        # DBG(f'GEOMETRY: size={geom.width}x{geom.height} x={geom.x} y={geom.y}')
 
         self._create_panels_for_monitor(monitor)
 
-    def _on_monitor_removed(self, name: str):
-        DBG(f'====  MONITOR REMOVED {name}')
+    def _on_monitor_removed(self, monitor: Gdk.Monitor):
+        name = monitor.get_connector()
+        INF(f'Monitor disconnected {name}')
         for panel in self.panels.pop(name, []):
+            INF('Removing panel "%s" from monitor %s', panel.name, name)
             panel.destroy()
 
     def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()
-        DBG(f'Creating panels for monitor {output_name}')
         for section in sorted(self.conf.sections('panel')):
             panel_conf = self.conf.section(section, PanelConfig)
             outputs = panel_conf.outputs
@@ -199,6 +199,6 @@ class AriaShell(Gtk.Application):
                     panel_name = section.split(':')[1]
                 else:
                     panel_name = 'Aria Panel'
-                INF(f'Running panel "{panel_name}" on monitor {output_name}')
+                INF('Running panel "%s" on monitor %s', panel_name, output_name)
                 panel = AriaPanel(panel_name, panel_conf, monitor, self)
                 self.panels.setdefault(output_name, []).append(panel)

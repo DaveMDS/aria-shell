@@ -126,7 +126,7 @@ class PipeWireBackend(metaclass=Singleton):
     #     print('_on_object_manager_installed', _, self)
 
     def _on_nodes_changed(self, man: Wp.ObjectManager):
-        WRN(f'NODES CHANGED {man} ?? mi serve?? {self}')
+        DBG(f'NODES CHANGED {man} ?? mi serve?? {self}')
 
     def _on_node_added(self, man: Wp.ObjectManager, node: Wp.Node):
         props = node.get_property('properties')

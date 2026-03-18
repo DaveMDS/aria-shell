@@ -179,13 +179,17 @@ Gadget              .aria-gadget .gadget-workspaces
   padding: 0;
 }
 .gadget-workspaces .aria-workspace {
+  margin-right: 2px;
   padding: 0px 6px;
+  border: 1px solid alpha(var(--aria-accent-color), 0.5);
+  border-radius: 3px;
 }
 .gadget-workspaces .aria-workspace:hover {
-  box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
+  border-color: alpha(var(--aria-accent-color), 0.8);
 }
 .gadget-workspaces .aria-workspace.active {
-  background: rgba(0, 0, 0, .15);  /* TODO: something better? */
+  background-color: alpha(var(--aria-accent-color), 0.5);
+  border-color: transparent;
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window {
   /*border: 1px solid transparent;*/

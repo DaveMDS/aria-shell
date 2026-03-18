@@ -28,8 +28,8 @@ class ThemeSelectorConfigModel(AriaConfigModel):
 class ThemeSelectorModule(AriaModule):
     config_model_class = ThemeSelectorConfigModel
 
-    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_new(ctx)
+    def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
+        super().gadget_factory(ctx)
         return ThemeSelectorGadget(ctx.config)  # noqa - pycharm error?
 
 

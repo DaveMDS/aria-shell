@@ -83,7 +83,7 @@ class AriaModule:
         DBG(f'Module shutdown: {self}')
         self.initialized = False
 
-    def gadget_new(self, ctx: GadgetRunContext) -> AriaGadget | None:
+    def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         """
         Create a new AriaGadget instance.
 
@@ -171,7 +171,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
     # request a new gadget instance from the module
     try:
         ctx = GadgetRunContext(config=conf, monitor=monitor)
-        instance = mod.gadget_new(ctx)
+        instance = mod.gadget_factory(ctx)
         assert isinstance(instance, AriaGadget)
     except Exception as e:
         ERR(f'Cannot create instance of module: {name}. Exception: {e}. Full traceback follow...')

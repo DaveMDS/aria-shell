@@ -86,7 +86,7 @@ class TrayIcon(Gtk.Overlay):
 
     def bind(self, item: 'StatusNotifierItem'):
         # print('BIND', self)
-        if self._binds is not None:  # should never happend
+        if self._binds is not None:  # should never happen
             self.unbind()
         self._binds.append(
             item.bind_property(

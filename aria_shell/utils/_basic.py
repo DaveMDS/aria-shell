@@ -95,9 +95,10 @@ class Timer:
     def __init__(self,
                  interval: int | float,
                  callback: Callable[..., bool],
+                 *args,
                  autostart=True,
                  immediate=False,
-                 *a, **ka):
+                 **kwargs):
         if not isinstance(interval, int | float):
             raise TypeError('Timer.interval must be int or float')
         if not isinstance(callback, Callable):
@@ -105,12 +106,12 @@ class Timer:
         if isinstance(interval, float) and interval > 5:
             WRN('for low resolution timer use an int interval !!!')
         self.interval = interval
-        self.cb_info = (callback, a, ka)
+        self.cb_info = (callback, args, kwargs)
         self.timeout_id = 0
         if autostart:
             self.start()
         if immediate:
-            callback(*a, **ka)
+            callback(*args, **kwargs)
 
     def __repr__(self):
         return f'<Timer #{self.timeout_id} cb={self.cb_info[0]}>'

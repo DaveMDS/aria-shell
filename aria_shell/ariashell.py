@@ -47,7 +47,7 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 class AriaShell(Gtk.Application):
     def __init__(self, args: argparse.Namespace):
-        super().__init__(application_id='org.davemds.aria-shell')
+        super().__init__(application_id='it.gurumeditation.aria-shell')
         self.args = args
         self.conf = AriaConfig()
 

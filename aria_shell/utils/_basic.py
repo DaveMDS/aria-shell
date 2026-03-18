@@ -13,7 +13,9 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class Singleton(type):
-    """ usage: MyClass(metaclass=Singleton) """
+    """ usage: MyClass(metaclass=Singleton)
+    NOTE: not compatible with GObject classes, don't use with them.
+    """
     _instances = {}
 
     def __call__(cls, *args, **kwargs):

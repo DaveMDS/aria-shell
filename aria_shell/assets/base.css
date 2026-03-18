@@ -192,7 +192,8 @@ Gadget              .aria-gadget .gadget-workspaces
   border-color: transparent;
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window {
-  /*border: 1px solid transparent;*/
+  /*border: 1px solid red;*/
+  margin-right: 2px;
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window:hover {
   box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
@@ -203,8 +204,15 @@ Gadget              .aria-gadget .gadget-workspaces
 
 /* Gadget: Tray
 --------------------------------------------------------------------------------
-TODO !!!!
+Gadget              .aria-gadget .gadget-tray
+╰─ listview
+   ├─ overlay       .aria-tray-item
+   ┊
+   ╰─ overlay       .aria-tray-item
 */
+.gadget-tray {
+  padding: 0;
+}
 .gadget-tray .aria-tray-item {
-  /*padding: 0 3px;*/
+  padding: 0 3px;
 }

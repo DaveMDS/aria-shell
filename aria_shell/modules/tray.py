@@ -17,6 +17,7 @@ from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
+from aria_shell.services.dbus_menu import CanonicalDBusMenu
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -39,7 +40,6 @@ class TrayModule(AriaModule):
         # create the StatusNotifierWatcher (with a fake Host)
         self.snw = StatusNotifierWatcher()
 
-
     def module_shutdown(self):
         if self.snw:
             self.snw.shutdown()
@@ -59,10 +59,17 @@ class TrayIcon(Gtk.Overlay):
         super().__init__(css_classes=['aria-tray-item'])
         self.image = Gtk.Image()
         self.set_child(self.image)
+
         self._binds: list[GObject.Binding] = []
         self._sni: StatusNotifierItem | None = None
 
         self.set_cursor_from_name('pointer')  # TODO giusto? ci piace?
+
+        # PopoverMenu
+        self.menu_model: CanonicalDBusMenu | None = None
+        self.popover_menu = Gtk.PopoverMenu()
+        self.popover_menu.connect('closed', self.on_menu_closed)
+        self.popover_menu.set_parent(self)
 
         # EventController to receive mouse clicks
         ec = Gtk.GestureSingle(button=0)
@@ -78,7 +85,7 @@ class TrayIcon(Gtk.Overlay):
         self.add_controller(ec)
 
     def bind(self, item: 'StatusNotifierItem'):
-        print('BIND', self)
+        # print('BIND', self)
         if self._binds is not None:  # should never happend
             self.unbind()
         self._binds.append(
@@ -96,7 +103,7 @@ class TrayIcon(Gtk.Overlay):
         self._sni = item
 
     def unbind(self):
-        print('UNBIND', self)
+        # print('UNBIND', self)
         while self._binds and (bind := self._binds.pop()):
             bind.unbind()
         self._sni = None
@@ -116,14 +123,43 @@ class TrayIcon(Gtk.Overlay):
             win = self.get_native()
             _, x, y = ec.get_point()
             _, p = self.compute_point(win, Graphene.Point(x, y)) # noqa
-            x, y = int(x), int(y)
-            match ec.get_current_button():
-                case 1:
-                    self._sni.activate(x, y)
-                case 2:
-                    self._sni.secondary_activate(x, y)
-                case 3:
+            x, y, btn = int(x), int(y), ec.get_current_button()
+            # print(f"{x=} {y=} {btn=} {p.x=} {p.y=}")
+            if btn == 3 or (btn == 1 and self._sni.item_is_menu):
+                if self._sni.menu:
+                    if self.popover_menu.get_menu_model():
+                        self.hide_menu()
+                    else:
+                        self.show_menu()
+                else:
                     self._sni.context_menu(x, y)
+            elif btn == 1:
+                self._sni.activate(x, y)
+            elif btn == 2:
+                self._sni.secondary_activate(x, y)
+
+    def show_menu(self):
+        self.menu_model = CanonicalDBusMenu(
+            service_name=self._sni.bus_name,
+            object_path=self._sni.menu,
+            parent_widget=self.popover_menu,
+        )
+        self.popover_menu.set_menu_model(self.menu_model)
+        self.popover_menu.popup()
+
+    def hide_menu(self):
+        self.popover_menu.popdown()
+
+    def on_menu_closed(self, menu: Gtk.PopoverMenu):
+        # destroy the menu model on the next tick, the clicked action
+        # has not been called yet
+        GLib.timeout_add(0, self.menu_model_delayed_destroy)
+
+    def menu_model_delayed_destroy(self):
+        self.popover_menu.set_menu_model(None)
+        if self.menu_model:
+            self.menu_model.destroy()
+            self.menu_model = None
 
 
 class TrayGadget(AriaGadget):
@@ -145,7 +181,7 @@ class TrayGadget(AriaGadget):
 
     @staticmethod
     def _factory_item_setup(_, list_item: Gtk.ListItem):
-        """ create a new for the list item """
+        """ create a new item for the list item """
         # create a new TrayIcon and attach to ListItem
         list_item.set_child(TrayIcon())
         list_item.set_activatable(False)
@@ -181,7 +217,10 @@ STATUS_NOTIFIER_WATCHER_PATH = '/StatusNotifierWatcher'
 
 
 class StatusNotifierItem(GObject.Object):
-    """ Implement the remote object StatusNotifierItem """
+    """ Implement the remote object StatusNotifierItem
+
+    https://specifications.freedesktop.org/status-notifier-item/
+    """
     __gtype_name__ = 'StatusNotifierItem'
 
     IFACE = 'org.kde.StatusNotifierItem'
@@ -192,7 +231,7 @@ class StatusNotifierItem(GObject.Object):
     category = GObject.Property(type=str)
     title = GObject.Property(type=str, default='')
     tooltip = GObject.Property(type=str, default='')
-    # item_is_menu = GObject.Property(type=Bool, default=False) # not usefull
+    item_is_menu = GObject.Property(type=bool, default=True)
     menu = GObject.Property(type=str, default='')
     # TODO WindowId  ??
     icon_name = GObject.Property(type=str, default='')
@@ -209,6 +248,8 @@ class StatusNotifierItem(GObject.Object):
         # full_path: ":1.12520/org/ayatana/NotificationItem/nm_applet"
         i = full_path.index('/')
         bus_name, object_path = full_path[:i], full_path[i:]
+        self.bus_name = bus_name
+        self.object_path = object_path
 
         # create the object proxy for this path
         self._proxy = SESSION_BUS.get_proxy(bus_name, object_path)
@@ -257,7 +298,7 @@ class StatusNotifierItem(GObject.Object):
 
     def _request_properties(self, props: list[str]):
         """ request the given properties from the remote object """
-        INF(f'SyncProps: {props} {self.id}')
+        # INF(f'SyncProps: {props} {self.id}')
         for prop_name in props:
             if prop_name not in self._alive_async_requests:
                 self._proxy.Get(self.IFACE, prop_name,
@@ -284,9 +325,9 @@ class StatusNotifierItem(GObject.Object):
         self._alive_async_requests.discard(prop_name)
         if callable(call):
             try:
-                INF(f'Get {prop_name} _')
+                # INF(f'Get {prop_name} _')
                 val = call()
-                INF(f'Get {prop_name} VAL {repr(val)})')
+                # INF(f'Get {prop_name} VAL {repr(val)})')
             except Exception as e:
                 ERR(f'YYY {e} {self.id} {prop_name}')
                 return
@@ -318,6 +359,9 @@ class StatusNotifierItem(GObject.Object):
             case 'Menu':
                 if val != self.menu:
                     self.menu = val
+            case 'ItemIsMenu':
+                if val != self.item_is_menu:
+                    self.item_is_menu = val
             case 'ToolTip':
                 # ToolTip: (icon_name, icon_data, title, descriptive_text)
                 if isinstance(val, tuple) and len(val) == 4:
@@ -347,7 +391,6 @@ class StatusNotifierItem(GObject.Object):
             pass
 
     def context_menu(self, x: int, y: int):
-        # TODO use dbus menu here if available, otherwise call ContextMenu
         try:
             self._proxy.ContextMenu(x, y)
         except AttributeError:

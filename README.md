@@ -50,7 +50,7 @@ psutil (optional, for the perf gadget)
      * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
      * [ ] show default mic volume in gadget (optional)
    * [x] tray: use (K)StatusNotifierItem protocol
-     *  [ ] full dbus menu support
+     *  [x] decent DBUS Menu support (com.canonical.dbusmenu)
      *  [ ] support for pixmap icons over dbus
    * [ ] screenshot / screenrecorder
    * [x] theme selector:
@@ -89,10 +89,10 @@ psutil (optional, for the perf gadget)
 - [ ] automatic logout command. How to make logout work on every wm?
 
 ## Aria terminal
-- [x] simple persistant terminal that show/hide from the top on command
+- [x] simple persistent terminal that show/hide from the top on command
 - [x] configurable opacity, font, size, shell and behaviours
 - [x] only available if vte4 is installed
-- [x] optionally grab the disaply when the terminal is visible
+- [x] optionally grab the display when the terminal is visible
 - [x] emulate fullscreen using Ctrl+F
 - [ ] configurable color palette
 - [ ] show/hide animation ala quake console

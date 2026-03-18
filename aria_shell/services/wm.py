@@ -342,6 +342,9 @@ class SwayBackend(WMBackendBase):
                         if ws := WORKSPACES.get(ws_id, None):
                             ws.name = event.data['current'].get('name', '')
                             self.emit_event('changed')
+                    case 'move':
+                        # refetch the whole tree
+                        self.sway.get_tree(self._tree_cb)
                     case _:
                         INF('NOT MANAGED WORKSPACE CHANGE %s', change)
 

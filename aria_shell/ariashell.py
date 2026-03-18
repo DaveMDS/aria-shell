@@ -199,6 +199,6 @@ class AriaShell(Gtk.Application):
                     panel_name = section.split(':')[1]
                 else:
                     panel_name = 'Aria Panel'
-                INF('Running panel "%s" on monitor %s', panel_name, output_name)
+                INF('Creating panel "%s" on monitor %s', panel_name, output_name)
                 panel = AriaPanel(panel_name, panel_conf, monitor, self)
                 self.panels.setdefault(output_name, []).append(panel)

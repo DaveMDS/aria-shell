@@ -1,6 +1,6 @@
 from gi.repository import Gdk, Gio
 
-from aria_shell.utils import Singleton, Signalable, Timer
+from aria_shell.utils import Singleton, Signalable
 from aria_shell.utils.logger import get_loggers
 
 
@@ -9,7 +9,7 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 class DisplayService(Signalable, metaclass=Singleton):
     """
-    Get info (and stay informed) about connected/disconnected  monitors
+    Get info (and stay informed) about connected/disconnected monitors.
 
     Signals:
       'monitor-added'(monitor: Gdk.Monitor)
@@ -40,17 +40,15 @@ class DisplayService(Signalable, metaclass=Singleton):
 
         # handle added monitors
         for i in range(added):
+            # NOTE: sometimes monitor are added with all the properties empty,
+            # they are populated later. In that case we need to wait for
+            # the 'connector' property to be available...
             monitor: Gdk.Monitor = monitors.get_item(pos + i)  # noqa
-            if monitor and monitor.is_valid() and monitor.get_connector():
-                # ok, monitor already populated
-                self._monitors.insert(pos + i, monitor)
-                self.emit('monitor-added', monitor)
-            elif monitor:
-                # HACK: under hyprland monitor is added with all properties
-                # not set (empty), and are populated asynchrony...
-                # hard to find a way to know when is all populated.
-                # Going for this ugly hack for the moment:
-                self.timer = Timer(0.1, self._delayed_added, pos, monitor)
+            if monitor and not self._monitor_try_insert(monitor, pos + 1):
+                monitor.connect(
+                    'notify::connector',
+                    lambda mon, _: self._monitor_try_insert(mon, pos + i)
+                )
 
         # handle removed monitors
         for i in range(removed):
@@ -58,8 +56,11 @@ class DisplayService(Signalable, metaclass=Singleton):
                 monitor = self._monitors.pop(pos)
                 self.emit('monitor-removed', monitor)
 
-    def _delayed_added(self, pos: int,  monitor: Gdk.Monitor) -> bool:
-        if monitor and monitor.is_valid() and monitor.get_connector():
+    def _monitor_try_insert(self, monitor: Gdk.Monitor, pos: int) -> bool:
+        if monitor in self._monitors:
+            return True
+        if monitor.is_valid() and monitor.get_connector():
             self._monitors.insert(pos, monitor)
             self.emit('monitor-added', monitor)
+            return True
         return False

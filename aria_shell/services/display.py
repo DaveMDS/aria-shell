@@ -17,6 +17,7 @@ class DisplayService(Signalable, metaclass=Singleton):
     """
     def __init__(self):
         super().__init__()
+        INF('Initializing DisplayService')
 
         # get the monitors list-model from the default display
         display = Gdk.Display.get_default()

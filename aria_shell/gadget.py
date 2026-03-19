@@ -22,6 +22,9 @@ class AriaGadget(Gtk.Box):
     def __repr__(self):
         return f'<AriaGadget {self.name}>'
 
+    def destroy(self):
+        print('DESTROY NOT IMPLEMENTED !!!!', self)
+
     def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
         self.on_mouse_down(ec.get_current_button())
 

@@ -44,6 +44,7 @@ class TerminalConfig(AriaConfigModel):
 
 class AriaTerminal(AriaWindow):
     def __init__(self, app: Gtk.Application):
+        INF('Initialize Aria Terminal')
         if not _vte_available:
             raise RuntimeError('Vte not available')
 
@@ -62,6 +63,11 @@ class AriaTerminal(AriaWindow):
 
         self.terminal: Vte.Terminal | None = None
         self._fullscreen: bool = False
+
+    def shutdown(self):
+        INF('Shutting down Aria Terminal')
+        self.terminal = None
+        super().destroy()
 
     def _toggle_fullscreen(self):
         """ Emulate fullscreen using LayerShell """

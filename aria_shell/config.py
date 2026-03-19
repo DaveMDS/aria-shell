@@ -131,6 +131,11 @@ class AriaConfig(metaclass=Singleton):
         else:
             ERR(f'Cannot find a configuration file')
 
+    def clear(self):
+        """ Cleanup all loaded configs """
+        self._parser.clear()
+        self._general = None
+
     @property
     def general(self) -> AriaConfigGeneralModel:
         """ Get the [general] config section """

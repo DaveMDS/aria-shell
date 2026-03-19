@@ -87,6 +87,7 @@ class ExiterButton(Gtk.Button):
 
 class AriaExiter(AriaWindow):
     def __init__(self, app: Gtk.Application):
+        INF('Initialize Aria Exiter')
         self.config = AriaConfig().section('exiter', ExiterConfig)
 
         super().__init__(
@@ -105,6 +106,16 @@ class AriaExiter(AriaWindow):
         self.countdown = 0
 
         self.populate_window()
+
+    def shutdown(self):
+        INF('Shutting down Aria Exiter')
+        if self.dialog:
+            self.dialog.destroy()
+            self.dialog = None
+        if self.timer:
+            self.timer.stop()
+            self.timer = None
+        super().destroy()
 
     def populate_window(self):
         flow = Gtk.FlowBox(

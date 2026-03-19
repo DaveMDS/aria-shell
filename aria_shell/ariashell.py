@@ -31,6 +31,7 @@ print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_
 from aria_shell.i18n import setup_locale
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
+from aria_shell.utils import Timer
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
@@ -51,7 +52,11 @@ class AriaShell(Gtk.Application):
         self.args = args
         self.conf = AriaConfig()
 
-        self.panels: dict[str, list[AriaPanel]] = {}  # es: {'eDP-1': [Panels]}
+        # keep track of all alive panels, ex: {'eDP-1': [Panel,Panel,..]}
+        self.panels: dict[str, list[AriaPanel]] = {}
+
+        # keep track of all loaded CSS
+        self.css_providers: list[Gtk.CssProvider] = []
 
         # components instances
         self.command_socket: AriaCommandSocket | None = None
@@ -60,7 +65,7 @@ class AriaShell(Gtk.Application):
         self.terminal: AriaTerminal | None = None
         self.exiter: AriaExiter | None = None
 
-        # app lifecycle
+        # app lifecycle signals
         self.connect('startup', self._on_app_startup)
         self.connect('activate', self._on_app_activate)
         self.connect('shutdown', self._on_app_shutdown)
@@ -87,17 +92,12 @@ class AriaShell(Gtk.Application):
         # setup i18n locale
         setup_locale()
 
-        # load config file
-        self.conf.load_conf(self.args.config)
-
-        # load css files
-        self._load_css_styles(self.args.style)
-
         # init commands
         self.commands = AriaCommands(app)
 
-        # preload all modules
-        preload_all_modules()
+        # start command socket listener
+        self.command_socket = AriaCommandSocket(self)
+
 
     def _on_app_activate(self, app: Gtk.Application):
         """Activate signal is emitted every time the application is launched."""
@@ -109,39 +109,87 @@ class AriaShell(Gtk.Application):
             return 0
         self.first_instance_created = True
 
-        # inspect connected monitors, and create needed panels
+        # HACK: a fake window to keep the app alive while reloading!
+        # (gtk close the whole app when the last window is closed...)
+        self.keep_alive_win = Gtk.Window()
+        self.add_window(self.keep_alive_win)
+
+        # stay informed about changed monitors
         ds = DisplayService()
         ds.connect('monitor-added', self._on_monitor_added)
         ds.connect('monitor-removed', self._on_monitor_removed)
-        for monitor in ds.monitors:
-            self._on_monitor_added(monitor)
 
-        # start command socket listener
-        self.command_socket = AriaCommandSocket(app)
-
-        # init the launcher
-        self.launcher = AriaLauncher(app)
-
-        # init the exiter (logout menu)
-        self.exiter = AriaExiter(app)
-
-        # init the terminal
-        try:
-            self.terminal = AriaTerminal(app)
-        except RuntimeError:
-            WRN('Vte4 not available, embedded terminal is disabled!')
+        # now prepare all the stuff that can be reloaded
+        self._setup_everything()
 
         return 0
 
     def _on_app_shutdown(self, _app: Gtk.Application):
         """Shutdown signal is emitted when the application is exiting."""
-        INF('Shutting down aria-shell...')
-        unload_all_modules()
+        self._shutdown_everything()
+        # TODO more stuff to shutdown here? the command socket?
         INF('Bye bye o/')
-        # TODO shutdown components, windows, sockets ...
 
     #---------------------------------------------------------------------------
-    # Manage CSS styles
+    # Aria global setup / teardown
+    #---------------------------------------------------------------------------
+    def _setup_everything(self):
+        INF('=========================================')
+        INF('Warming up aria-shell...')
+
+        # load config file
+        self.conf.load_conf(self.args.config)
+
+        # load css files
+        self._load_css_styles(self.args.style)
+
+        # create instances of all components
+        self.launcher = AriaLauncher(self)
+        self.exiter = AriaExiter(self)
+        try:
+            self.terminal = AriaTerminal(self)
+        except RuntimeError:
+            WRN('Vte4 not available, embedded terminal is disabled!')
+
+        # preload all modules (the gadgets)
+        preload_all_modules()
+
+        # inspect connected monitors, and create needed panels
+        for monitor in DisplayService().monitors:
+            self._on_monitor_added(monitor)
+
+    def _shutdown_everything(self):
+        INF('-----------------------------------------------------------------')
+        INF('Shutting down aria-shell...')
+
+        # destroy all panels
+        for monitor, panels in self.panels.items():
+            for panel in panels:
+                panel.destroy()
+        self.panels = {}
+
+        # shutdown all modules
+        unload_all_modules()
+
+        # shutdown all components, and release their references
+        if self.launcher:
+            self.launcher.shutdown()
+            self.launcher = None
+        if self.terminal:
+            self.terminal.shutdown()
+            self.terminal = None
+        if self.exiter:
+            self.exiter.shutdown()
+            self.exiter = None
+
+        # clear all loaded CSS styles
+        self._clear_css_styles()
+
+        # clear the loaded config
+        self.conf.clear()
+
+    #---------------------------------------------------------------------------
+    # CSS styles
     #---------------------------------------------------------------------------
     def _load_css_styles(self, user_css: Path | None):
         # load base.css from python package only (base should never be edited)
@@ -165,18 +213,29 @@ class AriaShell(Gtk.Application):
             else:
                 ERR(f'Cannot find requested style: {style}')
 
-    @staticmethod
-    def _load_css_file(css: Path):
-        if css.exists() or css.is_file():
+    def _load_css_file(self, css: Path):
+        if css.exists() and css.is_file():
             INF(f'Loading css file: {css}')
+
             css_provider = Gtk.CssProvider()
             css_provider.load_from_path(css.as_posix())
+            self.css_providers.append(css_provider)
+
             Gtk.StyleContext.add_provider_for_display(
                 Gdk.Display.get_default(), css_provider,
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
             )
         else:
             ERR(f'Cannot find css file: {css}')
+
+    def _clear_css_styles(self):
+        INF(f'Clearing CSS styles')
+        for provider in self.css_providers:
+            Gtk.StyleContext.remove_provider_for_display(
+                Gdk.Display.get_default(),
+                provider
+            )
+        self.css_providers.clear()
 
     #---------------------------------------------------------------------------
     # Manage monitors plugged and unplugged, create necessary Panels
@@ -198,7 +257,6 @@ class AriaShell(Gtk.Application):
         name = monitor.get_connector()
         INF(f'Monitor disconnected {name}')
         for panel in self.panels.pop(name, []):
-            INF('Removing panel "%s" from monitor %s', panel.name, name)
             panel.destroy()
 
     def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
@@ -211,6 +269,6 @@ class AriaShell(Gtk.Application):
                     panel_name = section.split(':')[1]
                 else:
                     panel_name = 'Aria Panel'
-                INF('Creating panel "%s" on monitor %s', panel_name, output_name)
+
                 panel = AriaPanel(panel_name, panel_conf, monitor, self)
                 self.panels.setdefault(output_name, []).append(panel)

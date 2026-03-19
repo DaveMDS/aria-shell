@@ -39,6 +39,9 @@ class Signalable:
     def connect(self, signal: str, handler: Callable, *a, **ka):
         self._handlers.setdefault(signal, []).append((handler, a, ka))
 
+    def disconnect_all(self):
+        self._handlers.clear()
+
     def emit(self, signal: str, *args):
         for h, a, ka in self._handlers.get(signal, []):
             h(*args, *a, *ka)

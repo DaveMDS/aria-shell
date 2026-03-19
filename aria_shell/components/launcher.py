@@ -39,6 +39,7 @@ class LauncherConfig(AriaConfigModel):
 
 class AriaLauncher(AriaWindow):
     def __init__(self, app: Gtk.Application):
+        INF('Initialize Aria Launcher')
         # get launcher config
         self.conf = AriaConfig().section('launcher', LauncherConfig)
 
@@ -72,6 +73,15 @@ class AriaLauncher(AriaWindow):
 
         # perform a first search
         self._on_entry_changed(self.search_entry, '')
+
+    def shutdown(self):
+        INF('Shutting down Aria Launcher')
+        # TODO shutdown properly each provider !!!!!!!!!!!
+        self.providers = []
+        self.list_store = None
+        self.list_view = None
+        self.search_entry = None
+        super().destroy()
 
     def _populate_window(self):
         vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL, spacing=12)

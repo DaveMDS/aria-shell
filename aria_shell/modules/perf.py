@@ -178,7 +178,7 @@ class PerfGadget(AriaGadget):
             f'CPU frequency: {info.cpu_freq:.0f}Mhz  ({info.cpu_freq_min:.0f}-{info.cpu_freq_max:.0f})'
         )
 
-    def on_mouse_down(self, button: int):
+    def mouse_click(self, button: int):
         self.toggle_popup()
 
     def toggle_popup(self):

@@ -115,7 +115,7 @@ class ThemeSelectorGadget(AriaGadget):
 
         return menu
 
-    def on_mouse_down(self, button: int):
+    def mouse_click(self, button: int):
         # create the menu model and the popover menu
         menu_model = self.build_menu_model()
         popover = Gtk.PopoverMenu(menu_model=menu_model)

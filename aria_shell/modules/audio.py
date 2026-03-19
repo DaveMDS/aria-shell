@@ -55,7 +55,7 @@ class AudioGadget(AriaGadget):
         ico = Gtk.Image.new_from_icon_name('audio-volume-medium')
         self.append(ico)
 
-    def on_mouse_down(self, button: int):
+    def mouse_click(self, button: int):
         self.toggle_popup()
 
     def toggle_popup(self):

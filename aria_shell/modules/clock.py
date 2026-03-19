@@ -66,7 +66,7 @@ class ClockGadget(AriaGadget):
         text = now.strftime(self.conf.format)
         self.label.set_text(text)
 
-    def on_mouse_down(self, button: int):
+    def mouse_click(self, button: int):
         self.toggle_calendar()
 
     def toggle_calendar(self):

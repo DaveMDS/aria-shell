@@ -4,7 +4,7 @@ from gi.repository import Gtk
 class AriaGadget(Gtk.Box):
     """
     Base class for all gadgets
-    A gadget is an entity that can be placed in panels, docks, etc...
+    A gadget is a Gtk.Widget that can be placed in panels, docks, etc...
     """
     def __init__(self, name: str, clickable=False):
         super().__init__(css_name='Gadget')
@@ -24,12 +24,12 @@ class AriaGadget(Gtk.Box):
 
     def destroy(self):
         print('DESTROY NOT IMPLEMENTED !!!!', self)
+    def mouse_click(self, button: int):
+        """Called on every mouse click."""
+        raise NotImplementedError(f'{self} must implement mouse_click()')
 
     def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
-        self.on_mouse_down(ec.get_current_button())
-
-    def on_mouse_down(self, button: int):
-        raise NotImplementedError('Gadget must implement on_mouse_down')
+        self.mouse_click(ec.get_current_button())
 
     # def open_popup(self):
     #     raise NotImplementedError('TODO')

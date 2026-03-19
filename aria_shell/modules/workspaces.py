@@ -28,13 +28,12 @@ class WorkSpacesModule(AriaModule):
         self.gadgets: list[WorkSpacesGadget] = [] # just for typing
 
     def module_init(self):
-        super().module_init()
         self.wm_service = WindowManagerService()
         self.wm_service.watch_events(self.wm_event_cb)
 
     def module_shutdown(self):
         # TODO shutdown WindowManagerService
-        super().module_shutdown()
+        pass
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: WorkspacesConfigModel = ctx.config  # noqa

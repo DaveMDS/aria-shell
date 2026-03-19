@@ -32,7 +32,10 @@ class AriaModule(ABC):
     """
     Base class for all Aria modules.
 
-    A Module can provide gadgets by implementing the gadget_new() method.
+    The lifecycle of the module can be controlled implementing
+    the module_init() and module_shutdown().
+
+    A Module can provide gadgets by implementing the gadget_factory() method.
 
     Attributes:
         config_model_class: AriaConfigModel class to use for parsing config section
@@ -51,7 +54,6 @@ class AriaModule(ABC):
 
         raise:
             RuntimeError if the module cannot be started
-
         """
         DBG(f'Module __init__: {self}')
         self.initialized = False
@@ -67,22 +69,15 @@ class AriaModule(ABC):
         This is called as later as possible, usually when the first gadget is
         needed on a panel. Here you can initialize all the needed stuff,
         like timers, connections, etc...
-
         """
-        DBG(f'Module init: {self}')
-        self.initialized = True
 
     def module_shutdown(self):
         """
         Shutdown the module.
 
         All resources must be released at this point.
-
         """
-        DBG(f'Module shutdown: {self}')
-        self.initialized = False
 
-    @abstractmethod
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         """
         Create a new AriaGadget instance.
@@ -155,6 +150,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
     if not mod.initialized:
         try:
             mod.module_init()
+            mod.initialized = True
         except Exception as e:
             ERR(f'Cannot init module: {name}. Exception: {e}. Full traceback follow...')
             traceback.print_exc()

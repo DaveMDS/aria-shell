@@ -66,12 +66,10 @@ class PerfModule(AriaModule):
         self.info = SysInfo()
 
     def module_init(self):
-        super().module_init()
         self.info.cpu_count = psutil.cpu_count(logical=True)
 
     def module_shutdown(self):
         self.stop_timer()
-        super().module_shutdown()
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: PerfConfigModel = ctx.config  # noqa

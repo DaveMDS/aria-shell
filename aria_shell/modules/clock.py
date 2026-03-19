@@ -26,14 +26,12 @@ class ClockModule(AriaModule):
         self.timer: Timer | None = None
 
     def module_init(self):
-        super().module_init()
         self.timer = Timer(1, self.timer_cb)
 
     def module_shutdown(self):
         if self.timer:
             self.timer.stop()
             self.timer = None
-        super().module_shutdown()
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: ClockConfigModel = ctx.config  # noqa

@@ -41,7 +41,6 @@ class AudioModule(AriaModule):
         super().module_shutdown()
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_factory(ctx)
         conf: AudioConfigModel = ctx.config  # noqa
         return AudioGadget(conf)
 

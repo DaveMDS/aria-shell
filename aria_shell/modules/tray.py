@@ -46,7 +46,6 @@ class TrayModule(AriaModule):
         super().module_shutdown()
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_factory(ctx)
         conf: TrayConfigModel = ctx.config  # noqa
         return TrayGadget(conf)
 

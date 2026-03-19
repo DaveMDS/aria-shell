@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import importlib
 import traceback
@@ -20,7 +19,7 @@ _loaded_modules: dict[str, AriaModule] = {}
 
 @dataclass
 class GadgetRunContext:
-    """ Context data received in AriaModule.gadget_new()
+    """ Context data received in AriaModule.gadget_factory()
     Attributes:
         config: The config section model for the gadget
         monitor: The monitor where the gadget has been requested
@@ -29,7 +28,7 @@ class GadgetRunContext:
     monitor: Gdk.Monitor
 
 
-class AriaModule:
+class AriaModule(ABC):
     """
     Base class for all Aria modules.
 
@@ -83,6 +82,7 @@ class AriaModule:
         DBG(f'Module shutdown: {self}')
         self.initialized = False
 
+    @abstractmethod
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         """
         Create a new AriaGadget instance.
@@ -90,11 +90,9 @@ class AriaModule:
         Args:
             ctx: Context data for the gadget (conf and other stuff)
 
-        Returns:
+        Return:
             A newly created AriaGadget or None in case of failure
         """
-        # DBG(f'AriaModule gadget_new: {self}')
-        return None
 
 #
 # def get_module_by_name(name: str) -> AriaModule | None:

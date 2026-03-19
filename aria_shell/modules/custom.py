@@ -26,7 +26,6 @@ class CustomModule(AriaModule):
     config_model_class = CustomConfigModel
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
-        super().gadget_factory(ctx)
         conf: CustomConfigModel = ctx.config  # noqa
         return CustomGadget(conf)
 

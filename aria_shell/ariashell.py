@@ -62,7 +62,7 @@ class AriaShell(Gtk.Application):
 
         # app lifecycle
         self.connect('startup', self._on_app_startup)
-        self.connect('activate', self._on_app_active)
+        self.connect('activate', self._on_app_activate)
         self.connect('shutdown', self._on_app_shutdown)
 
         # do not allow to run aria-shell multiple times.
@@ -79,7 +79,11 @@ class AriaShell(Gtk.Application):
             ERR(e)
             return 5
 
+    #---------------------------------------------------------------------------
+    # Gtk.Application lifecycle
+    #---------------------------------------------------------------------------
     def _on_app_startup(self, app: Gtk.Application):
+        """Startup signal is emitted exactly once on the first app instance."""
         # setup i18n locale
         setup_locale()
 
@@ -95,13 +99,8 @@ class AriaShell(Gtk.Application):
         # preload all modules
         preload_all_modules()
 
-    def _on_app_shutdown(self, _app: Gtk.Application):
-        INF(f'Shutting down... {self}')
-        unload_all_modules()
-        INF('Bye bye o/')
-        # TODO shutdown components, windows, sockets ...
-
-    def _on_app_active(self, app: Gtk.Application):
+    def _on_app_activate(self, app: Gtk.Application):
+        """Activate signal is emitted every time the application is launched."""
         if not Gdk.Display.get_default():
             raise RuntimeError('Cannot find wayland display')
 
@@ -134,6 +133,16 @@ class AriaShell(Gtk.Application):
 
         return 0
 
+    def _on_app_shutdown(self, _app: Gtk.Application):
+        """Shutdown signal is emitted when the application is exiting."""
+        INF('Shutting down aria-shell...')
+        unload_all_modules()
+        INF('Bye bye o/')
+        # TODO shutdown components, windows, sockets ...
+
+    #---------------------------------------------------------------------------
+    # Manage CSS styles
+    #---------------------------------------------------------------------------
     def _load_css_styles(self, user_css: Path | None):
         # load base.css from python package only (base should never be edited)
         self._load_css_file(ARIA_ASSETS_DIR / 'base.css')
@@ -169,6 +178,9 @@ class AriaShell(Gtk.Application):
         else:
             ERR(f'Cannot find css file: {css}')
 
+    #---------------------------------------------------------------------------
+    # Manage monitors plugged and unplugged, create necessary Panels
+    #---------------------------------------------------------------------------
     def _on_monitor_added(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()
         if not output_name:

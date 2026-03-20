@@ -35,15 +35,12 @@ class TrayModule(AriaModule):
         self.snw: StatusNotifierWatcher | None = None
 
     def module_init(self):
-        super().module_init()
-
         # create the StatusNotifierWatcher (with a fake Host)
         self.snw = StatusNotifierWatcher()
 
     def module_shutdown(self):
         if self.snw:
             self.snw.shutdown()
-        super().module_shutdown()
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: TrayConfigModel = ctx.config  # noqa

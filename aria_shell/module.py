@@ -16,6 +16,9 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 # index of loaded modules: {'clock': ClockModule,...}
 _loaded_modules: dict[str, AriaModule] = {}
 
+# keep track of loaded gadgets, to remember the parent module
+_loaded_gadgets: dict[AriaGadget, AriaModule] = {}
+
 
 @dataclass
 class GadgetRunContext:
@@ -132,6 +135,17 @@ def unload_all_modules():
             traceback.print_exc()
 
 
+def destroy_module_gadget(gadget: AriaGadget):
+    # call the gadget destroy method
+    gadget.destroy()
+
+    # remove from the list of gadgets in the module
+    if mod := _loaded_gadgets.pop(gadget, None):
+        mod.gadgets.remove(gadget)
+    else:
+        ERR('Cannot find the module for the gadget %s.', gadget)
+
+
 def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
     # name of the gadget can contain config instance id, es: "Clock:2"
     if ':' in name:
@@ -171,6 +185,9 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
         ERR(f'Cannot create instance of module: {name}. Exception: {e}. Full traceback follow...')
         traceback.print_exc()
         return None
+
+    # keep track of the module associated with this gadget
+    _loaded_gadgets[instance] = mod
 
     # keep track of gadgets inside the module class
     mod.gadgets.append(instance)

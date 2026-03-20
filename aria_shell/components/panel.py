@@ -2,7 +2,7 @@ from gi.repository import Gdk, Gtk
 
 from aria_shell.ui import AriaBox, AriaWindow
 from aria_shell.utils import clamp
-from aria_shell.module import request_module_gadget
+from aria_shell.module import request_module_gadget, destroy_module_gadget
 from aria_shell.config import AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
@@ -71,6 +71,7 @@ class PanelConfig(AriaConfigModel):
 
 class AriaPanel(AriaWindow):
     def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app):
+        INF('Creating Aria Panel "%s" on monitor %s', name, monitor.get_connector())
 
         anchors = [POSITIONS.get(conf.position)]
         if conf.size == 'fill':
@@ -119,6 +120,18 @@ class AriaPanel(AriaWindow):
     def __repr__(self):
         return f'<AriaPanel name="{self.name}" on="{self.monitor.get_connector()}">'
 
+    def destroy(self):
+        INF('Removing panel %s', self)
+
+        # clear the 3 boxes (unparent all gadgets)
+        for box in (self._box1, self._box2, self._box3):
+            for gadget in list(box or []):
+                destroy_module_gadget(gadget)
+                box.remove(gadget)
+
+        # destroy the Gtk.Window
+        super().destroy()
+
     def setup_window(self):
         # create the left/center/right boxes, in a CenterBox
         cbox = Gtk.CenterBox()
@@ -135,20 +148,18 @@ class AriaPanel(AriaWindow):
         # add a clock in the center for empty configs
         if not self.conf.ontheleft and not self.conf.ontheright and not self.conf.inthecenter:
             self.conf.inthecenter = ['Clock']
-        # populate left
+
+        # populate box1 (start)
         for module_name in self.conf.ontheleft:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box1.append(gadget)
-        # populate center
+
+        # populate box2 (center)
         for module_name in self.conf.inthecenter:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box2.append(gadget)
-        # populate right
+
+        # populate box3 (end)
         for module_name in self.conf.ontheright:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box3.append(gadget)
-
-    def destroy(self):
-        DBG(f'panel destroy {self}')
-        # TODO more cleanups? remove all gadgets?
-        super().destroy()

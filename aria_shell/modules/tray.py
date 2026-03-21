@@ -10,6 +10,7 @@ from dasbus.server.interface import accepts_additional_arguments
 from dasbus.client.observer import DBusObserver
 from dasbus.typing import Bool, Int, Str, List
 from dasbus.connection import SessionMessageBus
+from dasbus.client.proxy import disconnect_proxy
 
 from gi.repository import Gtk, GObject, Gio, GLib, Graphene
 
@@ -159,6 +160,7 @@ class TrayIcon(Gtk.Overlay):
 
 
 class TrayGadget(AriaGadget):
+    """The Tray gadget use a Gkt.ListView to show TrayIcon items."""
     def __init__(self, conf: TrayConfigModel):
         super().__init__('tray')
 
@@ -287,6 +289,10 @@ class StatusNotifierItem(GObject.Object):
 
     def __repr__(self):
         return f"<SNI id='{self.id}' status='{self.status}' icon='{self.icon_name}' menu='{self.menu}'>"
+
+    def shutdown(self):
+        disconnect_proxy(self._proxy)
+        self._proxy = None
 
     # keep track of prop Get async requests, to not request the same prop
     # while it is already being requested. The set keep the names of props.
@@ -434,6 +440,11 @@ class StatusNotifierWatcher(object):
         # remove self from the bus
         SESSION_BUS.unregister_service(STATUS_NOTIFIER_WATCHER_SERVICE)
         SESSION_BUS.unpublish_object(STATUS_NOTIFIER_WATCHER_PATH)
+        # clear the global list store, it's index, and terminate all sni items
+        ITEMS_STORE.remove_all()
+        while self._items:
+            _, sni = self._items.popitem()
+            sni.shutdown()
 
     @accepts_additional_arguments
     def RegisterStatusNotifierItem(self, service: Str, *, call_info: dict) -> None:
@@ -480,14 +491,15 @@ class StatusNotifierWatcher(object):
             ERR(f'Cannot find tray item to remove: {full_name}')
             return
 
-        # find position in store (needed to remove, hmm...somethig faster?)
+        # remove the sni from the store
         res, pos = ITEMS_STORE.find(sni)
-        if not res or pos < 0:
+        if res and pos >= 0:
+            ITEMS_STORE.remove(pos)
+        else:
             ERR(f'Cannot find tray item to remove: {sni}')
-            return
 
-        # remove sni from the store
-        ITEMS_STORE.remove(pos)
+        # destroy the sni (disconnect dbus stuff)
+        sni.shutdown()
 
         # emit the event on the bus
         self.StatusNotifierItemRegistered.emit(full_name)

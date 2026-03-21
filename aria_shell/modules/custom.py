@@ -41,7 +41,6 @@ class CustomGadget(AriaGadget):
             lbl = Gtk.Label(label=conf.label)
             self.append(lbl)
 
-    def on_mouse_down(self, button: int):
     def mouse_click(self, button: int):
         if self.conf.command:
             AriaCommands().run(self.conf.command)

@@ -106,7 +106,7 @@ class WorkSpacesGadget(AriaGadget):
 
             # make the box clickable
             ges = Gtk.GestureSingle()
-            ges.connect('begin', self.on_workspace_click, ws)
+            self.safe_connect(ges, 'begin', self.on_workspace_click, ws)
             box.add_controller(ges)
 
             # the workspace label
@@ -130,7 +130,7 @@ class WorkSpacesGadget(AriaGadget):
 
                     if self.conf.focus_window_on_click:
                         ges = Gtk.GestureSingle()
-                        ges.connect('begin', self.on_window_click, win)
+                        self.safe_connect(ges, 'begin', self.on_window_click, win)
                         icon.add_controller(ges)
 
                     self._win_index[win.id] = icon

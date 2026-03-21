@@ -48,7 +48,9 @@ class ThemeSelectorGadget(AriaGadget):
         actions = Gio.SimpleActionGroup()
         for action_name in ('gtk-theme', 'icon-theme', 'dark', 'light'):
             action = Gio.SimpleAction.new(action_name, GLib.VariantType('s'))
-            action.connect('activate', self.on_menu_item_activate, action_name)
+            self.safe_connect(
+                action, 'activate', self.on_menu_item_activate, action_name
+            )
             actions.add_action(action)
         self.insert_action_group(self.ACTION_GROUP, actions)
 

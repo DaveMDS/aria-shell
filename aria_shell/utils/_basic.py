@@ -99,7 +99,7 @@ class Timer:
     """
     def __init__(self,
                  interval: int | float,
-                 callback: Callable[..., bool],
+                 callback: Callable[..., bool | None],
                  *args,
                  autostart=True,
                  immediate=False,

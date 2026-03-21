@@ -78,6 +78,9 @@ class WindowManagerService(metaclass=Singleton):
         """
         self.backend.watch_events(callback)
 
+    def unwatch_events(self, callback: Callable):
+        self.backend.unwatch_events(callback)
+
     @property
     def monitors(self) -> dict[str, Monitor]:
         return MONITORS
@@ -110,6 +113,9 @@ class WMBackendBase:
     def emit_event(self, event: str):
         for listener in self.listeners:
             listener(event)
+
+    def unwatch_events(self, callback: Callable):
+        self.listeners.remove(callback)
 
     def activate_workspace(self, ws_id: str):
         """ Should activate the given workspace """

@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 import importlib
 import traceback
@@ -63,7 +63,7 @@ class AriaModule(ABC):
         self.gadgets: list[AriaGadget] = []
 
     def __repr__(self):
-        return f'<AriaModule: {self.__module__}.{self.__class__.__name__}>'
+        return f'<AriaModule {self.__module__}.{self.__class__.__name__}>'
 
     def module_init(self):
         """
@@ -128,11 +128,11 @@ def preload_all_modules():
 def unload_all_modules():
     while _loaded_modules:
         name, mod = _loaded_modules.popitem()
-        try:
-            mod.module_shutdown()
-        except Exception as e:
-            ERR(f'Cannot shutdown module: {name}. Exception: {e}. Full traceback follow...')
-            traceback.print_exc()
+        if mod.initialized:
+            try:
+                mod.module_shutdown()
+            except Exception as e:
+                ERR('Cannot shutdown module: %s Error: %s', name, e, exc_info=True)
 
 
 def destroy_module_gadget(gadget: AriaGadget):
@@ -166,8 +166,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
             mod.module_init()
             mod.initialized = True
         except Exception as e:
-            ERR(f'Cannot init module: {name}. Exception: {e}. Full traceback follow...')
-            traceback.print_exc()
+            ERR('Cannot init module: %s Error: %s', name, e, exc_info=True)
             return None
 
     # prepare the gadget config, using the model in config_model_class
@@ -182,8 +181,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
         instance = mod.gadget_factory(ctx)
         assert isinstance(instance, AriaGadget)
     except Exception as e:
-        ERR(f'Cannot create instance of module: {name}. Exception: {e}. Full traceback follow...')
-        traceback.print_exc()
+        ERR('Cannot create instance of module: %s Error: %s', name, e, exc_info=True)
         return None
 
     # keep track of the module associated with this gadget

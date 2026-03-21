@@ -126,7 +126,7 @@ def channel_sort(ch1: AudioChannel, ch2: AudioChannel) -> int:
     return _sort_weights.get(ch1.group, 0) - _sort_weights.get(ch2.group, 0)
 
 
-class AudioService(Signalable, metaclass=Singleton):
+class AudioService(metaclass=Singleton):
     def __init__(self):
         super().__init__()
         self._cancellable = Gio.Cancellable()  # TODO use on shutdown !!!

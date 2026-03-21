@@ -1,4 +1,6 @@
-from gi.repository import Gtk
+from collections.abc import Callable
+
+from gi.repository import Gtk, GObject
 
 
 class AriaGadget(Gtk.Box):
@@ -12,24 +14,37 @@ class AriaGadget(Gtk.Box):
         self.add_css_class(f'gadget-{name}')
         self.name = name
 
+        # keep track of signals registered using safe_connect()
+        self._signal_handlers: list[tuple[GObject.Object, int]] = []
+
         if clickable:
+            self.set_cursor_from_name('pointer')
             # EventController to receive mouse events
             ec = Gtk.GestureSingle(button=0)
-            ec.connect('begin', self._on_mouse_down)
+            def _on_click(_ec: Gtk.GestureSingle, _):
+                self.mouse_click(_ec.get_current_button())
+            self.safe_connect(ec, 'begin', _on_click)
             self.add_controller(ec)
-            self.set_cursor_from_name('pointer')
 
     def __repr__(self):
         return f'<AriaGadget {self.name}>'
 
+    def safe_connect(self, obj: GObject.Object, signal: str, cb: Callable, *a):
+        """Connect a signal that will be automatically disconnected on destroy().
+        Signal connection held references to cb and args that will make the
+        widget stay alive forever!"""
+        handler = obj.connect(signal, cb, *a)
+        self._signal_handlers.append((obj, handler))
+
     def destroy(self):
-        print('DESTROY NOT IMPLEMENTED !!!!', self)
+        """Called before removing the gadget from the bar."""
+        for obj, handler in self._signal_handlers:
+            obj.disconnect(handler)
+        self._signal_handlers.clear()
+
     def mouse_click(self, button: int):
         """Called on every mouse click."""
         raise NotImplementedError(f'{self} must implement mouse_click()')
-
-    def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
-        self.mouse_click(ec.get_current_button())
 
     # def open_popup(self):
     #     raise NotImplementedError('TODO')

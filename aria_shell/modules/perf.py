@@ -134,7 +134,7 @@ class PerfModule(AriaModule):
 
 class PerfGadget(AriaGadget):
     def __init__(self, conf: PerfConfigModel):
-        super().__init__('cpu', clickable=True)
+        super().__init__('perf', clickable=True)
         self.conf = conf
 
         self.label = Gtk.Label()

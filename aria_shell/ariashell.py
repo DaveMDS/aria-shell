@@ -31,7 +31,7 @@ print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_
 from aria_shell.i18n import setup_locale
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
-from aria_shell.utils import Timer
+from aria_shell.utils import Timer, FileMonitor
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
@@ -64,6 +64,9 @@ class AriaShell(Gtk.Application):
         self.launcher: AriaLauncher | None = None
         self.terminal: AriaTerminal | None = None
         self.exiter: AriaExiter | None = None
+
+        # monitors for config and CSS files change
+        self.file_monitors: list[FileMonitor] = []
 
         # app lifecycle signals
         self.connect('startup', self._on_app_startup)
@@ -148,11 +151,18 @@ class AriaShell(Gtk.Application):
         INF('=========================================')
         INF('Warming up aria-shell...')
 
-        # load config file
-        self.conf.load_conf(self.args.config)
+        # load config file, and reload the whole shell when it changes
+        config_file = self.conf.load_conf(self.args.config)
+        if self.conf.general.reload_config:
+            monitor = FileMonitor(config_file, lambda _: self.reload())
+            self.file_monitors.append(monitor)
 
-        # load css files
-        self._load_css_styles(self.args.style)
+        # load CSS files, and reload the styles when they changes
+        loaded_files = self._load_css_styles(self.args.style)
+        if self.conf.general.reload_style:
+            for css_file in loaded_files:
+                monitor = FileMonitor(css_file, lambda _: self._reload_css_styles())
+                self.file_monitors.append(monitor)
 
         # create instances of all components
         self.launcher = AriaLauncher(self)
@@ -172,6 +182,11 @@ class AriaShell(Gtk.Application):
     def _shutdown_everything(self):
         INF('-----------------------------------------------------------------')
         INF('Shutting down aria-shell...')
+
+        # destroy file monitors
+        while self.file_monitors:
+            monitor = self.file_monitors.pop()
+            monitor.destroy()
 
         # destroy all panels
         for monitor, panels in self.panels.items():
@@ -202,13 +217,18 @@ class AriaShell(Gtk.Application):
     #---------------------------------------------------------------------------
     # CSS styles
     #---------------------------------------------------------------------------
-    def _load_css_styles(self, user_css: Path | None):
-        # load base.css from python package only (base should never be edited)
-        self._load_css_file(ARIA_ASSETS_DIR / 'base.css')
+    def _load_css_styles(self, user_css: Path | None) -> list[Path]:
+        # return the list of successfully loaded files
+        loaded_files = []
+
+        # load base.css only from python package (base should never be edited)
+        base_css = ARIA_ASSETS_DIR / 'base.css'
+        if self._load_css_file(base_css):
+            loaded_files.append(base_css)
 
         # load stylesheet given on command line (file path)
-        if user_css:
-            self._load_css_file(user_css)
+        if self._load_css_file(user_css):
+            loaded_files.append(user_css)
 
         # load style from config (can be named and searched in sys dirs)
         style = self.conf.general.style
@@ -220,12 +240,15 @@ class AriaShell(Gtk.Application):
             else:
                 css_path = lookup_config_file(style)
             if css_path:
-                self._load_css_file(css_path)
+                if self._load_css_file(css_path):
+                    loaded_files.append(css_path)
             else:
                 ERR(f'Cannot find requested style: {style}')
 
-    def _load_css_file(self, css: Path):
-        if css.exists() and css.is_file():
+        return loaded_files
+
+    def _load_css_file(self, css: Path | None) -> bool:
+        if css and css.exists() and css.is_file():
             INF(f'Loading css file: {css}')
 
             css_provider = Gtk.CssProvider()
@@ -236,8 +259,10 @@ class AriaShell(Gtk.Application):
                 Gdk.Display.get_default(), css_provider,
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
             )
-        else:
+            return True
+        elif css is not None:
             ERR(f'Cannot find css file: {css}')
+        return False
 
     def _clear_css_styles(self):
         INF(f'Clearing CSS styles')
@@ -247,6 +272,10 @@ class AriaShell(Gtk.Application):
                 provider
             )
         self.css_providers.clear()
+
+    def _reload_css_styles(self):
+        self._clear_css_styles()
+        self._load_css_styles(self.args.style)
 
     #---------------------------------------------------------------------------
     # Manage monitors plugged and unplugged, create necessary Panels

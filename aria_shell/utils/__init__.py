@@ -3,6 +3,7 @@ from ._basic import (
     Signalable,
     Observable,
     Timer,
+    FileMonitor,
     clamp,
     safe_format,
     elli,

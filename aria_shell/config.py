@@ -97,6 +97,8 @@ class AriaConfigGeneralModel(AriaConfigModel):
     """ Model for the [general] main section """
     modules: list[str] = []
     style: str = ''
+    reload_config: bool = False
+    reload_style: bool = False
 
 
 AriaConfigModelType = TypeVar('AriaConfigModelType', bound=AriaConfigModel)
@@ -114,7 +116,7 @@ class AriaConfig(metaclass=Singleton):
         )
         self._general: AriaConfigGeneralModel | None = None
 
-    def load_conf(self, config_file: Path = None):
+    def load_conf(self, config_file: Path = None) -> Path:
         """ Load the aria config file, from config_file or searched in system """
         # check file given on command line
         if config_file and not config_file.exists():
@@ -133,6 +135,8 @@ class AriaConfig(metaclass=Singleton):
                 ERR('Config file parsing error: %s', e)
         else:
             ERR(f'Cannot find a configuration file')
+
+        return config_file
 
     def clear(self):
         """ Cleanup all loaded configs """

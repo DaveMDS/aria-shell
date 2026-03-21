@@ -2,8 +2,9 @@ import os
 import time
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
-from gi.repository import GLib
+from gi.repository import GLib, Gio
 
 from aria_shell.utils.env import HOME
 from aria_shell.utils.logger import get_loggers
@@ -86,7 +87,7 @@ class Observable:
 class Timer:
     """ Simple Timer class on top of GLib timeout_add
 
-    Params:
+    Args:
         interval (always in seconds) can be int or float:
             float -> create hi resolution timer, for subseconds precision
             int -> create a low resolution, cheaper timer
@@ -146,6 +147,46 @@ class Timer:
     def _timeout_cb(self):
         callback, a, ka = self.cb_info
         return callback(*a, **ka)
+
+
+class FileMonitor:
+    """A class to watch for changes on files.
+
+    Args:
+        path: the file to watch for changes
+        callback: the function to call on each detected file change
+        *args **kwargs: positional and named params to be passed in callback
+    """
+    FileMonitorCallback = Callable[..., None]
+
+    def __init__(self,
+                 path: Path | str,
+                 callback: FileMonitorCallback,
+                 *args, **kwargs):
+        if isinstance(path, str):
+            path = Path(path)
+
+        file = Gio.File.new_for_path(path.as_posix())
+        self._monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, None)
+        self._signal_handler = self._monitor.connect('changed', self._on_changed)
+        self._cb_info = (callback, args, kwargs)
+        self._path = path
+
+    def __repr__(self):
+        return f"<FileMonitor '{self._path}'>"
+
+    def destroy(self):
+        self._monitor.disconnect(self._signal_handler)
+        self._monitor.cancel()
+        self._monitor = None
+        self._cb_info = None
+        self._path = None
+
+    def _on_changed(self, _monitor, _file: Gio.File, _other_file,
+                    event_type: Gio.FileMonitorEvent):
+        if event_type == Gio.FileMonitorEvent.CHANGES_DONE_HINT:
+            callback, args, kwargs = self._cb_info
+            callback(self._path, *args, **kwargs)
 
 
 def clamp(val, low, high):

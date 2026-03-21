@@ -150,7 +150,7 @@ class AriaPopup(Gtk.Popover):
         self.set_autohide(True)  # TODO config (or pin icon in a corner?)
         self.set_has_arrow(True)  # TODO config
         self.add_css_class('aria-popup')
-        self.connect('closed', self._on_closed)
+        self._signal_handler = self.connect('closed', self._on_closed)
         # self.connect('destroy', lambda _: print("!!! DESTROY !!!  \o/"))
         self.popup()
 
@@ -158,11 +158,18 @@ class AriaPopup(Gtk.Popover):
         self.popdown()
 
     def _on_closed(self, _popover):
+        # call user callback
         if self._on_destroy:
             self._on_destroy(self)
-        self.set_child(None)
+
+        # break reference cycles
+        self.disconnect(self._signal_handler)
+        self._on_destroy = None
+
+        # unparent
         self.unparent()
-        # self.run_dispose()
+        self.set_child(None)
+        # self.get_child().unparent()
 
 
 class AriaDialog(AriaWindow):

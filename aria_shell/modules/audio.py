@@ -71,9 +71,10 @@ class AudioGadget(AriaGadget):
             # mixer button
             if self.conf.mixer_command:
                 btn = Gtk.Button(label='Mixer')  # TODO i18n
-                btn.connect('clicked', self._on_mixer_button_clicked)
+                self.safe_connect(btn, 'clicked', self._on_mixer_button_clicked)
                 vbox.append(btn)
-            # open in and AriaPopup
+
+            # open in an AriaPopup
             self.popup = AriaPopup(vbox, self, self.on_popup_destroy)
 
     def on_popup_destroy(self, _popup):

@@ -41,11 +41,7 @@ class WorkSpacesModule(AriaModule):
     def wm_event_cb(self, event):
         if event == 'changed':
             for instance in self.gadgets:
-                instance.update(
-                    self.wm_service.monitors,
-                    self.wm_service.workspaces,
-                    self.wm_service.windows,
-                )
+                instance.update()
 
         elif event.startswith('activewin ') and len(event) > 10:
             _, wid = event.split()
@@ -74,6 +70,7 @@ class WorkSpacesGadget(AriaGadget):
         self._active_ws_id: str | None = None
         self.icon_service = XDGDesktopService()
         self.wm_service = WindowManagerService()
+        self.update()
 
     def clear(self):
         while child := self.get_last_child():
@@ -81,19 +78,17 @@ class WorkSpacesGadget(AriaGadget):
         self._win_index.clear()
         self._ws_index.clear()
 
-    def update(self, monitors, workspaces, _windows):
+    def update(self):
         self.clear()
 
         # get the id of the monitor this panel belong to
-        for mon_id, mon in monitors.items():
+        for mon_id, mon in self.wm_service.monitors.items():
             if mon.name == self.monitor_name:
                 break
         else:
             mon_id = None
 
-        for ws_id in workspaces:
-            ws = workspaces[ws_id]
-
+        for ws_id, ws in self.wm_service.workspaces.items():
             # skip workspaces from other monitors
             if not self.conf.all_monitors and mon_id and ws.monitor_id != mon_id:
                 continue

@@ -111,8 +111,8 @@ class AriaConfig(metaclass=Singleton):
             strict=False,
             empty_lines_in_values=False,
             interpolation=None,
-            comment_prefixes=('#', ';'),
-            inline_comment_prefixes=('#', ';'),
+            comment_prefixes=('#',),
+            inline_comment_prefixes=('#',),
         )
         self._general: AriaConfigGeneralModel | None = None
 

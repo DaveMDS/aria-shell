@@ -7,6 +7,10 @@ from aria_shell.utils.logger import get_loggers
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
+class CommandError(Exception):
+    pass
+
+
 class AriaCommands(metaclass=Singleton):
     def __init__(self, app = None):
         if not app:
@@ -27,7 +31,7 @@ class AriaCommands(metaclass=Singleton):
         if method := getattr(self, f'_cmd_{command}', None):
             try:
                 return method(params)
-            except RuntimeError as e:
+            except CommandError as e:
                 return f'ERROR: {e}'
 
         return f'Unknown command: {command}'
@@ -36,29 +40,33 @@ class AriaCommands(metaclass=Singleton):
     def _cmd_ping(_params: list[str]):
         return 'pong'
 
+    def _cmd_reload(self, _params: list[str]):
+        self.app.reload()
+        return 'OK'
+
     def _cmd_show(self, params: list[str]):
         """ show <component> """
         if len(params) != 1:
-            raise RuntimeError('invalid params')
+            raise CommandError('invalid params')
 
         match params[0]:
             case 'launcher':
                 if self.app.launcher:
                     self.app.launcher.toggle()
                     return 'OK'
-                raise RuntimeError('launcher not available')
+                raise CommandError('launcher not available')
 
             case 'terminal':
                 if self.app.terminal:
                     self.app.terminal.toggle()
                     return 'OK'
-                raise RuntimeError('terminal not available')
+                raise CommandError('terminal not available')
 
             case 'exiter':
                 if self.app.exiter:
                     self.app.exiter.toggle()
                     return 'OK'
-                raise RuntimeError('exiter not available')
+                raise CommandError('exiter not available')
 
             case _:
-                raise RuntimeError(f'unknown component: {params[0]}')
+                raise CommandError(f'unknown component: {params[0]}')

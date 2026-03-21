@@ -84,6 +84,18 @@ class AriaShell(Gtk.Application):
             ERR(e)
             return 5
 
+    def reload(self):
+        """Reload config file and restart everything."""
+        # TODO test config file before restart !!!!!!!!!!!!
+
+        def _reload_on_next_tick():
+            self._shutdown_everything()
+            self._setup_everything()
+
+        # actually reload on the next tick, to release the current context,
+        # ex: to give "time" to reply on the command socket to the 'reload' cmd.
+        Timer(0, _reload_on_next_tick)
+
     #---------------------------------------------------------------------------
     # Gtk.Application lifecycle
     #---------------------------------------------------------------------------

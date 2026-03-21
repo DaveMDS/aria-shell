@@ -32,8 +32,7 @@ class WorkSpacesModule(AriaModule):
         self.wm_service.watch_events(self.wm_event_cb)
 
     def module_shutdown(self):
-        # TODO shutdown WindowManagerService
-        pass
+        self.wm_service.unwatch_events(self.wm_event_cb)
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: WorkspacesConfigModel = ctx.config  # noqa

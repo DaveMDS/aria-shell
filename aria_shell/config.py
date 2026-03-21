@@ -127,7 +127,10 @@ class AriaConfig(metaclass=Singleton):
         # read file
         if config_file and config_file.exists():
             INF(f'Reading config from file: {config_file}')
-            self._parser.read(config_file)
+            try:
+                self._parser.read(config_file)
+            except configparser.ParsingError as e:
+                ERR('Config file parsing error: %s', e)
         else:
             ERR(f'Cannot find a configuration file')
 

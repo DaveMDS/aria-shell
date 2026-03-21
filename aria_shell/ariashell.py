@@ -110,7 +110,6 @@ class AriaShell(Gtk.Application):
         # start command socket listener
         self.command_socket = AriaCommandSocket(self)
 
-
     def _on_app_activate(self, app: Gtk.Application):
         """Activate signal is emitted every time the application is launched."""
         if not Gdk.Display.get_default():

@@ -102,12 +102,12 @@ window.aria-terminal .aria-terminal {
 }
 
 
-/* Aria Popup
-popover    .aria-popup
+/* Aria Popover
+popover    .aria-popover
 ├─ contents
 ╰─ arrow
 */
-.aria-popup contents {
+.aria-popover contents {
   /*background-color: red;*/
 }
 

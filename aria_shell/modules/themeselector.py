@@ -4,6 +4,7 @@ from gi.repository import Gtk, Gio, GLib
 
 from aria_shell.i18n import i18n
 from aria_shell.services.themes import ThemesService
+from aria_shell.ui import AriaPopover
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
@@ -39,6 +40,7 @@ class ThemeSelectorGadget(AriaGadget):
         super().__init__('themes_selector', clickable=True)
         self.config = config
         self.themes_service = ThemesService()
+        self.popover_menu: AriaPopover | None = None
 
         # the gadget is just a single icon
         self.icon = Gtk.Image.new_from_icon_name(self.config.icon_name)
@@ -53,6 +55,13 @@ class ThemeSelectorGadget(AriaGadget):
             )
             actions.add_action(action)
         self.insert_action_group(self.ACTION_GROUP, actions)
+
+    def destroy(self):
+        # close/destroy the popover
+        if self.popover_menu:
+            self.popover_menu.popdown()
+        # destroy the gadget
+        super().destroy()
 
     def on_menu_item_activate(self, _, theme: GLib.Variant, action: str):
         theme: str = theme.get_string()
@@ -117,9 +126,14 @@ class ThemeSelectorGadget(AriaGadget):
         return menu
 
     def mouse_click(self, button: int):
-        # create the menu model and the popover menu
-        menu_model = self.build_menu_model()
-        popover = Gtk.PopoverMenu(menu_model=menu_model)
-        # popover.connect('closed', lambda _: print('menu closed'))
-        popover.set_parent(self.icon)
-        popover.popup()
+        if self.popover_menu:
+            self.popover_menu.popdown()
+        else:
+            self.popover_menu = AriaPopover(
+                parent=self.icon,
+                content=self.build_menu_model(),
+                callback=self.on_menu_closed,
+            )
+
+    def on_menu_closed(self, popover: AriaPopover):
+        self.popover_menu = None

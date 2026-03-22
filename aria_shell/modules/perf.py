@@ -4,7 +4,7 @@ import psutil
 from gi.repository import GLib, Gtk
 
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaPopup
+from aria_shell.ui import AriaPopover
 from aria_shell.utils import safe_format, human_size
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
@@ -140,7 +140,7 @@ class PerfGadget(AriaGadget):
         self.label = Gtk.Label()
         self.append(self.label)
 
-        self.popup: AriaPopup | None = None
+        self.popover: AriaPopover | None = None
         self.popup_label: Gtk.Label | None = None
         self.last_info: SysInfo | None = None
 
@@ -179,14 +179,14 @@ class PerfGadget(AriaGadget):
         self.toggle_popup()
 
     def toggle_popup(self):
-        if self.popup:
-            self.popup.close()
+        if self.popover:
+            self.popover.popdown()
         else:
             lbl = Gtk.Label()
-            self.popup = AriaPopup(lbl, self, self.on_popup_destroy)
+            self.popover = AriaPopover(self, lbl, self.on_popover_closed)
             self.popup_label = lbl
             self.update_popup(self.last_info)
 
-    def on_popup_destroy(self, _popup):
-        self.popup = None
+    def on_popover_closed(self, _popover):
+        self.popover = None
 

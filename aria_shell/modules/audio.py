@@ -6,7 +6,7 @@ from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaPopup, AriaSlider
+from aria_shell.ui import AriaSlider, AriaPopover
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup, MediaPlayer
 )
@@ -43,7 +43,7 @@ class AudioGadget(AriaGadget):
     def __init__(self, conf: AudioConfigModel):
         super().__init__('audio', clickable=True)
         self.conf = conf
-        self.popup: AriaPopup | None = None
+        self.popover: AriaPopover | None = None
         self.aas = AudioService()
         ico = Gtk.Image.new_from_icon_name('audio-volume-medium')
         self.append(ico)
@@ -52,38 +52,39 @@ class AudioGadget(AriaGadget):
         self.toggle_popup()
 
     def toggle_popup(self):
-        if self.popup:
-            self.popup.close()
-        else:
-            # create the popup
-            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        if self.popover:
+            self.popover.popdown()
+            return
 
-            # mixer channels
-            lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-            lbox.bind_model(self.aas.channels, self.channel_rows_factory)
-            vbox.append(lbox)
+        # create the popup
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-            # media players
-            lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-            lbox.bind_model(self.aas.players, self.player_rows_factory)
-            vbox.append(lbox)
+        # mixer channels
+        lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        lbox.bind_model(self.aas.channels, self.channel_rows_factory)
+        vbox.append(lbox)
 
-            # mixer button
-            if self.conf.mixer_command:
-                btn = Gtk.Button(label='Mixer')  # TODO i18n
-                self.safe_connect(btn, 'clicked', self._on_mixer_button_clicked)
-                vbox.append(btn)
+        # media players
+        lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        lbox.bind_model(self.aas.players, self.player_rows_factory)
+        vbox.append(lbox)
 
-            # open in an AriaPopup
-            self.popup = AriaPopup(vbox, self, self.on_popup_destroy)
+        # mixer button
+        if self.conf.mixer_command:
+            btn = Gtk.Button(label='Mixer')  # TODO i18n
+            self.safe_connect(btn, 'clicked', self._on_mixer_button_clicked)
+            vbox.append(btn)
 
-    def on_popup_destroy(self, _popup):
-        self.popup = None
+        # open in an AriaPopover
+        self.popover = AriaPopover(self, vbox, self.on_popover_closed)
+
+    def on_popover_closed(self, _popover):
+        self.popover = None
 
     def _on_mixer_button_clicked(self, _):
         exec_detached(self.conf.mixer_command)
-        if self.popup:
-            self.toggle_popup()
+        if self.popover:
+            self.popover.popdown()
 
     def channel_rows_factory(self, channel: AudioChannel) -> Gtk.ListBoxRow:
         # print('Factory for', channel)

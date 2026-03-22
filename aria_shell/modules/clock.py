@@ -5,7 +5,7 @@ from gi.repository import Gtk
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaPopup
+from aria_shell.ui import AriaPopover
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils import Timer
 
@@ -54,9 +54,9 @@ class ClockGadget(AriaGadget):
     def __init__(self, conf: ClockConfigModel):
         super().__init__('clock', clickable=True)
         self.conf = conf
+        self.popover: AriaPopover | None = None
 
         self.label = Gtk.Label()
-        self.popup = None
         self.append(self.label)
 
     def update(self, now: datetime):
@@ -67,11 +67,11 @@ class ClockGadget(AriaGadget):
         self.toggle_calendar()
 
     def toggle_calendar(self):
-        if self.popup is None:
+        if self.popover is None:
             calendar = Gtk.Calendar()
-            self.popup = AriaPopup(calendar, self, self.on_popup_destroy)
+            self.popover = AriaPopover(self, calendar, self.on_popover_closed)
         else:
-            self.popup.close()
+            self.popover.popdown()
 
-    def on_popup_destroy(self, _popup):
-        self.popup = None
+    def on_popover_closed(self, _popover):
+        self.popover = None

@@ -59,14 +59,14 @@ class CleanupHelper:
 
     def shutdown(self):
         """Disconnect all connected signals and unbind all bindings."""
-        # print('Helper shutdown', self)
+       # print('CleanupHelper shutdown', self)
         for obj, handler in self._signal_handlers:
-            # print('  disconnect', obj, handler)
+            # print('  -> disconnect', obj, handler)
             obj.disconnect(handler)
         self._signal_handlers.clear()
 
         for binding in self._bindings:
-            # print('  unbind', binding)
+            # print('  -> unbind', binding)
             binding.unbind()
         self._bindings.clear()
 

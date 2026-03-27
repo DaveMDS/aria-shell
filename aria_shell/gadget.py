@@ -2,8 +2,10 @@ from collections.abc import Callable
 
 from gi.repository import Gtk, GObject
 
+from aria_shell.ui import CleanupHelper
 
-class AriaGadget(Gtk.Box):
+
+class AriaGadget(CleanupHelper, Gtk.Box):
     """
     Base class for all gadgets
     A gadget is a Gtk.Widget that can be placed in panels, docks, etc...
@@ -29,18 +31,9 @@ class AriaGadget(Gtk.Box):
     def __repr__(self):
         return f'<AriaGadget {self.name}>'
 
-    def safe_connect(self, obj: GObject.Object, signal: str, cb: Callable, *a):
-        """Connect a signal that will be automatically disconnected on destroy().
-        Signal connection held references to cb and args that will make the
-        widget stay alive forever!"""
-        handler = obj.connect(signal, cb, *a)
-        self._signal_handlers.append((obj, handler))
-
-    def destroy(self):
+    def shutdown(self):
         """Called before removing the gadget from the bar."""
-        for obj, handler in self._signal_handlers:
-            obj.disconnect(handler)
-        self._signal_handlers.clear()
+        super().shutdown()
 
     def mouse_click(self, button: int):
         """Called on every mouse click."""

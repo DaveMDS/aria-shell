@@ -137,7 +137,7 @@ def unload_all_modules():
 
 def destroy_module_gadget(gadget: AriaGadget):
     # call the gadget destroy method
-    gadget.destroy()
+    gadget.shutdown()
 
     # remove from the list of gadgets in the module
     if mod := _loaded_gadgets.pop(gadget, None):

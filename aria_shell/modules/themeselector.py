@@ -56,12 +56,12 @@ class ThemeSelectorGadget(AriaGadget):
             actions.add_action(action)
         self.insert_action_group(self.ACTION_GROUP, actions)
 
-    def destroy(self):
+    def shutdown(self):
         # close/destroy the popover
         if self.popover_menu:
             self.popover_menu.popdown()
         # destroy the gadget
-        super().destroy()
+        super().shutdown()
 
     def on_menu_item_activate(self, _, theme: GLib.Variant, action: str):
         theme: str = theme.get_string()

@@ -3,6 +3,7 @@ import time
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 from gi.repository import GLib, Gio
 
@@ -11,6 +12,9 @@ from aria_shell.utils.logger import get_loggers
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
+
+
+T = TypeVar('T')
 
 
 class Singleton(type):
@@ -189,13 +193,13 @@ class FileMonitor:
             callback(self._path, *args, **kwargs)
 
 
-def clamp(val, low, high):
-    """ Return val clamped between low and high """
-    if val < low:
+def clamp(value: T, low: T | None, high: T | None) -> T:
+    """ Make sure value is between low and high (both optional) """
+    if low is not None and value < low:
         return low
-    if val > high:
+    if high is not None and value > high:
         return high
-    return val
+    return value
 
 
 def safe_format(format1: str, format2: str, **kwargs) -> str:

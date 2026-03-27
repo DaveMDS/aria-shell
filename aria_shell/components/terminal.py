@@ -67,7 +67,7 @@ class AriaTerminal(AriaWindow):
     def shutdown(self):
         INF('Shutting down Aria Terminal')
         self.terminal = None
-        super().destroy()
+        super().shutdown()
 
     def _toggle_fullscreen(self):
         """ Emulate fullscreen using LayerShell """
@@ -100,7 +100,7 @@ class AriaTerminal(AriaWindow):
         )
 
         ec = Gtk.EventControllerKey()
-        ec.connect('key-pressed', self._on_key_pressed)
+        self.safe_connect(ec, 'key-pressed', self._on_key_pressed)
         term.add_controller(ec)
 
         self.terminal = term

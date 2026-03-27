@@ -115,7 +115,8 @@ class AriaExiter(AriaWindow):
         if self.timer:
             self.timer.stop()
             self.timer = None
-        super().destroy()
+        self.set_child(None)
+        super().shutdown()
 
     def populate_window(self):
         flow = Gtk.FlowBox(
@@ -125,7 +126,7 @@ class AriaExiter(AriaWindow):
             selection_mode=Gtk.SelectionMode.SINGLE,
         )
         flow.add_css_class('aria-exiter-flowbox')
-        flow.connect('child_activated', self.child_activated_cb)
+        self.safe_connect(flow, 'child_activated', self.child_activated_cb)
         self.set_child(flow)
 
         for name, icon, want_confirm in BUTTONS:
@@ -175,7 +176,7 @@ class AriaExiter(AriaWindow):
             self.timer.stop()
             self.timer = None
         if self.dialog:
-            self.dialog.close()
+            self.dialog.shutdown()
             self.dialog = None
 
     def timer_cb(self, dialog: AriaDialog, button: ExiterButton) -> bool:

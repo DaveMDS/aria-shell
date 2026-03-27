@@ -1,12 +1,81 @@
 from collections.abc import Callable
+from typing import Any
 
 from gi.repository import Gtk, Gdk, Gio, GLib, GObject
 from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 
-class AriaWindow(Gtk.Window):
+class CleanupHelper:
+    """
+    When subclassing GObject the lifetime is not tied to the python object,
+    signal connections held references to cb and args that will make the
+    python object stay alive forever!
+
+    The trick to manage this lifetime difference seems to be to always cleanup
+    all connected signals and bindings (they hold ref to cb and args). This
+    means we need an explicit shutdown() function in every object.
+
+    Can be used as the primary superclass of a GObject subclass, es:
+        class MyWidget(CleanupHelper, Gtk.Box):
+            def __init__(...):
+                super().__init__(...)
+                self.safe_connect(obj, 'signal', self._callback1)
+                self.safe_bind(obj1, 'prop1', obj2, 'prop2',...)
+
+            def shutdown():
+                # shutdown automatically disconnect all safe-connected signals
+                super().shutdown()
+
+    Or used as a simple standalone helper:
+        helper = CleanupHelper()
+        helper.safe_connect(obj, 'signal', _callback)
+        ...
+        helper.shutdown()  # to disconnect all signals and bindings
+
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)  # cooperate with other parents (es: GObject)
+        self._signal_handlers: list[tuple[GObject.Object, int]] = []
+        self._bindings: list[GObject.Binding] = []
+
+    def safe_connect(self, obj: GObject.Object, signal: str, cb: Callable, *a):
+        """Connect a signal that will be automatically disconnected on shutdown."""
+        handler = obj.connect(signal, cb, *a)
+        self._signal_handlers.append((obj, handler))
+
+    def safe_bind(self,
+                  source: GObject.Object, source_property: str,
+                  target: GObject.Object, target_property: str,
+                  flags: GObject.BindingFlags | None = 0,
+                  transform_to: Callable[[GObject.Binding, Any, Any], Any] | None = None,
+                  transform_from: Callable[[GObject.Binding, Any, Any], Any] | None = None,
+                  user_data: Any = None):
+        """Bind a property that will be automatically unbinded on shutdown."""
+        binding = source.bind_property(
+            source_property, target, target_property,
+            flags, transform_to, transform_from, user_data
+        )
+        self._bindings.append(binding)
+
+    def shutdown(self):
+        """Disconnect all connected signals and unbind all bindings."""
+        # print('Helper shutdown', self)
+        for obj, handler in self._signal_handlers:
+            # print('  disconnect', obj, handler)
+            obj.disconnect(handler)
+        self._signal_handlers.clear()
+
+        for binding in self._bindings:
+            # print('  unbind', binding)
+            binding.unbind()
+        self._bindings.clear()
+
+
+class AriaWindow(CleanupHelper, Gtk.Window):
     """
     Extend Gtk.Window with GtkLayerShell abilities.
+
+    NOTE: Always call shutdown() to destroy an AriaWindow !!!!
 
     Args:
         app: the Gtk.Application this window belong
@@ -77,7 +146,7 @@ class AriaWindow(Gtk.Window):
             )
             # TODO grab mouse also,  and dim the whole bg?
             #ec = Gtk.GestureSingle(button=0)
-            #ec.connect('begin', lambda *_: self.hide())
+            #self.safe_connect(ec, 'begin', lambda *_: self.hide())
             #self.add_controller(ec)
         else:
             GtkLayerShell.set_keyboard_mode(
@@ -89,7 +158,7 @@ class AriaWindow(Gtk.Window):
 
         if hide_on_escape:
             ec = Gtk.EventControllerKey()
-            ec.connect('key-pressed', self._key_pressed)
+            self.safe_connect(ec, 'key-pressed', self._key_pressed)
             self.add_controller(ec)
 
     def show(self):
@@ -104,6 +173,11 @@ class AriaWindow(Gtk.Window):
         """Toggle window visibility."""
         self.hide() if self.is_visible() else self.show()
 
+    def shutdown(self):
+        """Destroy the window."""
+        CleanupHelper.shutdown(self)
+        Gtk.Window.destroy(self)
+
     def _key_pressed(self, _ec: Gtk.EventControllerKey, keyval: int,
                      _keycode: int, _state: Gdk.ModifierType):
         if keyval == Gdk.KEY_Escape:
@@ -116,10 +190,10 @@ class AriaWindow(Gtk.Window):
 class AriaBox(Gtk.Box):
     """
     Simple GtkBox wrapper
-    Use this when your box should be "visible" in css syles.
+    Use this when your box should be "visible" in CSS styles.
     """
-    def __init__(self, css_class: str = None, **kargs):
-        super().__init__(**kargs)
+    def __init__(self, css_class: str = None, **kwargs):
+        super().__init__(**kwargs)
         if css_class:
             self.add_css_class(css_class)
 
@@ -252,12 +326,14 @@ class AriaDialog(AriaWindow):
             def _button_clicked_cb(_btn: Gtk.Button, btn_id: str):
                 if callable(callback):
                     callback(btn_id, **kwargs)
-                self.close()
+                self.shutdown()
 
             for i, label in enumerate(buttons, 1):
                 button = Gtk.Button(label=label)
                 button.add_css_class('aria-dialog-button')
-                button.connect('clicked', _button_clicked_cb, f'button-{i}')
+                self.safe_connect(
+                    button, 'clicked', _button_clicked_cb, f'button-{i}'
+                )
                 hbox.append(button)
 
         def _key_pressed_cb(_ec: Gtk.EventControllerKey, keyval: int,
@@ -280,9 +356,6 @@ class AriaDialog(AriaWindow):
 
     def set_body(self, text: str):
         self.body_label.set_label(text)
-
-    def close(self):
-        super().close()
 
 '''
 class AriaDialogGTK(Gtk.AlertDialog):

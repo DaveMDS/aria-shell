@@ -120,7 +120,7 @@ class AriaPanel(AriaWindow):
     def __repr__(self):
         return f'<AriaPanel name="{self.name}" on="{self.monitor.get_connector()}">'
 
-    def destroy(self):
+    def shutdown(self):
         INF('Removing panel %s', self)
 
         # clear the 3 boxes (unparent all gadgets)
@@ -129,8 +129,8 @@ class AriaPanel(AriaWindow):
                 destroy_module_gadget(gadget)
                 box.remove(gadget)
 
-        # destroy the Gtk.Window
-        super().destroy()
+        # destroy the AriaWindow
+        super().shutdown()
 
     def setup_window(self):
         # create the left/center/right boxes, in a CenterBox

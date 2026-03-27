@@ -191,7 +191,7 @@ class AriaShell(Gtk.Application):
         # destroy all panels
         for monitor, panels in self.panels.items():
             for panel in panels:
-                panel.destroy()
+                panel.shutdown()
         self.panels = {}
 
         # shutdown all modules
@@ -297,7 +297,7 @@ class AriaShell(Gtk.Application):
         name = monitor.get_connector()
         INF(f'Monitor disconnected {name}')
         for panel in self.panels.pop(name, []):
-            panel.destroy()
+            panel.shutdown()
 
     def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()

@@ -57,13 +57,12 @@ class AriaLauncher(AriaWindow):
             grab_display=self.conf.grab_display,
             opacity=self.conf.opacity / 100.0,
             size_request=(self.conf.width, self.conf.height),
-            # decorated=False,
         )
         self._populate_window()
 
         # request keyboard events
         ec = Gtk.EventControllerKey()
-        ec.connect('key-pressed', self._on_win_key_pressed)
+        self.safe_connect(ec, 'key-pressed', self._on_win_key_pressed)
         self.add_controller(ec)
 
         # init all providers
@@ -81,7 +80,7 @@ class AriaLauncher(AriaWindow):
         self.list_store = None
         self.list_view = None
         self.search_entry = None
-        super().destroy()
+        super().shutdown()
 
     def _populate_window(self):
         vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -92,8 +91,8 @@ class AriaLauncher(AriaWindow):
             placeholder_text=i18n('launcher.search'))
         entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, 'search')
         entry.add_css_class('aria-launcher-entry')
-        entry.connect('notify::text', self._on_entry_changed)
-        entry.connect('activate', self.run_selected)
+        self.safe_connect(entry, 'notify::text', self._on_entry_changed)
+        self.safe_connect(entry, 'activate', self.run_selected)
         vbox.append(entry)
 
         # ListView in a scroller
@@ -110,7 +109,7 @@ class AriaLauncher(AriaWindow):
                                  single_click_activate=True,
                                  tab_behavior=Gtk.ListTabBehavior.ITEM)
         list_view.add_css_class('aria-launcher-list')
-        list_view.connect('activate', self.run_selected)
+        self.safe_connect(list_view, 'activate', self.run_selected)
 
         # selection model
         ssel = Gtk.SingleSelection(autoselect=True)
@@ -119,8 +118,8 @@ class AriaLauncher(AriaWindow):
 
         # item factory
         factory = Gtk.SignalListItemFactory()
-        factory.connect('setup', self._factory_item_setup)
-        factory.connect('bind', self._factory_item_bind)
+        self.safe_connect(factory, 'setup', self._factory_item_setup)
+        self.safe_connect(factory, 'bind', self._factory_item_bind)
         list_view.set_factory(factory)
 
         return list_view

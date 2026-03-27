@@ -502,7 +502,7 @@ class StatusNotifierWatcher(object):
         sni.shutdown()
 
         # emit the event on the bus
-        self.StatusNotifierItemRegistered.emit(full_name)
+        self.StatusNotifierItemUnregistered.emit(full_name)
 
     @staticmethod
     def RegisterStatusNotifierHost(service: Str) -> None:

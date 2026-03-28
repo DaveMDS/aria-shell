@@ -67,15 +67,63 @@ window {
 }
 
 
-/* Aria exiter
---------------------------------------------------------------------------------
-window               .aria-exiter
-╰─ flowbox           .aria-exiter-flowbox
-   ├─ button         .aria-exiter-button flat
-   │  ├─ image       .aria-exiter-button-icon
-   │  ╰─ label       .aria-exiter-button-label
-   ╰─ button... etc, for all six buttons
-*/
+/*==============================================================================
+ * Aria notificator
+ *==============================================================================
+ * window         .aria-notificator .aria-window
+ * ╰─ listview    .aria-notificator-list
+ *    ├─ row            
+ *    │  ╰─ grid           .aria-notification [.urgent] [.non-urgent] 
+ *    │     ├─ image       .aria-notification-icon
+ *    │     ├─ label       .aria-notification-summary .title-4
+ *    │     ├─ label       .aria-notification-body
+ *    │     ╰─ box         .aria-notification-actions
+ *    │        ├─ button   .aria-notification-button
+ *    │        ├─ button   .aria-notification-button
+ *    │        ╰─ etc...
+ *    ╰─ row
+ *       ╰─ grid   ... etc, for all visible notifications
+ */
+.aria-notificator {
+  background-color: transparent;
+  margin-right: 4px;
+}
+
+.aria-notificator-list {
+  background-color: transparent;
+}
+.aria-notificator-list row {
+  margin-bottom: 6px;
+}
+.aria-notificator-list row:last-child {
+  margin-bottom: 0;
+}
+
+.aria-notification {
+  min-width: 280px;
+  background-color: var(--aria-base-color);
+  border: 2px solid alpha(var(--aria-accent-color), 0.75);
+  border-radius: 4px;
+  padding: 6px;
+}
+.aria-notification.urgent {
+  background-color: red;
+}
+.aria-notification.non-urgent {
+  background-color: green;
+}
+.aria-notification .aria-notification-summary {
+}
+.aria-notification .aria-notification-body {
+}
+.aria-notification .aria-notification-icon {
+  padding-right: 8px;
+  -gtk-icon-size: 48px;
+}
+.aria-notification .aria-notification-button {
+  margin: 2px 4px;
+}
+
 
 /*==============================================================================
  * Aria exiter

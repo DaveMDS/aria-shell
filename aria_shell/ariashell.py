@@ -41,6 +41,8 @@ from aria_shell.components.panel import AriaPanel, PanelConfig
 from aria_shell.components.launcher import AriaLauncher
 from aria_shell.components.terminal import AriaTerminal
 from aria_shell.components.exiter import AriaExiter
+from aria_shell.components.notificator import AriaNotificator
+
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -167,6 +169,7 @@ class AriaShell(Gtk.Application):
         # create instances of all components
         self.launcher = AriaLauncher(self)
         self.exiter = AriaExiter(self)
+        self.notificator = AriaNotificator(self)
         try:
             self.terminal = AriaTerminal(self)
         except RuntimeError:
@@ -207,6 +210,9 @@ class AriaShell(Gtk.Application):
         if self.exiter:
             self.exiter.shutdown()
             self.exiter = None
+        if self.notificator:
+            self.notificator.shutdown()
+            self.notificator = None
 
         # clear all loaded CSS styles
         self._clear_css_styles()

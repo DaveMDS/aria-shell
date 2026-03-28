@@ -99,8 +99,15 @@ psutil (optional, for the perf gadget)
 - [ ] find more cool fonts for the default config (ship one in pkg?)
 
 
-## Aria logout
-- see wlogout
+## AriaNotifier
+- [x] Fully featured notification server, replace mako and friends
+- [x] Support icons and images data from DBUS
+- [x] Markup support
+- [x] Actions support (buttons inside notification)
+- [x] Support urgency in CSS
+- [ ] Sound support
+- [ ] Limit the number of visible notification somehow
+- [ ] Persistent notifications. where to show? in clock?
 
 
 ## Aria lockidle
@@ -108,8 +115,6 @@ psutil (optional, for the perf gadget)
 - see hypridle
 
 
-## AriaNotify
-- see mako/swaync
 
 
 ## REFERENCES

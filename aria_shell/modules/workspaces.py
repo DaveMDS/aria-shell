@@ -29,34 +29,31 @@ class WorkSpacesModule(AriaModule):
 
     def module_init(self):
         self.wm_service = WindowManagerService()
-        self.wm_service.watch_events(self.wm_event_cb)
+        self.wm_service.connect('changed', self._changed_event_cb)
+        self.wm_service.connect('activated', self._activated_event_cb)
 
     def module_shutdown(self):
-        self.wm_service.unwatch_events(self.wm_event_cb)
+        self.wm_service.disconnect('changed', self._changed_event_cb)
+        self.wm_service.disconnect('activated', self._activated_event_cb)
 
     def gadget_factory(self, ctx: GadgetRunContext) -> AriaGadget | None:
         conf: WorkspacesConfigModel = ctx.config  # noqa
         return WorkSpacesGadget(conf, ctx.monitor.get_connector())
 
-    def wm_event_cb(self, event):
-        if event == 'changed':
-            for instance in self.gadgets:
-                instance.update()
+    def _changed_event_cb(self):
+        for instance in self.gadgets:
+            instance.update()
 
-        elif event.startswith('activewin ') and len(event) > 10:
-            _, wid = event.split()
-            win = self.wm_service.windows.get(wid)
+    def _activated_event_cb(self, item: Window | Workspace):
+        if isinstance(item, Window):
             for instance in self.gadgets:
-                instance.set_active_window(wid)
-                if win and win.workspace_id:
-                    instance.set_active_workspace(win.workspace_id)
-
-        elif event.startswith('active_ws ') and len(event) > 10:
-            _, wid = event.split()
-            ws = self.wm_service.workspaces.get(wid)
+                instance.set_active_window(item.id)
+                if item and item.workspace_id:
+                    instance.set_active_workspace(item.workspace_id)
+        elif isinstance(item, Workspace):
             for instance in self.gadgets:
                 instance.set_active_window(None)
-                instance.set_active_workspace(ws.id)
+                instance.set_active_workspace(item.id)
 
 
 class WorkSpacesGadget(AriaGadget):

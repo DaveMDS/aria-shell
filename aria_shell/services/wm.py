@@ -1,9 +1,8 @@
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from aria_shell.services.hyprland import HyprlandService
 from aria_shell.services.sway import SwayService, SwayMessage, MessageType as SwayMessageType
-from aria_shell.utils import Singleton
+from aria_shell.utils import Singleton, Signalable
 from aria_shell.utils.logger import get_loggers
 
 
@@ -48,7 +47,14 @@ WORKSPACES: dict[str, Workspace] = {}
 WINDOWS: dict[str, Window] = {}
 
 
-class WindowManagerService(metaclass=Singleton):
+class WindowManagerService(Signalable, metaclass=Singleton):
+    """
+    Signals:
+      'changed'(): emitted every time an item is added/removed
+      'activated'(item: Window|Workspace): window or workspace become active
+    """
+    __signals__ = ['changed', 'activated']
+
     def __init__(self):
         instance = None
         for backend in (HyprlandBackend, SwayBackend):
@@ -65,21 +71,6 @@ class WindowManagerService(metaclass=Singleton):
         INF('Using WindowManager backend: %s', instance)
         self.backend = instance
         self.listeners = []
-
-    def watch_events(self, callback: Callable):
-        """
-        Receive wm events in callback
-
-        # TODO Put this events in a decent struct
-        events:
-        - 'changed': emitted every time an item is added/removed
-        - 'activewin win_id': new focused window
-        - 'active_ws ws_id': new focused workspace
-        """
-        self.backend.watch_events(callback)
-
-    def unwatch_events(self, callback: Callable):
-        self.backend.unwatch_events(callback)
 
     @property
     def monitors(self) -> dict[str, Monitor]:
@@ -101,29 +92,22 @@ class WindowManagerService(metaclass=Singleton):
 
 
 class WMBackendBase:
-    def __init__(self):
-        self.listeners: list[Callable] = []
-
     def __str__(self):
         return f'<{self.__class__.__name__}>'
 
-    def watch_events(self, callback: Callable):
-        self.listeners.append(callback)
-
-    def emit_event(self, event: str):
-        for listener in self.listeners:
-            listener(event)
-
-    def unwatch_events(self, callback: Callable):
-        self.listeners.remove(callback)
+    @staticmethod
+    def emit(signal: str, *args):
+        """Called by backends to emit events in the WM Service."""
+        WindowManagerService().emit(signal, *args)
 
     def activate_workspace(self, ws_id: str):
-        """ Should activate the given workspace """
+        """Should activate the given workspace."""
         raise NotImplementedError
 
     def activate_window(self, win_id: str):
-        """ Should activate the given window """
+        """Should activate the given window."""
         raise NotImplementedError
+
 
 ################################################################################
 ###  hyprland backend  #########################################################
@@ -147,7 +131,8 @@ class HyprlandBackend(WMBackendBase):
     def hypr_events_cb(self, event, data):
         match event:
             case 'activewindowv2':
-                self.emit_event(f'activewin {data}')
+                if win := WINDOWS.get(data, None):
+                    self.emit('activated', win)
             case 'openwindow' | 'closewindow' | 'movewindowv2':
                 # TODO: how to request only the changed client?
                 self.hypr.send_command('j/clients', self.clients_cb)
@@ -191,7 +176,7 @@ class HyprlandBackend(WMBackendBase):
                 monitor_id=str(cli['monitor']),
             )
         # pprint(WINDOWS)
-        self.emit_event('changed')
+        self.emit('changed')
 
     def activate_workspace(self, ws_id: str):
         self.hypr.send_command(f'dispatch workspace {ws_id}')
@@ -261,11 +246,11 @@ class SwayBackend(WMBackendBase):
                         focused_win = win
 
         # send events
-        self.emit_event('changed')
+        self.emit('changed')
         if focused_workspace:
-            self.emit_event(f'active_ws {focused_workspace.id}')
+            self.emit('activated', focused_workspace)
         if focused_win:
-            self.emit_event(f'activewin {focused_win.id}')
+            self.emit('activated', focused_win)
 
     @staticmethod
     def _make_monitor(node: dict) -> Monitor | None:
@@ -334,20 +319,21 @@ class SwayBackend(WMBackendBase):
         DBG('Received Sway event: %s %s', event.type.name, change)
 
         if event.type == SwayMessageType.EVT_WORKSPACE:
-            if ws_id := event.data.get('current', {}).get('id', None):
+            if ws_id := str(event.data.get('current', {}).get('id', '')):
                 match change:
                     case 'focus':
-                        self.emit_event(f'active_ws {ws_id}')
+                        if ws := WORKSPACES.get(ws_id, None):
+                            self.emit('activated', ws)
                     case 'init':
                         self._make_workspace(event.data['current'])
-                        self.emit_event('changed')
+                        self.emit('changed')
                     case 'empty':
-                        self._remove_workspace(str(ws_id))
-                        self.emit_event('changed')
+                        self._remove_workspace(ws_id)
+                        self.emit('changed')
                     case 'rename':
                         if ws := WORKSPACES.get(ws_id, None):
                             ws.name = event.data['current'].get('name', '')
-                            self.emit_event('changed')
+                            self.emit('changed')
                     case 'move':
                         # refetch the whole tree
                         self.sway.get_tree(self._tree_cb)
@@ -355,13 +341,14 @@ class SwayBackend(WMBackendBase):
                         INF('NOT MANAGED WORKSPACE CHANGE %s', change)
 
         elif event.type == SwayMessageType.EVT_WINDOW:
-            if win_id := event.data.get('container', {}).get('id', None):
+            if win_id := str(event.data.get('container', {}).get('id', '')):
                 match change:
                     case 'focus':
-                        self.emit_event(f'activewin {win_id}')
+                        if win := WINDOWS.get(win_id, None):
+                            self.emit('activated', win)
                     case 'close':
-                        self._remove_window(str(win_id))
-                        self.emit_event('changed')
+                        self._remove_window(win_id)
+                        self.emit('changed')
                     case 'new'|'move':
                         # NOTE: data do not contain the ws this new win belong
                         # I'm not able to create the win here, need to

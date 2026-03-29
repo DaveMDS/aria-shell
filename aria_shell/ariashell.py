@@ -122,7 +122,7 @@ class AriaShell(Gtk.Application):
 
         # prevent multiple instances
         if self.first_instance_created:
-            return 0
+            return
         self.first_instance_created = True
 
         # HACK: a fake window to keep the app alive while reloading!
@@ -137,8 +137,6 @@ class AriaShell(Gtk.Application):
 
         # now prepare all the stuff that can be reloaded
         self._setup_everything()
-
-        return 0
 
     def _on_app_shutdown(self, _app: Gtk.Application):
         """Shutdown signal is emitted when the application is exiting."""

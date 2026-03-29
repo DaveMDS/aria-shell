@@ -34,6 +34,7 @@ readme = 'README.md'
 
 [project.optional-dependencies]
 perf-gadget = ['psutil >= 7.0.0']
+development = ['PyGObject-stubs', 'pytest']
 
 
 [build-system]

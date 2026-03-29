@@ -8,12 +8,10 @@ AUTHOR: Davide Andreoli <dave@gurumeditation.it>
 */
 
 
-/* All the aria windows */
-/*Window {
-  background-color: var(--bg-color);
-  border-bottom: var(--normal-border);
-  box-shadow: var(--inset-border);
-}*/
+:root {
+  --aria-surface-border-radius: 0px;
+}
+
 
 window.aria-panel {
   font-family: "JetBrainsMono NF", "Roboto Mono", monospace, sans-serif;

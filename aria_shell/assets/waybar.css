@@ -21,6 +21,7 @@ AUTOCONFIG:
 :root {
   --aria-fg-color: #ffffff;
   --aria-base-color: rgba(43, 48, 59, 0.5);
+  --aria-surface-border-radius: 0px;
 
   --inset-border: inset 0 -3px rgba(100, 114, 125, 0.5);
   --normal-border: 3px solid rgba(100, 114, 125, 0.5);

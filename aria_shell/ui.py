@@ -115,6 +115,7 @@ class AriaWindow(CleanupHelper, Gtk.Window):
                  ):
         super().__init__(**kwargs)
         self.set_application(app)
+        self.add_css_class('aria-window')
         self.add_css_class(namespace)
 
         GtkLayerShell.init_for_window(self)

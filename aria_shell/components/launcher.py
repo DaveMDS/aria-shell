@@ -83,7 +83,7 @@ class AriaLauncher(AriaWindow):
         super().shutdown()
 
     def _populate_window(self):
-        vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL)
         vbox.add_css_class('aria-launcher-box')
 
         # search Entry

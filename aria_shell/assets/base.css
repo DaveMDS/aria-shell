@@ -23,47 +23,49 @@ https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-22/gtk/theme/Adwaita/_colors-pub
   --aria-fg-color: @theme_fg_color;      /* widget text/foreground color */
   --aria-text-color: @theme_text_color;  /* text color for entries, views and content in general */
   --aria-base-color: @theme_base_color;  /* base bg color (panel, text widgets) */
-  --aria-border-color: @borders;         /* widgets main borders color */
+  --aria-borders-color: @borders;        /* widgets main borders color */
 
+  --aria-warning-color: @warning_color;
+  --aria-error-color: @error_color;
+  --aria-success-color: @success_color;
+  
   --aria-accent-color: @theme_selected_bg_color;
   --aria-on-accent-color: @theme_selected_fg_color;
 
-  --aria-warning-color: @warning_color;  /* */
-  --aria-error-color: @error_color;      /* */
-  --aria-success-color: @success_color;  /* */
-
-  --aria-window-shadow: rgba(0, 0, 0, .5) 0px 5px 15px;
+  /* windows style */
+  --aria-surface-shadow: 0 3px 5px rgba(0, 0, 0, 0.15), 0 5px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.15);
+  --aria-surface-shadow-margin: 2px 10px 16px 10px;
+  --aria-surface-border: none;
+  --aria-surface-border-radius: 10px;
 }
 
-/*@define-color theme_bg_color red;*/
 
-/* Reset CSS
-window {
-  border-radius: unset;
-}*/
+/* Grrr...cannot find a way to use the default windows border defined in the gtk theme... */
+window.aria-window {
+  border: var(--aria-surface-border);
+  border-radius: var(--aria-surface-border-radius);
+  box-shadow: var(--aria-surface-shadow);
+  margin: var(--aria-surface-shadow-margin);
+}
 
 
 /*==============================================================================
  * Aria launcher
  *==============================================================================
- * window               .aria-launcher
+ * window               .aria-launcher .aria-window
  * ╰─ box               .aria-launcher-box
  *    ├─ entry          .aria-launcher-entry
  *    ╰─ scroller
  *       ╰─ listbox     .aria-launcher-list
  */
-.aria-launcher {
-  background-color: transparent;
-  padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
+window.aria-launcher {
 }
 .aria-launcher-box {
-  background-color: var(--aria-bg-color);
-  box-shadow: var(--aria-window-shadow);
-  padding: 10px;
 }
-.aria-launcher-entry {  }
+.aria-launcher-entry { 
+  margin: 10px; 
+}
 .aria-launcher-list {
-  background-color: unset;
 }
 
 
@@ -84,33 +86,34 @@ window {
  *    ╰─ row
  *       ╰─ grid   ... etc, for all visible notifications
  */
-.aria-notificator {
+window.aria-notificator {
   background-color: transparent;
-  margin-right: 4px;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
 }
 
 .aria-notificator-list {
   background-color: transparent;
 }
-.aria-notificator-list row {
-  margin-bottom: 6px;
-}
-.aria-notificator-list row:last-child {
-  margin-bottom: 0;
-}
 
 .aria-notification {
   min-width: 280px;
   background-color: var(--aria-base-color);
-  border: 2px solid alpha(var(--aria-accent-color), 0.75);
-  border-radius: 4px;
   padding: 6px;
+  
+  /* mimic the aria windows border */
+  border: var(--aria-surface-border);
+  border-radius: var(--aria-surface-border-radius);
+  box-shadow: var(--aria-surface-shadow);
+  margin: var(--aria-surface-shadow-margin);
 }
 .aria-notification.urgent {
-  background-color: red;
+  background-color: var(--aria-error-color);
 }
 .aria-notification.non-urgent {
-  background-color: green;
+  background-color: var(--aria-success-color);
 }
 .aria-notification .aria-notification-summary {
 }
@@ -128,7 +131,7 @@ window {
 /*==============================================================================
  * Aria exiter
  *==============================================================================
- * window               .aria-exiter
+ * window               .aria-exiter .aria-window
  * ╰─ flowbox           .aria-exiter-flowbox
  *    ├─ button         .aria-exiter-button flat
  *    │  ├─ image       .aria-exiter-button-icon
@@ -136,7 +139,6 @@ window {
  *    ╰─ button... etc, for all six buttons
  */
 window.aria-exiter {
-  padding: 8px;
 }
 image.aria-exiter-button-icon {
   padding: 8px 16px;
@@ -151,16 +153,10 @@ label.aria-exiter-button-label {
 /*==============================================================================
  * Aria terminal
  *==============================================================================
- * window               .aria-terminal
+ * window               .aria-terminal .aria-window
  * ╰─ terminal          .aria-terminal
  */
 window.aria-terminal {
-  background-color: transparent;
-  padding: 0 16px 32px 16px;  /* spacer for the terminal box-shadow */
-}
-window.aria-terminal .aria-terminal {
-  box-shadow: var(--aria-window-shadow);
-  padding: 6px;
 }
 
 
@@ -179,7 +175,7 @@ window.aria-terminal .aria-terminal {
 /*==============================================================================
  * Aria Dialog
  *==============================================================================
- * window            .aria-dialog
+ * window            .aria-dialog .aria-window
  * ╰─ box            .vertical
  *    ├─ label       .aria-dialog-heading
  *    ├─ label       .aria-dialog-body
@@ -203,7 +199,7 @@ button.aria-dialog-button {
 /*==============================================================================
  * Aria panel
  *==============================================================================
- * window              .aria-panel
+ * window              .aria-panel .aria-window
  * ╰─ centerbox        .aria-panel-box
  *    ├─ box           .aria-panel-box-start
  *    │  ╰─ Gadget     .aria-gadget .gadget-<name>
@@ -213,7 +209,7 @@ button.aria-dialog-button {
  *    ╰─ box           .aria-panel-box-end
  *       ╰─ Gadget     .aria-gadget .gadget-<name>
  */
-.aria-panel {
+window.aria-panel {
   min-height: 26px;
   border: none;
   border-radius: 0;

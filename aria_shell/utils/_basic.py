@@ -33,22 +33,32 @@ class Singleton(type):
 
 class Signalable:
     """ Make a class able to emit signals to registered clients """
+    __signals__: list[str] = []
+
     # 'signal-name' => [(callback, *args, **kwargs), ...]
     _handlers: dict[str, list[tuple[Callable, tuple, dict]]]
 
     def __new__(cls, *a, **ka):
         instance = super().__new__(cls)
-        instance._handlers = {}
+        instance._handlers = {sig: [] for sig in cls.__signals__}
         return instance
 
     def connect(self, signal: str, handler: Callable, *a, **ka):
-        self._handlers.setdefault(signal, []).append((handler, a, ka))
+        assert signal in self.__signals__
+        self._handlers[signal].append((handler, a, ka))
+
+    def disconnect(self, signal: str, handler: Callable):
+        assert signal in self.__signals__
+        self._handlers[signal] = list(filter(
+            lambda x: x[0] != handler, self._handlers[signal],
+        ))
 
     def disconnect_all(self):
         self._handlers.clear()
 
     def emit(self, signal: str, *args):
-        for h, a, ka in self._handlers.get(signal, []):
+        assert signal in self.__signals__
+        for h, a, ka in self._handlers[signal]:
             h(*args, *a, *ka)
 
 

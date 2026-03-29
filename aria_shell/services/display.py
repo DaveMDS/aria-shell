@@ -15,6 +15,8 @@ class DisplayService(Signalable, metaclass=Singleton):
       'monitor-added'(monitor: Gdk.Monitor)
       'monitor-removed'(monitor: Gdk.Monitor)
     """
+    __signals__ = ['monitor-added', 'monitor-removed']
+
     def __init__(self):
         super().__init__()
         INF('Initializing DisplayService')

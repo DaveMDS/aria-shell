@@ -1,14 +1,7 @@
 [project]
 name = 'aria-shell'
 description = 'A full, user-friendly, slim and configurable shell for Wayland'
-version = '0.0.0'
-
-requires-python = '>=3.14'
-dependencies = [
-    'PyGObject >= 3.50.0',
-    'pycairo',
-    'dasbus',
-]
+version = '0.0.1'
 
 authors = [
     { name='Davide Andreoli', email='dave@gurumeditation.it' },
@@ -31,6 +24,12 @@ urls.Changelog = 'https://github.com/DaveMDS/aria-shell/blob/master/CHANGELOG.md
 license = 'GPL-3.0'
 license-files = ['LICENSE']
 readme = 'README.md'
+
+requires-python = '>=3.14'
+dependencies = [
+    'PyGObject >= 3.50.0',
+    'dasbus >= 1.7',
+]
 
 [project.optional-dependencies]
 perf-gadget = ['psutil >= 7.0.0']

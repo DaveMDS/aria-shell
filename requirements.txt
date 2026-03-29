@@ -1,8 +1,7 @@
 # THIS IS DUPLICATED IN ppyprojecy.toml  :(
 # but is needed by pip install -r requirements.txt
 PyGObject >= 3.50.0
-pycairo
-dasbus
+dasbus >= 1.7
 
 # perf gadget:
 psutil >= 7.0.0

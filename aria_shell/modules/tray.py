@@ -169,7 +169,7 @@ class TrayGadget(AriaGadget):
         factory.connect('bind', self._factory_item_bind)
         factory.connect('unbind', self._factory_item_unbind)
 
-        model = Gtk.SingleSelection(model=ITEMS_STORE, autoselect=False)
+        model = Gtk.NoSelection(model=ITEMS_STORE)
         list_view = Gtk.ListView(
             model=model,
             factory=factory,

@@ -37,14 +37,16 @@ class AriaCommands(metaclass=Singleton):
         return f'Unknown command: {command}'
 
     @staticmethod
-    def _cmd_ping(_params: list[str]):
+    def _cmd_ping(_params: list[str]) -> str:
+        """ ping """
         return 'pong'
 
-    def _cmd_reload(self, _params: list[str]):
+    def _cmd_reload(self, _params: list[str]) -> str:
+        """ reload """
         self.app.reload()
         return 'OK'
 
-    def _cmd_show(self, params: list[str]):
+    def _cmd_show(self, params: list[str]) -> str:
         """ show <component> """
         if len(params) != 1:
             raise CommandError('invalid params')

@@ -47,8 +47,8 @@ class CleanupHelper:
                   source: GObject.Object, source_property: str,
                   target: GObject.Object, target_property: str,
                   flags: GObject.BindingFlags | None = 0,
-                  transform_to: Callable[[GObject.Binding, Any, Any], Any] | None = None,
-                  transform_from: Callable[[GObject.Binding, Any, Any], Any] | None = None,
+                  transform_to: Callable[[GObject.Binding, ...], Any] | None = None,
+                  transform_from: Callable[[GObject.Binding, ...], Any] | None = None,
                   user_data: Any = None):
         """Bind a property that will be automatically unbinded on shutdown."""
         binding = source.bind_property(

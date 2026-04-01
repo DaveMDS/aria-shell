@@ -1,8 +1,6 @@
-from collections.abc import Callable
-
 from gi.repository import Gtk, GObject
 
-from aria_shell.ui import CleanupHelper
+from aria_shell.utils import CleanupHelper
 
 
 class AriaGadget(CleanupHelper, Gtk.Box):

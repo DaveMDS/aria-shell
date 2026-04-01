@@ -13,5 +13,6 @@ from ._basic import (
     PerfTimer,
 )
 from ._toolkit import (
+    CleanupHelper,
     IndexedListStore,
 )

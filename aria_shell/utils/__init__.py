@@ -12,3 +12,6 @@ from ._basic import (
     exec_detached,
     PerfTimer,
 )
+from ._toolkit import (
+    IndexedListStore,
+)

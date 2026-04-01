@@ -2,7 +2,7 @@
 
 MPRIS2 backend for the AriaAudioService
 
-This backend use DBUS to manage mltimedia players exposing the Mpris2 interface
+This backend use DBUS to manage multimedia players exposing the Mpris2 interface
 
 Reference:
 https://specifications.freedesktop.org/mpris-spec/latest/index.html

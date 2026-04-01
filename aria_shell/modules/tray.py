@@ -12,8 +12,9 @@ from dasbus.typing import Bool, Int, Str, List
 from dasbus.connection import SessionMessageBus
 from dasbus.client.proxy import disconnect_proxy
 
-from gi.repository import Gtk, GObject, Gio, GLib, Graphene
+from gi.repository import Gtk, GObject, GLib, Graphene
 
+from aria_shell.utils import IndexedListStore
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
@@ -248,6 +249,7 @@ class StatusNotifierItem(GObject.Object):
         bus_name, object_path = full_path[:i], full_path[i:]
         self.bus_name = bus_name
         self.object_path = object_path
+        self.full_path = full_path
 
         # create the object proxy for this path
         self._proxy = SESSION_BUS.get_proxy(bus_name, object_path)
@@ -410,7 +412,8 @@ class StatusNotifierItem(GObject.Object):
         except AttributeError:
             pass
 
-ITEMS_STORE = Gio.ListStore(item_type=StatusNotifierItem)
+
+ITEMS_STORE = IndexedListStore(item_type=StatusNotifierItem, key_prop='full_path')
 
 
 @dbus_interface(STATUS_NOTIFIER_WATCHER_IFACE)
@@ -419,9 +422,6 @@ class StatusNotifierWatcher(object):
 
     def __init__(self):
         DBG(f'TRAY Publishing {STATUS_NOTIFIER_WATCHER_SERVICE} on D-Bus')
-
-        # index of registered sni items, by full_path
-        self._items: dict[str, StatusNotifierItem] = {}
 
         # publish self on the bus, and register the service name
         try:
@@ -441,10 +441,9 @@ class StatusNotifierWatcher(object):
         SESSION_BUS.unregister_service(STATUS_NOTIFIER_WATCHER_SERVICE)
         SESSION_BUS.unpublish_object(STATUS_NOTIFIER_WATCHER_PATH)
         # clear the global list store, it's index, and terminate all sni items
-        ITEMS_STORE.remove_all()
-        while self._items:
-            _, sni = self._items.popitem()
+        for sni in ITEMS_STORE:
             sni.shutdown()
+        ITEMS_STORE.remove_all()
 
     @accepts_additional_arguments
     def RegisterStatusNotifierItem(self, service: Str, *, call_info: dict) -> None:
@@ -462,7 +461,7 @@ class StatusNotifierWatcher(object):
             # ?? never seen this case...what's in service?
             full_path = f'{sender}/StatusNotifierItem'
 
-        if full_path in self._items:
+        if ITEMS_STORE.get(full_path):
             return
 
         # observe the sender on the bus, to know when disconnected
@@ -476,9 +475,8 @@ class StatusNotifierWatcher(object):
         observer.connect_once_available()
 
     def _item_available(self, full_path: str):
-        # create a new sni, put in store and index
+        # create a new sni and put in store
         sni = StatusNotifierItem(full_path)
-        self._items[full_path] = sni
         ITEMS_STORE.append(sni)
 
         # emit the event on the bus
@@ -486,17 +484,13 @@ class StatusNotifierWatcher(object):
 
     def _item_unavailable(self, full_name: str):
         # get and remove the sni from the index
-        sni = self._items.pop(full_name, None)
+        sni = ITEMS_STORE.get(full_name)
         if sni is None:
             ERR(f'Cannot find tray item to remove: {full_name}')
             return
 
         # remove the sni from the store
-        res, pos = ITEMS_STORE.find(sni)
-        if res and pos >= 0:
-            ITEMS_STORE.remove(pos)
-        else:
-            ERR(f'Cannot find tray item to remove: {sni}')
+        ITEMS_STORE.remove_item(sni)
 
         # destroy the sni (disconnect dbus stuff)
         sni.shutdown()
@@ -513,7 +507,7 @@ class StatusNotifierWatcher(object):
     @property
     def RegisteredStatusNotifierItems(self) -> List[Str]:
         """ List containing all the registered instances of StatusNotifierItem """
-        return list(self._items.keys())
+        return list(ITEMS_STORE.keys())
 
     @property
     def IsStatusNotifierHostRegistered(self) -> Bool:

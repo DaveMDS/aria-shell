@@ -26,7 +26,7 @@ from enum import StrEnum
 
 from gi.repository import Gio, GObject
 
-from aria_shell.utils import Singleton, Signalable
+from aria_shell.utils import Singleton, IndexedListStore
 from aria_shell.utils.logger import get_loggers
 
 
@@ -48,7 +48,7 @@ class AudioChannel(GObject.Object):
 
     def __init__(self,
         *,
-        cid: str,  # opaque, backend dependent, must be ashable and printable
+        cid: str,  # opaque, backend dependent, must be hashable and printable
         group: AudioChannelGroup,
         name: str,
         caption: str,
@@ -131,13 +131,11 @@ class AudioService(metaclass=Singleton):
         super().__init__()
         self._cancellable = Gio.Cancellable()  # TODO use on shutdown !!!
 
-        # AudioChannel list store, with dict index for faster access by id
-        self._channels = Gio.ListStore()
-        self._ch_index: dict[str, AudioChannel] = {}  # cid => AudioChannel
+        # AudioChannel list store (with index for faster access by cid)
+        self._channels = IndexedListStore(item_type=AudioChannel, key_prop='cid')
 
-        # AudioPlayer list store, with dict index for faster access by id
-        self._players = Gio.ListStore()
-        self._pl_index: dict[str, MediaPlayer] = {}  # pid => AudioPlayer
+        # MediaPlayer list store (with index for faster access by pid)
+        self._players = IndexedListStore(item_type=MediaPlayer, key_prop='pid')
 
         # try to load the pipewire backend
         try:
@@ -156,61 +154,33 @@ class AudioService(metaclass=Singleton):
     #
     # public API
     @property
-    def channels(self) -> Gio.ListStore:  # AudioChannel store
+    def channels(self) -> IndexedListStore[AudioChannel]:
         return self._channels
 
     def channel_by_id(self, cid: str) -> AudioChannel | None:
-        return self._ch_index.get(cid, None)
+        return self._channels.get(cid)
 
     @property
-    def players(self) -> Gio.ListStore:  # MediaPlayer store
+    def players(self) -> IndexedListStore[MediaPlayer]:
         return self._players
 
     def player_by_id(self, pid: str) -> MediaPlayer | None:
-        return self._pl_index.get(pid, None)
+        return self._players.get(pid)
 
     #
     # backends API
     def channel_added(self, cha: AudioChannel):
         DBG(f'AAS: Channel added {cha}')
         self._channels.insert_sorted(cha, channel_sort)
-        self._ch_index[cha.cid] = cha
 
     def channel_removed(self, cha_id: str):
         DBG(f'AAS: Channel removed {cha_id}')
-
-        # pop the Channel from  the index
-        cha = self._ch_index.pop(cha_id, None)
-        if not cha:
-            ERR(f'Removed not existant channel: {repr(cha_id)}')
-            return
-
-        # find position in store (needed to remove, hmm...somethig faster?)
-        res, pos = self._channels.find(cha)
-        if not res or pos < 0:
-            ERR(f'Cannot find channel to remove: {cha_id}')
-            return
-
-        # remove from the store
-        self._channels.remove(pos)
+        self._channels.remove_key(cha_id)
 
     def player_added(self, player: MediaPlayer):
         DBG(f'AAS: Player added {player}')
         self._players.append(player)
-        self._pl_index[player.pid] = player
 
     def player_removed(self, pid: str):
-        # pop the Player from the index
-        player = self._pl_index.pop(pid, None)
-        if not player:
-            ERR(f'Removed not existant player: {repr(pid)}')
-            return
-
-        # find position in store (needed to remove, hmm...somethig faster?)
-        res, pos = self._players.find(player)
-        if not res or pos < 0:
-            ERR(f'Cannot find player to remove: {repr(pid)}')
-            return
-
-        # remove from the store
-        self._players.remove(pos)
+        DBG(f'AAS: Player removed id={pid}')
+        self._players.remove_key(pid)

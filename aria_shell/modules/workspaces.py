@@ -79,8 +79,9 @@ class WorkspaceView(CleanupHelper, Gtk.Box):
             windows_box.bind_model(workspace.windows, WindowView, config)
             self.append(windows_box)
 
-        # add/remove the 'active' CSS class watching the 'active' property
+        # toggle the 'active' and 'urgent' CSS classes following props
         self.safe_connect(workspace, 'notify::active', sync_css_class, self)
+        self.safe_connect(workspace, 'notify::urgent', sync_css_class, self)
 
         # controller to receive mouse click
         ges = Gtk.GestureSingle()
@@ -115,8 +116,9 @@ class WindowView(CleanupHelper, Gtk.Image):
             self.safe_connect(ges, 'begin', lambda *_: window.activate())
             self.add_controller(ges)
 
-        # add/remove the 'active' CSS class watching the 'active' property
+        # toggle the 'active' and 'urgent' CSS classes following props
         self.safe_connect(window, 'notify::active', sync_css_class, self)
+        self.safe_connect(window, 'notify::urgent', sync_css_class, self)
 
     def do_unmap(self):
         CleanupHelper.shutdown(self)  # disconnect all safe-connected signal/bindings

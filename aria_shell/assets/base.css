@@ -231,12 +231,12 @@ window.aria-panel {
  * Workspaces
  *==============================================================================
  * Gadget              .aria-gadget .gadget-workspaces
- * ├─ box              .aria-workspace [.active]
+ * ├─ box              .aria-workspace [.active] [.urgent]
  * │  ├─ label         .aria-workspace-label
  * │  ╰─ box
- * │     ├─ image      .aria-workspace-window [.active]
+ * │     ├─ image      .aria-workspace-window [.active] [.urgent]
  * │     ┊
- * │     ╰─ image      .aria-workspace-window [.active]
+ * │     ╰─ image      .aria-workspace-window [.active] [.urgent]
  * ╰─ box
  *    ╰─ etc, for all workspaces...
  */
@@ -257,18 +257,26 @@ window.aria-panel {
   color: var(--aria-on-accent-color);
   border-color: transparent;
 }
-.gadget-workspaces .aria-workspace .aria-workspace-window {
+.gadget-workspaces .aria-workspace.urgent {
+  /* TODO Animate */
+  background-color: var(--aria-warning-color);
+  color: var(--aria-on-accent-color);
+}
+.gadget-workspaces .aria-workspace-window {
   margin-right: 2px;
   -gtk-icon-style: symbolic;  /* requested|regular|symbolic */
 }
-.gadget-workspaces .aria-workspace .aria-workspace-window:hover {
+.gadget-workspaces .aria-workspace-window:hover {
   /* TODO something better ! */
   box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
 }
-.gadget-workspaces .aria-workspace .aria-workspace-window.active {
+.gadget-workspaces .aria-workspace-window.active {
   /* TODO something !! */
 }
-
+.gadget-workspaces .aria-workspace-window.urgent {
+  /* TODO something !! */
+  outline: 3px solid var(--aria-error-color);
+}
 /*==============================================================================
  * Gadget: Tray
  *==============================================================================

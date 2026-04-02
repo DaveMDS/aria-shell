@@ -49,3 +49,7 @@ Gadget.gadget-clock,
   color: var(--aria-bg-color);
   background-color: var(--aria-accent-color);
 }
+.gadget-workspaces .aria-workspace.urgent {
+  background-color: var(--aria-error-color);
+  color: var(--aria-on-accent-color);
+}

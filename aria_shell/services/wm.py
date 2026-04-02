@@ -60,6 +60,7 @@ class Window(GObject.Object):
     monitor_id: str = GObject.Property(type=str)
     workspace_id: str = GObject.Property(type=str)
     active: bool = GObject.Property(type=bool, default=False)
+    urgent: bool = GObject.Property(type=bool, default=False)
 
     def __repr__(self):
         return f"<Window id={self.id} name='{self.name}' title='{self.title}'>"
@@ -69,8 +70,8 @@ class Window(GObject.Object):
         WindowManagerService().activate_window(self)
 
 
-WORKSPACES_STORE = IndexedListStore(item_type=Workspace)
-WINDOWS_STORE = IndexedListStore(item_type=Window)
+WORKSPACES_STORE: IndexedListStore[Workspace] = IndexedListStore(item_type=Workspace)
+WINDOWS_STORE: IndexedListStore[Window] = IndexedListStore(item_type=Window)
 
 
 class WindowManagerService(metaclass=Singleton):
@@ -333,10 +334,13 @@ class SwayBackend(WindowManagerBackend):
         if event.type == SwayMessageType.EVT_WORKSPACE:
             if ws_id := str(event.data.get('current', {}).get('id', '')):
                 match change:
-                    case 'focus':
-                        self._set_active_workspace(ws_id)
                     case 'init':
                         self._make_workspace(event.data['current'])
+                    case 'focus':
+                        self._set_active_workspace(ws_id)
+                    case 'urgent':
+                        if ws := WORKSPACES_STORE.get(ws_id):
+                            ws.urgent = event.data['current'].get('urgent', False)
                     case 'empty':
                         WORKSPACES_STORE.remove_key(ws_id)
                     case 'rename':
@@ -353,6 +357,9 @@ class SwayBackend(WindowManagerBackend):
                 match change:
                     case 'focus':
                         self._set_active_window(win_id)
+                    case 'urgent':
+                        if win := WINDOWS_STORE.get(win_id):
+                            win.urgent = event.data['container'].get('urgent', False)
                     case 'close':
                         WINDOWS_STORE.remove_key(win_id)
                     case 'new'|'move':

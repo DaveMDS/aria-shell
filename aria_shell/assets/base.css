@@ -231,11 +231,12 @@ window.aria-panel {
  * Workspaces
  *==============================================================================
  * Gadget              .aria-gadget .gadget-workspaces
- * ├─ box              .aria-workspace[.active]
+ * ├─ box              .aria-workspace [.active]
  * │  ├─ label         .aria-workspace-label
- * │  ├─ image         .aria-workspace-window[.active]
- * │  ┊
- * │  ╰─ image         .aria-workspace-window[.active]
+ * │  ╰─ box
+ * │     ├─ image      .aria-workspace-window [.active]
+ * │     ┊
+ * │     ╰─ image      .aria-workspace-window [.active]
  * ╰─ box
  *    ╰─ etc, for all workspaces...
  */
@@ -245,25 +246,27 @@ window.aria-panel {
 .gadget-workspaces .aria-workspace {
   margin-right: 2px;
   padding: 0px 6px;
-  border: 1px solid alpha(var(--aria-accent-color), 0.5);
-  border-radius: 3px;
+  border: 1px solid alpha(var(--aria-accent-color), 0.75);
+  border-radius: 2px;
 }
 .gadget-workspaces .aria-workspace:hover {
-  border-color: alpha(var(--aria-accent-color), 0.8);
+  border-color: var(--aria-accent-color);
 }
 .gadget-workspaces .aria-workspace.active {
-  background-color: alpha(var(--aria-accent-color), 0.5);
+  background-color: var(--aria-accent-color);
+  color: var(--aria-on-accent-color);
   border-color: transparent;
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window {
-  /*border: 1px solid red;*/
   margin-right: 2px;
+  -gtk-icon-style: symbolic;  /* requested|regular|symbolic */
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window:hover {
+  /* TODO something better ! */
   box-shadow: 0px 0px 3px 0px var(--aria-accent-color);
 }
 .gadget-workspaces .aria-workspace .aria-workspace-window.active {
-  /*box-shadow: 0px 0px 3px 0px #000000;*/
+  /* TODO something !! */
 }
 
 /*==============================================================================

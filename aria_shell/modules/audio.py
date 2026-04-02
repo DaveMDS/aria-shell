@@ -6,7 +6,7 @@ from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaSlider, AriaPopover
+from aria_shell.ui import AriaSlider, AriaPopover, AriaBox
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup, MediaPlayer
 )
@@ -45,8 +45,8 @@ class AudioGadget(AriaGadget):
         self.conf = conf
         self.popover: AriaPopover | None = None
         self.aas = AudioService()
-        ico = Gtk.Image.new_from_icon_name('audio-volume-medium')
-        self.append(ico)
+        self.icon = Gtk.Image.new_from_icon_name('audio-volume-medium')
+        self.append(self.icon)
 
     def mouse_click(self, button: int):
         self.toggle_popup()
@@ -60,14 +60,14 @@ class AudioGadget(AriaGadget):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
         # mixer channels
-        lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        lbox.bind_model(self.aas.channels, self.channel_rows_factory)
-        vbox.append(lbox)
+        abox = AriaBox(orientation=Gtk.Orientation.VERTICAL)
+        abox.bind_model(self.aas.channels, self.channel_rows_factory)
+        vbox.append(abox)
 
         # media players
-        lbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        lbox.bind_model(self.aas.players, self.player_rows_factory)
-        vbox.append(lbox)
+        abox = AriaBox(orientation=Gtk.Orientation.VERTICAL)
+        abox.bind_model(self.aas.players, self.player_rows_factory)
+        vbox.append(abox)
 
         # mixer button
         if self.conf.mixer_command:
@@ -76,7 +76,7 @@ class AudioGadget(AriaGadget):
             vbox.append(btn)
 
         # open in an AriaPopover
-        self.popover = AriaPopover(self, vbox, self.on_popover_closed)
+        self.popover = AriaPopover(self.icon, vbox, self.on_popover_closed)
 
     def on_popover_closed(self, _popover):
         self.popover = None
@@ -86,20 +86,18 @@ class AudioGadget(AriaGadget):
         if self.popover:
             self.popover.popdown()
 
-    def channel_rows_factory(self, channel: AudioChannel) -> Gtk.ListBoxRow:
+    def channel_rows_factory(self, channel: AudioChannel) -> Gtk.Widget:
         # print('Factory for', channel)
-        row = Gtk.ListBoxRow(selectable=False, activatable=False)
-        # row.connect('destroy', lambda *_: print('DESTROY....'*6))
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
         # hide the channel if a matching MediaPlayer exists
         if channel.group == AudioChannelGroup.STREAM:
-            for player in self.aas.players:  # type: MediaPlayer
+            # TODO questo è una vaccata, non funziona!
+            #  nascondiamo tutti i volumi nei player invece, sono anche brutti!
+            for player in self.aas.players:
                 if player.name.lower() == channel.name.lower():
-                    row.set_visible(False)
-                    return row
-
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        row.set_child(hbox)
+                    hbox.set_visible(False)
+                    return hbox
 
         # icon embedded in a mute toggle button
         if channel.group == AudioChannelGroup.OUTPUT:
@@ -139,20 +137,17 @@ class AudioGadget(AriaGadget):
                               GObject.BindingFlags.SYNC_CREATE)
         vbox.append(sli)
 
-        return row
+        return hbox
 
     @staticmethod
-    def player_rows_factory(player: MediaPlayer) -> Gtk.ListBoxRow:
+    def player_rows_factory(player: MediaPlayer) -> Gtk.Widget:
         # print('Factory for', player)
-        row = Gtk.ListBoxRow(selectable=False, activatable=False)
-        # row.connect('destroy', lambda *_: print('DESTROY....'*6))
 
         # main vbox in a frame
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         frame = Gtk.Frame(label=player.name, label_xalign=0.5)
         frame.set_size_request(200, -1)
         frame.set_child(vbox)
-        row.set_child(frame)
 
         # cover + metadata in a vbox
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -261,4 +256,4 @@ class AudioGadget(AriaGadget):
         )
         vbox.append(sli)
 
-        return row
+        return frame

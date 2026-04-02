@@ -4,7 +4,7 @@ from gi.repository import GObject, GLib, Gio, Gdk, Gtk
 
 from aria_shell.i18n import i18n
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
-from aria_shell.ui import AriaWindow, AriaBox
+from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp, PerfTimer
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
@@ -83,7 +83,7 @@ class AriaLauncher(AriaWindow):
         super().shutdown()
 
     def _populate_window(self):
-        vbox = AriaBox(orientation=Gtk.Orientation.VERTICAL)
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         vbox.add_css_class('aria-launcher-box')
 
         # search Entry

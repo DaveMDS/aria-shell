@@ -123,17 +123,6 @@ class AriaWindow(CleanupHelper, Gtk.Window):
             return False  # not handled, continue propagation
 
 
-class AriaBox(Gtk.Box):
-    """
-    Simple GtkBox wrapper
-    Use this when your box should be "visible" in CSS styles.
-    """
-    def __init__(self, css_class: str = None, **kwargs):
-        super().__init__(**kwargs)
-        if css_class:
-            self.add_css_class(css_class)
-
-
 class AriaSlider(Gtk.Scale):
     """
     Don't know why Gtk.Scale doesn't provide the 'value' property.

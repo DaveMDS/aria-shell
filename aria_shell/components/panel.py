@@ -1,6 +1,6 @@
 from gi.repository import Gdk, Gtk
 
-from aria_shell.ui import AriaBox, AriaWindow
+from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp
 from aria_shell.module import request_module_gadget, destroy_module_gadget
 from aria_shell.config import AriaConfigModel
@@ -136,9 +136,10 @@ class AriaPanel(AriaWindow):
         # create the left/center/right boxes, in a CenterBox
         cbox = Gtk.CenterBox()
         cbox.add_css_class('aria-panel-box')
-        self._box1 = AriaBox(css_class='aria-panel-box-start')
-        self._box2 = AriaBox(css_class='aria-panel-box-center')
-        self._box3 = AriaBox(css_class='aria-panel-box-end')
+        self._box1, self._box2, self._box3 = Gtk.Box(), Gtk.Box(), Gtk.Box()
+        self._box1.add_css_class('aria-panel-box-start')
+        self._box2.add_css_class('aria-panel-box-center')
+        self._box3.add_css_class('aria-panel-box-end')
         cbox.set_start_widget(self._box1)
         cbox.set_center_widget(self._box2)
         cbox.set_end_widget(self._box3)

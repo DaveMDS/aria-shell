@@ -1,118 +1,163 @@
-from dataclasses import dataclass
+"""
+Aria window manager abstraction
+
+This service keep two IndexedListModel of Windows and Workspaces
+objects always updated.
+
+"""
+from abc import abstractmethod, ABC
+from functools import cached_property
+
+from gi.repository import Gio, GObject, Gtk
 
 from aria_shell.services.hyprland import HyprlandService
 from aria_shell.services.sway import SwayService, SwayMessage, MessageType as SwayMessageType
-from aria_shell.utils import Singleton, Signalable
+from aria_shell.utils import Singleton, IndexedListStore
 from aria_shell.utils.logger import get_loggers
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
-"""
-Aria window manager abstraction
-"""
 
-@dataclass
-class Monitor:
-    id: str
-    name: str
-
-    @property
-    def windows(self):
-        return [w for w in WINDOWS.values() if w.monitor_id == self.id]
-
-
-@dataclass
-class Workspace:
-    id: str
-    name: str
-    monitor_id: str
-
-    @property
-    def windows(self):
-        return [w for w in WINDOWS.values() if w.workspace_id == self.id]
-
-
-@dataclass
-class Window:
-    id: str
-    name: str  # this is the window class (class cannot be used)
-    title: str
-    monitor_id: str
-    workspace_id: str
-
-
-MONITORS: dict[str, Monitor] = {}
-WORKSPACES: dict[str, Workspace] = {}
-WINDOWS: dict[str, Window] = {}
-
-
-class WindowManagerService(Signalable, metaclass=Singleton):
+class Workspace(GObject.Object):
     """
-    Signals:
-      'changed'(): emitted every time an item is added/removed
-      'activated'(item: Window|Workspace): window or workspace become active
+    Class used to represent a window manager workspace.
     """
-    __signals__ = ['changed', 'activated']
+    __gtype_name__ = 'Workspace'
 
+    # "reactive" props that can be watched/binded
+    id: str = GObject.Property(type=str)
+    name: str = GObject.Property(type=str)
+    monitor: str = GObject.Property(type=str)
+    active: bool = GObject.Property(type=bool, default=False)
+    urgent: bool = GObject.Property(type=bool, default=False)
+
+    def __repr__(self):
+        return f"<Workspace id={self.id} monitor={self.monitor} name='{self.name}'>"
+
+    @cached_property
+    def windows(self) -> Gio.ListModel[Window]:
+        """Get the list of Windows that belong to this Workspace."""
+        filter_ = Gtk.CustomFilter.new(lambda win: win.workspace_id == self.id)
+        model = Gtk.FilterListModel(model=WINDOWS_STORE, filter=filter_)
+        return model
+
+    def activate(self):
+        """Ask the window manager to activate this workspace."""
+        WindowManagerService().activate_workspace(self)
+
+
+class Window(GObject.Object):
+    """
+    Class used to represent a window manager window.
+    """
+    __gtype_name__ = 'Window'
+
+    # "reactive" props that can be watched/binded
+    id: str = GObject.Property(type=str)
+    name: str = GObject.Property(type=str) # this is the window class (class cannot be used)
+    title: str = GObject.Property(type=str)
+    monitor_id: str = GObject.Property(type=str)
+    workspace_id: str = GObject.Property(type=str)
+    active: bool = GObject.Property(type=bool, default=False)
+
+    def __repr__(self):
+        return f"<Window id={self.id} name='{self.name}' title='{self.title}'>"
+
+    def activate(self):
+        """Ask the window manager to focus this window."""
+        WindowManagerService().activate_window(self)
+
+
+WORKSPACES_STORE = IndexedListStore(item_type=Workspace)
+WINDOWS_STORE = IndexedListStore(item_type=Window)
+
+
+class WindowManagerService(metaclass=Singleton):
+    """
+    This is the main service to use.
+    """
     def __init__(self):
-        instance = None
         for backend in (HyprlandBackend, SwayBackend):
             try:
-                instance = backend()
+                self._backend = backend()
+                break
             except RuntimeError as e:
                 DBG(e)
-            else:
-                break
-        if not instance:
-            WRN('No supported wm found, lets see what we can do...')
-            # TODO return (raise) the failure?
+        else:
+            WRN('No supported window manager found!')
             return
-        INF('Using WindowManager backend: %s', instance)
-        self.backend = instance
-        self.listeners = []
+        INF('Using WindowManager backend: %s', self._backend)
 
     @property
-    def monitors(self) -> dict[str, Monitor]:
-        return MONITORS
+    def workspaces(self) -> IndexedListStore[Workspace]:
+        """Get the list of Workspaces."""
+        return WORKSPACES_STORE
 
     @property
-    def workspaces(self) -> dict[str, Workspace]:
-        return WORKSPACES
+    def windows(self) -> IndexedListStore[Window]:
+        """Get the list of Windows."""
+        return WINDOWS_STORE
 
-    @property
-    def windows(self) -> dict[str, Window]:
-        return WINDOWS
+    def activate_workspace(self, workspace: Workspace):
+        """Ask the window manager to activate the given workspace."""
+        if self._backend:
+            self._backend.activate_workspace(workspace)
 
-    def activate_workspace(self, ws_id: str):
-        self.backend.activate_workspace(ws_id)
+    def activate_window(self, window: Window):
+        """Ask the window manager to focus the given window."""
+        if self._backend:
+            self._backend.activate_window(window)
 
-    def activate_window(self, win_id: str):
-        self.backend.activate_window(win_id)
 
+class WindowManagerBackend(ABC):
+    """
+    Base abstract class for all WM backends.
+    """
+    def __init__(self):
+        self.active_window: Window | None = None
+        self.active_workspace: Workspace | None = None
 
-class WMBackendBase:
     def __str__(self):
         return f'<{self.__class__.__name__}>'
 
-    @staticmethod
-    def emit(signal: str, *args):
-        """Called by backends to emit events in the WM Service."""
-        WindowManagerService().emit(signal, *args)
-
-    def activate_workspace(self, ws_id: str):
+    #
+    # methods that must be implemented in backends
+    #
+    @abstractmethod
+    def activate_workspace(self, workspace: Workspace):
         """Should activate the given workspace."""
-        raise NotImplementedError
 
-    def activate_window(self, win_id: str):
+    @abstractmethod
+    def activate_window(self, window: Window):
         """Should activate the given window."""
-        raise NotImplementedError
+
+    #
+    # internal utilities to be used by backends
+    #
+    def _set_active_workspace(self, workspace: Workspace | str | None):
+        if isinstance(workspace, str):
+            workspace = WORKSPACES_STORE.get(workspace)
+        if self.active_workspace:
+            self.active_workspace.active = False
+        if workspace:
+            workspace.active = True
+        self.active_workspace = workspace
+
+    def _set_active_window(self, window: Window | str | None):
+        if isinstance(window, str):
+            window = WINDOWS_STORE.get(window)
+        if self.active_window:
+            self.active_window.active = False
+        if window:
+            window.active = True
+        self.active_window = window
 
 
 ################################################################################
 ###  hyprland backend  #########################################################
 ################################################################################
-class HyprlandBackend(WMBackendBase):
+class HyprlandBackend(WindowManagerBackend):
     ignored_events = (
         # v2 available
         'activewindow', 'focusedmon', 'movewindow', 'windowtitle',
@@ -126,13 +171,12 @@ class HyprlandBackend(WMBackendBase):
         super().__init__()
         self.hypr = HyprlandService()
         self.hypr.watch_events(self.hypr_events_cb)
-        self.hypr.send_command('j/monitors', self.monitors_cb)
+        self.hypr.send_command('j/workspaces', self.workspaces_cb)
 
     def hypr_events_cb(self, event, data):
         match event:
             case 'activewindowv2':
-                if win := WINDOWS.get(data, None):
-                    self.emit('activated', win)
+                self._set_active_window(data)
             case 'openwindow' | 'closewindow' | 'movewindowv2':
                 # TODO: how to request only the changed client?
                 self.hypr.send_command('j/clients', self.clients_cb)
@@ -142,81 +186,73 @@ class HyprlandBackend(WMBackendBase):
                 if event not in self.ignored_events:
                     print("HYPR EVENT", event, data)
 
-    def monitors_cb(self, data):
-        MONITORS.clear()
-        for mon in data or []:
-            mid = str(mon['id'])
-            MONITORS[mid] = Monitor(id=mid, name=mon['name'])
-        # pprint(MONITORS)
-        self.hypr.send_command('j/workspaces', self.workspaces_cb)
-
     def workspaces_cb(self, data):
-        WORKSPACES.clear()
+        WORKSPACES_STORE.remove_all()
+
         for ws in data or []:
             wid = str(ws['id'])
-            WORKSPACES[wid] = Workspace(
-                id=wid,
-                name=ws['name'],
-                monitor_id=str(ws['monitorID']),
-            )
-        # pprint(WORKSPACES)
+            workspace = Workspace()
+            workspace.id = wid
+            workspace.name = ws['name']
+            workspace.monitor = ws['monitor']
+            WORKSPACES_STORE.append(workspace)
+
         self.hypr.send_command('j/clients', self.clients_cb)
 
-    def clients_cb(self, data):
-        WINDOWS.clear()
+    @staticmethod
+    def clients_cb(data):
+        WINDOWS_STORE.remove_all()
+
         for cli in data or []:
             cid = cli['address']
             if cid.startswith('0x'):
                 cid = cid[2:]
-            WINDOWS[cid] = Window(
-                id=cid,
-                name=cli['class'],
-                title=cli['title'],
-                workspace_id=str(cli['workspace']['id']),
-                monitor_id=str(cli['monitor']),
-            )
-        # pprint(WINDOWS)
-        self.emit('changed')
+            window = Window()
+            window.id = cid
+            window.name = cli['class']
+            window.title = cli['title']
+            window.workspace_id = str(cli['workspace']['id'])
+            window.monitor_id = str(cli['monitor'])
+            WINDOWS_STORE.append(window)
 
-    def activate_workspace(self, ws_id: str):
-        self.hypr.send_command(f'dispatch workspace {ws_id}')
+    def activate_workspace(self, workspace: Workspace):
+        self.hypr.send_command(f'dispatch workspace {workspace.id}')
 
-    def activate_window(self, win_id: str):
-        self.hypr.send_command(f'dispatch focuswindow address:0x{win_id}')
+    def activate_window(self, window: Window):
+        self.hypr.send_command(f'dispatch focuswindow address:0x{window.id}')
 
 
 ################################################################################
 ### Sway backend  ##############################################################
 ################################################################################
-class SwayBackend(WMBackendBase):
-    EVENTS = ['window', 'workspace']
+class SwayBackend(WindowManagerBackend):
+    sway_events = ['window', 'workspace']
 
     def __init__(self):
         """ Raise RuntimeError if sway is not available """
         super().__init__()
         self.sway = SwayService()
-        self.sway.subscribe(self.EVENTS, self._sway_events_cb)
+        self.sway.subscribe(self.sway_events, self._sway_events_cb)
         self.sway.get_tree(self._tree_cb)
 
-    def activate_workspace(self, ws_id: str):
-        if ws := WORKSPACES.get(ws_id, None):
-            self.sway.run_command(f'workspace "{ws.name}"')
+    def activate_workspace(self, workspace: Workspace):
+        self.sway.run_command(f'workspace "{workspace.name}"')
 
-    def activate_window(self, win_id: str):
-        self.sway.run_command(f'[con_id={win_id}] focus')
+    def activate_window(self, window: Window):
+        self.sway.run_command(f'[con_id={window.id}] focus')
 
     def _tree_cb(self, root_node: dict | None):
         if root_node is None:
             return
 
-        parent_monitor: Monitor | None = None
+        parent_monitor: str = ''
         parent_workspace: Workspace | None = None
-        focused_win: Window | None = None
-        focused_workspace: Workspace | None = None
 
-        MONITORS.clear()
-        WORKSPACES.clear()
-        WINDOWS.clear()
+        WORKSPACES_STORE.remove_all()
+        WINDOWS_STORE.remove_all()
+
+        self._set_active_window(None)
+        self._set_active_workspace(None)
 
         # list of nodes to precess, will be recursively filled in the loop
         nodes: list[dict] = [root_node]
@@ -229,38 +265,25 @@ class SwayBackend(WMBackendBase):
 
             # monitor
             if node['type'] == 'output':
-                if monitor := self._make_monitor(node):
-                    parent_monitor = monitor
+                parent_monitor = node.get('name', '')
 
             # workspace
             elif node['type'] == 'workspace':
                 if workspace := self._make_workspace(node):
                     parent_workspace = workspace
                     if node.get('focused', False):
-                        focused_workspace = workspace
+                        self._set_active_workspace(workspace)
 
             # window
             elif node['type'] in ('con', 'floating_con'):
-                if win := self._make_window(node, parent_monitor, parent_workspace):
+                if win := self._make_window(node, parent_monitor,
+                                            parent_workspace):
                     if node.get('focused', False):
-                        focused_win = win
+                        self._set_active_window(win.id)
 
-        # send events
-        self.emit('changed')
-        if focused_workspace:
-            self.emit('activated', focused_workspace)
-        if focused_win:
-            self.emit('activated', focused_win)
-
-    @staticmethod
-    def _make_monitor(node: dict) -> Monitor | None:
-        name = node.get('name', None)
-        if not name:
-            return None
-
-        monitor = Monitor(id=name, name=name)
-        MONITORS[monitor.id] = monitor
-        return monitor
+        # ensure a workspace is active
+        if not self.active_workspace and self.active_window.workspace_id:
+            self._set_active_workspace(self.active_window.workspace_id)
 
     @staticmethod
     def _make_workspace(node: dict) -> Workspace | None:
@@ -270,21 +293,15 @@ class SwayBackend(WMBackendBase):
         if not (wid and name and output):
             return None
 
-        workspace =  Workspace(
-            id=str(wid),
-            name=node['name'],
-            monitor_id=node['output'],
-        )
-        WORKSPACES[workspace.id] = workspace
+        workspace =  Workspace()
+        workspace.id = str(wid)
+        workspace.name = node['name']
+        workspace.monitor = node['output']
+        WORKSPACES_STORE.append(workspace)
         return workspace
 
     @staticmethod
-    def _remove_workspace(workspace_id: str):
-        if workspace_id in WORKSPACES:
-            del WORKSPACES[workspace_id]
-
-    @staticmethod
-    def _make_window(node: dict, monitor: Monitor, workspace: Workspace) -> Window | None:
+    def _make_window(node: dict, monitor: str, workspace: Workspace) -> Window | None:
         wid = node.get('id', None)
         pid = node.get('pid', None)
         if not (wid and pid):
@@ -299,20 +316,15 @@ class SwayBackend(WMBackendBase):
         # visible = node.get('visible', False)
         # urgent = node.get('urgent', False)
         # focused = node.get('focused', False)
-        window = Window(
-            id=str(wid),
-            name=app_id,
-            title=node['name'],
-            workspace_id=workspace.id,
-            monitor_id=monitor.id,
-        )
-        WINDOWS[window.id] = window
-        return window
+        window = Window()
+        window.id=str(wid)
+        window.name = app_id
+        window.title = node['name']
+        window.workspace_id = workspace.id
+        window.monitor_id = monitor
+        WINDOWS_STORE.append(window)
 
-    @staticmethod
-    def _remove_window(window_id: str):
-        if window_id in WINDOWS:
-            del WINDOWS[window_id]
+        return window
 
     def _sway_events_cb(self, event: SwayMessage):
         change = event.data.get('change', None)
@@ -322,20 +334,16 @@ class SwayBackend(WMBackendBase):
             if ws_id := str(event.data.get('current', {}).get('id', '')):
                 match change:
                     case 'focus':
-                        if ws := WORKSPACES.get(ws_id, None):
-                            self.emit('activated', ws)
+                        self._set_active_workspace(ws_id)
                     case 'init':
                         self._make_workspace(event.data['current'])
-                        self.emit('changed')
                     case 'empty':
-                        self._remove_workspace(ws_id)
-                        self.emit('changed')
+                        WORKSPACES_STORE.remove_key(ws_id)
                     case 'rename':
-                        if ws := WORKSPACES.get(ws_id, None):
+                        if ws := WORKSPACES_STORE.get(ws_id):
                             ws.name = event.data['current'].get('name', '')
-                            self.emit('changed')
                     case 'move':
-                        # refetch the whole tree
+                        # refetch the whole tree  # TODO better?
                         self.sway.get_tree(self._tree_cb)
                     case _:
                         INF('NOT MANAGED WORKSPACE CHANGE %s', change)
@@ -344,20 +352,19 @@ class SwayBackend(WMBackendBase):
             if win_id := str(event.data.get('container', {}).get('id', '')):
                 match change:
                     case 'focus':
-                        if win := WINDOWS.get(win_id, None):
-                            self.emit('activated', win)
+                        self._set_active_window(win_id)
                     case 'close':
-                        self._remove_window(win_id)
-                        self.emit('changed')
+                        WINDOWS_STORE.remove_key(win_id)
                     case 'new'|'move':
                         # NOTE: data do not contain the ws this new win belong
                         # I'm not able to create the win here, need to
                         # refetch the whole tree (async!)  grrr...
                         # self._make_window(event.data['container'], None, None)
-                        self.sway.get_tree(self._tree_cb)
+                        self.sway.get_tree(self._tree_cb)  # TODO better ??
                     case 'title':
-                        pass  # TODO
+                        if win := WINDOWS_STORE.get(win_id):
+                            win.title = event.data['container'].get('name', '')
                     case 'floating':
                         pass  # something to do?
                     case _:
-                        INF('NOT MANAGED WINDOW CHANGE %s', change)
+                        WRN('NOT MANAGED WINDOW CHANGE %s', change)

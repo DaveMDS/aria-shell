@@ -109,16 +109,16 @@ class XDGDesktopService(metaclass=Singleton):
             return Gtk.Image.new_from_icon_name(icon_name)
         return Gtk.Image.new_from_icon_name('icon-not-found')
 
-    def get_icon_for_window_class(self, class_name: str) -> Gtk.Image:
+    def get_icon_name_for_window_class(self, class_name: str) -> str:
         """ Search an icon for the given window class """
         # search an app with the given name
         app = self.search_app(class_name)
         if not app and (fixed_name := self.apps_class_map.get(class_name)):
             app = self.search_app(fixed_name)
         if app and app.icon_name and self.icon_theme.has_icon(app.icon_name):
-            return Gtk.Image.new_from_icon_name(app.icon_name)
+            return app.icon_name
         # as a fallback try in icon_theme directly
-        return Gtk.Image.new_from_icon_name(class_name)
+        return class_name
 
     def get_app(self, app_name: str) -> DesktopApp | None:
         """ Get an application by name """

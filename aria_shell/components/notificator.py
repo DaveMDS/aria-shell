@@ -180,12 +180,10 @@ class NotificationView(Gtk.Grid):
 
         # bind summary and body labels
         self.helper.safe_bind(
-            notification, 'summary', self.label1, 'label',
-            GObject.BindingFlags.SYNC_CREATE,
+            notification, 'summary', self.label1, 'label'
         )
         self.helper.safe_bind(
-            notification, 'body', self.label2, 'label',
-            GObject.BindingFlags.SYNC_CREATE,
+            notification, 'body', self.label2, 'label'
         )
         # watch properties that cannot be easily binded
         self.helper.safe_connect(

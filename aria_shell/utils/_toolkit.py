@@ -46,7 +46,7 @@ class CleanupHelper:
     def safe_bind(self,
                   source: GObject.Object, source_property: str,
                   target: GObject.Object, target_property: str,
-                  flags: GObject.BindingFlags | None = 0,
+                  flags: GObject.BindingFlags = GObject.BindingFlags.SYNC_CREATE,
                   transform_to: Callable[[GObject.Binding, ...], Any] | None = None,
                   transform_from: Callable[[GObject.Binding, ...], Any] | None = None,
                   user_data: Any = None):

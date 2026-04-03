@@ -70,5 +70,11 @@ class AriaCommands(metaclass=Singleton):
                     return 'OK'
                 raise CommandError('exiter not available')
 
+            case 'locker':
+                if self.app.locker:
+                    self.app.locker.lock()
+                    return 'OK'
+                raise CommandError('exiter not available')
+
             case _:
                 raise CommandError(f'unknown component: {params[0]}')

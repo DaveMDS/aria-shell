@@ -3,6 +3,7 @@ __CATALOG__ = {
 # Generic
 'cancel': 'Annulla',
 'lock': 'Blocca',
+'unlock': 'Sblocca',
 'suspend': 'Sospendi',
 'hibernate': 'Iberna',
 'logout': 'Esci',

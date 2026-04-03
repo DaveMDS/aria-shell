@@ -4,11 +4,9 @@
 
 > [!WARNING]
 > 
-> EARLY DEVELOPMENT STAGE
+> DEVELOPMENT STAGE
 > 
-> NOTHING TO SEE HERE ATM
-> 
-> PLEASE COME BACK IN A FEW MONTHS
+> PLEASE COME BACK IN A FEW WEEKS
 
 
 
@@ -39,6 +37,7 @@ psutil (optional, for the perf gadget)
  * [x] fully customizable from config file
  * [x] pango markup in labels and tooltips
  * [ ] panel autohide
+ * [ ] action/key to show/hide the panels
  * gadgets:
    * [x] clock: show current time and a simple calendar on click
    * [x] perf: cpu, ram, load, temps  (with top-like in popup)
@@ -49,6 +48,7 @@ psutil (optional, for the perf gadget)
      * [x] MPRIS2 for media player controls
      * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
      * [ ] show default mic volume in gadget (optional)
+     * [ ] MPD support
    * [x] tray: use (K)StatusNotifierItem protocol
      *  [x] decent DBUS Menu support (com.canonical.dbusmenu)
      *  [ ] support for pixmap icons over dbus
@@ -68,9 +68,9 @@ psutil (optional, for the perf gadget)
    * [ ] bluetooth: ???
    * [x] logout: just a button to run Aria Exiter
    * [ ] apps: fixed list of apps to run (like a dock)
-   * [ ] home: open a menu (cinnamom style) with app categories and search, AriaLauncher?
+   * [ ] home: open a menu (cinnamon style) with app categories and search, AriaLauncher?
    * [ ] fileman: filemanager in a tree of menus?
-   * [ ] places: menu with usefull location, like home, favorites, devices
+   * [ ] places: menu with usefully locations, like home, favorites, devices
    * [ ] brightness: set monitor bright....how?
 
 
@@ -82,11 +82,41 @@ psutil (optional, for the perf gadget)
 - [ ] support secondary commands (fe: Firefox new private window)
 - [ ] other search providers? es: files, websearch, ??
 
+
+## Aria locker
+- [x] a lock screen implementing the ext-session-lock-v1 protocol
+- [x] show date/time and user name/avatar
+- [ ] password authentication using PAM
+- [ ] background customizations (with same abilities as Aria Wallpaper)
+
+
 ## Aria exiter
 - [x] dialog menu to lock, suspend, hibernate, logout, reboot and shutdown
 - [x] all commands can be changed in config file
 - [x] confirm dangerous actions with an auto-expiring dialog (configurable)
 - [ ] automatic logout command. How to make logout work on every wm?
+
+
+## Aria wallpaper
+- [ ] manage the background with a gtk window (layer shell? other ways?)
+- [ ] ability to show a single background or rotate in a given folder
+- [ ] support video playback
+- [ ] support shader toys shaders from file :D
+- [ ] interactive wallpapers? how? in python?
+- [ ] image that change based on daytime (how? multiple images? any standard?)
+- [ ] logtail in wallpaper?
+
+
+## AriaNotifier
+- [x] Full-featured notification server, replace mako and friends
+- [x] Support icons and images data from DBUS
+- [x] Markup support
+- [x] Actions support (buttons inside notification)
+- [x] Support urgency in CSS
+- [ ] Sound support
+- [ ] Limit the number of visible notification somehow
+- [ ] Persistent notifications. where to show? in clock?
+
 
 ## Aria terminal
 - [x] simple persistent terminal that show/hide from the top on command
@@ -99,19 +129,7 @@ psutil (optional, for the perf gadget)
 - [ ] find more cool fonts for the default config (ship one in pkg?)
 
 
-## AriaNotifier
-- [x] Fully featured notification server, replace mako and friends
-- [x] Support icons and images data from DBUS
-- [x] Markup support
-- [x] Actions support (buttons inside notification)
-- [x] Support urgency in CSS
-- [ ] Sound support
-- [ ] Limit the number of visible notification somehow
-- [ ] Persistent notifications. where to show? in clock?
-
-
 ## Aria lockidle
-- see swaylock
 - see hypridle
 
 

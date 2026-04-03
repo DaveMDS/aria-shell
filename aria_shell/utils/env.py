@@ -1,11 +1,14 @@
 from pathlib import Path
 import os
+import pwd
 
 #
 # Environment
 UID = os.getuid()
 HOME = Path.home()
 SHELL = os.getenv('SHELL') or '/bin/sh'
+USER_INFO = pwd.getpwuid(UID)
+
 
 #
 # XDG basedir
@@ -44,3 +47,14 @@ def lookup_config_file(filename: str, prefix='aria-shell') -> Path | None:
             return file
     file = ARIA_ASSETS_DIR / filename
     return file if file.exists() else None
+
+
+def search_user_avatar() -> Path | None:
+    """Return the path of the user avatar image, if found."""
+    for path in (
+        HOME / '.face',
+        HOME / '.face.icon',
+        Path('/var/lib/AccountsService/icons') / USER_INFO.pw_name,
+    ):
+        if path.exists():
+            return path

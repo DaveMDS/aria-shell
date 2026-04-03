@@ -151,6 +151,39 @@ label.aria-exiter-button-label {
 
 
 /*==============================================================================
+ * Aria locker
+ *==============================================================================
+ * window               .aria-locker
+ * ╰─ box
+ *    ├─ image          .aria-locker-avatar
+ *    ├─ label          .aria-locker-username
+ *    ├─ label          .aria-locker-time
+ *    ├─ label          .aria-locker-date
+ *    ╰─ button         .aria-locker-unlock [.suggested-action]
+ */
+.aria-locker-avatar {
+  -gtk-icon-size: 96pt;
+ /* border:1px solid var(--aria-accent-color);
+   box-shadow: var(--aria-surface-shadow);
+   border-radius: 50%; */
+}
+.aria-locker-username {
+  color: var(--aria-accent-color);
+  font-size: 18pt;
+}
+.aria-locker-time {
+  font-size: 48pt;
+  font-weight: 500;
+}
+.aria-locker-date {
+  font-size: 24pt;
+}
+.aria-locker button {
+  margin: 24pt;
+}
+
+
+/*==============================================================================
  * Aria terminal
  *==============================================================================
  * window               .aria-terminal .aria-window

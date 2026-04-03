@@ -20,6 +20,7 @@ gi.require_version('GLib', '2.0')
 gi.require_version('Gdk', '4.0')
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
+gi.require_version('Gtk4SessionLock', '1.0')
 
 from gi.repository import Gdk, Gtk, GLib
 print(f'Python: {platform.python_version()}')
@@ -41,6 +42,7 @@ from aria_shell.components.panel import AriaPanel, PanelConfig
 from aria_shell.components.launcher import AriaLauncher
 from aria_shell.components.terminal import AriaTerminal
 from aria_shell.components.exiter import AriaExiter
+from aria_shell.components.locker import AriaLocker
 from aria_shell.components.notificator import AriaNotificator
 
 
@@ -66,6 +68,7 @@ class AriaShell(Gtk.Application):
         self.launcher: AriaLauncher | None = None
         self.terminal: AriaTerminal | None = None
         self.exiter: AriaExiter | None = None
+        self.locker: AriaLocker | None = None
 
         # monitors for config and CSS files change
         self.file_monitors: list[FileMonitor] = []
@@ -167,6 +170,7 @@ class AriaShell(Gtk.Application):
         # create instances of all components
         self.launcher = AriaLauncher(self)
         self.exiter = AriaExiter(self)
+        self.locker = AriaLocker(self)
         self.notificator = AriaNotificator(self)
         try:
             self.terminal = AriaTerminal(self)
@@ -208,6 +212,9 @@ class AriaShell(Gtk.Application):
         if self.exiter:
             self.exiter.shutdown()
             self.exiter = None
+        if self.locker:
+            self.locker.shutdown()
+            self.locker = None
         if self.notificator:
             self.notificator.shutdown()
             self.notificator = None

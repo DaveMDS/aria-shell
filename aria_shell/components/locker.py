@@ -15,6 +15,7 @@ from gi.repository import Gtk, Gdk
 from gi.repository import Gtk4SessionLock as GtkSessionLock
 
 from aria_shell.services.pam import PamService, AuthCallback
+from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils import Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.env import USER_INFO, search_user_avatar
@@ -43,6 +44,9 @@ class AriaLocker(CleanupHelper):
         super().__init__()
         INF('Initialize Aria Locker')
         self.config = AriaConfig().section('locker', LockerConfig)
+        AriaCommands().register('lock', self.the_locker_command)
+
+        self._lock_instance: GtkSessionLock.Instance | None = None
 
         if not GtkSessionLock.is_supported():
             ERR('GtkSessionLock is not supported. Locker will not work!')
@@ -60,22 +64,31 @@ class AriaLocker(CleanupHelper):
 
     def shutdown(self):
         INF('Shutting down Aria Locker')
+        AriaCommands().unregister('lock')
         super().shutdown()  # cleanup safe-connected signals
         if self._lock_instance and self._lock_instance.is_locked():
             self._lock_instance.unlock()
         self._lock_instance = None
 
-    def lock(self):
+    def the_locker_command(self, *_) -> None:
+        """Runner for the 'locker' aria command."""
+        if error := self.lock():
+            raise CommandFailed(error)
+
+    def lock(self) -> None | str:
+        """Try to lock the screen, return an error str or None if success."""
         if not self._lock_instance:
             ERR('GtkSessionLock not available, cannot lock the screen')
-            return
+            return 'GtkSessionLock not available, cannot lock the screen'
 
         INF('Sending request to lock the screen')
         if not self._lock_instance.lock():
             ERR('Cannot request screen lock')
+            return 'Cannot request screen lock'
         # FOR DEBUG (without a real lock):
         # win = LockerWindow(self)
         # win.present()
+        return None
 
     def _create_surface(self, lock: GtkSessionLock.Instance, monitor: Gdk.Monitor):
         """Called for every monitor, must assign a new surface to the given monitor."""

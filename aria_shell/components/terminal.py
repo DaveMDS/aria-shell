@@ -13,6 +13,7 @@ from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp
 from aria_shell.utils.env import HOME, SHELL
 from aria_shell.config import AriaConfig, AriaConfigModel
+from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils.logger import get_loggers
 
 
@@ -49,6 +50,7 @@ class AriaTerminal(AriaWindow):
             raise RuntimeError('Vte not available')
 
         self.conf = AriaConfig().section('terminal', TerminalConfig)
+        AriaCommands().register('terminal', self.the_terminal_command)
 
         super().__init__(
             app=app,
@@ -66,8 +68,20 @@ class AriaTerminal(AriaWindow):
 
     def shutdown(self):
         INF('Shutting down Aria Terminal')
+        AriaCommands().unregister('terminal')
         self.terminal = None
         super().shutdown()
+
+    def the_terminal_command(self, _, params: list[str]) -> None:
+        """Runner for the 'terminal' aria command."""
+        if not params or params[0] == 'toggle':
+            self.toggle()
+        elif params and params[0] == 'hide':
+            self.hide()
+        elif params and params[0] == 'show':
+            self.show()
+        else:
+            raise CommandFailed('Invalid arguments for the <terminal> command')
 
     def _toggle_fullscreen(self):
         """ Emulate fullscreen using LayerShell """

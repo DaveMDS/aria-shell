@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import argparse
-import platform
 
 # For GTK4 Layer Shell to get linked before libwayland-client
 # we must explicitly load it before importing with gi
 from ctypes import CDLL
 try:
     CDLL('libgtk4-layer-shell.so')
-except Exception as e:
-    print(f'ERROR: Cannot preload the gtk4-layer-shell library. {e}')
+except Exception as err:
+    print(f'ERROR: Cannot preload the gtk4-layer-shell library. {err}')
     raise SystemExit(1)
 
 # Check required gtk libraries
@@ -22,11 +21,12 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 gi.require_version('Gtk4SessionLock', '1.0')
 
-from gi.repository import Gdk, Gtk, GLib
-print(f'Python: {platform.python_version()}')
-print(f'PyGObject: {gi.__version__}')
-print(f'GLib {'.'.join(map(str, GLib.glib_version))}')
-print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}')
+from gi.repository import Gdk, Gtk
+# import platform
+# print(f'Python: {platform.python_version()}')
+# print(f'PyGObject: {gi.__version__}')
+# print(f'GLib {'.'.join(map(str, GLib.glib_version))}')
+# print(f'Gtk: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}')
 
 
 from aria_shell.i18n import setup_locale
@@ -36,7 +36,7 @@ from aria_shell.utils import Timer, FileMonitor
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
-from aria_shell.components.commands import AriaCommands
+from aria_shell.services.commands import AriaCommands
 from aria_shell.components.cmd_socket import AriaCommandSocket
 from aria_shell.components.panel import AriaPanel, PanelConfig
 from aria_shell.components.launcher import AriaLauncher
@@ -44,7 +44,6 @@ from aria_shell.components.terminal import AriaTerminal
 from aria_shell.components.exiter import AriaExiter
 from aria_shell.components.locker import AriaLocker
 from aria_shell.components.notificator import AriaNotificator
-
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -64,7 +63,6 @@ class AriaShell(Gtk.Application):
 
         # components instances
         self.command_socket: AriaCommandSocket | None = None
-        self.commands: AriaCommands | None = None
         self.launcher: AriaLauncher | None = None
         self.terminal: AriaTerminal | None = None
         self.exiter: AriaExiter | None = None
@@ -105,15 +103,12 @@ class AriaShell(Gtk.Application):
         Timer(0, _reload_on_next_tick)
 
     #---------------------------------------------------------------------------
-    # Gtk.Application lifecycle
+    # region: Gtk.Application lifecycle
     #---------------------------------------------------------------------------
     def _on_app_startup(self, app: Gtk.Application):
         """Startup signal is emitted exactly once on the first app instance."""
         # setup i18n locale
         setup_locale()
-
-        # init commands
-        self.commands = AriaCommands(app)
 
         # start command socket listener
         self.command_socket = AriaCommandSocket(self)
@@ -146,9 +141,10 @@ class AriaShell(Gtk.Application):
         self._shutdown_everything()
         # TODO more stuff to shutdown here? the command socket?
         INF('Bye bye o/')
+    # endregion
 
     #---------------------------------------------------------------------------
-    # Aria global setup / teardown
+    # region: Aria global setup / teardown
     #---------------------------------------------------------------------------
     def _setup_everything(self):
         INF('=========================================')
@@ -166,6 +162,9 @@ class AriaShell(Gtk.Application):
             for css_file in loaded_files:
                 monitor = FileMonitor(css_file, lambda _: self._reload_css_styles())
                 self.file_monitors.append(monitor)
+
+        # register the reload command
+        AriaCommands().register('reload', lambda c,p: self.reload())
 
         # create instances of all components
         self.launcher = AriaLauncher(self)
@@ -219,14 +218,18 @@ class AriaShell(Gtk.Application):
             self.notificator.shutdown()
             self.notificator = None
 
+        # un-register basic commands
+        AriaCommands().unregister('reload')
+
         # clear all loaded CSS styles
         self._clear_css_styles()
 
         # clear the loaded config
         self.conf.clear()
+    # endregion
 
     #---------------------------------------------------------------------------
-    # CSS styles
+    # region: CSS styles
     #---------------------------------------------------------------------------
     def _load_css_styles(self, user_css: Path | None) -> list[Path]:
         # return the list of successfully loaded files
@@ -287,9 +290,10 @@ class AriaShell(Gtk.Application):
     def _reload_css_styles(self):
         self._clear_css_styles()
         self._load_css_styles(self.args.style)
+    # endregion
 
     #---------------------------------------------------------------------------
-    # Manage monitors plugged and unplugged, create necessary Panels
+    # region: Manage monitors plugged and unplugged, create necessary Panels
     #---------------------------------------------------------------------------
     def _on_monitor_added(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()
@@ -323,3 +327,4 @@ class AriaShell(Gtk.Application):
 
                 panel = AriaPanel(panel_name, panel_conf, monitor, self)
                 self.panels.setdefault(output_name, []).append(panel)
+    # endregion

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from gi.repository import GLib, Gio, Gtk
 
-from aria_shell.components.commands import AriaCommands
+from aria_shell.services.commands import AriaCommands
 from aria_shell.utils import Singleton
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import  ARIA_RUNTIME_DIR
@@ -15,7 +15,7 @@ class AriaCommandSocket(metaclass=Singleton):
     def __init__(self, _app: Gtk.Application):
 
         self.cancellable = Gio.Cancellable()
-        self.cmds = AriaCommands()
+        self.commands = AriaCommands()
 
         socket_path = ARIA_RUNTIME_DIR / 'cmd.sock'
         socket_path.unlink(missing_ok=True)
@@ -55,10 +55,11 @@ class AriaCommandSocket(metaclass=Singleton):
             try:
                 if received := stream.read_line_finish(result)[0]:
                     # process received data (execute the aria command)
-                    response = self.cmds.run(received.decode())
+                    success, response = self.commands.run(received.decode())
+                    full_reply = f'{'OK' if success else 'ERR'} {response or ''}'
                     # send response
                     output_stream.write_bytes_async(
-                        GLib.Bytes.new(response.encode() + b'\n'),
+                        GLib.Bytes.new(full_reply.strip().encode() + b'\n'),
                         GLib.PRIORITY_DEFAULT,
                         None,
                         on_write_ready,
@@ -71,7 +72,7 @@ class AriaCommandSocket(metaclass=Singleton):
                     DBG('Client closed connection')
                     connection.close()
             except Exception as e:
-                ERR(f'Error reading from socket: {e}')
+                ERR(f'Error reading from socket: {e}', exc_info=True)
                 connection.close()
 
         # start listening for the first line

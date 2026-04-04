@@ -3,6 +3,7 @@ from operator import attrgetter
 from gi.repository import GObject, GLib, Gio, Gdk, Gtk
 
 from aria_shell.i18n import i18n
+from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
 from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp, PerfTimer
@@ -42,6 +43,7 @@ class AriaLauncher(AriaWindow):
         INF('Initialize Aria Launcher')
         # get launcher config
         self.conf = AriaConfig().section('launcher', LauncherConfig)
+        AriaCommands().register('launcher', self.the_launcher_command)
 
         # declare internal widgets
         self.list_store = Gio.ListStore()
@@ -75,12 +77,24 @@ class AriaLauncher(AriaWindow):
 
     def shutdown(self):
         INF('Shutting down Aria Launcher')
+        AriaCommands().unregister('launcher')
         # TODO shutdown properly each provider !!!!!!!!!!!
         self.providers = []
         self.list_store = None
         self.list_view = None
         self.search_entry = None
         super().shutdown()
+
+    def the_launcher_command(self, _, params: list[str]) -> None:
+        """Runner for the 'launcher' aria command."""
+        if not params or params[0] == 'toggle':
+            self.toggle()
+        elif params and params[0] == 'hide':
+            self.hide()
+        elif params and params[0] == 'show':
+            self.show()
+        else:
+            raise CommandFailed('Invalid arguments for the <launcher> command')
 
     def _populate_window(self):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

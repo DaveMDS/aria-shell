@@ -1,6 +1,6 @@
 from gi.repository import Gtk
 
-from aria_shell.components.commands import AriaCommands
+from aria_shell.services.commands import AriaCommands
 from aria_shell.utils import exec_detached
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext

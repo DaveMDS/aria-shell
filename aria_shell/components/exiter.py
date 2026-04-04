@@ -12,7 +12,7 @@ from aria_shell.i18n import i18n
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-BUTTONS = [
+DEFAULT_BUTTONS = [
     # name         icon_name          confirm
     ('lock',      'system-lock-screen', False),
     ('suspend',   'system-suspend',     False),
@@ -56,33 +56,6 @@ class ExiterConfig(AriaConfigModel):
     @staticmethod
     def validate_height(val: int):
         return clamp(val, 0, 10000)
-
-
-class ExiterButton(Gtk.Button):
-    def __init__(self, name: str, label: str, icon_name: str, command: str,
-                 want_confirm: bool, callback: Callable[[ExiterButton], None]):
-        super().__init__(has_frame=False)
-        self.add_css_class('aria-exiter-button')
-        self.name = name
-        self.label = label
-        self.command = command
-        self.want_confirm = want_confirm
-
-        icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.add_css_class('aria-exiter-button-icon')
-
-        label = Gtk.Label(label=label)
-        label.add_css_class('aria-exiter-button-label')
-
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        vbox.append(icon)
-        vbox.append(label)
-        self.set_child(vbox)
-        self.connect('clicked', callback)
-
-    def execute_command(self):
-        INF('Running %s command: %s', self.name, self.command)
-        exec_detached(self.command)
 
 
 class AriaExiter(AriaWindow):
@@ -129,7 +102,7 @@ class AriaExiter(AriaWindow):
         self.safe_connect(flow, 'child_activated', self.child_activated_cb)
         self.set_child(flow)
 
-        for name, icon, want_confirm in BUTTONS:
+        for name, icon, want_confirm in DEFAULT_BUTTONS:
             if cmd := getattr(self.config, name):
                 flow.append(
                     ExiterButton(
@@ -193,3 +166,31 @@ class AriaExiter(AriaWindow):
                 i18n(f'exiter.confirm_{button.name}2', countdown=self.countdown)
             )
             return True  # continue timer execution
+
+
+class ExiterButton(Gtk.Button):
+    def __init__(self, name: str, label: str, icon_name: str, command: str,
+                 want_confirm: bool, callback: Callable[[ExiterButton], None]):
+        super().__init__(has_frame=False)
+        self.add_css_class('aria-exiter-button')
+        self.name = name
+        self.label = label
+        self.command = command
+        self.want_confirm = want_confirm
+
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.add_css_class('aria-exiter-button-icon')
+
+        label = Gtk.Label(label=label)
+        label.add_css_class('aria-exiter-button-label')
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        vbox.append(icon)
+        vbox.append(label)
+        self.set_child(vbox)
+        self.connect('clicked', callback)
+
+    def execute_command(self):
+        INF('Running %s command: %s', self.name, self.command)
+        exec_detached(self.command)
+

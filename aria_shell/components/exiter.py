@@ -71,7 +71,11 @@ class AriaExiter(AriaWindow):
         self.timer: Timer | None = None
         self.countdown = 0
 
-        self.populate_window()
+    # lazily populate the window on 'show'
+    def do_show(self):
+        if self.get_child() is None:
+            self.populate_window()
+        AriaWindow.do_show(self)
 
     def shutdown(self):
         INF('Shutting down Aria Exiter')

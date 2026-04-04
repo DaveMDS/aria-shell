@@ -153,44 +153,47 @@ label.aria-exiter-button-label {
 /*==============================================================================
  * Aria locker
  *==============================================================================
- * window               .aria-locker [.shake]
+ * window               .aria-locker
  * ╰─ box
- *    ├─ image          .aria-locker-avatar
- *    ├─ label          .aria-locker-username
- *    ├─ label          .aria-locker-time
- *    ├─ label          .aria-locker-date
- *    ├─ entry          .aria-locker-entry [.error]
- *    ├─ label          .aria-locker-error .error
- *    ╰─ button         .aria-locker-unlock [.suggested-action]
+ *    ├─ box            .aria-locker-avatar
+ *    │  ├─ image       
+ *    │  ╰─ label       
+ *    ├─ box            .aria-locker-datetime
+ *    │  ├─ label       .aria-locker-time
+ *    │  ╰─ label       .aria-locker-date
+ *    ╰─ box            .aria-locker-auth [.shake]
+ *       ├─ entry       [.error]
+ *       ├─ label       [.error]
+ *       ├─ spinner
+ *       ╰─ button
  */
-.aria-locker-avatar {
-  -gtk-icon-size: 96pt;
- /* border:1px solid var(--aria-accent-color);
-   box-shadow: var(--aria-surface-shadow);
-   border-radius: 50%; */
+.aria-locker > box > box {
+  margin: 8pt 0;
 }
-.aria-locker-username {
+.aria-locker-avatar image {
+  -gtk-icon-size: 96pt;
+   /*border: 2px solid var(--aria-accent-color);
+   box-shadow: var(--aria-surface-shadow);
+   border-radius: 50%;*/
+}
+.aria-locker-avatar label {
   color: var(--aria-accent-color);
   font-size: 18pt;
 }
 .aria-locker-time {
   font-size: 48pt;
   font-weight: 500;
-  margin-top: 12pt;
 }
 .aria-locker-date {
   font-size: 20pt;
 }
-.aria-locker-entry {
+.aria-locker-auth > * {
+  margin: 8pt 0;
+}
+.aria-locker-auth entry {
   min-width: 200pt;
-  margin-top: 32pt;
-  margin-bottom: 4pt;
 }
-.aria-locker-unlock {
-  margin: 8pt;
-}
-
-.aria-locker.shake > box {
+.aria-locker-auth.shake {
   animation: locker-shake-animation 500ms linear;
 }
 @keyframes locker-shake-animation {

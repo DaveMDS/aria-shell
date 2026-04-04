@@ -106,7 +106,7 @@ class AriaLocker(CleanupHelper):
         PamService().authenticate(USER_INFO.pw_name, password, _auth_done)
 
 
-class LockerWindow(CleanupHelper, Gtk.Window):
+class LockerWindow(Gtk.Window):
     """
     This is the surface that will be placed on every monitor.
     """
@@ -115,11 +115,6 @@ class LockerWindow(CleanupHelper, Gtk.Window):
         self.add_css_class('aria-locker')
         self.locker = locker
 
-        self.entry: Gtk.PasswordEntry
-        self.button: Gtk.Button
-        self.spinner: Gtk.Spinner
-        self.error: Gtk.Label
-
         # main vertical container
         vbox = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
@@ -127,14 +122,26 @@ class LockerWindow(CleanupHelper, Gtk.Window):
         )
 
         # show decoration widgets on request
-        if locker.config.show_avatar:
-            vbox.append(AvatarWidget())
-        if locker.config.show_username:
-            vbox.append(UsernameWidget())
-        if locker.config.show_time:
-            vbox.append(TimeWidget(locker.config))
-        if locker.config.show_date:
-            vbox.append(DateWidget(locker.config))
+        if locker.config.show_avatar or locker.config.show_username:
+            vbox.append(UserWidget(locker.config))
+        if locker.config.show_time or locker.config.show_date:
+            vbox.append(DateTimeWidget(locker.config))
+
+        # always show the entry + unlock button
+        auth = AuthWidget(locker)
+        vbox.append(auth)
+
+        # show the box and set the button to be activated on Enter
+        self.set_child(vbox)
+        self.set_default_widget(auth.button)
+
+
+class AuthWidget(CleanupHelper, Gtk.Box):
+    """Show password entry, unlock button, the spinner and the error."""
+    def __init__(self, locker: AriaLocker):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.add_css_class('aria-locker-auth')
+        self.locker = locker
 
         # password entry
         self.entry = Gtk.PasswordEntry(
@@ -143,27 +150,23 @@ class LockerWindow(CleanupHelper, Gtk.Window):
             show_peek_icon=True,
             visible=False,
         )
-        self.entry.add_css_class('aria-locker-entry')
-        self.safe_connect(self.entry, 'changed',
-                          lambda _: self.set_error(None))
-        vbox.append(self.entry)
+        self.safe_connect(self.entry, 'changed', lambda _: self.set_error(None))
+        self.append(self.entry)
 
         # error label
         self.error = Gtk.Label(visible=False)
-        self.error.add_css_class('aria-locker-error')
         self.error.add_css_class('error')
-        vbox.append(self.error)
+        self.append(self.error)
 
         # waiting spinner
         self.spinner = Gtk.Spinner(visible=False)
-        vbox.append(self.spinner)
+        self.append(self.spinner)
 
         # unlock button
         self.button = Gtk.Button(label=i18n('locker.unlock'), halign=Gtk.Align.CENTER)
         self.button.add_css_class('suggested-action')
-        self.button.add_css_class('aria-locker-unlock')
         self.safe_connect(self.button, 'clicked', self.unlock_clicked_cb)
-        vbox.append(self.button)
+        self.append(self.button)
 
         # show the password entry if needed, or an error if PAM not available
         if locker.config.password_prompt:
@@ -172,8 +175,10 @@ class LockerWindow(CleanupHelper, Gtk.Window):
             else:
                 self.set_error(i18n('locker.missing_pam'))
 
-        self.set_child(vbox)
-        self.set_default_widget(self.button)
+    def do_unmap(self):
+        self.locker = None
+        CleanupHelper.shutdown(self)
+        Gtk.Box.do_unmap(self)
 
     def unlock_clicked_cb(self, _button):
         self.entry.set_sensitive(False)
@@ -208,66 +213,59 @@ class LockerWindow(CleanupHelper, Gtk.Window):
             self.error.set_label(text)
             self.error.show()
 
-    def do_unmap(self):
-        self.locker = None
-        CleanupHelper.shutdown(self)
-        Gtk.Window.do_unmap(self)
 
-
-class AvatarWidget(Gtk.Image):
-    """Show the user avatar."""
-    def __init__(self):
-        super().__init__(halign=Gtk.Align.CENTER)
-        self.set_overflow(Gtk.Overflow.HIDDEN)
+class UserWidget(Gtk.Box):
+    """Show the avatar and the username."""
+    def __init__(self, config: LockerConfig):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self.add_css_class('aria-locker-avatar')
 
-        if avatar := search_user_avatar():
-            self.set_from_file(avatar.as_posix())
-        else:
-            self.set_from_icon_name('avatar-default')  # avatar-default-symbolic?
+        if config.show_avatar:
+            img = Gtk.Image(halign=Gtk.Align.CENTER, overflow=Gtk.Overflow.HIDDEN)
+            if avatar := search_user_avatar():
+                img.set_from_file(avatar.as_posix())
+            else:
+                img.set_from_icon_name('avatar-default')  # avatar-default-symbolic?
+            self.append(img)
+
+        if config.show_username:
+            lbl = Gtk.Label(label=USER_INFO.pw_gecos or USER_INFO.pw_name)
+            self.append(lbl)
 
 
-class UsernameWidget(Gtk.Label):
-    """Show the username."""
-    def __init__(self):
-        super().__init__()
-        self.add_css_class('aria-locker-username')
-        self.set_label(USER_INFO.pw_gecos or USER_INFO.pw_name)
-
-
-class TimeWidget(Gtk.Label):
-    """Show the current time."""
+class DateTimeWidget(Gtk.Box):
+    """Show the time and the date."""
     def __init__(self, config: LockerConfig):
-        super().__init__()
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.add_css_class('aria-locker-datetime')
         self.config = config
-        self.add_css_class('aria-locker-time')
-        self._timer = Timer(1, self._tick, immediate=True)
+        self.time_label: Gtk.Label | None = None
+        self.date_label: Gtk.Label | None = None
+
+        if config.show_time:
+            self.time_label = Gtk.Label()
+            self.time_label.add_css_class('aria-locker-time')
+            self.append(self.time_label)
+
+        if config.show_date:
+            self.date_label = Gtk.Label()
+            self.date_label.add_css_class('aria-locker-date')
+            self.append(self.date_label)
+
+        self.timer = Timer(1, self._tick, immediate=True)
 
     def _tick(self) -> bool:
-        text = datetime.now().strftime(self.config.time_format)
-        self.set_text(text)
+        now = datetime.now()
+        if self.time_label:
+            text = now.strftime(self.config.time_format)
+            self.time_label.set_text(text)
+        if self.date_label:
+            text = now.strftime(self.config.date_format)
+            self.date_label.set_text(text)
         return True
 
     def do_unmap(self):
-        self._timer.stop()
-        self._timer = None
-        Gtk.Label.do_unmap(self)
-
-
-class DateWidget(Gtk.Label):
-    """Show the current date."""
-    def __init__(self, config: LockerConfig):
-        super().__init__()
-        self.add_css_class('aria-locker-date')
-        self.config = config
-        self._timer = Timer(60, self._timer_tick, immediate=True)
-
-    def _timer_tick(self) -> bool:
-        text = datetime.now().strftime(self.config.date_format)
-        self.set_text(text)
-        return True
-
-    def do_unmap(self):
-        self._timer.stop()
-        self._timer = None
-        Gtk.Label.do_unmap(self)
+        if self.timer:
+            self.timer.stop()
+            self.timer = None
+        Gtk.Box.do_unmap(self)

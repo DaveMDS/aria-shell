@@ -12,25 +12,17 @@ from aria_shell.i18n import i18n
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-DEFAULT_BUTTONS = [
-    # name         icon_name          confirm
-    ('lock',      'system-lock-screen', False),
-    ('suspend',   'system-suspend',     False),
-    ('hibernate', 'system-hibernate',   False),
-    ('logout',    'system-log-out',     True),
-    ('reboot',    'system-reboot',      True),
-    ('shutdown',  'system-shutdown',    True),
-]
+DEFAULT_ICONS = {
+    'lock':      'system-lock-screen',
+    'suspend':   'system-suspend',
+    'hibernate': 'system-hibernate',
+    'logout':    'system-log-out',
+    'reboot':    'system-reboot',
+    'shutdown':  'system-shutdown',
+}
 
 
 class ExiterConfig(AriaConfigModel):
-    lock: str = None
-    suspend: str = None
-    hibernate: str = None
-    logout: str = None
-    reboot: str = None
-    shutdown: str = None
-
     columns: int = 3
     ask_confirm: bool = True
     confirm_timeout: int = 30
@@ -102,18 +94,26 @@ class AriaExiter(AriaWindow):
         self.safe_connect(flow, 'child_activated', self.child_activated_cb)
         self.set_child(flow)
 
-        for name, icon, want_confirm in DEFAULT_BUTTONS:
-            if cmd := getattr(self.config, name):
-                flow.append(
-                    ExiterButton(
-                        name=name,
-                        label=i18n(name),
-                        icon_name=icon,
-                        command=cmd,
-                        want_confirm=want_confirm,
-                        callback=self.button_callback,
-                    )
-                )
+        # populate from untyped options in config file
+        for name, command in self.config.options.items():
+            if name.endswith('-icon'):
+                continue
+            # commands that start with "!" want a confirm dialog
+            if want_confirm := command.startswith('!'):
+                command = command[1:].strip()
+
+            # get icon name from the user option 'name-icon' or from the default map
+            icon = self.config.options.get(f'{name}-icon', DEFAULT_ICONS.get(name, None))
+
+            # create the button
+            flow.append(ExiterButton(
+                name=name,
+                label=i18n(name),
+                icon_name=icon,
+                command=command,
+                want_confirm=want_confirm,
+                callback=self.button_callback,
+            ))
 
     def child_activated_cb(self, _flow: Gtk.FlowBox, child: Gtk.FlowBoxChild):
         self.button_callback(child.get_child())  # noqa  (pycharm error?)

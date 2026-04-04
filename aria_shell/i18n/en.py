@@ -11,7 +11,7 @@ __CATALOG__ = {
 },
 
 # Generic
-'cancel': 'Cancel ***',
+'cancel': 'Cancel',
 'lock': 'Lock',
 'suspend': 'Suspend',
 'hibernate': 'Hibernate',

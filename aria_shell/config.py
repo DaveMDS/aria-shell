@@ -13,7 +13,9 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class AriaConfigModel:
-    """ Base class for annotated config sections """
+    """
+    Base class for annotated config sections.
+    """
     def __init__(self, conf_data: Mapping[str, str]):
         # Config classes must be annotated
         try:
@@ -21,10 +23,12 @@ class AriaConfigModel:
         except TypeError:
             return
 
+        self._untyped_options: dict[str, str] = {}
+
         # fill the class with values in conf_data, validating using annotation
         for key, str_val in conf_data.items():
             if not hasattr(self, key):
-                WRN(f"Invalid key '{key}' in config {self.__class__.__name__}")
+                self._untyped_options[key] = str_val
                 continue
 
             # empty values are ignored
@@ -83,15 +87,23 @@ class AriaConfigModel:
             # store the validated value
             setattr(self, key, val)
 
+    @property
+    def options(self) -> dict[str, str]:
+        """The dict of all extra (untyped) options."""
+        return self._untyped_options
+
     def dump(self):
-        """ for debugging purpose only """
+        """For debugging purpose only."""
         print(self)
         for key in dir(self):
             if key[0] != '_':
                 val = getattr(self, key)
-                if not callable(val):  # skip methods
-                    print(f'  {key} = {repr(val)}')
-
+                if not callable(val) and key != 'options':  # skip methods and options
+                    print(f'  {key} = {repr(val)} ({type(val).__name__})')
+        if self._untyped_options:
+            print('  Extra options:')
+            for key, val in self._untyped_options.items():
+                print(f'    {key} = {repr(val)}')
 
 class AriaConfigGeneralModel(AriaConfigModel):
     """ Model for the [general] main section """
@@ -108,12 +120,12 @@ class AriaConfig(metaclass=Singleton):
     """ Main configuration for AriaShell, from config file """
     def __init__(self):
         self._parser = configparser.ConfigParser(
-            strict=False,
             empty_lines_in_values=False,
             interpolation=None,
             comment_prefixes=('#',),
             inline_comment_prefixes=('#',),
         )
+        self._parser.optionxform = str  # do not lowercase the keys!
         self._general: AriaConfigGeneralModel | None = None
 
     def load_conf(self, config_file: Path = None) -> Path:

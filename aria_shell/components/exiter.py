@@ -6,7 +6,7 @@ from aria_shell.ui import AriaWindow, AriaDialog
 from aria_shell.utils import clamp, exec_detached, Timer
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
-from aria_shell.i18n import i18n
+from aria_shell.i18n import i18n, MissingTranslation
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -127,9 +127,14 @@ class AriaExiter(AriaWindow):
 
     def make_confirm_dialog(self, button: ExiterButton):
         self.cleanup_and_close_confirm_dialog()
+        try:
+            heading = i18n(f'exiter.confirm_{button.name}1', fail=True)
+        except MissingTranslation:
+            heading = i18n(f'exiter.confirm_generic1')
+
         self.dialog = AriaDialog(
             parent=self,
-            heading=i18n(f'exiter.confirm_{button.name}1'),
+            heading=heading,
             buttons=[i18n('cancel'), i18n(button.name)],
             callback=self.confirm_dialog_response,
             button=button,
@@ -162,9 +167,13 @@ class AriaExiter(AriaWindow):
             return False  # stop timer execution
         else:
             # update the countdown in the dialog
-            dialog.set_body(
-                i18n(f'exiter.confirm_{button.name}2', countdown=self.countdown)
-            )
+            try:
+                body = i18n(f'exiter.confirm_{button.name}2',
+                            fail=True, countdown=self.countdown)
+            except MissingTranslation:
+                body = i18n(f'exiter.confirm_generic2',
+                            countdown=self.countdown)
+            dialog.set_body(body)
             return True  # continue timer execution
 
 

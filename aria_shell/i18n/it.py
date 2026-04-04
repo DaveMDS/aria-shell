@@ -25,6 +25,8 @@ __CATALOG__ = {
 'exiter.confirm_reboot2': 'Il computer si riavvierà automaticamente in ${countdown} secondi.',
 'exiter.confirm_shutdown1': 'Sei sicuro di voler spegner il computer?',
 'exiter.confirm_shutdown2': 'Il computer si spegnerà automaticamente in ${countdown} secondi.',
+'exiter.confirm_generic1': 'Sei sicuro?',
+'exiter.confirm_generic2': 'L\'operazione partirà automaticamente in ${countdown} secondi.',
 
 # Themes
 'themes.light': 'Usa tema chiaro',

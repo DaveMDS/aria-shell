@@ -35,6 +35,8 @@ __CATALOG__ = {
 'exiter.confirm_reboot2': 'The computer will reboot automatically in ${countdown} seconds.',
 'exiter.confirm_shutdown1': 'Are you sure you want to shutdown?',
 'exiter.confirm_shutdown2': 'The computer will poweroff automatically in ${countdown} seconds.',
+'exiter.confirm_generic1': 'Are you sure?',
+'exiter.confirm_generic2': 'The action will start automatically in ${countdown} seconds.',
 
 # Themes
 'themes.light': 'Use light theme',

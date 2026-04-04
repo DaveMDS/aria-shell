@@ -1,13 +1,4 @@
-import importlib
-import locale
-from os import getenv
-from string import Template
-
-from aria_shell.utils.logger import get_loggers
-
-from .en import __CATALOG__ as __EN_CATALOG__
-
-""" 
+"""
 Super simple internationalization for the AriaShell
 
 Basically a stripped-down version of python-i18n on pypi (thanks!)
@@ -24,6 +15,15 @@ catalog format:
 },
 'it': { etc... }
 """
+import importlib
+import locale
+from os import getenv
+from string import Template
+
+from aria_shell.utils.logger import get_loggers
+
+from .en import __CATALOG__ as __EN_CATALOG__
+
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
@@ -48,8 +48,18 @@ def setup_locale():
         WRN(f'Cannot detect system locale, using default translations')
 
 
-def i18n(key: str, lang: str = None, **kwargs) -> str:
-    """ Translate the given key """
+class MissingTranslation(Exception):
+    pass
+
+
+def i18n(key: str, lang: str = None, fail=False, **kwargs) -> str:
+    """
+    Translate the given `key` using `lang` or the system locale.
+    Raise:
+        MissingTranslation if `fail` is True.
+    Return:
+        The translated string, or `key` if `fail` is False
+    """
     if lang is None:
         lang = CURRENT_LANG
 
@@ -64,7 +74,9 @@ def i18n(key: str, lang: str = None, **kwargs) -> str:
     # search the translated key in 'lang' catalog, fallback to 'en'
     trans = _CATALOG.get(lang, {}).get(key) or \
             _CATALOG.get(DEFAULT_LANG, {}).get(key)
-    if not trans:
+    if not trans and fail:
+        raise MissingTranslation
+    elif not trans:
         return key
 
     # handle pluralization

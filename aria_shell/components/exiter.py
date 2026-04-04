@@ -202,5 +202,10 @@ class ExiterButton(Gtk.Button):
 
     def execute_command(self):
         INF('Running %s command: %s', self.name, self.command)
-        exec_detached(self.command)
-
+        if self.command.startswith('aria '):
+            # run an aria command
+            cmd = self.command[5:].strip()
+            AriaCommands().run(cmd)
+        else:
+            # or execute a process
+            exec_detached(self.command)

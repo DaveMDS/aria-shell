@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from gi.repository import GLib, Gio, Gtk
 
 from aria_shell.services.commands import AriaCommands

@@ -9,8 +9,6 @@ https://pipewire.pages.freedesktop.org/wireplumber/
 https://github.com/Alexays/Waybar/blob/master/src/modules/wireplumber.cpp
 
 """
-from __future__ import annotations
-
 try:
     import gi
     gi.require_version('Wp', '0.5')  # WirePlumber API

@@ -5,6 +5,7 @@ from gi.repository import Gtk
 from aria_shell.ui import AriaWindow, AriaDialog
 from aria_shell.utils import clamp, exec_detached, Timer
 from aria_shell.config import AriaConfig, AriaConfigModel
+from aria_shell.components.commands import AriaCommands
 from aria_shell.utils.logger import get_loggers
 from aria_shell.i18n import i18n, MissingTranslation
 

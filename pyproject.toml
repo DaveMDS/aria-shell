@@ -1,6 +1,6 @@
 [project]
 name = 'aria-shell'
-description = 'A full, user-friendly, slim and configurable shell for Wayland'
+description = 'A full-featured, user-friendly, slim and customizable shell for Wayland'
 version = '0.0.1'
 
 authors = [
@@ -27,13 +27,16 @@ readme = 'README.md'
 
 requires-python = '>=3.14'
 dependencies = [
-    'PyGObject >= 3.50.0',
+    'PyGObject >= 3.54.0',
     'dasbus >= 1.7',
 ]
 
 [project.optional-dependencies]
 perf-gadget = ['psutil >= 7.0.0']
-development = ['PyGObject-stubs', 'pytest']
+aria-locker = ['python-pam >= 2.0.0']
+
+[dependency-groups]
+develop = ['PyGObject-stubs', 'pytest']
 
 
 [build-system]

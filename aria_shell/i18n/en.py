@@ -1,5 +1,6 @@
 __CATALOG__ = {
 
+# Tests
 'hi': 'Hello ${name} !',
 'fall': 'EN Fallback OK',
 'test_count': 'test ${count} missing',
@@ -12,7 +13,6 @@ __CATALOG__ = {
 # Generic
 'cancel': 'Cancel ***',
 'lock': 'Lock',
-'unlock': 'Unlock',
 'suspend': 'Suspend',
 'hibernate': 'Hibernate',
 'logout': 'Logout',
@@ -21,6 +21,12 @@ __CATALOG__ = {
 
 # Launcher
 'launcher.search': 'Type to search...',
+
+# locker
+'locker.unlock': 'Unlock',
+'locker.enter_password': 'Enter password',
+'locker.auth_failed': 'Authentication failed',
+'locker.missing_pam': 'PAM not available, cannot authenticate user password!',
 
 # Exiter
 'exiter.confirm_logout1': 'Are you sure you want to logout?',

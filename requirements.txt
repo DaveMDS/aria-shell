@@ -5,3 +5,6 @@ dasbus >= 1.7
 
 # perf gadget:
 psutil >= 7.0.0
+
+# aria locker
+python-pam >= 2.0.0

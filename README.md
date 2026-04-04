@@ -86,7 +86,7 @@ psutil (optional, for the perf gadget)
 ## Aria locker
 - [x] a lock screen implementing the ext-session-lock-v1 protocol
 - [x] show date/time and user name/avatar
-- [ ] password authentication using PAM
+- [x] password authentication using PAM
 - [ ] background customizations (with same abilities as Aria Wallpaper)
 
 

@@ -3,7 +3,6 @@ __CATALOG__ = {
 # Generic
 'cancel': 'Annulla',
 'lock': 'Blocca',
-'unlock': 'Sblocca',
 'suspend': 'Sospendi',
 'hibernate': 'Iberna',
 'logout': 'Esci',
@@ -12,6 +11,12 @@ __CATALOG__ = {
 
 # Launcher
 'launcher.search': 'Digita per cercare...',
+
+# locker
+'locker.unlock': 'Sblocca',
+'locker.enter_password': 'Inserisci password',
+'locker.auth_failed': 'Autenticazione fallita',
+'locker.missing_pam': 'PAM non disponibile, impossibile autenticare la password!',
 
 # Exiter
 'exiter.confirm_logout1': 'Sei sicuro di voler uscire?',

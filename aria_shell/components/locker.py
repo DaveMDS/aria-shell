@@ -194,9 +194,9 @@ class LockerWindow(CleanupHelper, Gtk.Window):
             self.entry.set_text('')
             self.entry.grab_focus()
             self.set_error(i18n('locker.auth_failed'))
-            # make the entry shake in CSS (for 1 sec max)
-            self.entry.add_css_class('shake')
-            Timer(1, lambda: self.entry.remove_css_class('shake'))
+            # make the shake animation in CSS (for 1 sec max)
+            self.add_css_class('shake')
+            Timer(1, lambda: self.remove_css_class('shake'))
 
     def set_error(self, text: str | None):
         if text is None:

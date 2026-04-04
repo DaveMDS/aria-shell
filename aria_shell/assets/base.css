@@ -153,13 +153,13 @@ label.aria-exiter-button-label {
 /*==============================================================================
  * Aria locker
  *==============================================================================
- * window               .aria-locker
+ * window               .aria-locker [.shake]
  * ╰─ box
  *    ├─ image          .aria-locker-avatar
  *    ├─ label          .aria-locker-username
  *    ├─ label          .aria-locker-time
  *    ├─ label          .aria-locker-date
- *    ├─ entry          .aria-locker-entry .error [.shake]
+ *    ├─ entry          .aria-locker-entry [.error]
  *    ├─ label          .aria-locker-error .error
  *    ╰─ button         .aria-locker-unlock [.suggested-action]
  */
@@ -186,13 +186,13 @@ label.aria-exiter-button-label {
   margin-top: 32pt;
   margin-bottom: 4pt;
 }
-.aria-locker-entry.shake {
-  animation: locker-shake-animation 500ms linear;
-}
-.aria-locker button {
+.aria-locker-unlock {
   margin: 8pt;
 }
 
+.aria-locker.shake > box {
+  animation: locker-shake-animation 500ms linear;
+}
 @keyframes locker-shake-animation {
   0% { transform: translateX(0); }
   12.5% { transform: translateX(-12px); }

@@ -1,9 +1,10 @@
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk
 
+from aria_shell.ui import AriaBox
 from aria_shell.utils import CleanupHelper
 
 
-class AriaGadget(CleanupHelper, Gtk.Box):
+class AriaGadget(CleanupHelper, AriaBox):
     """
     Base class for all gadgets
     A gadget is a Gtk.Widget that can be placed in panels, docks, etc...
@@ -13,9 +14,6 @@ class AriaGadget(CleanupHelper, Gtk.Box):
         self.add_css_class('aria-gadget')
         self.add_css_class(f'gadget-{name}')
         self.name = name
-
-        # keep track of signals registered using safe_connect()
-        self._signal_handlers: list[tuple[GObject.Object, int]] = []
 
         if clickable:
             self.set_cursor_from_name('pointer')

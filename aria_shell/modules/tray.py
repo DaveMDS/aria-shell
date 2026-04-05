@@ -14,11 +14,12 @@ from dasbus.client.proxy import disconnect_proxy
 
 from gi.repository import Gtk, GObject, GLib, Graphene
 
-from aria_shell.utils import IndexedListStore
-from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
+from aria_shell.ui import AriaPopover
+from aria_shell.utils import IndexedListStore, CleanupHelper
+from aria_shell.utils.logger import get_loggers
 from aria_shell.services.dbus_menu import CanonicalDBusMenu
 
 
@@ -51,71 +52,37 @@ class TrayModule(AriaModule):
 
 class TrayGadget(AriaGadget):
     """
-    The Tray gadget use a Gkt.ListView to show TrayIcon items.
+    The Tray gadget use the base AriaBox of AriaGadget to show TrayIcon items.
     """
-    def __init__(self, conf: TrayConfigModel):
+    def __init__(self, _conf: TrayConfigModel):
         super().__init__('tray')
-
-        factory = Gtk.SignalListItemFactory()
-        factory.connect('setup', self._factory_item_setup)
-        factory.connect('bind', self._factory_item_bind)
-        factory.connect('unbind', self._factory_item_unbind)
-
-        model = Gtk.NoSelection(model=ITEMS_STORE)
-        list_view = Gtk.ListView(
-            model=model,
-            factory=factory,
-            orientation=Gtk.Orientation.HORIZONTAL,
-        )
-        self.append(list_view)
-
-    @staticmethod
-    def _factory_item_setup(_, list_item: Gtk.ListItem):
-        """ create a new item for the list item """
-        # create a new TrayIcon and attach to ListItem
-        list_item.set_child(TrayIcon())
-        list_item.set_activatable(False)
-        list_item.set_selectable(False)
-
-    @staticmethod
-    def _factory_item_bind(_, list_item: Gtk.ListItem):
-        """ bind the previously created TrayIcon with the StatusNotifierItem """
-        item: StatusNotifierItem = list_item.get_item()  # noqa
-        tico: TrayIcon = list_item.get_child()  # noqa
-        tico.bind(item)
-
-    @staticmethod
-    def _factory_item_unbind(_, list_item: Gtk.ListItem):
-        """ unbind the previously binded StatusNotifierItem """
-        tico: TrayIcon = list_item.get_child()  # noqa
-        tico.unbind()
+        self.bind_model(ITEMS_STORE, TrayIcon)
 
 
-class TrayIcon(Gtk.Overlay):
+class TrayIcon(CleanupHelper, Gtk.Overlay):
     """
     A Gtk.Widget that is able to show a single StatusNotifierItem object.
     """
     __gtype_name__ = 'TrayIcon'
 
-    def __init__(self):
-        super().__init__(css_classes=['aria-tray-item'])
+    def __init__(self, sni: StatusNotifierItem):
+        super().__init__()
+        self.add_css_class('aria-tray-item')
+        self.set_cursor_from_name('pointer')
+        self.sni = sni
+
+        # NOTE we should inherit directly from Image(), but the Popover get
+        #      wrong sizes if attached to the image... :/
         self.image = Gtk.Image()
         self.set_child(self.image)
 
-        self._binds: list[GObject.Binding] = []
-        self._sni: StatusNotifierItem | None = None
-
-        self.set_cursor_from_name('pointer')  # TODO giusto? ci piace?
-
-        # PopoverMenu
+        # PopoverMenu will be created lazily only when needed
         self.menu_model: CanonicalDBusMenu | None = None
-        self.popover_menu = Gtk.PopoverMenu()
-        self.popover_menu.connect('closed', self.on_menu_closed)
-        self.popover_menu.set_parent(self)
+        self.popover_menu: AriaPopover | None = None
 
         # EventController to receive mouse clicks
         ec = Gtk.GestureSingle(button=0)
-        ec.connect('begin', self._on_mouse_down)
+        self.safe_connect(ec, 'begin', self._on_mouse_down)
         self.add_controller(ec)
 
         # EventController to receive mouse wheel events
@@ -123,85 +90,73 @@ class TrayIcon(Gtk.Overlay):
             Gtk.EventControllerScrollFlags.VERTICAL
             | Gtk.EventControllerScrollFlags.DISCRETE
         )
-        ec.connect('scroll', self._on_scroll)
+        self.safe_connect(ec, 'scroll', self._on_scroll)
         self.add_controller(ec)
 
-    def bind(self, item: 'StatusNotifierItem'):
-        # print('BIND', self)
-        if self._binds is not None:  # should never happen
-            self.unbind()
-        self._binds.append(
-            item.bind_property(
-               'icon_name', self.image, 'icon_name',
-                GObject.BindingFlags.SYNC_CREATE,
-            )
-        )
-        self._binds.append(
-            item.bind_property(
-                'tooltip', self, 'tooltip_markup',
-                GObject.BindingFlags.SYNC_CREATE,
-            )
-        )
-        self._sni = item
+        # bind properties from the sni object
+        self.safe_bind(sni, 'icon_name', self.image, 'icon_name')
+        self.safe_bind(sni, 'tooltip', self, 'tooltip_markup')
 
-    def unbind(self):
-        # print('UNBIND', self)
-        while self._binds and (bind := self._binds.pop()):
-            bind.unbind()
-        self._sni = None
+    def do_unmap(self):
+        self.sni = None
+        self.image = None
+        if self.popover_menu:
+            self.popover_menu.popdown()
+            self.popover_menu = None
+        if self.menu_model:
+            self.menu_model.destroy()
+            self.menu_model = None
+        CleanupHelper.shutdown(self)
+        Gtk.Overlay.do_unmap(self)
 
     def _on_scroll(self, _ec: Gtk.EventControllerScroll, dx: float, dy: float):
-        if self._sni:
+        if self.sni:
             if dy != 0:
-                self._sni.scroll(int(dy), 'vertical')
+                self.sni.scroll(int(dy), 'vertical')
             elif dx != 0:
-                self._sni.scroll(int(dx), 'horizontal')
+                self.sni.scroll(int(dx), 'horizontal')
 
     def _on_mouse_down(self, ec: Gtk.GestureSingle, _):
         # ...ok, on wayland is not really possible to get absolute pos
         # needed by Activate. Will use point relative to the parent win.
         # When the panel is on top this should work more or less...
-        if self._sni:
+        if self.sni:
             win = self.get_native()
             _, x, y = ec.get_point()
             _, p = self.compute_point(win, Graphene.Point(x, y)) # noqa
             x, y, btn = int(x), int(y), ec.get_current_button()
             # print(f"{x=} {y=} {btn=} {p.x=} {p.y=}")
-            if btn == 3 or (btn == 1 and self._sni.item_is_menu):
-                if self._sni.menu:
-                    if self.popover_menu.get_menu_model():
-                        self.hide_menu()
+            if btn == 3 or (btn == 1 and self.sni.item_is_menu):
+                if self.sni.menu:
+                    if self.popover_menu:
+                        self.popover_menu.popdown()
                     else:
-                        self.show_menu()
+                        self.build_popover()
                 else:
-                    self._sni.context_menu(x, y)
+                    self.sni.context_menu(x, y)
             elif btn == 1:
-                self._sni.activate(x, y)
+                self.sni.activate(x, y)
             elif btn == 2:
-                self._sni.secondary_activate(x, y)
+                self.sni.secondary_activate(x, y)
 
-    def show_menu(self):
+    def build_popover(self):
         self.menu_model = CanonicalDBusMenu(
-            service_name=self._sni.bus_name,
-            object_path=self._sni.menu,
-            parent_widget=self.popover_menu,
+            service_name=self.sni.bus_name,
+            object_path=self.sni.menu,
+            parent_widget=self,
         )
-        self.popover_menu.set_menu_model(self.menu_model)
-        self.popover_menu.popup()
+        self.popover_menu = AriaPopover(
+            parent=self,
+            content=self.menu_model,
+            callback=self.on_popover_closed
+        )
 
-    def hide_menu(self):
-        self.popover_menu.popdown()
-
-    def on_menu_closed(self, menu: Gtk.PopoverMenu):
-        # destroy the menu model on the next tick, the clicked action
-        # has not been called yet
-        GLib.timeout_add(0, self.menu_model_delayed_destroy)
-
-    def menu_model_delayed_destroy(self):
-        self.popover_menu.set_menu_model(None)
+    def on_popover_closed(self, _menu: Gtk.PopoverMenu):
         if self.menu_model:
             self.menu_model.destroy()
             self.menu_model = None
+        if self.popover_menu:
+            self.popover_menu = None
 
 
 #-------------------------------------------------------------------------------

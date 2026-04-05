@@ -227,10 +227,10 @@ class AriaPopover:
     """
     def __init__(self,
                  parent: Gtk.Widget,
-                 content: Gtk.Widget | Gio.Menu = None,
+                 content: Gtk.Widget | Gio.MenuModel = None,
                  callback: Callable[..., None] = None,
                  *args, **kwargs):
-        if isinstance(content, Gio.Menu):
+        if isinstance(content, Gio.MenuModel):
             popover = Gtk.PopoverMenu.new_from_model(content)
         else:
             popover = Gtk.Popover()
@@ -253,16 +253,15 @@ class AriaPopover:
 
     def _on_closed(self, _popover):
         # destroy on next tick, to let the menu actions execute...
-        # Timer(0, self._on_closed_delayed)
         GLib.idle_add(self._on_closed_delayed)
 
     def _on_closed_delayed(self) -> bool:
-        # call user callback fi provided
+        # call user callback if provided
         callback, args, kwargs = self._cb_info
         if callable(callback):
             callback(self, *args, **kwargs)
 
-        # detach child from the popover
+        # release children from the popover
         if isinstance(self._popover, Gtk.PopoverMenu):
             self._popover.set_menu_model(None)
         else:

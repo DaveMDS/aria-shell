@@ -53,7 +53,7 @@ class AriaShell(Gtk.Application):
     def __init__(self, args: argparse.Namespace):
         super().__init__(application_id='it.gurumeditation.aria-shell')
         self.args = args
-        self.conf = AriaConfig()
+        self.config = AriaConfig()
 
         # keep track of all alive panels, ex: {'eDP-1': [Panel,Panel,..]}
         self.panels: dict[str, list[AriaPanel]] = {}
@@ -151,14 +151,14 @@ class AriaShell(Gtk.Application):
         INF('Warming up aria-shell...')
 
         # load config file, and reload the whole shell when it changes
-        config_file = self.conf.load_conf(self.args.config)
-        if self.conf.general.reload_config:
+        config_file = self.config.load_conf(self.args.config)
+        if self.config.general.reload_config:
             monitor = FileMonitor(config_file, lambda _: self.reload())
             self.file_monitors.append(monitor)
 
         # load CSS files, and reload the styles when they changes
         loaded_files = self._load_css_styles(self.args.style)
-        if self.conf.general.reload_style:
+        if self.config.general.reload_style:
             for css_file in loaded_files:
                 monitor = FileMonitor(css_file, lambda _: self._reload_css_styles())
                 self.file_monitors.append(monitor)
@@ -225,7 +225,7 @@ class AriaShell(Gtk.Application):
         self._clear_css_styles()
 
         # clear the loaded config
-        self.conf.clear()
+        self.config.clear()
     # endregion
 
     #---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ class AriaShell(Gtk.Application):
             loaded_files.append(user_css)
 
         # load style from config (can be named and searched in sys dirs)
-        style = self.conf.general.style
+        style = self.config.general.style
         if style:
             if not style.endswith('.css'):
                 style += '.css'
@@ -316,8 +316,8 @@ class AriaShell(Gtk.Application):
 
     def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
         output_name = monitor.get_connector()
-        for section in sorted(self.conf.sections('panel')):
-            panel_conf = self.conf.section(section, PanelConfig)
+        for section in sorted(self.config.sections('panel')):
+            panel_conf = self.config.section(section, PanelConfig)
             outputs = panel_conf.outputs
             if (not outputs) or ('all' in outputs) or (output_name in outputs):
                 if ':' in section and not section.endswith(':'):

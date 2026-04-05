@@ -194,7 +194,7 @@ class CanonicalDBusMenu(Gio.Menu):
 
         # disconnect the proxy, only if we are the root node
         if self.root_node == 0 and self._proxy:
-            print("-- DISCONNECT --")
+            DBG('Disconnect from DBusMenu %s %s', self.service_name, self.object_path)
             disconnect_proxy(self._proxy)
             del self._proxy
 
@@ -218,7 +218,7 @@ class CanonicalDBusMenu(Gio.Menu):
             self._action_group.remove_action(action_name)
 
     def _build_menu(self, root_node: int = 0):
-        print("BUILD MENU")
+        DBG('Building DBus menu %d', root_node)
         # request the menu layout
         try:
             layout = self._proxy.GetLayout(root_node, 1, [])

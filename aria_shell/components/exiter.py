@@ -2,8 +2,9 @@ from collections.abc import Callable
 
 from gi.repository import Gtk
 
+from aria_shell.components import AriaComponent
 from aria_shell.ui import AriaWindow, AriaDialog
-from aria_shell.utils import clamp, exec_detached, Timer
+from aria_shell.utils import clamp, exec_detached, Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils.logger import get_loggers
@@ -51,13 +52,13 @@ class ExiterConfig(AriaConfigModel):
         return clamp(val, 0, 10000)
 
 
-class AriaExiter(AriaWindow):
+class AriaExiter(CleanupHelper, AriaComponent):
     def __init__(self, app: Gtk.Application):
-        INF('Initialize Aria Exiter')
+        super().__init__(app)
         self.config = AriaConfig().section('exiter', ExiterConfig)
         AriaCommands().register('exiter', self.the_exiter_command)
 
-        super().__init__(
+        self.win = AriaWindow(
             app=app,
             namespace='aria-exiter',
             title='Aria exiter',
@@ -65,21 +66,14 @@ class AriaExiter(AriaWindow):
             layer=AriaWindow.Layer.TOP,
             grab_display=self.config.grab_display,
             opacity=self.config.opacity / 100.0,
-            # decorated=False,
         )
 
         self.dialog: AriaDialog | None = None
         self.timer: Timer | None = None
         self.countdown = 0
 
-    # lazily populate the window on 'show'
-    def do_show(self):
-        if self.get_child() is None:
-            self.populate_window()
-        AriaWindow.do_show(self)
 
     def shutdown(self):
-        INF('Shutting down Aria Exiter')
         AriaCommands().unregister('exiter')
         if self.dialog:
             self.dialog.destroy()
@@ -87,17 +81,22 @@ class AriaExiter(AriaWindow):
         if self.timer:
             self.timer.stop()
             self.timer = None
-        self.set_child(None)
+        self.win.set_child(None)
+        self.win = None
         super().shutdown()
 
     def the_exiter_command(self, _, params: list[str]) -> None:
         """Runner for the 'exiter' aria command."""
+        # lazily populate the window
+        if self.win.get_child() is None:
+            self.populate_window()
+
         if not params or params[0] == 'toggle':
-            self.toggle()
+            self.win.toggle()
         elif params and params[0] == 'hide':
-            self.hide()
+            self.win.hide()
         elif params and params[0] == 'show':
-            self.show()
+            self.win.show()
         else:
             raise CommandFailed('Invalid arguments for the <exiter> command')
 
@@ -110,7 +109,7 @@ class AriaExiter(AriaWindow):
         )
         flow.add_css_class('aria-exiter-flowbox')
         self.safe_connect(flow, 'child_activated', self.child_activated_cb)
-        self.set_child(flow)
+        self.win.set_child(flow)
 
         # populate from untyped options in config file
         for name, command in self.config.options.items():
@@ -137,7 +136,7 @@ class AriaExiter(AriaWindow):
         self.button_callback(child.get_child())  # noqa  (pycharm error?)
 
     def button_callback(self, button: ExiterButton):
-        self.hide()
+        self.win.hide()
         if button.want_confirm and self.config.ask_confirm:
             self.make_confirm_dialog(button)
         else:
@@ -151,7 +150,7 @@ class AriaExiter(AriaWindow):
             heading = i18n(f'exiter.confirm_generic1')
 
         self.dialog = AriaDialog(
-            parent=self,
+            parent=self.win,
             heading=heading,
             buttons=[i18n('cancel'), i18n(button.name)],
             callback=self.confirm_dialog_response,

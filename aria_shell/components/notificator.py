@@ -1,5 +1,6 @@
-from gi.repository import Gtk, GObject, Gio, Gdk
+from gi.repository import Gtk, Gio, Gdk
 
+from aria_shell.components import AriaComponent
 from aria_shell.services.notifications import \
     Notification, NotificationService, Urgency, CloseReason, Action
 from aria_shell.config import AriaConfig, AriaConfigModel
@@ -43,20 +44,18 @@ class NotificatorConfig(AriaConfigModel):
         return val
 
 
-class AriaNotificator(AriaWindow):
+class AriaNotificator(CleanupHelper, AriaComponent):
     """The notificator window show a ListView of Notification."""
     def __init__(self, app: Gtk.Application):
+        super().__init__(app)
 
         # load config, nicely wrapped in a NotificatorConfig model
         self.config = AriaConfig().section('notifications', NotificatorConfig)
-        if self.config.enabled:
-            INF('Initialize Aria Notificator')
-        else:
-            INF('Aria Notificator disabled by config')
-            return
+        if not self.config.enabled:
+            raise RuntimeError('Notifications disabled by config')
 
         # initialize the window
-        super().__init__(
+        self.win = AriaWindow(
             app=app,
             namespace='aria-notificator',
             title='Aria notificator',
@@ -86,23 +85,25 @@ class AriaNotificator(AriaWindow):
             orientation=Gtk.Orientation.VERTICAL,
         )
         self.list_view.add_css_class('aria-notificator-list')
-        self.set_child(self.list_view)
+        self.win.set_child(self.list_view)
 
     def shutdown(self):
-        INF('Shutting down Aria Notificator')
         # stop the notification server
         if self.notification_service:
             self.notification_service.stop_server()
             self.notification_service = None
-
-        # disconnect all safe_connected signals and destroy the AriaWindow
+        # destroy the window
+        if self.win:
+            self.win.destroy()
+            self.win = None
+        # disconnect all safe_connected signals
         super().shutdown()
 
-    def _on_items_changed(self, model: Gio.ListStore, pos, added, removed):
+    def _on_items_changed(self, model: Gio.ListStore, _pos, _added, _removed):
         # keep the window at a minimum size (needed when the ListView shrink)
-        self.set_default_size(-1, -1)
+        self.win.set_default_size(-1, -1)
         # only show the window when there are notifications to show
-        self.show() if model.get_n_items() > 0 else self.hide()
+        self.win.show() if model.get_n_items() > 0 else self.win.hide()
 
     @staticmethod
     def _factory_item_setup(_, list_item: Gtk.ListItem):
@@ -240,8 +241,8 @@ class NotificationView(Gtk.Grid):
         elif notification.urgency == Urgency.LOW:
             self.add_css_class('non-urgent')
 
-    def _notification_clicked(self, gesture, n_press, x, y):
+    def _notification_clicked(self, _gesture, _n_press, _x, _y):
         self.notification.close(CloseReason.DISMISSED)
 
-    def _action_button_clicked(self, button, action: Action):
+    def _action_button_clicked(self, _button, action: Action):
         self.notification.action(action)

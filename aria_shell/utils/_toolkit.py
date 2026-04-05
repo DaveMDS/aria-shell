@@ -33,8 +33,8 @@ class CleanupHelper:
         helper.shutdown()  # to disconnect all signals and bindings
 
     """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)  # cooperate with other parents (es: GObject)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)  # cooperate with other parents (es: GObject)
         self._signal_handlers: list[tuple[GObject.Object, int]] = []
         self._bindings: list[GObject.Binding] = []
 

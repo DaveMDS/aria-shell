@@ -2,15 +2,15 @@ try:
     import gi
     gi.require_version('Vte', '3.91')
     from gi.repository import Vte
-    _vte_available = True
 except (ImportError, ValueError):
-    _vte_available = False
+    Vte = None
 
 from gi.repository import GLib, Gdk, Gtk, Pango
 from gi.repository import Gtk4LayerShell as GtkLayerShell
 
+from aria_shell.components import AriaComponent
 from aria_shell.ui import AriaWindow
-from aria_shell.utils import clamp
+from aria_shell.utils import clamp, CleanupHelper
 from aria_shell.utils.env import HOME, SHELL
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed
@@ -43,16 +43,16 @@ class TerminalConfig(AriaConfigModel):
         return clamp(val, 1, 10000)
 
 
-class AriaTerminal(AriaWindow):
+class AriaTerminal(CleanupHelper, AriaComponent):
     def __init__(self, app: Gtk.Application):
-        INF('Initialize Aria Terminal')
-        if not _vte_available:
-            raise RuntimeError('Vte not available')
+        super().__init__(app)
+        if Vte is None:
+            raise RuntimeError('Vte4 not available, embedded terminal is disabled!')
 
         self.conf = AriaConfig().section('terminal', TerminalConfig)
         AriaCommands().register('terminal', self.the_terminal_command)
 
-        super().__init__(
+        self.win = AriaWindow(
             app=app,
             namespace='aria-terminal',
             title='Aria terminal',
@@ -67,15 +67,16 @@ class AriaTerminal(AriaWindow):
         self._fullscreen: bool = False
 
     def shutdown(self):
-        INF('Shutting down Aria Terminal')
         AriaCommands().unregister('terminal')
         self.terminal = None
+        self.win.destroy()
+        self.win = None
         super().shutdown()
 
     def the_terminal_command(self, _, params: list[str]) -> None:
         """Runner for the 'terminal' aria command."""
         if not params or params[0] == 'toggle':
-            self.toggle()
+            self.hide() if self.win.is_visible() else self.show()
         elif params and params[0] == 'hide':
             self.hide()
         elif params and params[0] == 'show':
@@ -118,19 +119,23 @@ class AriaTerminal(AriaWindow):
         term.add_controller(ec)
 
         self.terminal = term
-        self.set_child(term)
+        self.win.set_child(term)
 
     def show(self):
         if self.terminal is None:
             self._create_terminal()
-        super().show()
+        self.win.show()
         self.terminal.grab_focus()
+
+    def hide(self):
+        self.win.hide()
 
     def _on_child_exited(self, term, status: int):
         # shell exited, hide the window and destroy the terminal,
         # a new one will be recreated on next show()
-        self.hide()
-        self.set_child(None)
+        if self.win:
+            self.win.hide()
+            self.win.set_child(None)
         self.terminal = None
 
     def _on_key_pressed(self, _ec: Gtk.EventControllerKey,

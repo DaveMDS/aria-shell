@@ -2,11 +2,12 @@ from operator import attrgetter
 
 from gi.repository import GObject, GLib, Gio, Gdk, Gtk
 
+from aria_shell.components import AriaComponent
 from aria_shell.i18n import i18n
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
 from aria_shell.ui import AriaWindow
-from aria_shell.utils import clamp, PerfTimer
+from aria_shell.utils import clamp, PerfTimer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
 
@@ -38,10 +39,11 @@ class LauncherConfig(AriaConfigModel):
         return clamp(val, 0, 10000)
 
 
-class AriaLauncher(AriaWindow):
+class AriaLauncher(CleanupHelper, AriaComponent):
     def __init__(self, app: Gtk.Application):
-        INF('Initialize Aria Launcher')
-        # get launcher config
+        super().__init__(app)
+
+        # get launcher config and register the launcher command
         self.conf = AriaConfig().section('launcher', LauncherConfig)
         AriaCommands().register('launcher', self.the_launcher_command)
 
@@ -51,7 +53,7 @@ class AriaLauncher(AriaWindow):
         self.search_entry: Gtk.Entry | None = None
 
         # crete the window
-        super().__init__(
+        self.win = AriaWindow(
             app=app,
             namespace='aria-launcher',
             title='Aria launcher',
@@ -65,7 +67,7 @@ class AriaLauncher(AriaWindow):
         # request keyboard events
         ec = Gtk.EventControllerKey()
         self.safe_connect(ec, 'key-pressed', self._on_win_key_pressed)
-        self.add_controller(ec)
+        self.win.add_controller(ec)
 
         # init all providers
         self.providers = [
@@ -76,9 +78,10 @@ class AriaLauncher(AriaWindow):
         self._on_entry_changed(self.search_entry, '')
 
     def shutdown(self):
-        INF('Shutting down Aria Launcher')
         AriaCommands().unregister('launcher')
         # TODO shutdown properly each provider !!!!!!!!!!!
+        self.win.shutdown()
+        self.win = None
         self.providers = []
         self.list_store = None
         self.list_view = None
@@ -88,7 +91,7 @@ class AriaLauncher(AriaWindow):
     def the_launcher_command(self, _, params: list[str]) -> None:
         """Runner for the 'launcher' aria command."""
         if not params or params[0] == 'toggle':
-            self.toggle()
+            self.hide() if self.win.is_visible() else self.show()
         elif params and params[0] == 'hide':
             self.hide()
         elif params and params[0] == 'show':
@@ -115,7 +118,7 @@ class AriaLauncher(AriaWindow):
         scroller.set_child(self.list_view)
         vbox.append(scroller)
 
-        self.set_child(vbox)
+        self.win.set_child(vbox)
 
     def _create_listview(self) -> Gtk.ListView:
         # listview
@@ -213,8 +216,11 @@ class AriaLauncher(AriaWindow):
 
     def show(self):
         self.reset()
-        super().show()
-        super().grab_focus()
+        self.win.show()
+        self.win.grab_focus()
+
+    def hide(self):
+        self.win.hide()
 
     def reset(self):
         self.search_entry.set_text('')

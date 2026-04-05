@@ -14,6 +14,7 @@ from datetime import datetime
 from gi.repository import Gtk, Gdk
 from gi.repository import Gtk4SessionLock as GtkSessionLock
 
+from aria_shell.components import AriaComponent
 from aria_shell.services.pam import PamService, AuthCallback
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils import Timer, CleanupHelper
@@ -36,13 +37,12 @@ class LockerConfig(AriaConfigModel):
     date_format: str = '%A %d %B'
 
 
-class AriaLocker(CleanupHelper):
+class AriaLocker(CleanupHelper, AriaComponent):
     """
     Aria screen locker manager.
     """
-    def __init__(self, _app: Gtk.Application):
-        super().__init__()
-        INF('Initialize Aria Locker')
+    def __init__(self, app: Gtk.Application):
+        super().__init__(app)
         self.config = AriaConfig().section('locker', LockerConfig)
         AriaCommands().register('lock', self.the_locker_command)
 
@@ -63,7 +63,6 @@ class AriaLocker(CleanupHelper):
         self._lock_instance = lock
 
     def shutdown(self):
-        INF('Shutting down Aria Locker')
         AriaCommands().unregister('lock')
         super().shutdown()  # cleanup safe-connected signals
         if self._lock_instance and self._lock_instance.is_locked():

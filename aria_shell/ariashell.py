@@ -37,13 +37,9 @@ from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
 from aria_shell.services.commands import AriaCommands
+from aria_shell.components import AriaComponent
 from aria_shell.components.cmd_socket import AriaCommandSocket
 from aria_shell.components.panel import AriaPanel, PanelConfig
-from aria_shell.components.launcher import AriaLauncher
-from aria_shell.components.terminal import AriaTerminal
-from aria_shell.components.exiter import AriaExiter
-from aria_shell.components.locker import AriaLocker
-from aria_shell.components.notificator import AriaNotificator
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -55,18 +51,17 @@ class AriaShell(Gtk.Application):
         self.args = args
         self.config = AriaConfig()
 
-        # keep track of all alive panels, ex: {'eDP-1': [Panel,Panel,..]}
+        # keep track of loaded components
+        self.components: list[AriaComponent] = []
+
+        # keep track of alive panels, ex: {'eDP-1': [Panel,Panel,..]}
         self.panels: dict[str, list[AriaPanel]] = {}
 
-        # keep track of all loaded CSS
+        # keep track of loaded CSS
         self.css_providers: list[Gtk.CssProvider] = []
 
-        # components instances
+        # command socket
         self.command_socket: AriaCommandSocket | None = None
-        self.launcher: AriaLauncher | None = None
-        self.terminal: AriaTerminal | None = None
-        self.exiter: AriaExiter | None = None
-        self.locker: AriaLocker | None = None
 
         # monitors for config and CSS files change
         self.file_monitors: list[FileMonitor] = []
@@ -166,15 +161,19 @@ class AriaShell(Gtk.Application):
         # register the reload command
         AriaCommands().register('reload', lambda c,p: self.reload())
 
-        # create instances of all components
-        self.launcher = AriaLauncher(self)
-        self.exiter = AriaExiter(self)
-        self.locker = AriaLocker(self)
-        self.notificator = AriaNotificator(self)
-        try:
-            self.terminal = AriaTerminal(self)
-        except RuntimeError:
-            WRN('Vte4 not available, embedded terminal is disabled!')
+        # automatically create an instance of all components
+        for component in AriaComponent.__subclasses__():
+            INF('Initializing component: %s', component.__name__)
+            try:
+                instance = component(self)
+            except RuntimeError as e:
+                WRN('Cannot initialize the %s component! Info: %s',
+                    component.__name__, e)
+            except Exception as e:
+                ERR('Cannot initialize %s component! Error: %s',
+                    component.__name__, e, exc_info=True)
+            else:
+                self.components.append(instance)
 
         # preload all modules (the gadgets)
         preload_all_modules()
@@ -206,21 +205,9 @@ class AriaShell(Gtk.Application):
         unload_all_modules()
 
         # shutdown all components, and release their references
-        if self.launcher:
-            self.launcher.shutdown()
-            self.launcher = None
-        if self.terminal:
-            self.terminal.shutdown()
-            self.terminal = None
-        if self.exiter:
-            self.exiter.shutdown()
-            self.exiter = None
-        if self.locker:
-            self.locker.shutdown()
-            self.locker = None
-        if self.notificator:
-            self.notificator.shutdown()
-            self.notificator = None
+        while self.components and (component := self.components.pop()):
+            INF('Shutting down %s', type(component).__name__)
+            component.shutdown()
 
         # un-register basic commands
         AriaCommands().unregister('reload')

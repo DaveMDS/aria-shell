@@ -49,8 +49,52 @@ class TrayModule(AriaModule):
         return TrayGadget(conf)
 
 
+class TrayGadget(AriaGadget):
+    """
+    The Tray gadget use a Gkt.ListView to show TrayIcon items.
+    """
+    def __init__(self, conf: TrayConfigModel):
+        super().__init__('tray')
+
+        factory = Gtk.SignalListItemFactory()
+        factory.connect('setup', self._factory_item_setup)
+        factory.connect('bind', self._factory_item_bind)
+        factory.connect('unbind', self._factory_item_unbind)
+
+        model = Gtk.NoSelection(model=ITEMS_STORE)
+        list_view = Gtk.ListView(
+            model=model,
+            factory=factory,
+            orientation=Gtk.Orientation.HORIZONTAL,
+        )
+        self.append(list_view)
+
+    @staticmethod
+    def _factory_item_setup(_, list_item: Gtk.ListItem):
+        """ create a new item for the list item """
+        # create a new TrayIcon and attach to ListItem
+        list_item.set_child(TrayIcon())
+        list_item.set_activatable(False)
+        list_item.set_selectable(False)
+
+    @staticmethod
+    def _factory_item_bind(_, list_item: Gtk.ListItem):
+        """ bind the previously created TrayIcon with the StatusNotifierItem """
+        item: StatusNotifierItem = list_item.get_item()  # noqa
+        tico: TrayIcon = list_item.get_child()  # noqa
+        tico.bind(item)
+
+    @staticmethod
+    def _factory_item_unbind(_, list_item: Gtk.ListItem):
+        """ unbind the previously binded StatusNotifierItem """
+        tico: TrayIcon = list_item.get_child()  # noqa
+        tico.unbind()
+
+
 class TrayIcon(Gtk.Overlay):
-    """ A Gtk.Widget that is able to show a single StatusNotifierItem """
+    """
+    A Gtk.Widget that is able to show a single StatusNotifierItem object.
+    """
     __gtype_name__ = 'TrayIcon'
 
     def __init__(self):
@@ -160,65 +204,16 @@ class TrayIcon(Gtk.Overlay):
             self.menu_model = None
 
 
-class TrayGadget(AriaGadget):
-    """The Tray gadget use a Gkt.ListView to show TrayIcon items."""
-    def __init__(self, conf: TrayConfigModel):
-        super().__init__('tray')
-
-        factory = Gtk.SignalListItemFactory()
-        factory.connect('setup', self._factory_item_setup)
-        factory.connect('bind', self._factory_item_bind)
-        factory.connect('unbind', self._factory_item_unbind)
-
-        model = Gtk.NoSelection(model=ITEMS_STORE)
-        list_view = Gtk.ListView(
-            model=model,
-            factory=factory,
-            orientation=Gtk.Orientation.HORIZONTAL,
-        )
-        self.append(list_view)
-
-    @staticmethod
-    def _factory_item_setup(_, list_item: Gtk.ListItem):
-        """ create a new item for the list item """
-        # create a new TrayIcon and attach to ListItem
-        list_item.set_child(TrayIcon())
-        list_item.set_activatable(False)
-        list_item.set_selectable(False)
-
-    @staticmethod
-    def _factory_item_bind(_, list_item: Gtk.ListItem):
-        """ bind the previously created TrayIcon with the StatusNotifierItem """
-        item: StatusNotifierItem = list_item.get_item()  # noqa
-        tico: TrayIcon = list_item.get_child()  # noqa
-        tico.bind(item)
-
-    @staticmethod
-    def _factory_item_unbind(_, list_item: Gtk.ListItem):
-        """ unbind the previously binded StatusNotifierItem """
-        tico: TrayIcon = list_item.get_child()  # noqa
-        tico.unbind()
-
-
-
-################################################################################
-
-################################################################################
-
-################################################################################
-
-
+#-------------------------------------------------------------------------------
+# DBUS stuff
+#-------------------------------------------------------------------------------
 SESSION_BUS = SessionMessageBus()
-
-STATUS_NOTIFIER_WATCHER_IFACE = 'org.kde.StatusNotifierWatcher'
-STATUS_NOTIFIER_WATCHER_SERVICE = 'org.kde.StatusNotifierWatcher'
-STATUS_NOTIFIER_WATCHER_PATH = '/StatusNotifierWatcher'
 
 
 class StatusNotifierItem(GObject.Object):
-    """ Implement the remote object StatusNotifierItem
-
-    https://specifications.freedesktop.org/status-notifier-item/
+    """
+    Implement the remote object StatusNotifierItem.
+    Reference: https://specifications.freedesktop.org/status-notifier-item/
     """
     __gtype_name__ = 'StatusNotifierItem'
 
@@ -414,6 +409,11 @@ class StatusNotifierItem(GObject.Object):
 
 
 ITEMS_STORE = IndexedListStore(item_type=StatusNotifierItem, key_prop='full_path')
+
+
+STATUS_NOTIFIER_WATCHER_IFACE = 'org.kde.StatusNotifierWatcher'
+STATUS_NOTIFIER_WATCHER_SERVICE = 'org.kde.StatusNotifierWatcher'
+STATUS_NOTIFIER_WATCHER_PATH = '/StatusNotifierWatcher'
 
 
 @dbus_interface(STATUS_NOTIFIER_WATCHER_IFACE)

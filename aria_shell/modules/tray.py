@@ -5,10 +5,11 @@ TODO DOC a little bit
 """
 from typing import Literal
 
+from dasbus.error import DBusError
 from dasbus.server.interface import dbus_interface, dbus_signal
 from dasbus.server.interface import accepts_additional_arguments
 from dasbus.client.observer import DBusObserver
-from dasbus.typing import Bool, Int, Str, List
+from dasbus.typing import Bool, Int, Str, List, Variant
 from dasbus.connection import SessionMessageBus
 from dasbus.client.proxy import disconnect_proxy
 
@@ -172,7 +173,7 @@ class StatusNotifierItem(GObject.Object):
     """
     __gtype_name__ = 'StatusNotifierItem'
 
-    IFACE = 'org.kde.StatusNotifierItem'
+    IFACE = 'org.kde.StatusNotifierItem'  # TODO also support org.freedesktop.StatusNotifierItem?
 
     # "reactive" properties that can be watched/binded
     id = GObject.Property(type=str)
@@ -204,11 +205,15 @@ class StatusNotifierItem(GObject.Object):
         # create the object proxy for this path
         self._proxy = SESSION_BUS.get_proxy(bus_name, object_path)
 
+        # keep track of prop Get async requests, to not request the same prop
+        # while it is already being requested. The set keep the names of props.
+        self._alive_async_requests = set()
+
         # async read all the properties from the remote object
         self._proxy.GetAll(
             self.IFACE,
             callback=self._get_all_callback,
-            # timeout=2000,
+            timeout=500,
         )
         # self.connect('destroy', lambda *_: print("DESTROY -- "*10))
         # watch properties for changes (NEEDED?)
@@ -245,10 +250,7 @@ class StatusNotifierItem(GObject.Object):
     def shutdown(self):
         disconnect_proxy(self._proxy)
         self._proxy = None
-
-    # keep track of prop Get async requests, to not request the same prop
-    # while it is already being requested. The set keep the names of props.
-    _alive_async_requests = set()
+        self._alive_async_requests.clear()
 
     def _request_properties(self, props: list[str]):
         """ request the given properties from the remote object """
@@ -267,35 +269,33 @@ class StatusNotifierItem(GObject.Object):
         """ async props GetAll() method response """
         try:
             vals: dict = call()
-        except Exception as e:
+        except DBusError as e:
             ERR(f'XXX {e} {self.id}')
             return
         for prop_name, variant_val in vals.items():
             # reuse the callback for single prop get
             self._get_callback(None, prop_name, variant_val)
 
-    def _get_callback(self, call, prop_name, val=None):
+    def _get_callback(self, call, prop_name: str, val: Variant = None):
         """ async prop Get() method response """
         self._alive_async_requests.discard(prop_name)
         if callable(call):
             try:
-                # INF(f'Get {prop_name} _')
                 val = call()
-                # INF(f'Get {prop_name} VAL {repr(val)})')
-            except Exception as e:
-                ERR(f'YYY {e} {self.id} {prop_name}')
+            except DBusError:
+                # its possible we request props that do not exist.
+                # fe: the IconPixmap request when we receive the NewIcon.
                 return
 
         if val is not None:
             self._update_internal_property(prop_name, val)
 
-    def _update_internal_property(self, prop_name: str, val):
+    def _update_internal_property(self, prop_name: str, val: Variant):
         """ Update our "reactive" properties with new values """
         if val is None:
             return
 
-        if isinstance(val, GLib.Variant):
-            val = val.unpack()
+        val = val.unpack()
 
         match prop_name:
             case 'Id':
@@ -373,8 +373,9 @@ STATUS_NOTIFIER_WATCHER_PATH = '/StatusNotifierWatcher'
 
 @dbus_interface(STATUS_NOTIFIER_WATCHER_IFACE)
 class StatusNotifierWatcher(object):
-    """ Implementation of the Watcher with a fake Host """
-
+    """
+    Implementation of the Watcher with a fake Host
+    """
     def __init__(self):
         DBG(f'TRAY Publishing {STATUS_NOTIFIER_WATCHER_SERVICE} on D-Bus')
 
@@ -402,7 +403,7 @@ class StatusNotifierWatcher(object):
 
     @accepts_additional_arguments
     def RegisterStatusNotifierItem(self, service: Str, *, call_info: dict) -> None:
-        """ Register a StatusNotifierItem into the StatusNotifierWatcher """
+        """Register a StatusNotifierItem into the StatusNotifierWatcher."""
         DBG(f'TRAY RegisterStatusNotifierItem({service})')
         sender = call_info['sender']
 
@@ -455,18 +456,18 @@ class StatusNotifierWatcher(object):
 
     @staticmethod
     def RegisterStatusNotifierHost(service: Str) -> None:
-        """ Register a StatusNotifierHost into the StatusNotifierWatcher """
+        """Register a StatusNotifierHost into the StatusNotifierWatcher."""
         DBG(f'TRAY RegisterStatusNotifierHost({service})')
         pass  # we are the only Host (well, a fake host...)
 
     @property
     def RegisteredStatusNotifierItems(self) -> List[Str]:
-        """ List containing all the registered instances of StatusNotifierItem """
+        """List containing all the registered instances of StatusNotifierItem."""
         return list(ITEMS_STORE.keys())
 
     @property
     def IsStatusNotifierHostRegistered(self) -> Bool:
-        """ True if at least one StatusNotifierHost has been registered """
+        """True if at least one StatusNotifierHost has been registered."""
         return True  # yes, here we are!
 
     @property

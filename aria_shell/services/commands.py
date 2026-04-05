@@ -74,6 +74,10 @@ class AriaCommands(metaclass=Singleton):
         if not command:
             return False, 'Empty command!'
 
+        # support the config file syntax: 'aria terminal toggle'
+        if command.startswith('aria '):
+            command = command[5:]
+
         # split command and params
         params = command.strip().split(' ')
         # TODO handle "params with spaces" ! ma non vedo le virgolette??

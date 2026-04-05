@@ -15,11 +15,11 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 # lots of example in manjaro-sway:
 #   /usr/share/sway/templates/waybar/config.jsonc
 
+
 class CustomConfigModel(AriaConfigModel):
     label: str = ''
     icon: str = ''
     command: str = ''
-    exec: str = ''
 
 
 class CustomModule(AriaModule):
@@ -42,8 +42,7 @@ class CustomGadget(AriaGadget):
             self.append(lbl)
 
     def mouse_click(self, button: int):
-        if self.conf.command:
+        if self.conf.command.startswith('aria '):
             AriaCommands().run(self.conf.command)
-
-        if self.conf.exec:
-            exec_detached(self.conf.exec)
+        elif self.conf.command:
+            exec_detached(self.conf.command)

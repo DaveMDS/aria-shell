@@ -88,12 +88,15 @@ psutil (optional, for the perf gadget)
 - [x] show date/time and user name/avatar
 - [x] password authentication using PAM
 - [ ] background customizations (with same abilities as Aria Wallpaper)
+- [ ] buttons to reboot/halt?
+- [ ] other info to show?
 
 
 ## Aria exiter
-- [x] dialog menu to lock, suspend, hibernate, logout, reboot and shutdown
-- [x] all commands can be changed in config file
+- [x] customizable dialog menu to lock, suspend, hibernate, logout, reboot and shutdown
+- [x] all commands can be customized in config file
 - [x] confirm dangerous actions with an auto-expiring dialog (configurable)
+- [x] custom buttons can be created in config. With label, icon and confirm option.
 - [ ] automatic logout command. How to make logout work on every wm?
 
 

@@ -221,8 +221,7 @@ class ExiterButton(Gtk.Button):
         INF('Running %s command: %s', self.name, self.command)
         if self.command.startswith('aria '):
             # run an aria command
-            cmd = self.command[5:].strip()
-            AriaCommands().run(cmd)
+            AriaCommands().run(self.command)
         else:
             # or execute a process
             exec_detached(self.command)

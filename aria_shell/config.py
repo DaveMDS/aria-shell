@@ -105,8 +105,9 @@ class AriaConfigModel:
             for key, val in self._untyped_options.items():
                 print(f'    {key} = {repr(val)}')
 
+
 class AriaConfigGeneralModel(AriaConfigModel):
-    """ Model for the [general] main section """
+    """Model for the [general] main section."""
     modules: list[str] = []
     style: str = ''
     reload_config: bool = False
@@ -122,6 +123,7 @@ class AriaConfig(metaclass=Singleton):
         self._parser = configparser.ConfigParser(
             empty_lines_in_values=False,
             interpolation=None,
+            allow_no_value=True,
             comment_prefixes=('#',),
             inline_comment_prefixes=('#',),
         )
@@ -161,6 +163,12 @@ class AriaConfig(metaclass=Singleton):
         if self._general is None:
             self._general = AriaConfigGeneralModel(self.section_dict('general'))
         return self._general
+
+    def autostart(self) -> list[str]:
+        """ Get all the items in the [autostart] config section """
+        if self._parser.has_section('autostart'):
+            return self._parser.options('autostart')
+        return []
 
     def section(self, section_name: str,
                 model_class: type[AriaConfigModelType]

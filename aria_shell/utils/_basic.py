@@ -243,7 +243,7 @@ def exec_detached(cmd: str | list[str]) -> bool:
         )
         return True
     except OSError as e:
-        ERR('Cannot execute command: "%s" Error: %s', cmd, e)
+        ERR('Cannot execute command: %s Error: %s', cmd, e)
         return False
 
 

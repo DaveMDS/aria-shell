@@ -32,7 +32,7 @@ from gi.repository import Gdk, Gtk
 from aria_shell.i18n import setup_locale
 from aria_shell.utils.logger import get_loggers
 from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
-from aria_shell.utils import Timer, FileMonitor
+from aria_shell.utils import Timer, FileMonitor, exec_detached
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.display import DisplayService
@@ -182,6 +182,10 @@ class AriaShell(Gtk.Application):
         # inspect connected monitors, and create needed panels
         for monitor in DisplayService().monitors:
             self._on_monitor_added(monitor)
+
+        # run user applications from the [autostart] config section
+        for command in self.config.autostart():
+            exec_detached(command)
 
     def _shutdown_everything(self):
         INF('-----------------------------------------------------------------')

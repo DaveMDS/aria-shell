@@ -248,6 +248,15 @@ def exec_detached(command: str | Sequence[str]) -> bool:
         return False
 
 
+def exec_command_or_program(cmd: str):
+    """ Execute the given aria command or external program. """
+    if cmd and cmd.startswith('aria '):
+        from aria_shell.services.commands import AriaCommands
+        AriaCommands().run(cmd)
+    elif cmd:
+        exec_detached(cmd)
+
+
 def elli(s: str|bytes, pos=50) -> str|bytes:
     """ Cut the given string at pos and add ellipsis ... """
     if len(s) <= pos:

@@ -10,6 +10,7 @@ from ._basic import (
     human_size,
     pack_variant,
     exec_detached,
+    exec_command_or_program,
     PerfTimer,
 )
 from ._toolkit import (

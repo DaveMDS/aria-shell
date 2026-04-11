@@ -1,7 +1,6 @@
 from gi.repository import Gtk
 
-from aria_shell.services.commands import AriaCommands
-from aria_shell.utils import exec_detached
+from aria_shell.utils import exec_command_or_program
 from aria_shell.utils.logger import get_loggers
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
@@ -42,7 +41,4 @@ class CustomGadget(AriaGadget):
             self.append(lbl)
 
     def mouse_click(self, button: int):
-        if self.conf.command.startswith('aria '):
-            AriaCommands().run(self.conf.command)
-        elif self.conf.command:
-            exec_detached(self.conf.command)
+        exec_command_or_program(self.conf.command)

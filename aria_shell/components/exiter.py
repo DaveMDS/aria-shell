@@ -4,7 +4,7 @@ from gi.repository import Gtk
 
 from aria_shell.components import AriaComponent
 from aria_shell.ui import AriaWindow, AriaDialog
-from aria_shell.utils import clamp, exec_detached, Timer, CleanupHelper
+from aria_shell.utils import clamp, exec_command_or_program, Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils.logger import get_loggers
@@ -218,9 +218,4 @@ class ExiterButton(Gtk.Button):
 
     def execute_command(self):
         INF('Running %s command: %s', self.name, self.command)
-        if self.command.startswith('aria '):
-            # run an aria command
-            AriaCommands().run(self.command)
-        else:
-            # or execute a process
-            exec_detached(self.command)
+        exec_command_or_program(self.command)

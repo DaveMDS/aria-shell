@@ -1,3 +1,4 @@
+/tests/sandbox*
 /.idea
 /.venv
 /dist/

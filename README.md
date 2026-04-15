@@ -100,6 +100,16 @@ psutil (optional, for the perf gadget)
 - [ ] automatic logout command. How to make logout work on every wm?
 
 
+## Aria idler (EXPERIMENTAL)
+NOTE: I'm not sure if this should be an aria responsibility, seems we are fighting with systemd abilities.
+- [x] an "idler daemon" implementation, use the ext_idle_notifier_v1 wayland protocol.
+- [x] support for arbitrary idled / resumed commands (both aria commands or external commands)
+- [x] simple configuration in the aria.conf file with a simple syntax
+- [ ] Different timeouts for different scenarios! (AC power, on battery, etc...)
+- [ ] manage events like on-lid-closed? How?
+- [ ] manage before-sleep and the like?
+
+
 ## Aria wallpaper
 - [ ] manage the background with a gtk window (layer shell? other ways?)
 - [ ] ability to show a single background or rotate in a given folder

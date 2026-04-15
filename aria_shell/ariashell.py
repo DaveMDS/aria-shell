@@ -37,7 +37,6 @@ from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
 from aria_shell.services.commands import AriaCommands
 from aria_shell.components import AriaComponent
-from aria_shell.components.cmd_socket import AriaCommandSocket
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -54,9 +53,6 @@ class AriaShell(Gtk.Application):
 
         # keep track of loaded CSS
         self.css_providers: list[Gtk.CssProvider] = []
-
-        # command socket
-        self.command_socket: AriaCommandSocket | None = None
 
         # monitors for config and CSS files change
         self.file_monitors: list[FileMonitor] = []
@@ -95,13 +91,11 @@ class AriaShell(Gtk.Application):
     #---------------------------------------------------------------------------
     # region: Gtk.Application lifecycle
     #---------------------------------------------------------------------------
-    def _on_app_startup(self, app: Gtk.Application):
+    @staticmethod
+    def _on_app_startup(app: Gtk.Application):
         """Startup signal is emitted exactly once on the first app instance."""
         # setup i18n locale
         setup_locale()
-
-        # start command socket listener
-        self.command_socket = AriaCommandSocket(self)
 
     def _on_app_activate(self, app: Gtk.Application):
         """Activate signal is emitted every time the application is launched."""
@@ -149,12 +143,13 @@ class AriaShell(Gtk.Application):
                 self.file_monitors.append(monitor)
 
         # register the reload command
+        # register the reload command (this also initialize the commands socket!)
         AriaCommands().register('reload', lambda c,p: self.reload())
 
         # preload all modules (the gadgets)
         preload_all_modules()
 
-        # automatically create an instance of all components
+        # automagically create an instance of all components
         for component in AriaComponent.__subclasses__():
             INF('Initializing component: %s', component.__name__)
             try:

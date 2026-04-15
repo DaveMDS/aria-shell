@@ -9,7 +9,8 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 class DisplayService(Signalable, metaclass=Singleton):
     """
-    Get info (and stay informed) about connected/disconnected monitors.
+    Get info (and stay informed) about connected/disconnected monitors
+    on the current wayland display.
 
     Signals:
       'monitor-added'(monitor: Gdk.Monitor)

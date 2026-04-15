@@ -184,7 +184,7 @@ class AriaConfig(metaclass=Singleton):
             return {}
 
     def sections(self, prefix: str = None) -> list[str]:
-        """ List of section names that starts with the given prefix """
+        """ List of all section names that starts with the given prefix """
         if prefix is None:
             return self._parser.sections()
         else:

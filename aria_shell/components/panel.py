@@ -1,10 +1,16 @@
+from typing import TYPE_CHECKING
+
 from gi.repository import Gdk, Gtk
 
+from aria_shell.components import AriaComponent
+from aria_shell.services.display import DisplayService
 from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp
 from aria_shell.module import request_module_gadget, destroy_module_gadget
-from aria_shell.config import AriaConfigModel
+from aria_shell.config import AriaConfigModel, AriaConfig
 from aria_shell.utils.logger import get_loggers
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -28,6 +34,7 @@ SIZES = {
 
 
 class PanelConfig(AriaConfigModel):
+    """The configuration model for a single panel."""
     outputs: list[str] = 'all'
     position: str = 'top'
     layer: str = 'bottom'
@@ -69,8 +76,69 @@ class PanelConfig(AriaConfigModel):
         return val
 
 
+class AriaPanels(AriaComponent):
+    """
+    This is the manager component that keep track of connected monitors
+    and create / destroy the needed panels.
+    """
+    def __init__(self, app: AriaShell):
+        super().__init__(app)
+
+        # keep track of alive panels, ex: {'DP-1': [Panel, Panel, ..]}
+        self.panels: dict[str, list[AriaPanel]] = {}
+
+        # stay informed about changed monitors
+        ds = DisplayService()
+        ds.connect('monitor-added', self._on_monitor_added)
+        ds.connect('monitor-removed', self._on_monitor_removed)
+
+        # inspect connected monitors, and create needed panels
+        for monitor in ds.monitors:
+            self._on_monitor_added(monitor)
+
+    def shutdown(self):
+        ds = DisplayService()
+        ds.disconnect('monitor-added', self._on_monitor_added)
+        ds.disconnect('monitor-removed', self._on_monitor_removed)
+        for monitor, panels in self.panels.items():
+            for panel in panels:
+                panel.shutdown()
+        self.panels.clear()
+
+    def _on_monitor_added(self, monitor: Gdk.Monitor):
+        if output_name := monitor.get_connector():
+            INF('Monitor connected %s', output_name)
+            self._create_panels_for_monitor(monitor)
+        else:
+            CRI('Cannot find monitor name for monitor %s', monitor)
+
+    def _on_monitor_removed(self, monitor: Gdk.Monitor):
+        name = monitor.get_connector()
+        INF('Monitor disconnected %s', name)
+        for panel in self.panels.pop(name, []):
+            panel.shutdown()
+
+    def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
+        output_name = monitor.get_connector()
+        config = AriaConfig()
+        for section in sorted(config.sections('panel')):
+            panel_conf = config.section(section, PanelConfig)
+            outputs = panel_conf.outputs
+            if (not outputs) or ('all' in outputs) or (output_name in outputs):
+                if ':' in section and not section.endswith(':'):
+                    panel_name = section.split(':')[1]
+                else:
+                    panel_name = 'Aria Panel'
+
+                panel = AriaPanel(panel_name, panel_conf, monitor, self.app)
+                self.panels.setdefault(output_name, []).append(panel)
+
+
 class AriaPanel(AriaWindow):
-    def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app):
+    """
+    A single AriaWindow for a single PanelConfig on the given monitor.
+    """
+    def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app: AriaShell):
         INF('Creating Aria Panel "%s" on monitor %s', name, monitor.get_connector())
 
         anchors = [POSITIONS.get(conf.position)]
@@ -102,7 +170,6 @@ class AriaPanel(AriaWindow):
             keyboard_mode=AriaWindow.KeyboardMode.NONE,
             monitor=monitor,
             opacity=conf.opacity / 100.0,
-            # decorated=False,
         )
         self._box1: Gtk.Box | None = None
         self._box2: Gtk.Box | None = None

@@ -35,11 +35,9 @@ from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
 from aria_shell.utils import Timer, FileMonitor, exec_detached
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
-from aria_shell.services.display import DisplayService
 from aria_shell.services.commands import AriaCommands
 from aria_shell.components import AriaComponent
 from aria_shell.components.cmd_socket import AriaCommandSocket
-from aria_shell.components.panel import AriaPanel, PanelConfig
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -53,9 +51,6 @@ class AriaShell(Gtk.Application):
 
         # keep track of loaded components
         self.components: list[AriaComponent] = []
-
-        # keep track of alive panels, ex: {'eDP-1': [Panel,Panel,..]}
-        self.panels: dict[str, list[AriaPanel]] = {}
 
         # keep track of loaded CSS
         self.css_providers: list[Gtk.CssProvider] = []
@@ -123,11 +118,6 @@ class AriaShell(Gtk.Application):
         self.keep_alive_win = Gtk.Window()
         self.add_window(self.keep_alive_win)
 
-        # stay informed about changed monitors
-        ds = DisplayService()
-        ds.connect('monitor-added', self._on_monitor_added)
-        ds.connect('monitor-removed', self._on_monitor_removed)
-
         # now prepare all the stuff that can be reloaded
         self._setup_everything()
 
@@ -161,6 +151,9 @@ class AriaShell(Gtk.Application):
         # register the reload command
         AriaCommands().register('reload', lambda c,p: self.reload())
 
+        # preload all modules (the gadgets)
+        preload_all_modules()
+
         # automatically create an instance of all components
         for component in AriaComponent.__subclasses__():
             INF('Initializing component: %s', component.__name__)
@@ -175,13 +168,6 @@ class AriaShell(Gtk.Application):
             else:
                 self.components.append(instance)
 
-        # preload all modules (the gadgets)
-        preload_all_modules()
-
-        # inspect connected monitors, and create needed panels
-        for monitor in DisplayService().monitors:
-            self._on_monitor_added(monitor)
-
         # run user applications from the [autostart] config section
         for command in self.config.autostart():
             exec_detached(command)
@@ -194,12 +180,6 @@ class AriaShell(Gtk.Application):
         while self.file_monitors:
             monitor = self.file_monitors.pop()
             monitor.destroy()
-
-        # destroy all panels
-        for monitor, panels in self.panels.items():
-            for panel in panels:
-                panel.shutdown()
-        self.panels = {}
 
         # shutdown all modules
         unload_all_modules()
@@ -281,41 +261,4 @@ class AriaShell(Gtk.Application):
     def _reload_css_styles(self):
         self._clear_css_styles()
         self._load_css_styles(self.args.style)
-    # endregion
-
-    #---------------------------------------------------------------------------
-    # region: Manage monitors plugged and unplugged, create necessary Panels
-    #---------------------------------------------------------------------------
-    def _on_monitor_added(self, monitor: Gdk.Monitor):
-        output_name = monitor.get_connector()
-        if not output_name:
-            CRI('Cannot find monitor name for monitor %s', monitor)
-            return
-
-        INF('Monitor connected %s', output_name)
-        # geom = monitor.get_geometry()
-        # DBG(f'MONITOR: {monitor.get_model()} - {output_name} - scale={monitor.get_scale_factor()} valid={monitor.is_valid()}')
-        # DBG(f'GEOMETRY: size={geom.width}x{geom.height} x={geom.x} y={geom.y}')
-
-        self._create_panels_for_monitor(monitor)
-
-    def _on_monitor_removed(self, monitor: Gdk.Monitor):
-        name = monitor.get_connector()
-        INF(f'Monitor disconnected {name}')
-        for panel in self.panels.pop(name, []):
-            panel.shutdown()
-
-    def _create_panels_for_monitor(self, monitor: Gdk.Monitor):
-        output_name = monitor.get_connector()
-        for section in sorted(self.config.sections('panel')):
-            panel_conf = self.config.section(section, PanelConfig)
-            outputs = panel_conf.outputs
-            if (not outputs) or ('all' in outputs) or (output_name in outputs):
-                if ':' in section and not section.endswith(':'):
-                    panel_name = section.split(':')[1]
-                else:
-                    panel_name = 'Aria Panel'
-
-                panel = AriaPanel(panel_name, panel_conf, monitor, self)
-                self.panels.setdefault(output_name, []).append(panel)
     # endregion

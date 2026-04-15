@@ -15,9 +15,8 @@ lots to write here... help wanted ;)
 
 ## Dependencies
 
-### System dependency
+### System dependencies
 ```
-Python >= 3.14
 Gio 2.0 (GioUnix 2.0)
 Gtk >= 4.14
 Gtk4LayerShell
@@ -25,12 +24,26 @@ vte4 (optional, for the embedded terminal)
 libwireplumber (optional, for the audio gadget)
 ```
 
-### python dependency
+### Python dependencies
 ```
+Python >= 3.14
 PyGObject >= 3.50.0
+pywayland >= 0.4.18
 dasbus
 psutil (optional, for the perf gadget)
 ```
+
+### Arch packages
+```
+gtk4 gtk4-layer-shell vte4
+python-gobject python-pywayland python-dasbus python-pam python-psutil
+```
+
+### Develop only utilities:
+```
+pip install pytest pygobject-stubs
+```
+
 
 
 ## Aria panel

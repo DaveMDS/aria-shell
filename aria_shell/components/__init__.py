@@ -1,5 +1,5 @@
 from .aria_component import AriaComponent
-
+from .panel import AriaPanels
 from .launcher import AriaLauncher
 from .exiter import AriaExiter
 from .locker import AriaLocker

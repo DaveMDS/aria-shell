@@ -42,9 +42,9 @@ class PanelConfig(AriaConfigModel):
     align: str = 'center'
     margin: int = 0
     opacity: int = 80
-    ontheleft: list[str] = []
-    inthecenter: list[str] = []
-    ontheright: list[str] = []
+    items_start: list[str] = []
+    items_center: list[str] = []
+    items_end: list[str] = []
 
     @staticmethod
     def validate_opacity(val: int):
@@ -214,20 +214,20 @@ class AriaPanel(AriaWindow):
 
     def populate(self):
         # add a clock in the center for empty configs
-        if not self.conf.ontheleft and not self.conf.ontheright and not self.conf.inthecenter:
-            self.conf.inthecenter = ['Clock']
+        if not self.conf.items_start and not self.conf.items_center and not self.conf.items_end:
+            self.conf.items_center = ['Clock']
 
         # populate box1 (start)
-        for module_name in self.conf.ontheleft:
+        for module_name in self.conf.items_start:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box1.append(gadget)
 
         # populate box2 (center)
-        for module_name in self.conf.inthecenter:
+        for module_name in self.conf.items_center:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box2.append(gadget)
 
         # populate box3 (end)
-        for module_name in self.conf.ontheright:
+        for module_name in self.conf.items_end:
             if gadget := request_module_gadget(module_name, self.monitor):
                 self._box3.append(gadget)

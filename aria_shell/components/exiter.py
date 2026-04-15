@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 from collections.abc import Callable
 
 from gi.repository import Gtk
@@ -9,7 +10,8 @@ from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils.logger import get_loggers
 from aria_shell.i18n import i18n, MissingTranslation
-
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
@@ -53,7 +55,7 @@ class ExiterConfig(AriaConfigModel):
 
 
 class AriaExiter(CleanupHelper, AriaComponent):
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: AriaShell):
         super().__init__(app)
         self.config = AriaConfig().section('exiter', ExiterConfig)
         AriaCommands().register('exiter', self.the_exiter_command)

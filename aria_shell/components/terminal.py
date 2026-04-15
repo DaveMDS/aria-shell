@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 try:
     import gi
     gi.require_version('Vte', '3.91')
@@ -15,6 +17,8 @@ from aria_shell.utils.env import HOME, SHELL
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.utils.logger import get_loggers
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -44,7 +48,7 @@ class TerminalConfig(AriaConfigModel):
 
 
 class AriaTerminal(CleanupHelper, AriaComponent):
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: AriaShell):
         super().__init__(app)
         if Vte is None:
             raise RuntimeError('Vte4 not available, embedded terminal is disabled!')

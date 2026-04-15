@@ -1,4 +1,4 @@
-from .component import AriaComponent
+from .aria_component import AriaComponent
 
 from .launcher import AriaLauncher
 from .exiter import AriaExiter

@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from gi.repository import Gtk, Gio, Gdk
 
 from aria_shell.components import AriaComponent
@@ -7,7 +9,8 @@ from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.ui import AriaWindow, CleanupHelper
 from aria_shell.utils import clamp
 from aria_shell.utils.logger import get_loggers
-
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
@@ -46,7 +49,7 @@ class NotificatorConfig(AriaConfigModel):
 
 class AriaNotificator(CleanupHelper, AriaComponent):
     """The notificator window show a ListView of Notification."""
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: AriaShell):
         super().__init__(app)
 
         # load config, nicely wrapped in a NotificatorConfig model

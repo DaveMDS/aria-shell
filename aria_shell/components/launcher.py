@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 from operator import attrgetter
 
 from gi.repository import GObject, GLib, Gio, Gdk, Gtk
@@ -10,6 +11,8 @@ from aria_shell.ui import AriaWindow
 from aria_shell.utils import clamp, PerfTimer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
@@ -40,7 +43,7 @@ class LauncherConfig(AriaConfigModel):
 
 
 class AriaLauncher(CleanupHelper, AriaComponent):
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: AriaShell):
         super().__init__(app)
 
         # get launcher config and register the launcher command

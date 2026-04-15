@@ -9,6 +9,7 @@ References:
 - https://wmww.github.io/gtk4-layer-shell/gtk4-layer-shell-GTK4-Session-Lock.html
 
 """
+from typing import TYPE_CHECKING
 from datetime import datetime
 
 from gi.repository import Gtk, Gdk
@@ -22,7 +23,8 @@ from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.env import USER_INFO, search_user_avatar
 from aria_shell.utils.logger import get_loggers
 from aria_shell.i18n import i18n
-
+if TYPE_CHECKING:
+    from aria_shell.ariashell import AriaShell
 
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
@@ -41,7 +43,7 @@ class AriaLocker(CleanupHelper, AriaComponent):
     """
     Aria screen locker manager.
     """
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: AriaShell):
         super().__init__(app)
         self.config = AriaConfig().section('locker', LockerConfig)
         AriaCommands().register('lock', self.the_locker_command)

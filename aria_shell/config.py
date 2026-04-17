@@ -1,4 +1,4 @@
-from typing import Mapping, TypeVar
+from typing import Mapping, TypeVar, Literal, get_origin, get_args
 
 import configparser
 from pathlib import Path
@@ -45,6 +45,9 @@ class AriaConfigModel:
             if annot == str:
                 val = str_val
 
+            elif annot == Path:
+                val = Path(str_val)
+
             elif annot == int:
                 try:
                     val = int(str_val)
@@ -71,13 +74,21 @@ class AriaConfigModel:
             elif annot == list[str]:
                 val = str_val.split()
 
+            elif get_origin(annot) is Literal:
+                allowed_values = get_args(annot)
+                if str_val in allowed_values:
+                    val = str_val
+                else:
+                    ERR(f'Invalid value: {str_val} for key: {key}. Must be one of: {allowed_values}')
+                    continue
+
             else:
                 WRN(f'Unknown annotation: {annot} for key: {key}')
                 val = str_val
 
             # run the custom validator if present
             validator = getattr(self, f'validate_{key}', None)
-            if validator and callable(validator):
+            if callable(validator):
                 try:
                     val = validator(val)
                 except ValueError as e:

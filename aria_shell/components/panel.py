@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from gi.repository import Gdk, Gtk
 
@@ -36,9 +36,9 @@ SIZES = {
 class PanelConfig(AriaConfigModel):
     """The configuration model for a single panel."""
     outputs: list[str] = 'all'
-    position: str = 'top'
-    layer: str = 'bottom'
-    size: str = 'fill'
+    position: Literal['top', 'bottom'] = 'top'
+    layer: Literal['top', 'bottom', 'overlay'] = 'bottom'
+    size: Literal['fill', 'min'] = 'fill'
     align: str = 'center'
     margin: int = 0
     opacity: int = 80
@@ -53,27 +53,6 @@ class PanelConfig(AriaConfigModel):
     @staticmethod
     def validate_margin(val: int):
         return clamp(val, 0, 9999)
-
-    @staticmethod
-    def validate_size(val: str):
-        if val not in SIZES:
-            raise ValueError(f'Invalid size "{val}" for panel. '
-                             'Allowed values: ' + ','.join(SIZES))
-        return val
-
-    @staticmethod
-    def validate_position(val: str):
-        if val not in POSITIONS:
-            raise ValueError(f'Invalid position "{val}" for panel. '
-                             'Allowed values: ' + ','.join(POSITIONS.keys()))
-        return val
-
-    @staticmethod
-    def validate_layer(val: str):
-        if val not in LAYERS:
-            raise ValueError(f'Invalid layer "{val}" for panel. '
-                             'Allowed values: ' + ','.join(LAYERS.keys()))
-        return val
 
 
 class AriaPanels(AriaComponent):

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from gi.repository import Gtk, Gio, Gdk
 
@@ -28,7 +28,8 @@ POSITIONS = {
 class NotificatorConfig(AriaConfigModel):
     enabled: bool = True
     duration: int = 20
-    position: str = 'top-right'
+    position: Literal['top-left', 'top-right','top-center',
+                      'bottom-left','bottom-right','bottom-center'] = 'top-right'
     opacity: int = 100
 
     @staticmethod
@@ -38,13 +39,6 @@ class NotificatorConfig(AriaConfigModel):
     @staticmethod
     def validate_opacity(val: int):
         return clamp(val, 0, 100)
-
-    @staticmethod
-    def validate_position(val: str):
-        if val not in POSITIONS:
-            raise ValueError(f'Invalid position "{val}" for notification. '
-                             f'Allowed values: {','.join(POSITIONS)}')
-        return val
 
 
 class AriaNotificator(CleanupHelper, AriaComponent):

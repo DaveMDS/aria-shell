@@ -25,6 +25,8 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class TerminalConfig(AriaConfigModel):
+    __section__ = 'terminal'
+
     opacity: int = 75
     cols: int = 120
     rows: int = 30
@@ -53,7 +55,7 @@ class AriaTerminal(CleanupHelper, AriaComponent):
         if Vte is None:
             raise RuntimeError('Vte4 not available, embedded terminal is disabled!')
 
-        self.conf = AriaConfig().section('terminal', TerminalConfig)
+        self.conf = AriaConfig().section(TerminalConfig)
         AriaCommands().register('terminal', self.the_terminal_command)
 
         self.win = AriaWindow(

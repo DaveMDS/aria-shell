@@ -27,6 +27,8 @@ DEFAULT_ICONS = {
 
 
 class ExiterConfig(AriaConfigModel):
+    __section__ = 'exiter'
+
     columns: int = 3
     ask_confirm: bool = True
     confirm_timeout: int = 30
@@ -57,7 +59,7 @@ class ExiterConfig(AriaConfigModel):
 class AriaExiter(CleanupHelper, AriaComponent):
     def __init__(self, app: AriaShell):
         super().__init__(app)
-        self.config = AriaConfig().section('exiter', ExiterConfig)
+        self.config = AriaConfig().section(ExiterConfig)
         AriaCommands().register('exiter', self.the_exiter_command)
 
         self.win = AriaWindow(

@@ -24,7 +24,8 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class IdlerConfig(AriaConfigModel):
-    pass  # the config is fully dynamic
+    __section__ = 'idler'
+    # the config is fully dynamic
 
 
 @dataclass
@@ -40,7 +41,7 @@ class AriaIdler(AriaComponent, CleanupHelper):
     """
     def __init__(self, app: AriaShell):
         super().__init__(app)
-        self.config = AriaConfig().section('idler', IdlerConfig)
+        self.config = AriaConfig().section(IdlerConfig)
 
         # keep track of created Notification objects
         self.notifications: list[ExtIdleNotificationV1] = []

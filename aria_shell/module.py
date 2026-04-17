@@ -171,7 +171,7 @@ def request_module_gadget(name: str, monitor: Gdk.Monitor) -> AriaGadget | None:
 
     # prepare the gadget config, using the model in config_model_class
     if mod.config_model_class:
-        conf = AriaConfig().section(name, mod.config_model_class)
+        conf = AriaConfig().section(mod.config_model_class, name)
     else:
         conf = None
 

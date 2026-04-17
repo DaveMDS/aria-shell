@@ -30,6 +30,8 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class LockerConfig(AriaConfigModel):
+    __section__ = 'locker'
+
     password_prompt: bool = True
     show_avatar: bool = True
     show_username: bool = True
@@ -45,7 +47,7 @@ class AriaLocker(CleanupHelper, AriaComponent):
     """
     def __init__(self, app: AriaShell):
         super().__init__(app)
-        self.config = AriaConfig().section('locker', LockerConfig)
+        self.config = AriaConfig().section(LockerConfig)
         AriaCommands().register('lock', self.the_locker_command)
 
         self._lock_instance: GtkSessionLock.Instance | None = None

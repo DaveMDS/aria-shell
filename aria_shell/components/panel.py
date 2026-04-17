@@ -35,6 +35,8 @@ SIZES = {
 
 class PanelConfig(AriaConfigModel):
     """The configuration model for a single panel."""
+    __section__ = 'panel'
+
     outputs: list[str] = 'all'
     position: Literal['top', 'bottom'] = 'top'
     layer: Literal['top', 'bottom', 'overlay'] = 'bottom'
@@ -101,7 +103,7 @@ class AriaPanels(AriaComponent):
         output_name = monitor.get_connector()
         config = AriaConfig()
         for section in sorted(config.sections('panel')):
-            panel_conf = config.section(section, PanelConfig)
+            panel_conf = config.section(PanelConfig, section)
             outputs = panel_conf.outputs
             if (not outputs) or ('all' in outputs) or (output_name in outputs):
                 if ':' in section and not section.endswith(':'):

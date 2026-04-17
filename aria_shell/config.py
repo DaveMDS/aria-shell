@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import Mapping, TypeVar, Literal, get_origin, get_args
 
 import configparser
@@ -12,10 +13,12 @@ from aria_shell.utils.env import lookup_config_file
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class AriaConfigModel:
+class AriaConfigModel(ABC):
     """
     Base class for annotated config sections.
     """
+    __section__ = '' # section name, must be overridden in subclasses
+
     def __init__(self, conf_data: Mapping[str, str]):
         # Config classes must be annotated
         try:
@@ -119,6 +122,8 @@ class AriaConfigModel:
 
 class AriaConfigGeneralModel(AriaConfigModel):
     """Model for the [general] main section."""
+    __section__ = 'general'
+
     modules: list[str] = []
     style: str = ''
     reload_config: bool = False
@@ -172,7 +177,7 @@ class AriaConfig(metaclass=Singleton):
     def general(self) -> AriaConfigGeneralModel:
         """ Get the [general] config section """
         if self._general is None:
-            self._general = AriaConfigGeneralModel(self.section_dict('general'))
+            self._general = self.section(AriaConfigGeneralModel)
         return self._general
 
     def autostart(self) -> list[str]:
@@ -181,11 +186,12 @@ class AriaConfig(metaclass=Singleton):
             return self._parser.options('autostart')
         return []
 
-    def section(self, section_name: str,
-                model_class: type[AriaConfigModelType]
+    def section(self, model_class: type[AriaConfigModelType],
+                section_name: str | None = None
                 ) -> AriaConfigModelType:
-        """ Get the given section, wrapped in model_class """
-        return model_class(self.section_dict(section_name))
+        """ Get the config section nicely wrapped in `model_class` """
+        data = self.section_dict(section_name or model_class.__section__)
+        return model_class(data)
 
     def section_dict(self, section_name: str) -> Mapping[str, str]:
         """ Return the raw section dict, with keys and values as string """

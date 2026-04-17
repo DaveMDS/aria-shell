@@ -19,6 +19,8 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
 class LauncherConfig(AriaConfigModel):
+    __section__ = 'launcher'
+
     icon_size: int = 48
     opacity: int = 100
     width: int = 400
@@ -47,7 +49,7 @@ class AriaLauncher(CleanupHelper, AriaComponent):
         super().__init__(app)
 
         # get launcher config and register the launcher command
-        self.conf = AriaConfig().section('launcher', LauncherConfig)
+        self.conf = AriaConfig().section(LauncherConfig)
         AriaCommands().register('launcher', self.the_launcher_command)
 
         # declare internal widgets

@@ -26,6 +26,8 @@ POSITIONS = {
 
 
 class NotificatorConfig(AriaConfigModel):
+    __section__ = 'notifications'
+
     enabled: bool = True
     duration: int = 20
     position: Literal['top-left', 'top-right','top-center',
@@ -47,7 +49,7 @@ class AriaNotificator(CleanupHelper, AriaComponent):
         super().__init__(app)
 
         # load config, nicely wrapped in a NotificatorConfig model
-        self.config = AriaConfig().section('notifications', NotificatorConfig)
+        self.config = AriaConfig().section(NotificatorConfig)
         if not self.config.enabled:
             raise RuntimeError('Notifications disabled by config')
 

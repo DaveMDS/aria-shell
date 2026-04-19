@@ -11,7 +11,7 @@ from gi.repository import GLib, Gdk, Gtk, Pango
 from gi.repository import Gtk4LayerShell as GtkLayerShell
 
 from aria_shell.components import AriaComponent
-from aria_shell.ui import AriaWindow
+from aria_shell.gui import AriaWindow
 from aria_shell.utils import clamp, CleanupHelper
 from aria_shell.utils.env import HOME, SHELL
 from aria_shell.config import AriaConfig, AriaConfigModel

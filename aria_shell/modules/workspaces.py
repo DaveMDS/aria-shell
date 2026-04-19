@@ -1,7 +1,7 @@
 from gi.repository import Gtk, GObject
 
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaBox
+from aria_shell.gui import AriaBox
 from aria_shell.utils import CleanupHelper
 from aria_shell.services.wm import WindowManagerService, Workspace, Window
 from aria_shell.services.xdg import XDGDesktopService

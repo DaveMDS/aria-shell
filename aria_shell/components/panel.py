@@ -4,7 +4,7 @@ from gi.repository import Gdk, Gtk
 
 from aria_shell.components import AriaComponent
 from aria_shell.services.display import DisplayService
-from aria_shell.ui import AriaWindow
+from aria_shell.gui import AriaWindow
 from aria_shell.utils import clamp
 from aria_shell.module import request_module_gadget, destroy_module_gadget
 from aria_shell.config import AriaConfigModel, AriaConfig

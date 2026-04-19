@@ -6,8 +6,8 @@ from aria_shell.components import AriaComponent
 from aria_shell.services.notifications import \
     Notification, NotificationService, Urgency, CloseReason, Action
 from aria_shell.config import AriaConfig, AriaConfigModel
-from aria_shell.ui import AriaWindow, CleanupHelper
-from aria_shell.utils import clamp
+from aria_shell.gui import AriaWindow
+from aria_shell.utils import clamp, CleanupHelper
 from aria_shell.utils.logger import get_loggers
 if TYPE_CHECKING:
     from aria_shell.ariashell import AriaShell

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from gi.repository import Gtk
 
 from aria_shell.components import AriaComponent
-from aria_shell.ui import AriaWindow, AriaDialog
+from aria_shell.gui import AriaWindow, AriaDialog
 from aria_shell.utils import clamp, exec_command_or_program, Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.services.commands import AriaCommands, CommandFailed

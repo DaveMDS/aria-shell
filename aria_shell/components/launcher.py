@@ -7,7 +7,7 @@ from aria_shell.components import AriaComponent
 from aria_shell.i18n import i18n
 from aria_shell.services.commands import AriaCommands, CommandFailed
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
-from aria_shell.ui import AriaWindow
+from aria_shell.gui import AriaWindow
 from aria_shell.utils import clamp, PerfTimer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.logger import get_loggers

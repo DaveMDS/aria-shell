@@ -1,6 +1,6 @@
 from gi.repository import Gtk
 
-from aria_shell.ui import AriaBox
+from aria_shell.gui import AriaBox
 from aria_shell.utils import CleanupHelper
 
 

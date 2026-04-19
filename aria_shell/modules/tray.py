@@ -18,7 +18,7 @@ from gi.repository import Gtk, GObject, GLib, Graphene
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaPopover
+from aria_shell.gui import AriaPopover
 from aria_shell.utils import IndexedListStore, CleanupHelper
 from aria_shell.utils.logger import get_loggers
 from aria_shell.services.dbus_menu import CanonicalDBusMenu

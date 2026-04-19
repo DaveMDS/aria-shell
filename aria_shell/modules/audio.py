@@ -6,7 +6,7 @@ from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel
 from aria_shell.services.xdg import XDGDesktopService
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaSlider, AriaPopover, AriaBox
+from aria_shell.gui import AriaSlider, AriaPopover, AriaBox
 from aria_shell.services.audio import (
     AudioService, AudioChannel, AudioChannelGroup, MediaPlayer
 )

@@ -4,7 +4,7 @@ import psutil
 from gi.repository import GLib, Gtk
 
 from aria_shell.gadget import AriaGadget
-from aria_shell.ui import AriaPopover
+from aria_shell.gui import AriaPopover
 from aria_shell.utils import safe_format, human_size
 from aria_shell.module import AriaModule, GadgetRunContext
 from aria_shell.config import AriaConfigModel

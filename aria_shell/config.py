@@ -50,6 +50,8 @@ class AriaConfigModel(ABC):
 
             elif annot == Path:
                 val = Path(str_val)
+                if not val.is_absolute():
+                    val = AriaConfig().resolve_path(val)
 
             elif annot == int:
                 try:
@@ -145,6 +147,7 @@ class AriaConfig(metaclass=Singleton):
         )
         self._parser.optionxform = str  # do not lowercase the keys!
         self._general: AriaConfigGeneralModel | None = None
+        self._parsed_file: Path | None = None
 
     def load_conf(self, config_file: Path = None) -> Path:
         """ Load the aria config file, from config_file or searched in system """
@@ -166,12 +169,23 @@ class AriaConfig(metaclass=Singleton):
         else:
             ERR(f'Cannot find a configuration file')
 
+        self._parsed_file = config_file
         return config_file
 
     def clear(self):
         """ Cleanup all loaded configs """
         self._parser.clear()
         self._general = None
+        self._parsed_file = None
+
+    @property
+    def parsed_file(self) -> Path:
+        """ The file path of the config actually loaded """
+        return self._parsed_file
+
+    def resolve_path(self, path: Path) -> Path:
+        """ Make `path` absolute, using the loaded config as base """
+        return self._parsed_file.parent / path
 
     @property
     def general(self) -> AriaConfigGeneralModel:

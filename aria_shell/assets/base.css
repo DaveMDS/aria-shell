@@ -41,7 +41,8 @@ https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-22/gtk/theme/Adwaita/_colors-pub
 
 
 /* Grrr...cannot find a way to use the default windows border defined in the gtk theme... */
-window.aria-window {
+window.aria-window:not(.aria-panel):not(.aria-wallpaper)
+{
   border: var(--aria-surface-border);
   border-radius: var(--aria-surface-border-radius);
   box-shadow: var(--aria-surface-shadow);

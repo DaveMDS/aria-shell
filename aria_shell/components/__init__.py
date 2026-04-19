@@ -6,3 +6,4 @@ from .locker import AriaLocker
 from .notificator import AriaNotificator
 from .terminal import AriaTerminal
 from .idler import AriaIdler
+from .wallpaper import AriaWallpaper

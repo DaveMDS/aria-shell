@@ -124,13 +124,16 @@ NOTE: I'm not sure if this should be an aria responsibility, seems we are fighti
 
 
 ## Aria wallpaper
-- [ ] manage the background with a gtk window (layer shell? other ways?)
-- [ ] ability to show a single background or rotate in a given folder
-- [ ] support video playback
-- [ ] support shader toys shaders from file :D
-- [ ] interactive wallpapers? how? in python?
-- [ ] image that change based on daytime (how? multiple images? any standard?)
-- [ ] logtail in wallpaper?
+- [x] draw the background using the LayerShell protocol
+- [x] different background per specific monitor
+- [x] ability to change picture fit (fill, contain, cover, etc...)
+- [ ] ability to rotate from files in a given folder
+- [x] static images
+- [x] animated GIF images
+- [x] video playback (muted and looped)
+- [ ] shadertoys.com shaders from file  (COMING SOON) :D 
+- [ ] day-time based wallpapers (formats?)
+- [ ] auto-pause when on battery? or when full covered?
 
 
 ## AriaNotifier
@@ -155,9 +158,16 @@ NOTE: I'm not sure if this should be an aria responsibility, seems we are fighti
 - [ ] find more cool fonts for the default config (ship one in pkg?)
 
 
-## Aria lockidle
-- see hypridle
-
+## Aria commands
+- [x] ping
+- [x] reload
+- [x] lock
+- [x] launcher [toggle|show|hide]
+- [x] terminal [toggle|show|hide]
+- [x] exiter [toggle|show|hide]
+- [ ] notify ....
+- [ ] osd ...
+- [ ] dmenu ...
 
 
 

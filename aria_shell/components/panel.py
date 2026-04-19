@@ -87,15 +87,10 @@ class AriaPanels(AriaComponent):
         self.panels.clear()
 
     def _on_monitor_added(self, monitor: Gdk.Monitor):
-        if output_name := monitor.get_connector():
-            INF('Monitor connected %s', output_name)
-            self._create_panels_for_monitor(monitor)
-        else:
-            CRI('Cannot find monitor name for monitor %s', monitor)
+        self._create_panels_for_monitor(monitor)
 
     def _on_monitor_removed(self, monitor: Gdk.Monitor):
         name = monitor.get_connector()
-        INF('Monitor disconnected %s', name)
         for panel in self.panels.pop(name, []):
             panel.shutdown()
 
@@ -120,7 +115,7 @@ class AriaPanel(AriaWindow):
     A single AriaWindow for a single PanelConfig on the given monitor.
     """
     def __init__(self, name: str, conf: PanelConfig, monitor: Gdk.Monitor, app: AriaShell):
-        INF('Creating Aria Panel "%s" on monitor %s', name, monitor.get_connector())
+        INF('Creating panel "%s" on monitor %s', name, monitor.get_connector())
 
         anchors = [POSITIONS.get(conf.position)]
         if conf.size == 'fill':

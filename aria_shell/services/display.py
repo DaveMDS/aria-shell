@@ -58,12 +58,14 @@ class DisplayService(Signalable, metaclass=Singleton):
         for i in range(removed):
             if pos < len(self._monitors):
                 monitor = self._monitors.pop(pos)
+                INF('Monitor disconnected: %s', monitor.get_connector())
                 self.emit('monitor-removed', monitor)
 
     def _monitor_try_insert(self, monitor: Gdk.Monitor, pos: int) -> bool:
         if monitor in self._monitors:
             return True
         if monitor.is_valid() and monitor.get_connector():
+            INF('Monitor connected: %s', monitor.get_connector())
             self._monitors.insert(pos, monitor)
             self.emit('monitor-added', monitor)
             return True

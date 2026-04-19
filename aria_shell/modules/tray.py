@@ -282,7 +282,7 @@ class StatusNotifierItem(GObject.Object):
         if callable(call):
             try:
                 val = call()
-            except DBusError:
+            except (DBusError, TimeoutError):
                 # its possible we request props that do not exist.
                 # fe: the IconPixmap request when we receive the NewIcon.
                 return

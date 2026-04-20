@@ -321,6 +321,9 @@ window.aria-panel {
   background-color: var(--aria-warning-color);
   color: var(--aria-on-accent-color);
 }
+.gadget-workspaces .aria-workspace-label {
+  padding-right: 4px;
+}
 .gadget-workspaces .aria-workspace-window {
   margin-right: 2px;
   -gtk-icon-style: symbolic;  /* requested|regular|symbolic */

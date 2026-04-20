@@ -1,193 +1,236 @@
-# A Desktop Shell for Wayland
-![](https://img.shields.io/endpoint?label=LOC&color=blue&logo=python&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.py)
-![](https://img.shields.io/endpoint?label=CSS&color=pink&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.css)
+# Aria Shell
 
-AriaShell is the perfect companion for your Hyprland, Sway, etc... compositor.
+![License](https://img.shields.io/github/license/davemds/aria-shell)
+![LOC-PY](https://img.shields.io/endpoint?label=LOC&color=blue&logo=python&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.py)
+![LOC-CSS](https://img.shields.io/endpoint?label=CSS&color=pink&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.css)
 
+A fast, modern and customizable desktop shell for your Wayland compositor.
+
+AriaShell is a full-featured desktop shell designed to complement Wayland compositors
+such as **Hyprland**, **Sway**, and others. It provides a panel, launcher, lock screen, 
+notification daemon, wallpaper manager, terminal, and more — all configurable and themeable.
 
 > [!WARNING]
-> 
-> DEVELOPMENT STAGE
-> 
-> PLEASE COME BACK IN A FEW DAYS
+> **The project is in active development.** Expect breaking changes and incomplete features.
+
+---
+
+## Components
+ 
+### 🗂️ Aria Panel
+A fully customizable panel with a rich set of built-in gadgets:
+ 
+| Gadget       | Status | Description                                                                |
+|--------------|---|---------------------------------------------------------------------------------|
+| `clock`      | ✅ | Current time with a calendar popup                                              |
+| `perf`       | ✅ | CPU, RAM, load and temperature monitor with top-like popup                      |
+| `workspaces` | ✅ | Workspaces and windows overview (Hyprland & Sway)                               |
+| `audio`      | ✅ | Volume control, multichannel mixer (WirePlumber) and MPRIS2 media controls      |
+| `tray`       | ✅ | System tray via (K)StatusNotifierItem + DBusMenu                                |
+| `theme`      | ✅ | GTK theme & icon theme selector with light/dark mode support                    |
+| `custom`     | ✅ | User-defined gadgets with label, icon and command                               |
+| `logout`     | ✅ | A Custom button to invoke Aria Exiter                                           |
+| `power`      | 🔲 | Idle inhibitor, battery status, power profiles                                  |
+| `network`    | 🔲 | Full featured network manager                                                   |
+| `bluetooth`  | 🔲 | bluetooth manager                                                               |
+| `screenshot` | 🔲 | Screenshot and screen recorder                                                  |
+| `apps`       | 🔲 | fixed list of apps to run (like a dock)                                         |
+| `home`       | 🔲 | a menu (cinnamon style) with app categories, search, favorites and sys controls |
+| `file`       | 🔲 | file browser in a tree of menus?                                                |
+| `places`     | 🔲 | menu with usefully locations, like home, favorites, devices                     |
+| `brightness` | 🔲 | set monitor bright....how?                                                      |
+ 
+Pango markup is supported in labels and tooltips. Full configuration via the `aria.conf` file.
 
 
+---
 
-lots to write here... help wanted ;)
+### 🚀 Aria Launcher
+An application launcher with support for `.desktop` files and multiple search providers.
+ 
+- ✅ Search and run `.desktop` applications
+- ✅ Multiple search provider architecture
+- 🔲 App list auto-update on install/uninstall
+- 🔲 Usage-based ranking
+- 🔲 Secondary commands (e.g. "Firefox — New Private Window")
 
+
+---
+
+### 🔒 Aria Locker
+A lock screen implementing the `ext-session-lock-v1` Wayland protocol.
+ 
+- ✅ Date/time and user name/avatar display
+- ✅ PAM-based password authentication
+- 🔲 Background customization (same capabilities as Aria Wallpaper)
+
+
+---
+
+### 🚪 Aria Exiter
+A session management dialog for locking, suspending, hibernating, logging out, rebooting and shutting down.
+
+- ✅ Fully customizable actions and labels via config
+- ✅ Auto-expiring confirmation dialogs for dangerous actions
+- ✅ Custom buttons with icon, label and confirmation support
+
+
+---
+
+### 🖼️ Aria Wallpaper
+A background manager built on the `LayerShell` Wayland protocol. Each monitor can 
+have a completely independent wallpaper, and sources can be mixed freely across
+displays — a static image on the laptop screen, an animated GIF on a second 
+monitor, a live shader on the third.
+
+#### Supported sources
+
+**Static images** — standard raster formats (PNG, JPEG, WEBP).
+
+**Animated GIFs** — frame-accurate GIF playback, looped continuously. Useful for subtle motion loops without the overhead of a video file.
+
+**Video** — muted, looped playback of any GStreamer-supported container (MP4, WEBM, MKV…). Requires the `gstreamer` optional dependency.
+
+**Shadertoy shaders** — GLSL fragment shaders sourced directly from [shadertoy.com](https://shadertoy.com). Save any shader code as a `.shadertoy` file and point the config at it. The shader is executed on the GPU every frame via OpenGL, giving you a fully animated, procedurally generated background with zero CPU cost. Requires the `PyOpenGL` optional dependency.
+
+- ✅ Per-monitor backgrounds
+- ✅ Fit modes: fill, contain, cover, etc.
+- ✅ Static images
+- ✅ Animated GIFs
+- ✅ Video playback (muted loop)
+- ✅ [Shadertoy](https://shadertoy.com) shader support (`.shadertoy` files)
+- 🔲 texture based shader support
+- 🔲 Cycle through files in folder
+- 🔲 day-time-based wallpapers
+- 🔲 auto-pause when on battery? or when full covered?_
+
+
+---
+
+### 🔔 Aria Notifier
+A full-featured desktop notification server, replacing tools like `mako`.
+ 
+- ✅ Icon and image data via DBus
+- ✅ Markup support
+- ✅ Action buttons inside notifications
+- ✅ Urgency styling via CSS
+- 🔲 Sound support, notification persistence
+- 🔲 Limit the number of visible notification somehow
+
+
+---
+
+### 💻 Aria Terminal
+A lightweight drop-down terminal (requires `vte4`).
+ 
+- ✅ Show/hide on command (Quake-style)
+- ✅ Configurable opacity, font, size and shell
+- ✅ Optional display grab when visible
+- ✅ Fullscreen emulation via `Ctrl+F`
+- 🔲 show/hide animation ala quake console
+
+
+---
+
+### 💤 Aria Idler *(experimental)*
+An idle daemon using the `ext_idle_notifier_v1` Wayland protocol.
+
+>[!NOTE] I'm not sure if this thing should be an aria responsibility, seems 
+>we are fighting with systemd abilities.
+
+- ✅ Configurable idle/resume commands (Aria or external)
+- ✅ Simple syntax in `aria.conf`
+- 🔲 Per-scenario timeouts (AC vs battery)
+- 🔲 manage events like on-lid-closed? How?
+- 🔲 manage before-sleep and the like?
+
+
+---
+
+### ⌨️ Aria Commands
+Control AriaShell programmatically via commands:
+ 
+```
+aria ping
+aria reload
+aria lock
+aria launcher [toggle|show|hide]
+aria terminal [toggle|show|hide]
+aria exiter   [toggle|show|hide]
+TODO: notify ....
+TODO: osd ...
+TODO: dmenu ...
+```
+
+---
 
 ## Dependencies
 
-### System dependencies
+### System libraries
 ```
-Gio 2.0 (GioUnix 2.0)
+Gio >= 2.0 (GioUnix 2.0)
 Gtk >= 4.14
 Gtk4LayerShell
-libwireplumber (optional, for the audio gadget)
-gstreamer (optional, for video playback in wallpaper and screensaver)
-vte4 (optional, for the embedded terminal)
+libwireplumber    # optional — audio gadget
+gstreamer         # optional — video wallpaper and screensaver
+vte4              # optional — embedded terminal
 ```
 
-### Python dependencies
+### Python packages
 ```
 Python >= 3.14
 PyGObject >= 3.50.0
 pywayland >= 0.4.18
 dasbus
-psutil (optional, for the perf gadget)
-PyOpenGL >= 3.1.7 (optional, to play shaders in wallpaper and screensaver)
+psutil            # optional — perf gadget
+PyOpenGL          # optional — shader wallpaper/screensaver
 ```
 
-### Arch packages
-```
-gtk4 gtk4-layer-shell vte4
-python-gobject python-pywayland python-dasbus python-pam python-psutil
-gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-libav 
-python-opengl
+### Arch Linux
+```bash
+sudo pacman -S gtk4 gtk4-layer-shell vte4 \
+               python-gobject python-pywayland python-dasbus \
+               python-pam python-psutil \
+               gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-libav \
+               python-opengl
 ```
 
-### Develop utils
-```
+### Development extras
+```bash
 pip install pytest pygobject-stubs
 ```
 
+---
+
+## Installation
+
+> Packaging for distributions is a work in progress... help needed!
+
+To run AriaShell just clone the repo and run the main script from source:
+
+```bash
+# install dependencies (see above), then:
+git clone https://github.com/davemds/aria-shell.git
+cd aria-shell/aria_shell
+./bin/aria-shell
+```
 
 
-## Aria panel
- * [x] fully customizable from config file
- * [x] pango markup in labels and tooltips
- * [ ] panel autohide
- * [ ] action/key to show/hide the panels
- * gadgets:
-   * [x] clock: show current time and a simple calendar on click
-   * [x] perf: cpu, ram, load, temps  (with top-like in popup)
-   * [x] workspaces: show workspaces and windows (hyprland and sway supported)
-   * [x] custom: custom gadget built in config (label+icon->command/exec on click)
-   * [x] audio: main volume control, simple mixer and multimedia controls
-     * [x] Use WirePlumber gAPI to provide multichannel mixer controls
-     * [x] MPRIS2 for media player controls
-     * [ ] show default volume in gadget, mouse-wheel to adjust (optional)
-     * [ ] show default mic volume in gadget (optional)
-     * [ ] MPD support
-   * [x] tray: use (K)StatusNotifierItem protocol
-     *  [x] decent DBUS Menu support (com.canonical.dbusmenu)
-     *  [ ] support for pixmap icons over dbus
-   * [ ] screenshot / screenrecorder
-   * [x] theme selector:
-     * [x] show a menu with the list of preferred, user and system themes (fully configurable)
-     * [x] support "special" light/dark themes
-     * [x] list and apply icon-theme (manually or from the desktop theme)
-     * [ ] list and apply cursor-theme (manually or from the desktop theme)
-     * [ ] copy the theme gtk-4.0 folder in ~/.config/gtk4.0 ?? seems totally wrong...
-     * [ ] group themes with same name prefix under a submenu
-     * [ ] show the active theme in the menu, check box?
-   * [ ] power: idle inhibitor, battery/ac status, power profiles
-   * [ ] help: just an icon, on click show a dialog with keybindings and basic info
-          (also show on META+F1)
-   * [ ] network: super simple NetworkManager, on/off ifaces, ssid list/connect
-   * [ ] bluetooth: ???
-   * [x] logout: just a button to run Aria Exiter
-   * [ ] apps: fixed list of apps to run (like a dock)
-   * [ ] home: open a menu (cinnamon style) with app categories and search, AriaLauncher?
-   * [ ] fileman: filemanager in a tree of menus?
-   * [ ] places: menu with usefully locations, like home, favorites, devices
-   * [ ] brightness: set monitor bright....how?
+---
+
+## Configuration
+
+AriaShell is configured through a single `aria.conf` file. Each component and 
+gadget can be enabled, disabled and tuned independently. Refer to the example 
+config included in the repository for a full reference.
 
 
-## Aria launcher
-- [x] search and run .desktop files
-- [x] support multiple search providers (implemented only .desktop app)
-- [ ] keep apps list updated when install/uninstall apps
-- [ ] remember most used and rank first
-- [ ] support secondary commands (fe: Firefox new private window)
-- [ ] other search providers? es: files, websearch, ??
+---
 
+## Credits & Inspiration
+ 
+- [Fabric](https://github.com/Fabric-Development/fabric)
+- [Ignis](https://github.com/linkfrg/ignis)
+- [Waybar](https://github.com/Alexays/Waybar) — style inspiration
+- Wallpaper shader art: [@1041uuu](https://x.com/1041uuu), [zuranthus/LivePaper](https://github.com/zuranthus/LivePaper)
 
-## Aria locker
-- [x] a lock screen implementing the ext-session-lock-v1 protocol
-- [x] show date/time and user name/avatar
-- [x] password authentication using PAM
-- [ ] background customizations (with same abilities as Aria Wallpaper)
-- [ ] buttons to reboot/halt?
-- [ ] other info to show?
-
-
-## Aria exiter
-- [x] customizable dialog menu to lock, suspend, hibernate, logout, reboot and shutdown
-- [x] all commands can be customized in config file
-- [x] confirm dangerous actions with an auto-expiring dialog (configurable)
-- [x] custom buttons can be created in config. With label, icon and confirm option.
-- [ ] automatic logout command. How to make logout work on every wm?
-
-
-## Aria idler (EXPERIMENTAL)
-NOTE: I'm not sure if this should be an aria responsibility, seems we are fighting with systemd abilities.
-- [x] an "idler daemon" implementation, use the ext_idle_notifier_v1 wayland protocol.
-- [x] support for arbitrary idled / resumed commands (both aria commands or external commands)
-- [x] simple configuration in the aria.conf file with a simple syntax
-- [ ] Different timeouts for different scenarios! (AC power, on battery, etc...)
-- [ ] manage events like on-lid-closed? How?
-- [ ] manage before-sleep and the like?
-
-
-## Aria wallpaper
-- [x] draw the background using the LayerShell protocol
-- [x] different background per specific monitor
-- [x] ability to change picture fit (fill, contain, cover, etc...)
-- [ ] ability to rotate from files in a given folder
-- [x] static images
-- [x] animated GIF images
-- [x] video playback (muted and looped)
-- [x] shadertoys.com art! (just put the shader code in a .shadertoy file and use as wallpaper source) 
-- [ ] support shaders with textures 
-- [ ] day-time based wallpapers (formats?)
-- [ ] auto-pause when on battery? or when full covered?
-
-
-## AriaNotifier
-- [x] Full-featured notification server, replace mako and friends
-- [x] Support icons and images data from DBUS
-- [x] Markup support
-- [x] Actions support (buttons inside notification)
-- [x] Support urgency in CSS
-- [ ] Sound support
-- [ ] Limit the number of visible notification somehow
-- [ ] Persistent notifications. where to show? in clock?
-
-
-## Aria terminal
-- [x] simple persistent terminal that show/hide from the top on command
-- [x] configurable opacity, font, size, shell and behaviours
-- [x] only available if vte4 is installed
-- [x] optionally grab the display when the terminal is visible
-- [x] emulate fullscreen using Ctrl+F
-- [ ] configurable color palette
-- [ ] show/hide animation ala quake console
-- [ ] find more cool fonts for the default config (ship one in pkg?)
-
-
-## Aria commands
-- [x] ping
-- [x] reload
-- [x] lock
-- [x] launcher [toggle|show|hide]
-- [x] terminal [toggle|show|hide]
-- [x] exiter [toggle|show|hide]
-- [ ] notify ....
-- [ ] osd ...
-- [ ] dmenu ...
-
-
-
-## REFERENCES
-https://github.com/davidmalcolm/pygobject
-https://lazka.github.io/pgi-docs
-https://api.pygobject.gnome.org
-https://docs.gtk.org/gtk4/visual_index.html
-https://docs.gtk.org/gtk4/css-properties.html
-
-
-# CREDITS
-- https://github.com/Fabric-Development/fabric
-- https://github.com/linkfrg/ignis  usa socket.socket (blocca sui comandi) e un thread per gli eventi
-- waybar for the style

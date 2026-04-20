@@ -7,6 +7,7 @@ objects always updated.
 """
 from abc import abstractmethod, ABC
 from functools import cached_property
+from typing import Any
 
 from gi.repository import Gio, GObject, Gtk
 
@@ -139,20 +140,24 @@ class WindowManagerBackend(ABC):
     def _set_active_workspace(self, workspace: Workspace | str | None):
         if isinstance(workspace, str):
             workspace = WORKSPACES_STORE.get(workspace)
-        if self.active_workspace:
-            self.active_workspace.active = False
-        if workspace:
-            workspace.active = True
-        self.active_workspace = workspace
+
+        if self.active_workspace != workspace:
+            if self.active_workspace:
+                self.active_workspace.active = False
+            if workspace:
+                workspace.active = True
+            self.active_workspace = workspace
 
     def _set_active_window(self, window: Window | str | None):
         if isinstance(window, str):
             window = WINDOWS_STORE.get(window)
-        if self.active_window:
-            self.active_window.active = False
-        if window:
-            window.active = True
-        self.active_window = window
+
+        if self.active_window != window:
+            if self.active_window:
+                self.active_window.active = False
+            if window:
+                window.active = True
+            self.active_window = window
 
 
 ################################################################################
@@ -164,33 +169,47 @@ class HyprlandBackend(WindowManagerBackend):
         'activewindow', 'focusedmon', 'movewindow', 'windowtitle',
         'workspace', 'createworkspace', 'destroyworkspace',
         # other
-        'openlayer', 'focusedmonv2',
+        'openlayer', 'closelayer',
     )
 
     def __init__(self):
         """ Raise RuntimeError if hyprland is not available """
         super().__init__()
         self.hypr = HyprlandService()
-        self.hypr.watch_events(self.hypr_events_cb)
-        self.hypr.send_command('j/workspaces', self.workspaces_cb)
+        self.hypr.watch_events(self._hypr_events_cb)
+        self.hypr.send_command('j/workspaces', self._workspaces_cb)
+        self.hypr.send_command('j/clients', self._clients_cb)
+        self.hypr.send_command('j/activeworkspace', self._activeworkspace_cb)
+        self.hypr.send_command('j/activewindow', self._activewindow_cb)
 
-    def hypr_events_cb(self, event, data):
+    def _hypr_events_cb(self, event: str, data: str):
         match event:
             case 'activewindowv2':
                 self._set_active_window(data)
             case 'openwindow' | 'closewindow' | 'movewindowv2':
                 # TODO: how to request only the changed client?
-                self.hypr.send_command('j/clients', self.clients_cb)
+                self.hypr.send_command('j/clients', self._clients_cb)
             case 'createworkspacev2' | 'destroyworkspacev2':
-                self.hypr.send_command('j/workspaces', self.workspaces_cb)
+                self.hypr.send_command('j/workspaces', self._workspaces_cb)
+                self.hypr.send_command('j/clients', self._clients_cb)
+            case 'focusedmonv2':
+                if data and ',' in data:
+                    _, workspace_id = data.split(',', 1)
+                    self._set_active_workspace(workspace_id)
+            case 'workspacev2':
+                if data and ',' in data:
+                    workspace_id, _ = data.split(',', 1)
+                    self._set_active_workspace(workspace_id)
             case _:
                 if event not in self.ignored_events:
                     print("HYPR EVENT", event, data)
 
-    def workspaces_cb(self, data):
+    def _workspaces_cb(self, workspaces: list[dict[str, str|int|bool]]):
+        # remember the active workspace (if any)
+        active_ws_id = self.active_workspace.id if self.active_workspace else None
         WORKSPACES_STORE.remove_all()
 
-        for ws in data or []:
+        for ws in workspaces or []:
             wid = str(ws['id'])
             workspace = Workspace()
             workspace.id = wid
@@ -198,16 +217,17 @@ class HyprlandBackend(WindowManagerBackend):
             workspace.monitor = ws['monitor']
             WORKSPACES_STORE.append(workspace)
 
-        self.hypr.send_command('j/clients', self.clients_cb)
+        # restore previously active workspace (if any)
+        self._set_active_workspace(active_ws_id)
 
-    @staticmethod
-    def clients_cb(data):
+    def _clients_cb(self, clients: list[dict[str, str|int|bool|list|dict]]):
+        # remember the active win (if any)
+        active_win_id = self.active_window.id if self.active_window else None
         WINDOWS_STORE.remove_all()
 
-        for cli in data or []:
+        for cli in clients or []:
             cid = cli['address']
-            if cid.startswith('0x'):
-                cid = cid[2:]
+            cid = cid.lstrip('0x')
             window = Window()
             window.id = cid
             window.name = cli['class']
@@ -215,6 +235,17 @@ class HyprlandBackend(WindowManagerBackend):
             window.workspace_id = str(cli['workspace']['id'])
             window.monitor_id = str(cli['monitor'])
             WINDOWS_STORE.append(window)
+
+        # restore previously active window (if any)
+        self._set_active_window(active_win_id)
+
+    def _activeworkspace_cb(self, ws: dict[str, Any]):
+        ws_id = str(ws['id'])
+        self._set_active_workspace(ws_id)
+
+    def _activewindow_cb(self, win: dict[str, Any]):
+        win_id = win['address'].lstrip('0x')
+        self._set_active_window(win_id)
 
     def activate_workspace(self, workspace: Workspace):
         self.hypr.send_command(f'dispatch workspace {workspace.id}')

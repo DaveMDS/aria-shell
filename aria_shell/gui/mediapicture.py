@@ -4,6 +4,7 @@ from gi.repository import Gdk, Gtk, GdkPixbuf
 
 from aria_shell.utils import Timer
 from aria_shell.utils.logger import get_loggers
+from .shadertoy import ShaderToy
 
 # optional GStreamer dependency, for video playback
 try:
@@ -29,7 +30,7 @@ def AriaMediaPicture(source: Path, *,
     """
     extension = source.suffix.lower().strip('.')
 
-    for picture_class in (StaticPicture, AnimatedPicture, VideoPicture):
+    for picture_class in (StaticPicture, AnimatedPicture, VideoPicture, ShaderToy):
         if extension in picture_class.__supported_extensions__:
             return picture_class(source, content_fit=content_fit)
 

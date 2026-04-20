@@ -1,12 +1,15 @@
-# Aria desktop shell for Wayland
+# A Desktop Shell for Wayland
 ![](https://img.shields.io/endpoint?label=LOC&color=blue&logo=python&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.py)
 ![](https://img.shields.io/endpoint?label=CSS&color=pink&url=https://ghloc.vercel.app/api/DaveMDS/aria-shell/badge?filter=.css)
+
+AriaShell is the perfect companion for your Hyprland, Sway, etc... compositor.
+
 
 > [!WARNING]
 > 
 > DEVELOPMENT STAGE
 > 
-> PLEASE COME BACK IN A FEW WEEKS
+> PLEASE COME BACK IN A FEW DAYS
 
 
 
@@ -20,8 +23,9 @@ lots to write here... help wanted ;)
 Gio 2.0 (GioUnix 2.0)
 Gtk >= 4.14
 Gtk4LayerShell
-vte4 (optional, for the embedded terminal)
 libwireplumber (optional, for the audio gadget)
+gstreamer (optional, for video playback in wallpaper and screensaver)
+vte4 (optional, for the embedded terminal)
 ```
 
 ### Python dependencies
@@ -31,15 +35,18 @@ PyGObject >= 3.50.0
 pywayland >= 0.4.18
 dasbus
 psutil (optional, for the perf gadget)
+PyOpenGL >= 3.1.7 (optional, to play shaders in wallpaper and screensaver)
 ```
 
 ### Arch packages
 ```
 gtk4 gtk4-layer-shell vte4
 python-gobject python-pywayland python-dasbus python-pam python-psutil
+gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-libav 
+python-opengl
 ```
 
-### Develop only utilities:
+### Develop utils
 ```
 pip install pytest pygobject-stubs
 ```
@@ -131,7 +138,8 @@ NOTE: I'm not sure if this should be an aria responsibility, seems we are fighti
 - [x] static images
 - [x] animated GIF images
 - [x] video playback (muted and looped)
-- [ ] shadertoys.com shaders from file  (COMING SOON) :D 
+- [x] shadertoys.com art! (just put the shader code in a .shadertoy file and use as wallpaper source) 
+- [ ] support shaders with textures 
 - [ ] day-time based wallpapers (formats?)
 - [ ] auto-pause when on battery? or when full covered?
 

@@ -2,6 +2,7 @@ import os
 import time
 import shlex
 import subprocess
+from abc import ABCMeta
 from pathlib import Path
 from collections.abc import Callable, Sequence
 from typing import TypeVar
@@ -18,18 +19,35 @@ DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 T = TypeVar('T')
 
 
-class Singleton(type):
-    """ usage: MyClass(metaclass=Singleton)
+class Singleton(ABCMeta):
+    """ A metaclass to create singleton classes.
+
+    Usage:
+      class MyClass(metaclass=Singleton): ...
+      class MyAbstractClass(ABC, metaclass=Singleton): ...
+
     NOTE: not compatible with GObject classes, don't use with them.
+
+    NOTE: inherit from ABCMeta (instead of type) so that users can define
+          abstract singletons.
     """
     _instances = {}
 
     def __call__(cls, *args, **kwargs):
+        """Create only a single instance on first usage."""
         instance = cls._instances.get(cls, None)
         if instance is None:
             instance = super().__call__(*args, **kwargs)
             cls._instances[cls] = instance
         return instance
+
+    def has_instance(cls) -> bool:
+        """Return True if the singleton instance has been created."""
+        return cls in cls._instances
+
+    def clear_instance(cls):
+        """Remove the cached instance."""
+        cls._instances.pop(cls, None)
 
 
 class Signalable:

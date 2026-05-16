@@ -7,12 +7,14 @@ from aria_shell.utils import Signalable
 
 
 class BasicSignalable(Signalable):
+    __signals__ = ['sig1', 'sig2', 'sig3']
     name = 'John'
     age = 21
 
 
 @dataclass
 class DataclassSignalable(Signalable):
+    __signals__ = ['sig1', 'sig2', 'sig3']
     name: str
     age: int
 

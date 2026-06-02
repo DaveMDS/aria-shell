@@ -63,7 +63,7 @@ class SocketClient:
         self._istream: Gio.InputStream | None = None
         self._ostream: Gio.OutputStream | None = None
         self._dstream: Gio.DataInputStream | None = None
-        self._cancellable = Gio.Cancellable()
+        self._cancellable: Gio.Cancellable | None = None
 
     def __repr__(self):
         return f'<SocketClient fd={self.fd} path={self.path}>'
@@ -71,6 +71,7 @@ class SocketClient:
     def connect(self):
         """Open the socket connection."""
         if not self.connected:
+            self._cancellable = Gio.Cancellable()
             self._connection = self._client.connect(self._address, self._cancellable)
             self._ostream = self._connection.get_output_stream()
             self._istream = self._connection.get_input_stream()
@@ -80,20 +81,18 @@ class SocketClient:
 
     def disconnect(self):
         """Close the socket connection."""
+        # NOTE: not really sure about this implementation... :/
         if self.connected:
             DBG('Closing socket %s', self)
-            if self._ostream:
-                self._ostream.close(self._cancellable)
-            if self._istream:
-                self._istream.close(self._cancellable)
-            if self._dstream:
-                self._dstream.close(self._cancellable)
-            self._connection.close(self._cancellable)
-
-        self._connection = None
-        self._ostream = None
-        self._istream = None
-        self._dstream = None
+            self._cancellable.cancel()
+            for stream in (self._ostream, self._istream, self._dstream):
+                if stream and stream.has_pending():
+                    stream.clear_pending()
+                if stream:
+                    stream.close()
+            self._connection.close()
+            self._connection = self._cancellable = None
+            self._ostream = self._istream = self._dstream = None
 
     @property
     def connected(self) -> bool:
@@ -104,7 +103,8 @@ class SocketClient:
     def busy(self) -> bool:
         """True if an async operation is in progress"""
         return self.connected and (
-                self._ostream.has_pending() or self._istream.has_pending())
+            self._ostream.has_pending() or self._istream.has_pending()
+        )
 
     @property
     def path(self) -> str:

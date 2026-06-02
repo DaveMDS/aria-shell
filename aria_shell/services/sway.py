@@ -11,6 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any, NamedTuple
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton
 from aria_shell.utils.socket import SocketClient
 from aria_shell.utils.logger import get_loggers
@@ -65,7 +66,7 @@ MessageCallback = Callable[[dict|list|None], None]  # msg_cb(response: dict|list
 EventCallback   = Callable[[SwayMessage], None]     # event_cb(event: SwayMessage) -> None
 
 
-class SwayService(metaclass=Singleton):
+class SwayService(AriaService, metaclass=Singleton):
     """ Implementation of the sway IPC sockets """
 
     def __init__(self):
@@ -76,6 +77,15 @@ class SwayService(metaclass=Singleton):
         self._cmd_socket = SocketClient(swaysock)
         self._evt_socket = SocketClient(swaysock)
         self._send_queue: list[QueueItem] = []
+
+    def shutdown(self):
+        if self._cmd_socket:
+            self._cmd_socket.disconnect()
+            self._cmd_socket = None
+        if self._evt_socket:
+            self._evt_socket.disconnect()
+            self._evt_socket = None
+        self._send_queue = []
 
     def send_message(self,
                      mtype: MessageType,

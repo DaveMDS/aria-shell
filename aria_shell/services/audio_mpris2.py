@@ -25,7 +25,7 @@ class Mpris2Backend(metaclass=Singleton):
 
     def __init__(self, aas: AudioService, cancellable: Gio.Cancellable):
         DBG('MPRIS: init...')
-        self._cancellable = cancellable  # TODO needed???
+        self._cancellable = cancellable  # TODO use to cleanup !
 
         self.aas = aas
         self.bus = SessionMessageBus()

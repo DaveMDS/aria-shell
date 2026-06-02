@@ -9,6 +9,7 @@ from threading import Thread
 
 from gi.repository import GLib
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton
 
 # python-pam is an optional dependency
@@ -21,7 +22,12 @@ except ImportError:
 AuthCallback = Callable[[bool], None]
 
 
-class PamService(metaclass=Singleton):
+class PamService(AriaService, metaclass=Singleton):
+    def __init__(self):
+        pass
+
+    def shutdown(self):
+        pass  # TODO stop thread?
 
     @property
     def available(self) -> bool:
@@ -36,7 +42,6 @@ class PamService(metaclass=Singleton):
             t = Thread(target=self._thread_started,
                        args=(username, password, callback))
             t.start()
-
 
     def _thread_started(self, username, password, callback):
         success = pam.authenticate(username, password)

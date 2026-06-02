@@ -11,6 +11,7 @@ from typing import Any
 
 from gi.repository import Gio, GObject, Gtk
 
+from aria_shell.services import AriaService
 from aria_shell.services.hyprland import HyprlandService
 from aria_shell.services.sway import SwayService, SwayMessage, MessageType as SwayMessageType
 from aria_shell.utils import Singleton, IndexedListStore
@@ -75,7 +76,7 @@ WORKSPACES_STORE: IndexedListStore[Workspace] = IndexedListStore(item_type=Works
 WINDOWS_STORE: IndexedListStore[Window] = IndexedListStore(item_type=Window)
 
 
-class WindowManagerService(metaclass=Singleton):
+class WindowManagerService(AriaService, metaclass=Singleton):
     """
     This is the main service to use.
     """
@@ -90,6 +91,11 @@ class WindowManagerService(metaclass=Singleton):
             WRN('No supported window manager found!')
             return
         INF('Using WindowManager backend: %s', self._backend)
+
+    def shutdown(self):
+        if self._backend:
+            self._backend.shutdown()
+            self._backend = None
 
     @property
     def workspaces(self) -> IndexedListStore[Workspace]:
@@ -133,6 +139,10 @@ class WindowManagerBackend(ABC):
     @abstractmethod
     def activate_window(self, window: Window):
         """Should activate the given window."""
+
+    @abstractmethod
+    def shutdown(self):
+        """Must free all backend resources."""
 
     #
     # internal utilities to be used by backends
@@ -181,6 +191,11 @@ class HyprlandBackend(WindowManagerBackend):
         self.hypr.send_command('j/clients', self._clients_cb)
         self.hypr.send_command('j/activeworkspace', self._activeworkspace_cb)
         self.hypr.send_command('j/activewindow', self._activewindow_cb)
+
+    def shutdown(self):
+        if self.hypr:
+            # self.hypr.unwatch_events(self._hypr_events_cb)  # TODO !!!
+            self.hypr = None
 
     def _hypr_events_cb(self, event: str, data: str):
         match event:
@@ -266,6 +281,11 @@ class SwayBackend(WindowManagerBackend):
         self.sway = SwayService()
         self.sway.subscribe(self.sway_events, self._sway_events_cb)
         self.sway.get_tree(self._tree_cb)
+
+    def shutdown(self):
+        if self.sway:
+            # self.sway.unsubscribe() # TODO
+            self.sway = None
 
     def activate_workspace(self, workspace: Workspace):
         self.sway.run_command(f'workspace "{workspace.name}"')

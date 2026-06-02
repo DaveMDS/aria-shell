@@ -25,6 +25,7 @@ __all__ = [
     'ExtIdleNotificationV1',
 ]
 
+from aria_shell.services import AriaService
 
 # OK, pywayland is a mess with typing! This is a minimal-hackish stub
 if TYPE_CHECKING:
@@ -80,7 +81,7 @@ class Global(NamedTuple):
     version: int
 
 
-class WaylandService(metaclass=Singleton):
+class WaylandService(AriaService, metaclass=Singleton):
     """
     The main wayland singleton service.
     """
@@ -133,6 +134,18 @@ class WaylandService(metaclass=Singleton):
             self._display.get_fd(), GLib.IO_IN, _wayland_event_source
         )
 
+    def shutdown(self):
+        if self._watch_handler:
+            GLib.source_remove(self._watch_handler)
+            self._watch_handler = 0
+        if self._seat:
+            self._seat.release()
+            self._seat = None
+        if self._display:
+            self._display.disconnect()
+            self._display = None
+        self._global_objects.clear()
+
     @property
     def connected(self) -> bool:
         return self._display is not None
@@ -151,21 +164,3 @@ class WaylandService(metaclass=Singleton):
     def roundtrip(self):
         if self._display:
             self._display.roundtrip()
-
-    def shutdown(self):
-        # TODO no one is calling this!! factorize AriaService!
-        INF('Shutting down WaylandService')
-
-        if self._watch_handler:
-            GLib.source_remove(self._watch_handler)
-            self._watch_handler = 0
-
-        if self._seat:
-            self._seat.release()
-            self._seat = None
-
-        if self._display:
-            self._display.disconnect()
-            self._display = None
-
-        self._global_objects.clear()

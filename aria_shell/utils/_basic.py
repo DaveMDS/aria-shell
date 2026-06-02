@@ -276,8 +276,8 @@ def exec_detached(command: str | Sequence[str]) -> bool:
 def exec_command_or_program(cmd: str):
     """ Execute the given aria command or external program. """
     if cmd and cmd.startswith('aria '):
-        from aria_shell.services.commands import AriaCommands
-        AriaCommands().run(cmd)
+        from aria_shell.services.commands import CommandsService
+        CommandsService().run(cmd)
     elif cmd:
         exec_detached(cmd)
 

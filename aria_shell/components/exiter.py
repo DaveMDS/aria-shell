@@ -7,7 +7,7 @@ from aria_shell.components import AriaComponent
 from aria_shell.gui import AriaWindow, AriaDialog
 from aria_shell.utils import clamp, exec_command_or_program, Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
-from aria_shell.services.commands import AriaCommands, CommandFailed
+from aria_shell.services.commands import CommandsService, CommandFailed
 from aria_shell.utils.logger import get_loggers
 from aria_shell.i18n import i18n, MissingTranslation
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ class AriaExiter(CleanupHelper, AriaComponent):
     def __init__(self, app: AriaShell):
         super().__init__(app)
         self.config = AriaConfig().section(ExiterConfig)
-        AriaCommands().register('exiter', self.the_exiter_command)
+        CommandsService().register('exiter', self.the_exiter_command)
 
         self.win = AriaWindow(
             app=app,
@@ -78,7 +78,7 @@ class AriaExiter(CleanupHelper, AriaComponent):
 
 
     def shutdown(self):
-        AriaCommands().unregister('exiter')
+        CommandsService().unregister('exiter')
         if self.dialog:
             self.dialog.destroy()
             self.dialog = None

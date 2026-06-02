@@ -3,6 +3,7 @@ from operator import attrgetter
 from gi.repository import Gtk, Gdk, Gio, GioUnix
 
 from aria_shell.config import AriaConfig
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton, PerfTimer, exec_detached
 from aria_shell.utils.logger import get_loggers
 
@@ -74,7 +75,7 @@ class DesktopApp:
 
 
 
-class XDGDesktopService(metaclass=Singleton):
+class XDGDesktopService(AriaService, metaclass=Singleton):
     """ Implement XDG DesktopFile and XDGIcons """
     def __init__(self):
         # hack for clients with unusual window class
@@ -96,6 +97,11 @@ class XDGDesktopService(metaclass=Singleton):
         INF(f'Loaded {len(self.apps)} .desktop apps (in {t.elapsed})')
 
         # TODO: Gio.AppInfoMonitor to keep db uptodate
+
+    def shutdown(self):
+        self.apps_class_map = {}
+        self.icon_theme = None
+        self.apps = {}
 
     def get_icon(self, icon_name: str | list[str] | tuple[str, ...]) -> Gtk.Image:
         """ Create an icon by icon name(s), respect XDG IconTheme

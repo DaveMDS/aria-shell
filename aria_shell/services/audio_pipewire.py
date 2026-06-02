@@ -45,7 +45,7 @@ class PipeWireBackend(metaclass=Singleton):
             raise RuntimeError('WirePlumber gAPI not available!')
 
         self._aas = aas
-        self._cancellable = cancellable
+        self._cancellable = cancellable  # TODO use to cleanup
 
         # initialize the WirePlumber library
         DBG('WP Initialize the WirePlumber lib...')

@@ -6,7 +6,7 @@ Commands must be registered using register() and must provide a callback
 (runner) that will take care of executing the command.
 
 Usage:
-AriaCommands().register('pippo', the_pippo_command)
+CommandsService().register('pippo', the_pippo_command)
 
 def the_pippo_command(cmd: str, params: list[str]) -> str | None
     # the command stuff ...
@@ -22,6 +22,7 @@ from collections.abc import Callable
 
 from gi.repository import Gio, GLib
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton
 from aria_shell.utils.env import ARIA_RUNTIME_DIR
 from aria_shell.utils.logger import get_loggers
@@ -45,9 +46,9 @@ def the_ping_command(_cmd: str, params: list[str]) -> str:
     return f'pong {params}'
 
 
-class AriaCommands(metaclass=Singleton):
+class CommandsService(AriaService, metaclass=Singleton):
     """
-    The main Singleton commands service.
+    A service to manage  aria commands.
     """
     def __init__(self):
         # index of registered command runners
@@ -56,6 +57,12 @@ class AriaCommands(metaclass=Singleton):
         }
         # listen for commands on the socket
         self._socket_listener = SocketListener()
+
+    def shutdown(self):
+        if self._socket_listener:
+            self._socket_listener.cancellable.cancel()
+            self._socket_listener = None
+        self._commands = {}
 
     def register(self, prefix: str, runner: CommandRunner):
         """Register `prefix` as a command. `runner` will be called to execute the command."""
@@ -149,7 +156,7 @@ class SocketListener(metaclass=Singleton):
             try:
                 if received := stream.read_line_finish(result)[0]:
                     # process received data (execute the aria command)
-                    success, response = AriaCommands().run(received.decode())
+                    success, response = CommandsService().run(received.decode())
                     full_reply = f'{'OK' if success else 'ERR'} {response or ''}'
                     # send response
                     output_stream.write_bytes_async(

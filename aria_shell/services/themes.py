@@ -2,6 +2,7 @@ from pathlib import Path
 
 from gi.repository import GLib, Gio
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton
 from aria_shell.utils.env import HOME
 from aria_shell.utils.logger import get_loggers
@@ -17,7 +18,7 @@ USER_ICONS_DIR = HOME / '.icons'
 SYSTEM_ICONS_DIR = Path('/usr/share/icons')
 
 
-class ThemesService(metaclass=Singleton):
+class ThemesService(AriaService, metaclass=Singleton):
     """
     Get info about installed FDO system themes, can also set the current theme.
 
@@ -35,6 +36,11 @@ class ThemesService(metaclass=Singleton):
         #         gsettings.get_string(field))
         #
         # self.gsettings.connect('changed', _gsettings_changed_cb)
+
+    def shutdown(self):
+        if self.gsettings:
+            self.gsettings.sync()
+            self.gsettings = None
 
     def get_themes(self) -> list[DesktopTheme]:
         """Get all available themes."""

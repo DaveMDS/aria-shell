@@ -17,7 +17,7 @@ from gi.repository import Gtk4SessionLock as GtkSessionLock
 
 from aria_shell.components import AriaComponent
 from aria_shell.services.pam import PamService, AuthCallback
-from aria_shell.services.commands import AriaCommands, CommandFailed
+from aria_shell.services.commands import CommandsService, CommandFailed
 from aria_shell.utils import Timer, CleanupHelper
 from aria_shell.config import AriaConfig, AriaConfigModel
 from aria_shell.utils.env import USER_INFO, search_user_avatar
@@ -48,7 +48,7 @@ class AriaLocker(CleanupHelper, AriaComponent):
     def __init__(self, app: AriaShell):
         super().__init__(app)
         self.config = AriaConfig().section(LockerConfig)
-        AriaCommands().register('lock', self.the_locker_command)
+        CommandsService().register('lock', self.the_locker_command)
 
         self._lock_instance: GtkSessionLock.Instance | None = None
 
@@ -67,7 +67,7 @@ class AriaLocker(CleanupHelper, AriaComponent):
         self._lock_instance = lock
 
     def shutdown(self):
-        AriaCommands().unregister('lock')
+        CommandsService().unregister('lock')
         super().shutdown()  # cleanup safe-connected signals
         if self._lock_instance and self._lock_instance.is_locked():
             self._lock_instance.unlock()

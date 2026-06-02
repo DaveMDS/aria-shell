@@ -26,6 +26,7 @@ from enum import StrEnum
 
 from gi.repository import Gio, GObject
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton, IndexedListStore
 from aria_shell.utils.logger import get_loggers
 
@@ -126,10 +127,10 @@ def channel_sort(ch1: AudioChannel, ch2: AudioChannel) -> int:
     return _sort_weights.get(ch1.group, 0) - _sort_weights.get(ch2.group, 0)
 
 
-class AudioService(metaclass=Singleton):
+class AudioService(AriaService, metaclass=Singleton):
     def __init__(self):
         super().__init__()
-        self._cancellable = Gio.Cancellable()  # TODO use on shutdown !!!
+        self._cancellable = Gio.Cancellable()
 
         # AudioChannel list store (with index for faster access by cid)
         self._channels = IndexedListStore(item_type=AudioChannel, key_prop='cid')
@@ -150,6 +151,17 @@ class AudioService(metaclass=Singleton):
             Mpris2Backend(self, self._cancellable)
         except Exception as e:
             ERR(f'Cannot load Mpris2 audio backend. Error: {e}')
+
+    def shutdown(self):
+        if self._cancellable:
+            self._cancellable.cancel()
+            self._cancellable = None
+        if self._channels:
+            self._channels.remove_all()
+            self._channels = None
+        if self._players:
+            self._players.remove_all()
+            self._players = None
 
     #
     # public API

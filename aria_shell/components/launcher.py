@@ -5,7 +5,7 @@ from gi.repository import GObject, GLib, Gio, Gdk, Gtk
 
 from aria_shell.components import AriaComponent
 from aria_shell.i18n import i18n
-from aria_shell.services.commands import AriaCommands, CommandFailed
+from aria_shell.services.commands import CommandsService, CommandFailed
 from aria_shell.services.xdg import XDGDesktopService, DesktopApp
 from aria_shell.gui import AriaWindow
 from aria_shell.utils import clamp, PerfTimer, CleanupHelper
@@ -50,7 +50,7 @@ class AriaLauncher(CleanupHelper, AriaComponent):
 
         # get launcher config and register the launcher command
         self.conf = AriaConfig().section(LauncherConfig)
-        AriaCommands().register('launcher', self.the_launcher_command)
+        CommandsService().register('launcher', self.the_launcher_command)
 
         # declare internal widgets
         self.list_store = Gio.ListStore()
@@ -83,7 +83,7 @@ class AriaLauncher(CleanupHelper, AriaComponent):
         self._on_entry_changed(self.search_entry, '')
 
     def shutdown(self):
-        AriaCommands().unregister('launcher')
+        CommandsService().unregister('launcher')
         # TODO shutdown properly each provider !!!!!!!!!!!
         self.win.shutdown()
         self.win = None

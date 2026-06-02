@@ -35,7 +35,7 @@ from aria_shell.utils.env import lookup_config_file, ARIA_ASSETS_DIR
 from aria_shell.utils import Timer, FileMonitor, exec_detached
 from aria_shell.module import preload_all_modules, unload_all_modules
 from aria_shell.config import AriaConfig
-from aria_shell.services.commands import AriaCommands
+from aria_shell.services import AriaService, CommandsService
 from aria_shell.components import AriaComponent
 
 
@@ -118,7 +118,13 @@ class AriaShell(Gtk.Application):
     def _on_app_shutdown(self, _app: Gtk.Application):
         """Shutdown signal is emitted when the application is exiting."""
         self._shutdown_everything()
-        # TODO more stuff to shutdown here? the command socket?
+
+        # automagically call shutdown() on all initialized AriaService subclasses
+        for service in AriaService.__subclasses__():
+            if service.has_instance():
+                INF('Shutting down service: %s', service.__name__)
+                service().shutdown()
+
         INF('Bye bye o/')
     # endregion
 
@@ -144,7 +150,7 @@ class AriaShell(Gtk.Application):
 
         # register the reload command
         # register the reload command (this also initialize the commands socket!)
-        AriaCommands().register('reload', lambda c,p: self.reload())
+        CommandsService().register('reload', lambda c, p: self.reload())
 
         # preload all modules (the gadgets)
         preload_all_modules()
@@ -181,11 +187,11 @@ class AriaShell(Gtk.Application):
 
         # shutdown all components, and release their references
         while self.components and (component := self.components.pop()):
-            INF('Shutting down %s', type(component).__name__)
+            INF('Shutting down component: %s', type(component).__name__)
             component.shutdown()
 
         # un-register basic commands
-        AriaCommands().unregister('reload')
+        CommandsService().unregister('reload')
 
         # clear all loaded CSS styles
         self._clear_css_styles()

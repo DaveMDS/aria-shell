@@ -15,7 +15,7 @@ from aria_shell.gui import AriaWindow
 from aria_shell.utils import clamp, CleanupHelper
 from aria_shell.utils.env import HOME, SHELL
 from aria_shell.config import AriaConfig, AriaConfigModel
-from aria_shell.services.commands import AriaCommands, CommandFailed
+from aria_shell.services.commands import CommandsService, CommandFailed
 from aria_shell.utils.logger import get_loggers
 if TYPE_CHECKING:
     from aria_shell.ariashell import AriaShell
@@ -56,7 +56,7 @@ class AriaTerminal(CleanupHelper, AriaComponent):
             raise RuntimeError('Vte4 not available, embedded terminal is disabled!')
 
         self.conf = AriaConfig().section(TerminalConfig)
-        AriaCommands().register('terminal', self.the_terminal_command)
+        CommandsService().register('terminal', self.the_terminal_command)
 
         self.win = AriaWindow(
             app=app,
@@ -73,7 +73,7 @@ class AriaTerminal(CleanupHelper, AriaComponent):
         self._fullscreen: bool = False
 
     def shutdown(self):
-        AriaCommands().unregister('terminal')
+        CommandsService().unregister('terminal')
         self.terminal = None
         self.win.destroy()
         self.win = None

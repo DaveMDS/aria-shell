@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton
 from aria_shell.utils.socket import SocketClient
 from aria_shell.utils.logger import get_loggers
@@ -21,7 +22,7 @@ class HyprCommand(NamedTuple):
     callback: CommandCallback
 
 
-class HyprlandService(metaclass=Singleton):
+class HyprlandService(AriaService, metaclass=Singleton):
     """ Implementation of the hyprland IPC sockets """
 
     def __init__(self):
@@ -51,6 +52,15 @@ class HyprlandService(metaclass=Singleton):
         if not self._evt_socket_path.is_socket():
             raise RuntimeError(f'Cannot find hyprland socket {self._evt_socket_path}')
         self._evt_socket = SocketClient(self._evt_socket_path, line_buffered=True)
+
+    def shutdown(self):
+        self._commands_queue = []
+        if self._cmd_socket:
+            self._cmd_socket.disconnect()
+            self._cmd_socket = None
+        if self._evt_socket:
+            self._evt_socket.disconnect()
+            self._evt_socket = None
 
     def send_command(self, command: str, callback: CommandCallback = None):
         cmd = HyprCommand(command, callback)

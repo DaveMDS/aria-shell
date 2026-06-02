@@ -11,6 +11,7 @@ from dasbus.server.interface import (
 from gi.repository import GObject, Gio, GdkPixbuf
 
 from aria_shell import __version__ as aria_version
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton, Timer
 from aria_shell.utils.logger import get_loggers
 
@@ -91,7 +92,7 @@ SPEC_VERSION = '1.3'
 
 
 @dbus_interface(DBUS_IFACE)
-class NotificationService(metaclass=Singleton):
+class NotificationService(AriaService, metaclass=Singleton):
     """ Implementation of the DBUS Notification Server
 
     The service keep an updated ListStore of Notification objects.
@@ -104,6 +105,10 @@ class NotificationService(metaclass=Singleton):
         self._store = Gio.ListStore(item_type=Notification)
         self._default_expire = 30
         self._connected = False
+
+    def shutdown(self):
+        self.stop_server()
+        self._store = None
 
     #---------------------------------------------------------------------------
     # Python Api

@@ -1,5 +1,6 @@
 from gi.repository import Gdk, Gio
 
+from aria_shell.services import AriaService
 from aria_shell.utils import Singleton, Signalable
 from aria_shell.utils.logger import get_loggers
 
@@ -7,7 +8,7 @@ from aria_shell.utils.logger import get_loggers
 DBG, INF, WRN, ERR, CRI = get_loggers(__name__)
 
 
-class DisplayService(Signalable, metaclass=Singleton):
+class DisplayService(AriaService, Signalable, metaclass=Singleton):
     """
     Get info (and stay informed) about connected/disconnected monitors
     on the current wayland display.
@@ -33,6 +34,12 @@ class DisplayService(Signalable, metaclass=Singleton):
 
         # stay informed about monitors connected/disconnected
         self._list_model.connect('items-changed', self._on_listmodel_changed)
+
+    def shutdown(self):
+        if self._list_model:
+            self._list_model.disconnect_by_func(self._on_listmodel_changed)
+        self._monitors = []
+
 
     @property
     def monitors(self) -> list[Gdk.Monitor]:

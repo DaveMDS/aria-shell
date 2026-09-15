@@ -3,11 +3,13 @@ mod config;
 mod gadget;
 mod gadgets;
 mod panel;
+mod widgets;
 
 use std::collections::BTreeMap;
 
+use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
-use iced::{Element, Subscription, Task};
+use iced::{Element, Rectangle, Subscription, Task, widget};
 use iced_exwlshell::build_pattern::daemon;
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
 use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
@@ -16,8 +18,8 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use compositor::Compositor;
 use config::Config;
-use gadget::{Action, Context};
-use panel::{Panel, PanelConfig};
+use gadget::Context;
+use panel::{Action, Panel, PanelConfig};
 
 /// Top-level message. `#[to_layer_message(multi)]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
@@ -39,6 +41,8 @@ struct AriaShell {
     compositor: Compositor,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
+    /// Open popup surfaces, to the panel each hangs off.
+    popups: BTreeMap<Id, Id>,
 }
 
 impl AriaShell {
@@ -48,19 +52,20 @@ impl AriaShell {
             shell_events,
             compositor: Compositor::detect(),
             panels: BTreeMap::new(),
+            popups: BTreeMap::new(),
         }
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Shell(event) => self.on_shell_event(event),
-            Message::Panel(id, m) => {
-                let action = match self.panels.get_mut(&id) {
-                    Some(panel) => panel.update(m).map(move |m| Message::Panel(id, m)),
-                    None => Action::None,
-                };
-                self.perform(action)
-            }
+            Message::Panel(id, m) => match self.panels.get_mut(&id) {
+                Some(panel) => {
+                    let action = panel.update(m);
+                    self.perform(id, action)
+                }
+                None => Task::none(),
+            },
             Message::Compositor(event) => {
                 self.compositor.apply(event);
                 Task::none()
@@ -69,12 +74,33 @@ impl AriaShell {
         }
     }
 
-    /// Carry out what a panel/gadget `update` asked for.
-    fn perform(&self, action: Action<Message>) -> Task<Message> {
+    /// Carry out what the panel in window `panel` asked for.
+    fn perform(&mut self, panel: Id, action: Action) -> Task<Message> {
         match action {
             Action::None => Task::none(),
-            Action::Run(task) => task,
+            Action::Run(task) => task.map(move |m| Message::Panel(panel, m)),
             Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
+            Action::OpenPopup { id, anchor, size } => {
+                let Some(position) = self.panels.get(&panel).map(Panel::position) else {
+                    return Task::none();
+                };
+                self.popups.insert(id, panel);
+                // Only the widget tree knows where the anchor is: ask it,
+                // then open the popup there.
+                widget_bounds(anchor).map(move |bounds| Message::NewPopUp {
+                    settings: panel::popup_settings(
+                        panel,
+                        position,
+                        bounds.unwrap_or_default(),
+                        size,
+                    ),
+                    id,
+                })
+            }
+            Action::ClosePopup(id) => {
+                self.popups.remove(&id);
+                Task::done(Message::RemoveWindow(id))
+            }
         }
     }
 
@@ -100,7 +126,13 @@ impl AriaShell {
                 }))
             }
             ShellEvent::Closed(id) => {
-                self.panels.remove(&id);
+                if self.panels.remove(&id).is_some() {
+                    self.popups.retain(|_, panel| *panel != id);
+                } else if let Some(panel) = self.popups.remove(&id)
+                    && let Some(panel) = self.panels.get_mut(&panel)
+                {
+                    panel.popup_closed(id);
+                }
                 Task::none()
             }
             _ => Task::none(),
@@ -137,10 +169,17 @@ impl AriaShell {
         let ctx = Context {
             compositor: &self.compositor,
         };
-        match self.panels.get(&window) {
-            Some(panel) => panel.view(ctx).map(move |m| Message::Panel(window, m)),
-            None => iced::widget::Space::new().into(),
+        if let Some(panel) = self.panels.get(&window) {
+            return panel.view(ctx).map(move |m| Message::Panel(window, m));
         }
+        if let Some(&owner) = self.popups.get(&window)
+            && let Some(panel) = self.panels.get(&owner)
+        {
+            return panel
+                .popup_view(window, ctx)
+                .map(move |m| Message::Panel(owner, m));
+        }
+        widget::Space::new().into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -159,6 +198,36 @@ impl AriaShell {
             .chain(panels),
         )
     }
+}
+
+/// Bounds of the `container` tagged `id`, in the coordinates of the
+/// surface it's in. The runtime walks every window, so the id must be
+/// unique across them.
+fn widget_bounds(id: widget::Id) -> Task<Option<Rectangle>> {
+    struct Find {
+        id: widget::Id,
+        bounds: Option<Rectangle>,
+    }
+
+    impl Operation<Option<Rectangle>> for Find {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
+            if self.bounds.is_none() {
+                operate(self);
+            }
+        }
+
+        fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
+            if id == Some(&self.id) {
+                self.bounds = Some(bounds);
+            }
+        }
+
+        fn finish(&self) -> Outcome<Option<Rectangle>> {
+            Outcome::Some(self.bounds)
+        }
+    }
+
+    iced::advanced::widget::operate(Find { id, bounds: None })
 }
 
 fn main() -> iced_exwlshell::Result {

@@ -73,7 +73,10 @@ Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadget
 AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
   Message::Clock(clock::Message) | Message::Workspaces(..) | ...
 
-Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / subscription
+Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / subscription
+  Message::Calendar(calendar::Message)
+
+Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today)
 
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
   subscription()            the single IPC stream (compositor/hyprland.rs), yields `Event`s
@@ -89,8 +92,27 @@ Two things flow between the daemon and the gadgets besides messages:
 - **`gadget::Action`** comes *up*, out of `update`, in place of a bare
   `Task`: `Action::Run(Task)` for the gadget's own async work,
   `Action::Compositor(Command)` (and later `Action::Audio(..)`, ...) for
-  things only the daemon can do. `AriaShell::perform` turns it into a
-  `Task`. Gadgets never hold an IPC handle.
+  things only the daemon can do, `Action::OpenPopup`/`ClosePopup` for a
+  popup surface. `Panel::update` turns it into the concrete
+  `panel::Action` (same variants, popup bookkeeping done) and
+  `AriaShell::perform` into a `Task`. Gadgets never hold an IPC handle.
+
+- **Popups** are xdg popups parented to the panel's layer surface. A
+  gadget with one keeps a `gadget::Popup` field, exposes it through
+  `Gadget::popup()`, wraps the widget the popup hangs from in
+  `popup.anchor(..)` (a `container` tagged with a unique `widget::Id`) and
+  returns `popup.toggle(size)` from `update`; the content is
+  `Gadget::popup_view`. Under the hood `toggle` yields
+  `Action::OpenPopup { anchor, size }` / `ClosePopup(id)`; the panel mints
+  the `window::Id`, remembers `popup -> gadget index` and records it in
+  the gadget's `Popup`. The daemon keeps `popup -> panel`, asks the widget
+  tree for the anchor's bounds with a custom `Operation` (`widget_bounds`
+  in `main.rs`) and sends `NewPopUp` placed by `panel::popup_settings`
+  (centred on the anchor, below a top bar / above a bottom one).
+  `view(popup_id)` routes to `Panel::popup_view` -> `Gadget::popup_view`.
+  Whoever closes it (the gadget, or the compositor on a click outside),
+  it ends in `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the
+  gadget's `Popup` is marked closed.
 
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
@@ -115,6 +137,11 @@ Two things flow between the daemon and the gadgets besides messages:
 - **Closed gadget set.** No plugins, no `dyn`. Adding a gadget: one file
   under `gadgets/`, one variant in `AnyGadget` and `gadget::Message`, one
   arm in each `match` in `gadget.rs`.
+- **Reusable widgets live in `widgets/`** (`Calendar` so far), as plain
+  Elm components: a host embeds one as a field, calls `update` with the
+  widget's `Message` and `.map()`s its `view`. Nothing in iced or a
+  third-party crate fit (`iced_aw::date_picker` is a modal picker, and
+  would pin our iced version); COSMIC's calendar is inside `libcosmic`.
 - **Config sections** implement `config::Section` by hand
   (`const NAME` + `from_raw(&RawSection)`). `RawSection` has the typed
   accessors (`str_or`, `bool_or`, `list_or`; add `int_or` when a section
@@ -160,6 +187,25 @@ Two things flow between the daemon and the gadgets besides messages:
   (negative ids); we sort by id and drop those.
 - A `tooltip` on a 32px layer surface would be clipped to the surface, so
   the Workspaces gadget has none (Python showed name/title tooltips).
+- `Message::NewPopUp { settings: IcedNewPopupSettings, id }` (added by the
+  macro). `IcedNewPopupSettings::new(parent, size, anchor_pos, anchor_size)`
+  then `.anchor(PopupAnchor::Bottom).gravity(PopupGravity::Bottom)` puts
+  the popup centred under the anchor rect; defaults flip/slide it back on
+  screen. The runtime takes the grab serial from the last pointer button
+  itself, so a popup opened from a click gets the implicit grab: a click
+  outside dismisses it (`xdg_popup.popup_done` -> `ShellEvent::Closed`)
+  and the compositor swallows that click.
+- A widget's on-screen bounds are only known to the widget tree: query
+  them with a custom `widget::Operation` via `iced::advanced::widget::operate`
+  (needs the `advanced` feature). The runtime runs the operation on every
+  window and can't tell which answered, so tag widgets with
+  `widget::Id::unique()` per instance, never a fixed name.
+  `container::visible_bounds` from iced 0.13 is gone in 0.14.
+- `container.center(Length::Fill)` sets width *and* height, overriding a
+  fixed size set before it; use `align_x`/`align_y` for a fixed cell.
+- No pointer injection on this setup (no `ydotool`/`wtype`, `/dev/uinput`
+  is root-only, Hyprland's Lua dispatchers move the cursor but can't
+  click): clicks have to be done by the user, screenshots with `grim -g`.
 
 ## Status (2026-09-16)
 
@@ -174,26 +220,29 @@ Verified on the real Hyprland session with two outputs:
   shows only that monitor's workspaces, the per-monitor active one
   highlighted, one marker per window (filled for the active window),
   and follows `hyprctl dispatch` switches live (Hyprland 0.56.2).
+- Clicking the Clock opens a month calendar popup centred under it
+  (weeks start on Monday, today highlighted, `<`/`>` change month, no
+  locale for month names); clicking the clock again or anywhere outside
+  closes it. Verified with screenshots on both outputs.
 - `cargo build`, `cargo clippy --all-targets`, `cargo test`: clean.
 
 Implemented: config loading, `[panel]` (`outputs`, `position`, `layer`,
-`items_*`), multi-output panels, Clock (`format`), Workspaces (all four
-keys; windows are dots, not icons) over the Hyprland IPC, with the
-daemon-owned `Compositor` / `Context` / `Action` plumbing.
+`items_*`), multi-output panels, Clock (`format`, calendar popup),
+Workspaces (all four keys; windows are dots, not icons) over the Hyprland
+IPC, with the daemon-owned `Compositor` / `Context` / `Action` plumbing
+and the popup plumbing (`Panel` <-> `Gadget` popup hooks).
 
 Not yet: Sway backend, window icons in Workspaces (XDG desktop lookup +
 icon theme + `svg`/`image` in iced), `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, hot-reload,
-styling/theme, click/popover on the Clock, every other gadget and
-component (tray, notifications, launcher, lock, wallpaper, terminal,
-idle).
+styling/theme (the popup is a bare white box), Clock `tooltip_format`,
+every other gadget and component (tray, notifications, launcher, lock,
+wallpaper, terminal, idle).
 
 ## Next steps, in order
 
-1. The Clock calendar popover: first non-panel surface, exercises
-   `NewPopUp` on the multi-window runtime.
-2. Styling: how the bar looks (background, fonts, the workspace buttons)
-   before more gadgets pile up on an unstyled row.
-3. Config hot-reload (watch the file, rebuild panels).
-4. Window icons in Workspaces (needs the XDG/icon-theme service that the
+1. Styling: how the bar and popups look (background, fonts, the workspace
+   buttons) before more gadgets pile up on an unstyled row.
+2. Config hot-reload (watch the file, rebuild panels).
+3. Window icons in Workspaces (needs the XDG/icon-theme service that the
    launcher and tray will need too).

@@ -1,0 +1,145 @@
+//! A month view: weekday header, the days in a 6x7 grid, prev/next month
+//! navigation. Weeks start on Monday; month names are English (chrono
+//! has no locale support without extra features).
+
+use chrono::{Datelike, Months, NaiveDate};
+use iced::widget::{Space, button, column, container, row, text};
+use iced::{Alignment, Element, Length};
+
+const CELL: u32 = 32;
+const PADDING: u32 = 12;
+
+pub struct Calendar {
+    /// First day of the month shown.
+    month: NaiveDate,
+}
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    PrevMonth,
+    NextMonth,
+}
+
+impl Calendar {
+    /// Pixel size of the view, for hosts that need it up front (popups).
+    pub const SIZE: (u32, u32) = (7 * CELL + 2 * PADDING, 8 * CELL + 2 * PADDING);
+
+    /// Showing the month of `date`.
+    pub fn new(date: NaiveDate) -> Self {
+        Self {
+            month: first_of_month(date),
+        }
+    }
+
+    pub fn show(&mut self, date: NaiveDate) {
+        self.month = first_of_month(date);
+    }
+
+    pub fn update(&mut self, message: Message) {
+        self.month = match message {
+            Message::PrevMonth => self.month - Months::new(1),
+            Message::NextMonth => self.month + Months::new(1),
+        };
+    }
+
+    /// `today` is highlighted when it falls in the month shown.
+    pub fn view<'a>(&'a self, today: NaiveDate) -> Element<'a, Message> {
+        let cell = |content: Element<'a, Message>| {
+            container(content)
+                .width(CELL)
+                .height(CELL)
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center)
+        };
+        let header = row![
+            button(text("<"))
+                .style(button::text)
+                .on_press(Message::PrevMonth),
+            container(text(self.month.format("%B %Y").to_string()))
+                .width(Length::Fill)
+                .align_x(Alignment::Center),
+            button(text(">"))
+                .style(button::text)
+                .on_press(Message::NextMonth),
+        ]
+        .height(CELL)
+        .align_y(Alignment::Center);
+        let weekdays = row(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+            .into_iter()
+            .map(|d| cell(text(d).size(12).into()).into()));
+        let days = month_grid(self.month)
+            .chunks(7)
+            .fold(column![], |col, week| {
+                col.push(row(week.iter().map(|day| match day {
+                    Some(day) => {
+                        let date = self.month.with_day(*day).expect("day of this month");
+                        let label = text(day.to_string());
+                        let label = if date == today {
+                            label.style(text::primary)
+                        } else {
+                            label
+                        };
+                        cell(label.into()).into()
+                    }
+                    None => cell(Space::new().into()).into(),
+                })))
+            });
+        container(column![header, weekdays, days])
+            .padding(PADDING as f32)
+            .into()
+    }
+}
+
+fn first_of_month(date: NaiveDate) -> NaiveDate {
+    date.with_day(1).expect("the 1st exists in every month")
+}
+
+/// Six weeks of day numbers starting on Monday, `None` outside `month`.
+fn month_grid(month: NaiveDate) -> [Option<u32>; 42] {
+    let first = first_of_month(month);
+    let offset = first.weekday().num_days_from_monday() as usize;
+    let days = (first + Months::new(1) - first).num_days() as u32;
+    let mut grid = [None; 42];
+    for day in 1..=days {
+        grid[offset + day as usize - 1] = Some(day);
+    }
+    grid
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grid_layout() {
+        // September 2026 starts on a Tuesday and has 30 days.
+        let grid = month_grid(NaiveDate::from_ymd_opt(2026, 9, 1).unwrap());
+        assert_eq!(grid[0], None);
+        assert_eq!(grid[1], Some(1));
+        assert_eq!(grid[30], Some(30));
+        assert_eq!(grid[31], None);
+
+        // February 2027 starts on a Monday and has 28 days: exactly 4 rows.
+        let grid = month_grid(NaiveDate::from_ymd_opt(2027, 2, 1).unwrap());
+        assert_eq!(grid[0], Some(1));
+        assert_eq!(grid[27], Some(28));
+        assert_eq!(grid[28], None);
+
+        // Leap year, starting on a Sunday.
+        let grid = month_grid(NaiveDate::from_ymd_opt(2032, 2, 1).unwrap());
+        assert_eq!(grid[6], Some(1));
+        assert_eq!(grid[34], Some(29));
+        assert_eq!(grid[35], None);
+    }
+
+    #[test]
+    fn navigation() {
+        let mut cal = Calendar::new(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap());
+        assert_eq!(cal.month, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+        cal.update(Message::PrevMonth);
+        assert_eq!(cal.month, NaiveDate::from_ymd_opt(2025, 12, 1).unwrap());
+        cal.update(Message::NextMonth);
+        cal.update(Message::NextMonth);
+        assert_eq!(cal.month, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
+    }
+}

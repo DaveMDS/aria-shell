@@ -11,7 +11,8 @@
 //! a gadget that wants to change it returns an [`Action`] carrying a
 //! command, which the daemon executes.
 
-use iced::{Element, Subscription, Task};
+use iced::widget::{Space, container};
+use iced::{Element, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::compositor::{self, Compositor};
@@ -31,6 +32,61 @@ pub enum Action<M> {
     None,
     Run(Task<M>),
     Compositor(compositor::Command),
+    /// Open a popup surface of `size` pixels, hanging off the widget
+    /// tagged `anchor`. Gadgets don't build this by hand, they call
+    /// [`Popup::toggle`].
+    OpenPopup {
+        anchor: widget::Id,
+        size: (u32, u32),
+    },
+    ClosePopup(window::Id),
+}
+
+/// A gadget's popup surface, as far as the gadget is concerned: the
+/// widget it hangs from and whether it's open. The gadget keeps one as a
+/// field and hands it out through [`Gadget::popup`]; the panel reports
+/// the surface coming and going through it, whoever closed it (the
+/// gadget, or the compositor on a click outside).
+pub struct Popup {
+    anchor: widget::Id,
+    id: Option<window::Id>,
+}
+
+impl Popup {
+    pub fn new() -> Self {
+        Self {
+            anchor: widget::Id::unique(),
+            id: None,
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.id.is_some()
+    }
+
+    /// Tag `content` as the widget the popup hangs from.
+    pub fn anchor<'a, M: 'a>(&self, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
+        container(content).id(self.anchor.clone()).into()
+    }
+
+    /// Close the popup if open, else open one of `size` pixels.
+    pub fn toggle<M>(&mut self, size: (u32, u32)) -> Action<M> {
+        match self.id.take() {
+            Some(id) => Action::ClosePopup(id),
+            None => Action::OpenPopup {
+                anchor: self.anchor.clone(),
+                size,
+            },
+        }
+    }
+
+    fn opened(&mut self, id: window::Id) {
+        self.id = Some(id);
+    }
+
+    fn closed(&mut self) {
+        self.id = None;
+    }
 }
 
 impl<M: Send + 'static> Action<M> {
@@ -39,6 +95,8 @@ impl<M: Send + 'static> Action<M> {
             Self::None => Action::None,
             Self::Run(task) => Action::Run(task.map(f)),
             Self::Compositor(cmd) => Action::Compositor(cmd),
+            Self::OpenPopup { anchor, size } => Action::OpenPopup { anchor, size },
+            Self::ClosePopup(id) => Action::ClosePopup(id),
         }
     }
 }
@@ -53,6 +111,16 @@ pub trait Gadget: Sized {
     fn update(&mut self, message: Self::Message) -> Action<Self::Message>;
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Self::Message>;
+
+    /// The gadget's [`Popup`], if it has one.
+    fn popup(&mut self) -> Option<&mut Popup> {
+        None
+    }
+
+    /// Content of the popup.
+    fn popup_view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Self::Message> {
+        Space::new().into()
+    }
 
     /// Per-instance event source (timers, ...). The panel keys it by
     /// gadget index, so identical subscriptions on two gadgets stay
@@ -108,6 +176,32 @@ impl AnyGadget {
         match self {
             Self::Clock(g) => g.view(ctx).map(Message::Clock),
             Self::Workspaces(g) => g.view(ctx).map(Message::Workspaces),
+        }
+    }
+
+    pub fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
+        match self {
+            Self::Clock(g) => g.popup_view(ctx).map(Message::Clock),
+            Self::Workspaces(g) => g.popup_view(ctx).map(Message::Workspaces),
+        }
+    }
+
+    fn popup(&mut self) -> Option<&mut Popup> {
+        match self {
+            Self::Clock(g) => g.popup(),
+            Self::Workspaces(g) => g.popup(),
+        }
+    }
+
+    pub fn popup_opened(&mut self, id: window::Id) {
+        if let Some(p) = self.popup() {
+            p.opened(id);
+        }
+    }
+
+    pub fn popup_closed(&mut self) {
+        if let Some(p) = self.popup() {
+            p.closed();
         }
     }
 

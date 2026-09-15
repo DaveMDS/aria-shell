@@ -1,15 +1,20 @@
 //! A panel: one layer-shell bar on one output, holding gadgets in three
 //! slots (start / center / end).
 
-use iced::widget::{container, row};
-use iced::{Element, Length, Subscription};
+use std::collections::BTreeMap;
+
+use iced::widget::{Space, container, row};
+use iced::{Element, Length, Rectangle, Subscription, Task, widget, window};
+use iced_exwlshell::actions::IcedNewPopupSettings;
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+    PixelSize, PopupAnchor, PopupGravity,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use crate::compositor;
 use crate::config::{Config, RawSection, Section};
-use crate::gadget::{self, Action, AnyGadget, Context};
+use crate::gadget::{self, AnyGadget, Context};
 
 /// Bar thickness. Fixed for now: layer-shell needs a size up front and
 /// iced can't report a content size before the first layout.
@@ -67,6 +72,29 @@ impl Section for PanelConfig {
     }
 }
 
+/// Placement of a popup hanging off a widget with `anchor` bounds in the
+/// surface of a bar at `position`: centred on the widget, on the side
+/// away from the screen edge.
+pub fn popup_settings(
+    parent: window::Id,
+    position: Position,
+    anchor: Rectangle,
+    size: (u32, u32),
+) -> IcedNewPopupSettings {
+    let (edge, gravity) = match position {
+        Position::Top => (PopupAnchor::Bottom, PopupGravity::Bottom),
+        Position::Bottom => (PopupAnchor::Top, PopupGravity::Top),
+    };
+    IcedNewPopupSettings::new(
+        parent,
+        PixelSize::px(size.0.max(1), size.1.max(1)),
+        (anchor.x as i32, anchor.y as i32),
+        PixelSize::px((anchor.width as u32).max(1), (anchor.height as u32).max(1)),
+    )
+    .anchor(edge)
+    .gravity(gravity)
+}
+
 impl PanelConfig {
     /// The `[panel*]` sections to instantiate. With none configured, a
     /// single default bar with just a clock.
@@ -108,12 +136,32 @@ pub struct Panel {
     pub output: OutputId,
     config: PanelConfig,
     gadgets: Vec<(Slot, AnyGadget)>,
+    /// Open popups, by window id, to the index of the gadget that owns
+    /// each. The panel mints the ids so the daemon only has to map them
+    /// back to the panel.
+    popups: BTreeMap<window::Id, usize>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
     /// Index into `gadgets`, then the gadget's own message.
     Gadget(usize, gadget::Message),
+}
+
+/// What `update` asks the daemon to do; [`gadget::Action`] with the
+/// popup bookkeeping the panel already did.
+pub enum Action {
+    None,
+    Run(Task<Message>),
+    Compositor(compositor::Command),
+    /// Open the popup surface `id` as a child of this panel's surface,
+    /// hanging off the widget tagged `anchor`.
+    OpenPopup {
+        id: window::Id,
+        anchor: widget::Id,
+        size: (u32, u32),
+    },
+    ClosePopup(window::Id),
 }
 
 impl Panel {
@@ -135,6 +183,7 @@ impl Panel {
             output: OutputId::from(output),
             config,
             gadgets,
+            popups: BTreeMap::new(),
         }
     }
 
@@ -156,12 +205,43 @@ impl Panel {
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Action<Message> {
+    pub fn position(&self) -> Position {
+        self.config.position
+    }
+
+    pub fn update(&mut self, message: Message) -> Action {
         match message {
-            Message::Gadget(i, m) => match self.gadgets.get_mut(i) {
-                Some((_, g)) => g.update(m).map(move |m| Message::Gadget(i, m)),
-                None => Action::None,
-            },
+            Message::Gadget(i, m) => {
+                let Some((_, g)) = self.gadgets.get_mut(i) else {
+                    return Action::None;
+                };
+                match g.update(m) {
+                    gadget::Action::None => Action::None,
+                    gadget::Action::Run(task) => {
+                        Action::Run(task.map(move |m| Message::Gadget(i, m)))
+                    }
+                    gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
+                    gadget::Action::OpenPopup { anchor, size } => {
+                        let id = window::Id::unique();
+                        self.popups.insert(id, i);
+                        g.popup_opened(id);
+                        Action::OpenPopup { id, anchor, size }
+                    }
+                    gadget::Action::ClosePopup(id) => {
+                        self.popups.remove(&id);
+                        Action::ClosePopup(id)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The popup surface `id` is gone, whoever closed it.
+    pub fn popup_closed(&mut self, id: window::Id) {
+        if let Some(i) = self.popups.remove(&id)
+            && let Some((_, g)) = self.gadgets.get_mut(i)
+        {
+            g.popup_closed();
         }
     }
 
@@ -185,6 +265,18 @@ impl Panel {
                 .align_right(Length::Fill),
         ]
         .into()
+    }
+
+    /// Content of the popup surface `id`.
+    pub fn popup_view<'a>(&'a self, id: window::Id, ctx: Context<'a>) -> Element<'a, Message> {
+        match self
+            .popups
+            .get(&id)
+            .and_then(|&i| Some((i, self.gadgets.get(i)?)))
+        {
+            Some((i, (_, g))) => g.popup_view(ctx).map(move |m| Message::Gadget(i, m)),
+            None => Space::new().into(),
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

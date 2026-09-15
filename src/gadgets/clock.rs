@@ -1,15 +1,17 @@
 //! Clock gadget: the current time, formatted with a `strftime` pattern.
+//! A click opens a month calendar in a popup.
 
 use std::time::Duration;
 
 use chrono::{DateTime, Local, Timelike};
 use iced::futures::stream;
-use iced::widget::text;
+use iced::widget::{button, text};
 use iced::{Element, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Context, Gadget};
+use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::widgets::calendar::{self, Calendar};
 
 /// `[Clock]` section. Same keys and defaults as the Python implementation.
 #[derive(Debug, Clone)]
@@ -32,11 +34,15 @@ impl Section for ClockConfig {
 pub struct Clock {
     config: ClockConfig,
     now: DateTime<Local>,
+    popup: Popup,
+    calendar: Calendar,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
     Tick(DateTime<Local>),
+    Toggle,
+    Calendar(calendar::Message),
 }
 
 impl Gadget for Clock {
@@ -44,21 +50,47 @@ impl Gadget for Clock {
     type Message = Message;
 
     fn new(config: ClockConfig, _output: &OutputInfo) -> Self {
+        let now = Local::now();
         Self {
             config,
-            now: Local::now(),
+            now,
+            popup: Popup::new(),
+            calendar: Calendar::new(now.date_naive()),
         }
     }
 
     fn update(&mut self, message: Message) -> Action<Message> {
         match message {
             Message::Tick(now) => self.now = now,
+            Message::Toggle => {
+                if !self.popup.is_open() {
+                    self.calendar.show(self.now.date_naive());
+                }
+                return self.popup.toggle(Calendar::SIZE);
+            }
+            Message::Calendar(m) => self.calendar.update(m),
         }
         Action::None
     }
 
     fn view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Message> {
-        text(self.now.format(&self.config.format).to_string()).into()
+        let label = text(self.now.format(&self.config.format).to_string());
+        self.popup.anchor(
+            button(label)
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::Toggle),
+        )
+    }
+
+    fn popup(&mut self) -> Option<&mut Popup> {
+        Some(&mut self.popup)
+    }
+
+    fn popup_view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Message> {
+        self.calendar
+            .view(self.now.date_naive())
+            .map(Message::Calendar)
     }
 
     fn subscription(&self) -> Subscription<Message> {

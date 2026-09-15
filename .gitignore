@@ -1,6 +1,2 @@
-/tests/sandbox*
 /.idea
-/.venv
-/dist/
-/build/
-__pycache__
+/target

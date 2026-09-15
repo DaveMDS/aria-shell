@@ -1,0 +1,5 @@
+/tests/sandbox*
+/.venv
+/dist/
+/build/
+__pycache__

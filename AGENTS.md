@@ -40,17 +40,28 @@ swaymsg -t get_tree # Sway
 
 ## Architecture
 
-Mirrors the Python implementation's `config`/`service`/`module`/`gadget`
-layering, adapted to Rust idioms (traits + associated types instead of
-runtime reflection, a flat top-level `Message` enum instead of dynamic
-dispatch — the module set is closed and compiled-in, not a real plugin
-system). See RS-PORT.md's "Key architecture decisions" section for the
-reasoning behind each choice before changing the shape of these traits.
+Plain iced Elm architecture, nested: `AriaShell` (daemon, one entry per
+open surface) → `Panel` (one layer surface on one output) → `AnyGadget`
+(closed enum over gadget types) → e.g. `Clock` (`impl Gadget`). Each
+level owns its state and `Message`, routes to children by key, and
+`.map()`s their messages up. No globals: `Config` is loaded once and
+passed by reference. External event sources are `Subscription`s. See
+RS-PORT.md's "Architecture" section before changing the shape of any of
+these.
 
-Source code comments referencing a Python file (e.g. "mirrors
-`aria_shell.config.AriaConfigModel`") are intentional -- they document
-*why* something is shaped the way it is, by pointing at the original
-behavior being mirrored. Keep that pattern when porting a new piece.
+The Python implementation is a reference for **behaviour** (config
+format, gadget semantics, protocol usage), not for structure. Don't port
+its `Singleton`/`Service`/`Module` machinery, and only write a "mirrors
+`foo.py`" comment where a specific behaviour is being reproduced, not for
+structure.
+
+## Verifying
+
+`cargo test` covers the config layer (the only part testable without a
+compositor). Everything else needs a real run: `cargo run`, then
+`hyprctl layers` to confirm the surfaces, and a screenshot (`grim -g
+"0,0 1920x40" out.png`) to confirm what's drawn. Logs go through `log`;
+`RUST_LOG=aria_shell=debug cargo run` for more.
 
 ## Commit style
 

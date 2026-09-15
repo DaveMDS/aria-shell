@@ -1,297 +1,151 @@
-# Rust port spike: Panel + Clock gadget
+# Rust port
 
-## Context
+## Why
 
-`aria-shell` is currently Python + GTK4 + gtk4-layer-shell (~8.6k lines).
-The internal architecture (Config/Service/Module/Gadget) is solid, but GTK4
-itself has turned out to be an uncomfortable fit: the development experience
-is clunky, and — more importantly — GTK's CSS is too limited for the level
-of visual customization we actually want.
+`aria-shell` was Python + GTK4 + gtk4-layer-shell (~8.6k lines, now under
+`aria-shell-python/`). GTK4 turned out to be an uncomfortable fit: clunky
+development experience and, more importantly, GTK's CSS is too limited for
+the level of visual customization we actually want.
 
-### How we got here
+### Alternatives considered
 
-- Qt was explicitly ruled out from the start.
-- EFL/Edje was considered (the author has 20 years of history with
-  `python-efl`) but rejected: the EFL project itself is effectively dead,
-  and it would be a more extreme jump than needed anyway.
-- A "real" CSS engine without GTK (e.g. Blitz/Stylo) was considered and
-  rejected: on Linux, any webview with real CSS still requires WebKitGTK
-  underneath, which means GTK comes back in — plus a whole browser engine
-  on top. That makes the dependency footprint worse, not better. Blitz
-  standalone is also too young/unstable to bet a rewrite on.
-- Landed on **Rust + `iced` + `iced_exwlshell`** (formerly `iced_layershell`
-  + `iced_sessionlock`, merged/renamed as of v0.20): a lightweight (wgpu),
-  non-Qt, non-GTK toolkit with actively maintained Wayland layer-shell
-  support (verified via a same-day commit at research time). `iced`'s
-  `shader` widget gives direct per-widget wgpu access — this covers the
-  "more visual freedom than CSS" requirement (the existing Shadertoy
-  wallpaper effect can be ported ~1:1, and arbitrary GPU-drawn effects are
-  possible elsewhere too) without having to commit to a specific "skin
-  format" right now — that question stays open and isn't blocking for this
-  spike.
-- Real risks surfaced by actual web research (not from training memory):
-  PAM in Rust is the weakest link (even COSMIC's own official greeter has
-  open production bugs around it); the idle-notifier protocol, raw
-  PipeWire volume control, and the GStreamer→wgpu bridge for video all lack
-  mature ready-made crates — expect to hand-roll them. `iced_layershell`
-  was just renamed to `iced_exwlshell`: small team, expect API churn.
-- **COSMIC** (System76/Pop!_OS, a production DE built on an `iced` fork,
-  `libcosmic`) has already solved every one of these subsystems in real,
-  shipped Rust code: multi-monitor layer-shell panels, SNI tray, a
-  notification daemon, a PAM-based lock screen. Decision: **study and
-  adapt their patterns as reference, stay on vanilla `iced`** — don't
-  depend on `libcosmic` itself, since it's a fairly opinionated toolkit
-  built for a different DE.
-- Given the scope of a full rewrite (GTK isn't isolated behind a `gui/`
-  layer — it's spread across ~30 files: every component, every module,
-  most services), we start with a **small, focused spike**: just the Panel
-  with just the Clock gadget (no calendar popover), but with the
-  foundational layers (config, service, module/gadget, layer-shell window)
-  already in their "definitive" shape — designed to scale to future
-  modules without a redesign, but without building generic machinery that
-  isn't needed yet (no dyn-dispatch, no config derive-macro, no dynamic
-  registry: the module set is closed and compiled-in, so a static `match`
-  is enough).
+- Qt: ruled out from the start.
+- EFL/Edje (the author has 20 years of history with `python-efl`): the EFL
+  project is effectively dead, and it would be a more extreme jump than
+  needed.
+- A "real" CSS engine without GTK (Blitz/Stylo): on Linux any webview with
+  real CSS still needs WebKitGTK underneath, so GTK comes back plus a whole
+  browser engine. Blitz standalone is too young to bet a rewrite on.
+- **Chosen: Rust + `iced` + `iced_exwlshell`** (formerly `iced_layershell`
+  + `iced_sessionlock`, merged as of v0.20): lightweight (wgpu), non-Qt,
+  non-GTK, actively maintained Wayland layer-shell support. `iced`'s
+  `shader` widget gives direct per-widget wgpu access, which covers the
+  "more visual freedom than CSS" requirement without committing to a
+  specific "skin format" yet.
+- **COSMIC** (System76, a production DE on an `iced` fork, `libcosmic`)
+  has shipped every subsystem we need: multi-monitor layer-shell panels,
+  SNI tray, notification daemon, PAM lock screen. Study and adapt their
+  patterns as reference; stay on vanilla `iced`, don't depend on
+  `libcosmic`.
 
-The goal of this spike is to validate the full path end-to-end
-(`aria.conf` → typed config → module → gadget → layer-shell window → live
-update) before investing further, and to surface any surprises in the
-(young, moving) `iced`/`iced_exwlshell` APIs early rather than halfway
-through a much bigger effort.
+### Known risks (from real research, not memory)
 
-## Python reference files (mirror behavior, don't copy code)
+- PAM in Rust is the weakest link: even COSMIC's official greeter has open
+  production auth bugs. Highest-risk unimplemented piece.
+- The idle-notifier protocol, raw PipeWire volume control and a
+  GStreamer→wgpu bridge for video all lack mature crates; expect to
+  hand-roll them.
+- `iced_exwlshell` is a small, fast-moving crate: expect API churn, verify
+  against its source in `~/.cargo/registry` rather than memory.
 
-`aria_shell/config.py`, `aria_shell/services/aria_service.py`,
-`aria_shell/module.py`, `aria_shell/gadget.py`, `aria_shell/modules/clock.py`,
-`aria_shell/components/panel.py`, `aria_shell/gui/window.py`,
-`aria_shell/assets/aria.conf`, `aria_shell/utils/_basic.py` (`Singleton`,
-`Timer`), `aria_shell/utils/env.py` (`lookup_config_file`).
+## Relationship to the Python implementation
 
-To study later (pattern reference only, never a dependency) once tray,
-notifications, and the lock screen are tackled: the open-source code of
-`cosmic-panel`, `cosmic-applets` (SNI status-area applet),
-`cosmic-notifications`, `cosmic-greeter` (System76, MPL-2.0).
+The Python code is a **behaviour** reference, not a structure reference.
 
-## Initial setup
+Kept on purpose (it's the user-facing contract):
+- the `aria.conf` format: INI, case-sensitive, `[Name]` / `[Name:id]`
+  instances, empty value = default, same keys and defaults per section;
+- the feature list and the semantics of each gadget/component.
 
-- Started on a dedicated git branch (`rust-spike`) for this experimental
-  work.
-- The repo has since been reorganized: Rust is now the project at the repo
-  root (`Cargo.toml`, `src/`, `assets/`), and the original Python
-  implementation was moved to `aria-shell-python/` (its own `pyproject.toml`,
-  `aria_shell/`, `tests/`, `README.md`, `LICENSE`, `.gitignore`, `Makefile`)
-  as a subordinate, legacy reference implementation — not deleted, since it
-  documents real behavior worth mirroring while the Rust port is incomplete.
-- Single Cargo package (no workspace yet — introduce one only when/if a
-  second crate shows up), named `aria-shell`.
+Deliberately **not** mirrored: `Singleton` metaclass, the `AriaService`
+base, the `AriaModule`/`Gadget` split, runtime reflection over config
+models, dynamic `importlib` module loading. Those solved GTK/Python
+problems that iced doesn't have. Don't reintroduce them, and don't add
+"mirrors `foo.py`" comments for structure, only where a *behaviour* is
+being reproduced.
 
-## File layout
+## Architecture
+
+Plain Elm architecture as iced defines it, nested once per layer. Every
+layer is a struct with its own `Message`, `update`, `view` and
+`subscription`; the parent routes by key and `.map()`s messages up.
 
 ```
-aria-shell/                     (repo root)
-├── Cargo.toml
-├── assets/
-│   └── aria.conf               trimmed dev/sample config (Clock section only)
-├── src/
-│   ├── main.rs                 iced app + top-level Message enum
-│   ├── config/
-│   │   ├── mod.rs              AriaConfig (loader/singleton), mirrors config.py::AriaConfig
-│   │   ├── model.rs            ConfigSection trait + parsing helpers (bool/list)
-│   │   └── general.rs          GeneralConfig, mirrors AriaConfigGeneralModel
-│   ├── service.rs               Service trait + ServiceCell<T>, mirrors aria_service.py
-│   ├── module.rs                 Module trait + GadgetRunContext, mirrors module.py
-│   ├── panel.rs                  layer-shell window + PanelState, mirrors panel.py + window.py
-│   └── modules/
-│       ├── mod.rs               GadgetSlot enum + request_gadget() (the "registry")
-│       └── clock.rs             ClockConfig, ClockModule, ClockState, clock::Message
-└── aria-shell-python/            legacy Python/GTK4 implementation (reference only)
+AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, panels: BTreeMap<window::Id, Panel>
+  Message::Shell(ShellEvent)          monitors and surfaces appearing/disappearing
+  Message::Panel(window::Id, panel::Message)
+  + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
+
+Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
+  Message::Gadget(index, gadget::Message)
+
+AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
+  Message::Clock(clock::Message) | ...
+
+Clock      (gadgets/clock.rs)  impl Gadget: new / update / view / subscription
 ```
 
-## Cargo.toml (verify against real docs before building)
+- **No global state.** `Config` is loaded in `AriaShell::new` and passed
+  by `&` down to gadget construction. This is what makes hot-reload
+  possible later (replace the value, rebuild panels) and what makes the
+  config layer unit-testable.
+- **Multi-monitor from day one.** The daemon starts in
+  `StartMode::Background` (no surface). It subscribes to the shell
+  broadcast (`iced_wayland_subscriber`); on `OutputAdded` it opens one
+  layer surface per `[panel*]` section that wants that output
+  (`NewLayerShellSettings { output_option: OutputOption::GlobalName(id) }`),
+  on `OutputRemoved` it removes them. The broadcast replays current
+  outputs to late subscribers, so startup and hot-plug are the same path.
+- **External event sources are `Subscription`s**, not services. A timer
+  is a stream; a compositor IPC socket or DBus connection will be a stream
+  too. Derived state lives in whichever struct needs it. Shared
+  connections, when they show up, are a `Subscription::run_with(key, ..)`
+  whose events fan out through `update`, not a mutex-guarded static.
+- **Subscription identity.** iced dedups subscriptions by hash. Every
+  level keys its children's subscriptions with `.with(key)` (gadget index
+  in `Panel`, `window::Id` in `AriaShell`) so two identical gadgets on two
+  outputs keep separate streams.
+- **Closed gadget set.** No plugins, no `dyn`. Adding a gadget: one file
+  under `gadgets/`, one variant in `AnyGadget` and `gadget::Message`, one
+  arm in each `match` in `gadget.rs`.
+- **Config sections** implement `config::Section` by hand
+  (`const NAME` + `from_raw(&RawSection)`). `RawSection` has the typed
+  accessors (`str_or`, `list_or`; add `bool_or`/`int_or` when a section
+  needs them).
 
-```toml
-[package]
-name = "aria-shell"
-version = "0.0.1"
-edition = "2021"
+### Facts about the crates, verified in source (v0.20.1 / iced 0.14)
 
-[dependencies]
-iced = { version = "0.14", features = ["wgpu", "tokio"] }
-iced_exwlshell = "0.20.1"
-configparser = "3"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-```
+- `iced::time::every` needs the `tokio` feature on `iced`. We use
+  `tokio::time::sleep` directly for the wall-clock-aligned clock tick.
+- `LayerSize::FILL` with only `Anchor::Top` fills the whole output height;
+  always set `LayerSize::fill_width(h)` for a bar.
+- `exclusive_zone` is a plain pixel count; there is no "auto from content".
+- `Anchor` is a bitflag re-export of the protocol type.
+- `OutputInfo` (sctk) carries `id` (`wl_registry` global name, what
+  `OutputOption::GlobalName` wants) and `name: Option<String>` (connector,
+  e.g. `HDMI-A-1`, what the `outputs =` config key matches).
+- `Subscription::with(v)` includes `v` in the recipe hash; `.map(f)` only
+  includes `TypeId::of::<F>()`.
+- `configparser` strips inline comments from the first `#` anywhere in a
+  value (Python needs leading whitespace). We disable inline comments
+  entirely so `#ff0000` survives.
+- `configparser::Ini::new_cs()` is case-sensitive on sections and keys.
 
-(`tokio` feature added during implementation -- `iced::time::every` needs
-it, see the resolved-uncertainties section below.)
+## Status (2026-09-15)
 
-- `configparser` over `rust-ini`: closer behavior to Python's stdlib
-  (`Ini::new_cs()` for case-sensitivity, matching `optionxform = str`;
-  configurable inline comments, matching `inline_comment_prefixes=('#',)`).
-  **Highest-risk point in the whole config layer**: confirm `new_cs()` is
-  actually case-sensitive on section names, or `Clock:2` would silently
-  break.
-- `chrono` for `strftime`-style formatting (`ClockConfig.format` passed
-  straight into `.format()`, same `%`-specifier language as Python).
+Verified on the real Hyprland session with two outputs:
 
-## Key architecture decisions
+- `hyprctl layers` shows one `aria-panel` surface per output, full width,
+  32px, in the configured layer, with an exclusive zone.
+- `assets/aria.conf` drives it: `[panel]` with `items_center = Clock` and
+  `items_end = Clock:2`, each `[Clock*]` with its own `format`. Screenshots
+  confirm both gadgets render on both bars and the seconds tick.
+- `cargo build`, `cargo clippy --all-targets`, `cargo test`: clean.
 
-**Config (`config/model.rs`)**: no generic runtime introspection (Rust has
-no `get_annotations` equivalent). Every typed section hand-writes its own
-`from_section(&HashMap<String,String>) -> Self` behind a shared
-`ConfigSection { const SECTION; fn from_section(...) }` trait. No generic
-`validate_<key>` hook mechanism: if a future config needs one, it's just a
-function call inside its own `from_section`, not a runtime-dispatched hook.
+Implemented: config loading, `[panel]` (`outputs`, `position`, `layer`,
+`items_*`), multi-output panels, Clock (`format`).
 
-**Service (`service.rs`)**: the layer is fully defined (`trait Service` +
-`ServiceCell<T>` backed by `OnceLock<Mutex<T>>`, one static instance per
-type) but **has zero consumers in this spike** — Clock doesn't use a
-Service in Python either (it drives its own `Timer`), and the periodic tick
-has a better native fit in iced's `Subscription` system. Building a Service
-just for the tick would fight the framework.
+Not yet: `[panel]` `size`/`align`/`margin`/`opacity`, panel height from
+content, hot-reload, styling/theme, click/popover on the Clock, every other
+gadget and component (tray, notifications, launcher, lock, wallpaper,
+terminal, idle).
 
-**Module/Gadget (`module.rs`, `modules/mod.rs`)**: **a flat `Message` enum,
-no `dyn Any`/type-erasure.** Why: the module set is closed and known at
-compile time (no dynamic plugins to support), and `iced_exwlshell`'s macro
-(`#[to_layer_message]`/`#[to_exwlshell_message]`, exact name to confirm)
-decorates a single top-level `Message` enum — fighting that with
-per-module erasure would go against the crate's intended usage. The
-"registry" that replaces Python's dynamic `importlib` becomes a
-`GadgetSlot` enum + a `request_gadget(name, ...)` function with a `match`
-on the string (mirrors `request_module_gadget`): adding a future module
-(e.g. Workspaces) = one new file + one enum variant + one match arm + one
-`Message` variant in `main.rs` — no trait redesign.
+## Next steps, in order
 
-**Clock tick**: a single top-level subscription
-(`iced::time::every(Duration::from_secs(1))`) updates every Clock instance
-in `update()`, mirroring Python's single `Timer` broadcasting to all
-`self.gadgets`. `Module::subscription()` exists in the trait for future
-modules that need their own event source (e.g. Workspaces via the
-compositor's IPC socket); Clock leaves it as `Subscription::none()`.
-
-**Panel/layer-shell window (`panel.rs`)**: only what a top-anchored bar
-needs — no generic reusable `AriaWindow` for launcher/lock/exiter (out of
-scope). `PanelState` has 3 slots (start/center/end) like
-`AriaPanel.populate`, but for this spike it's **hardcoded** to a single
-centered Clock: no `[panel]`/`PanelConfig` parsing yet (no
-`items_start`/`items_center`/`items_end`).
-
-## Explicitly out of scope for this spike
-
-DBus/tray, audio, notifications, terminal, wallpaper, lock screen, idle
-daemon, multi-monitor gadget duplication, config/style hot-reload,
-packaging, click/tooltip/popover on the Clock.
-
-## Status: spike implemented and verified (2026-09-15)
-
-Built on branch `rust-spike`. `cargo build` is clean (zero warnings after
-marking the intentionally-unused foundational pieces `#[allow(dead_code)]`).
-Ran on the real Hyprland session with `cargo run` / the built binary
-directly:
-
-- `hyprctl layers` shows a genuine `aria-panel` layer-shell surface
-  (`namespace: aria-panel`) on the `top` layer, full output width, fixed
-  32px height, stacked correctly below the pre-existing bar on the same
-  output (Hyprland's own exclusive-zone stacking, not a bug).
-- Screenshot confirms the Clock gadget renders and reads a real `[Clock]`
-  config section: initially showed `15 Sep 2026 21:48` (the configured
-  `%e %b %Y  %H:%M` format). At the time of this test the config still
-  lived at `aria_shell/assets/aria.conf` (pre-reorg); the crate now reads
-  the trimmed `assets/aria.conf` at the repo root instead (see "Initial
-  setup" above) -- same lookup logic, same result.
-- Live-edited `format =` to `RUST SPIKE TEST %H:%M:%S`, restarted: bar
-  showed `RUST SPIKE TEST 21:49:52`, seconds visibly ticking one screenshot
-  to the next — proves the `aria.conf → ClockConfig → view()` path and the
-  1Hz `iced::time::every` subscription are both real, not hardcoded.
-  Config file was reverted after the test.
-- Process stayed alive and responsive across restarts and a 70+ second
-  run with no panics.
-
-### How each flagged uncertainty actually resolved (found in the real
-`iced_exwlshell` 0.20.1 source, not guessed)
-
-1. `iced::time::every` requires the `tokio` (or `smol`) Cargo feature on
-   `iced` -- added `features = ["wgpu", "tokio"]`.
-2. `exclusive_zone` is a plain `i32` field on `LayerShellSettings`
-   (default `-1`); no separate "auto" mode exists in this crate. Used a
-   fixed pixel value (`PANEL_HEIGHT = 32`) matching the bar's own height.
-3. `Anchor` **is** bitflag-combinable (`Anchor::Top | Anchor::Left |
-   Anchor::Right` compiles and works) -- it's a re-export of the raw
-   `zwlr_layer_surface_v1::Anchor` protocol type.
-4. Output targeting wasn't needed/exercised (single-output dev machine,
-   default `StartMode` picked the active output) -- still open for the
-   multi-monitor phase.
-5. `LayerSize::fill_width(height)` exists and is exactly what a
-   full-width, fixed-height bar needs. Its default (`LayerSize::FILL`,
-   used when `size` is left out of `LayerShellSettings`) fills the
-   *entire remaining output height* when only `Anchor::Top` is set (no
-   `Bottom`) -- this was a real bug hit during the first run (the surface
-   was 1045px tall instead of 32px), fixed by setting `size` explicitly.
-6. Both `#[to_layer_message]` and `#[to_exwlshell_message]` exist (the
-   crate's real examples use `to_layer_message`); used that one.
-7. `configparser::ini::Ini::new_cs()` is confirmed case-sensitive on both
-   section names and keys -- required for `Clock:2` to work correctly.
-
-## Genuinely uncertain API points — verify against real docs/compiler, don't trust memory
-
-1. Which `iced` 0.14 feature flags are needed for `Task`/async and for
-   `iced::time::every` (exact module path to confirm).
-2. Exact semantics of `LayerShellSettings.exclusive_zone` (fixed pixel
-   count vs. protocol-level "auto", i.e. `-1`, as in raw
-   `zwlr_layer_surface_v1::set_exclusive_zone`).
-3. Whether `Anchor` is a combinable bitflag (`Anchor::Top | Anchor::Left |
-   Anchor::Right`) or something else — only a single `Anchor::Bottom` was
-   seen in the real examples fetched during research.
-4. Output/monitor targeting API name and shape (`StartMode::TargetOutput`
-   vs `OutputOption` — conflicting signals, likely version drift). Not
-   needed for this spike, but will matter as soon as multi-monitor support
-   is added.
-5. `LayerSize` constructor for "fill width, fixed height" (`fill_width(h)`
-   seen once, not confirmed against authoritative docs).
-6. Exact attribute macro name: `#[to_layer_message]` (seen in a real
-   example) vs `#[to_exwlshell_message]` (named in the docs.rs summary for
-   0.20.1) — could be an alias, or the example could be from a different
-   crate version.
-7. Exact `configparser` accessor for a section's raw map, and whether it
-   supports value-less keys (`allow_no_value`-style, not needed for this
-   spike).
-
-The first `cargo build` is the natural checkpoint to resolve these against
-real compiler errors/docs — not before.
-
-## End-to-end flow: aria.conf → ClockConfig
-
-1. `main()` calls `AriaConfig::global()` → loads the file (same lookup as
-   `lookup_config_file`: XDG dirs, then fall back to the trimmed
-   `assets/aria.conf` at the repo root for local-dev convenience).
-2. `request_gadget("Clock", output_name)` →
-   `AriaConfig::global().section::<ClockConfig>(Some("Clock"))` → raw
-   case-sensitive section lookup → `ClockConfig::from_section` (defaults to
-   `"%H:%M"` if missing/empty, no validation, same as Python).
-3. With the current sample file: `"Clock"` → `format = "%H:%M:%S"`. A
-   `"Clock:2"` instance section works the same way (section lookup is
-   generic on the name) but isn't reachable from the default panel in this
-   spike, since there's no `items_center` config support yet.
-
-## Verification plan
-
-1. `cargo build` (from the repo root) — first real checkpoint: this is
-   where every uncertain API point above gets resolved against actual
-   compiler errors/docs.
-2. On a Wayland session with a `wlr-layer-shell-v1` compositor (Hyprland or
-   Sway — not X11, not a compositor without layer-shell): `cargo run`.
-3. Expected visual result: a thin bar anchored to the top edge, full width
-   of the output, above normal windows, showing the current time as plain
-   text, updating once per second, no decorations, not stealing keyboard
-   focus (clicking through to windows underneath should still work).
-4. Manual checks:
-   - Restart `cargo run` — the bar should reappear in the same place.
-   - Edit the `format =` line under `[Clock]` in `assets/aria.conf` and
-     restart (no hot-reload in this spike) — the displayed format should
-     change, proving the
-     config→`ClockConfig`→`view()` path is real, not hardcoded.
-   - `hyprctl clients` / `swaymsg -t get_tree` — the surface should show up
-     as a layer-shell surface, not a normal toplevel, confirming
-     `iced_exwlshell` actually went through the layer-shell path.
-5. Explicitly not tested this round: multi-monitor, clicking the Clock,
-   hot-reload, any other module, tray/notifications/wallpaper/lock.
+1. A second gadget with its own event source (Workspaces over the
+   compositor IPC) to validate the subscription-per-gadget path.
+2. The Clock calendar popover: first non-panel surface, exercises
+   `NewPopUp` on the multi-window runtime.
+3. Styling: how the bar looks (background, fonts) before more gadgets pile
+   up on an unstyled row.
+4. Config hot-reload (watch the file, rebuild panels).

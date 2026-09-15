@@ -1,100 +1,157 @@
 mod config;
-mod module;
-mod modules;
+mod gadget;
+mod gadgets;
 mod panel;
-mod service;
 
-use std::time::Duration;
+use std::collections::BTreeMap;
 
-use chrono::Local;
-use iced_exwlshell::layershell::application;
+use iced::window::Id;
+use iced::{Element, Subscription, Task};
+use iced_exwlshell::build_pattern::daemon;
+use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
+use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
+use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use config::AriaConfig;
-use module::Module;
-use modules::GadgetSlot;
-use panel::PanelState;
+use config::Config;
+use panel::{Panel, PanelConfig};
 
-/// Top-level Message enum, one variant per module -- see the design note
-/// on `module::Module` for why this is a flat enum and not `dyn
-/// Any`/type-erasure. `#[to_layer_message]` injects the shell-lifecycle
-/// variants `iced_exwlshell` needs alongside ours.
-#[to_layer_message]
-#[derive(Clone, Debug)]
-pub(crate) enum Message {
-    Clock(modules::clock::Message),
-    /// Top-level ticker, broadcast to every gadget slot -- mirrors
-    /// Python's single `Timer` looping over every `self.gadgets` entry.
-    Tick(chrono::DateTime<Local>),
-    // Workspaces(modules::workspaces::Message),   <-- future
+/// Top-level message. `#[to_layer_message(multi)]` adds the variants the
+/// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
+/// `RemoveWindow`, ...).
+#[to_layer_message(multi)]
+#[derive(Debug, Clone)]
+enum Message {
+    /// Surface and monitor lifecycle from the runtime.
+    Shell(ShellEvent),
+    /// Routed to the panel shown in that window.
+    Panel(Id, panel::Message),
 }
 
 struct AriaShell {
-    panel: PanelState,
+    config: Config,
+    shell_events: ShellReceiver,
+    /// One entry per open layer surface.
+    panels: BTreeMap<Id, Panel>,
 }
 
 impl AriaShell {
-    fn new() -> (Self, iced::Task<Message>) {
-        let output_name = "default".to_owned(); // no real output
-        // enumeration in this spike -- multi-monitor is out of scope.
-        (
-            Self {
-                panel: PanelState::new_default(&output_name),
-            },
-            iced::Task::none(),
-        )
-    }
-
-    fn namespace() -> String {
-        "aria-panel".into() // mirrors AriaWindow namespace='aria-shell'
-    }
-
-    fn update(&mut self, message: Message) -> iced::Task<Message> {
-        match message {
-            Message::Tick(now) => {
-                for slot in self.panel.all_slots_mut() {
-                    match slot {
-                        GadgetSlot::Clock(state) => {
-                            let _ = modules::clock::ClockModule::update(
-                                state,
-                                modules::clock::Message::Tick(now),
-                            );
-                        }
-                    }
-                }
-                iced::Task::none()
-            }
-            Message::Clock(_inner) => iced::Task::none(), // Clock doesn't
-            // originate messages of its own yet (no click handling)
-            _ => iced::Task::none(), // shell-lifecycle variants injected
-                                      // by #[to_layer_message]
+    fn new(shell_events: ShellReceiver) -> Self {
+        Self {
+            config: Config::load(),
+            shell_events,
+            panels: BTreeMap::new(),
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Message> {
-        self.panel.view()
+    fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Shell(event) => self.on_shell_event(event),
+            Message::Panel(id, m) => match self.panels.get_mut(&id) {
+                Some(panel) => panel.update(m).map(move |m| Message::Panel(id, m)),
+                None => Task::none(),
+            },
+            _ => Task::none(), // runtime variants, handled by the runtime
+        }
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
-        // Idiomatic iced pattern (Elm-architecture subscriptions, not a
-        // GLib/Service timer): a single top-level tick, mirrors
-        // ClockModule.timer_cb(instance=None) broadcasting to every
-        // self.gadgets entry from one GLib timeout.
-        iced::time::every(Duration::from_secs(1)).map(|_instant| Message::Tick(Local::now()))
+    fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
+        match event {
+            ShellEvent::OutputAdded(output) => self.open_panels(&output),
+            ShellEvent::OutputRemoved(output) => {
+                let gone = OutputId::from(&output);
+                let ids: Vec<Id> = self
+                    .panels
+                    .iter()
+                    .filter(|(_, p)| p.output == gone)
+                    .map(|(id, _)| *id)
+                    .collect();
+                log::info!(
+                    "output {:?} removed, closing {} panel(s)",
+                    output.name,
+                    ids.len()
+                );
+                Task::batch(ids.into_iter().map(|id| {
+                    self.panels.remove(&id);
+                    Task::done(Message::RemoveWindow(id))
+                }))
+            }
+            ShellEvent::Closed(id) => {
+                self.panels.remove(&id);
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    /// Open every configured panel that wants this output and isn't
+    /// already shown on it (the shell broadcast replays outputs to late
+    /// subscribers, so an output can be announced more than once).
+    fn open_panels(&mut self, output: &OutputInfo) -> Task<Message> {
+        let output_id = OutputId::from(output);
+        let mut tasks = Vec::new();
+        for (section, cfg) in PanelConfig::all(&self.config) {
+            let shown = self
+                .panels
+                .values()
+                .any(|p| p.output == output_id && p.section == section);
+            if shown || !cfg.wants_output(output) {
+                continue;
+            }
+            log::info!("opening [{section}] on output {:?}", output.name);
+            let panel = Panel::new(section, cfg, &self.config, output);
+            let id = Id::unique();
+            tasks.push(Task::done(Message::NewLayerShell {
+                settings: panel.layer_settings(),
+                id,
+            }));
+            self.panels.insert(id, panel);
+        }
+        Task::batch(tasks)
+    }
+
+    fn view(&self, window: Id) -> Element<'_, Message> {
+        match self.panels.get(&window) {
+            Some(panel) => panel.view().map(move |m| Message::Panel(window, m)),
+            None => iced::widget::Space::new().into(),
+        }
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        let panels = self.panels.iter().map(|(id, panel)| {
+            panel
+                .subscription()
+                .with(*id)
+                .map(|(id, m)| Message::Panel(id, m))
+        });
+        Subscription::batch(
+            std::iter::once(self.shell_events.listen().map(Message::Shell)).chain(panels),
+        )
     }
 }
 
 fn main() -> iced_exwlshell::Result {
-    let _ = AriaConfig::global(); // load aria.conf eagerly, mirrors
-    // AriaShell startup calling AriaConfig().load_conf()
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("aria_shell=info"))
+        .init();
 
-    application(
-        AriaShell::new,
-        AriaShell::namespace,
+    let (shell_broadcast, shell_events) = shell::channel();
+
+    daemon(
+        move || AriaShell::new(shell_events.clone()),
+        "aria-shell",
         AriaShell::update,
         AriaShell::view,
     )
     .subscription(AriaShell::subscription)
-    .layer_settings(panel::panel_layer_settings())
+    .settings(Settings {
+        shell_broadcast,
+        layer_settings: LayerShellSettings {
+            // No initial surface: panels are opened per output as the
+            // compositor announces them.
+            start_mode: StartMode::Background,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
     .run()
 }

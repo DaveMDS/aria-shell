@@ -1,94 +1,198 @@
+//! A panel: one layer-shell bar on one output, holding gadgets in three
+//! slots (start / center / end).
+
 use iced::widget::{container, row};
-use iced::{Element, Length};
+use iced::{Element, Length, Subscription, Task};
+use iced_exwlshell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+};
+use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
-use iced_exwlshell::settings::LayerShellSettings;
+use crate::config::{Config, RawSection, Section};
+use crate::gadget::{self, AnyGadget};
 
-/// Panel bar height in pixels -- fixed for this spike (no auto-sizing to
-/// content, see the `exclusive_zone` note below).
-const PANEL_HEIGHT: u32 = 32;
+/// Bar thickness. Fixed for now: layer-shell needs a size up front and
+/// iced can't report a content size before the first layout.
+const HEIGHT: u32 = 32;
 
-use crate::Message;
-use crate::modules::{GadgetSlot, request_gadget};
+/// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
+/// and defaults match the Python implementation; `size`, `align`,
+/// `margin`, `opacity` are not honoured yet.
+#[derive(Debug, Clone)]
+pub struct PanelConfig {
+    /// `all`, or the connector names (`DP-1 HDMI-A-1`) to show this bar on.
+    pub outputs: Vec<String>,
+    pub position: Position,
+    pub layer: Layer,
+    pub items_start: Vec<String>,
+    pub items_center: Vec<String>,
+    pub items_end: Vec<String>,
+}
 
-/// Mirrors `AriaWindow.__init__` + `AriaPanel.__init__` combined, trimmed
-/// hard to what a single top-anchored panel bar needs -- no
-/// `grab_display`/`hide_on_escape`/`KeyboardMode::EXCLUSIVE`/generic
-/// reusable window base (that generality served the
-/// launcher/lock-screen/exiter windows too in Python, all out of scope
-/// here).
-pub fn panel_layer_settings() -> LayerShellSettings {
-    LayerShellSettings {
-        // mirrors PanelConfig.size == "fill": TOP + LEFT + RIGHT anchors,
-        // full width, fixed height (default `LayerSize::FILL` would fill
-        // the whole remaining output height since only Top is anchored
-        // vertically -- confirmed by a first real run, see RS-PORT.md).
-        anchor: Anchor::Top | Anchor::Left | Anchor::Right,
-        size: LayerSize::fill_width(PANEL_HEIGHT),
-        // Python default is "bottom" (LAYERS["bottom"]); hardcoded to Top
-        // here for visibility during development of the spike.
-        layer: Layer::Top,
-        // GtkLayerShell.auto_exclusive_zone_enable() computes a zone from
-        // the surface's actual size; iced_exwlshell's exclusive_zone is a
-        // plain pixel count (protocol-level -1 = "don't care", not
-        // "auto-size to content" -- see RS-PORT.md's uncertain-points
-        // list). A fixed pixel value matching the bar height is an
-        // acceptable stand-in for this spike.
-        exclusive_zone: PANEL_HEIGHT as i32,
-        // mirrors AriaWindow.KeyboardMode.NONE
-        keyboard_interactivity: KeyboardInteractivity::None,
-        // mirrors AriaWindow margins=(0, 0, 0, 0)
-        margin: (0, 0, 0, 0),
-        ..Default::default()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Position {
+    Top,
+    Bottom,
+}
+
+impl Section for PanelConfig {
+    const NAME: &'static str = "panel";
+
+    fn from_raw(raw: &RawSection) -> Self {
+        let position = match raw.get("position") {
+            None | Some("top") => Position::Top,
+            Some("bottom") => Position::Bottom,
+            Some(other) => {
+                log::warn!("invalid panel position {other:?}, using top");
+                Position::Top
+            }
+        };
+        let layer = match raw.get("layer") {
+            None | Some("bottom") => Layer::Bottom,
+            Some("top") => Layer::Top,
+            Some("overlay") => Layer::Overlay,
+            Some(other) => {
+                log::warn!("invalid panel layer {other:?}, using bottom");
+                Layer::Bottom
+            }
+        };
+        Self {
+            outputs: raw.list_or("outputs", &["all"]),
+            position,
+            layer,
+            items_start: raw.list_or("items_start", &[]),
+            items_center: raw.list_or("items_center", &[]),
+            items_end: raw.list_or("items_end", &[]),
+        }
     }
 }
 
-/// Mirrors `AriaPanel`'s 3-box (start/center/end) content, hardcoded to a
-/// single centered Clock for this spike -- no `[panel]`/`PanelConfig`
-/// parsing yet, no `items_start`/`items_center`/`items_end` config
-/// wiring (see RS-PORT.md's "explicitly out of scope" list).
-pub struct PanelState {
-    start: Vec<GadgetSlot>,
-    center: Vec<GadgetSlot>,
-    end: Vec<GadgetSlot>,
+impl PanelConfig {
+    /// The `[panel*]` sections to instantiate. With none configured, a
+    /// single default bar with just a clock.
+    pub fn all(config: &Config) -> Vec<(String, Self)> {
+        let names = config.instances(Self::NAME);
+        if names.is_empty() {
+            let mut default = config.section::<Self>(None);
+            default.items_center = vec!["Clock".to_owned()];
+            return vec![(Self::NAME.to_owned(), default)];
+        }
+        names
+            .into_iter()
+            .map(|n| {
+                let cfg = config.section(Some(&n));
+                (n, cfg)
+            })
+            .collect()
+    }
+
+    pub fn wants_output(&self, output: &OutputInfo) -> bool {
+        self.outputs.iter().any(|o| o == "all")
+            || output
+                .name
+                .as_ref()
+                .is_some_and(|name| self.outputs.contains(name))
+    }
 }
 
-impl PanelState {
-    /// Mirrors `AriaPanel.populate()`'s default-empty-config behavior
-    /// (`self.conf.items_center = ['Clock']`) -- only the *result* is
-    /// mirrored here, not the mechanism.
-    pub fn new_default(output_name: &str) -> Self {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slot {
+    Start,
+    Center,
+    End,
+}
+
+pub struct Panel {
+    /// Config section this panel was built from, e.g. `panel:2`.
+    pub section: String,
+    pub output: OutputId,
+    config: PanelConfig,
+    gadgets: Vec<(Slot, AnyGadget)>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    /// Index into `gadgets`, then the gadget's own message.
+    Gadget(usize, gadget::Message),
+}
+
+impl Panel {
+    pub fn new(section: String, config: PanelConfig, shell: &Config, output: &OutputInfo) -> Self {
+        let mut gadgets = Vec::new();
+        for (slot, names) in [
+            (Slot::Start, &config.items_start),
+            (Slot::Center, &config.items_center),
+            (Slot::End, &config.items_end),
+        ] {
+            for name in names {
+                if let Some(g) = AnyGadget::create(name, shell, output) {
+                    gadgets.push((slot, g));
+                }
+            }
+        }
         Self {
-            start: Vec::new(),
-            center: request_gadget("Clock", output_name).into_iter().collect(),
-            end: Vec::new(),
+            section,
+            output: OutputId::from(output),
+            config,
+            gadgets,
         }
     }
 
-    /// Mirrors `ClockModule.timer_cb()` broadcasting to every
-    /// `self.gadgets` instance -- walks every gadget slot currently on
-    /// the panel and lets the top-level `update()` dispatch into it.
-    pub fn all_slots_mut(&mut self) -> impl Iterator<Item = &mut GadgetSlot> {
-        self.start
-            .iter_mut()
-            .chain(self.center.iter_mut())
-            .chain(self.end.iter_mut())
+    pub fn layer_settings(&self) -> NewLayerShellSettings {
+        let edge = match self.config.position {
+            Position::Top => Anchor::Top,
+            Position::Bottom => Anchor::Bottom,
+        };
+        NewLayerShellSettings {
+            anchor: edge | Anchor::Left | Anchor::Right,
+            size: LayerSize::fill_width(HEIGHT),
+            layer: self.config.layer,
+            exclusive_zone: Some(HEIGHT as i32),
+            margin: None,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            output_option: OutputOption::GlobalName(self.output.0),
+            namespace: Some("aria-panel".to_owned()),
+            ..Default::default()
+        }
     }
 
-    /// Mirrors `AriaPanel.setup_window()`'s `Gtk.CenterBox` with 3 child
-    /// `Gtk.Box`: three equal-width sections, aligned start/center/end.
-    pub fn view(&self) -> Element<'_, Message> {
-        let start = row(self.start.iter().map(GadgetSlot::view));
-        let center = row(self.center.iter().map(GadgetSlot::view));
-        let end = row(self.end.iter().map(GadgetSlot::view));
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Gadget(i, m) => match self.gadgets.get_mut(i) {
+                Some((_, g)) => g.update(m).map(move |m| Message::Gadget(i, m)),
+                None => Task::none(),
+            },
+        }
+    }
 
+    pub fn view(&self) -> Element<'_, Message> {
+        let section = |slot| {
+            row(self
+                .gadgets
+                .iter()
+                .enumerate()
+                .filter(move |(_, (s, _))| *s == slot)
+                .map(|(i, (_, g))| g.view().map(move |m| Message::Gadget(i, m))))
+            .spacing(8)
+        };
         row![
-            container(start).width(Length::Fill),
-            container(center).width(Length::Fill).center_x(Length::Fill),
-            container(end)
+            container(section(Slot::Start)).width(Length::Fill),
+            container(section(Slot::Center))
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+            container(section(Slot::End))
                 .width(Length::Fill)
                 .align_right(Length::Fill),
         ]
         .into()
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch(
+            self.gadgets
+                .iter()
+                .enumerate()
+                .map(|(i, (_, g))| g.subscription().with(i).map(|(i, m)| Message::Gadget(i, m))),
+        )
     }
 }

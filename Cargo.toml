@@ -1,10 +1,14 @@
 [package]
 name = "aria-shell"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 iced = { version = "0.14", features = ["wgpu", "tokio"] }
 iced_exwlshell = "0.20.1"
+iced_wayland_subscriber = "0.20.1"
 configparser = "3"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tokio = { version = "1", features = ["time"] }
+log = "0.4"
+env_logger = "0.11"

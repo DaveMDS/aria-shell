@@ -7,8 +7,10 @@ edition = "2024"
 iced = { version = "0.14", features = ["wgpu", "tokio"] }
 iced_exwlshell = "0.20.1"
 iced_wayland_subscriber = "0.20.1"
-configparser = "3"
+configparser = { version = "3", features = ["indexmap"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "net", "io-util"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 log = "0.4"
 env_logger = "0.11"

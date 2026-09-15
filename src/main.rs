@@ -1,3 +1,4 @@
+mod compositor;
 mod config;
 mod gadget;
 mod gadgets;
@@ -13,7 +14,9 @@ use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use compositor::Compositor;
 use config::Config;
+use gadget::{Action, Context};
 use panel::{Panel, PanelConfig};
 
 /// Top-level message. `#[to_layer_message(multi)]` adds the variants the
@@ -26,11 +29,14 @@ enum Message {
     Shell(ShellEvent),
     /// Routed to the panel shown in that window.
     Panel(Id, panel::Message),
+    /// Workspaces/windows changes from the compositor IPC.
+    Compositor(compositor::Event),
 }
 
 struct AriaShell {
     config: Config,
     shell_events: ShellReceiver,
+    compositor: Compositor,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
 }
@@ -40,6 +46,7 @@ impl AriaShell {
         Self {
             config: Config::load(),
             shell_events,
+            compositor: Compositor::detect(),
             panels: BTreeMap::new(),
         }
     }
@@ -47,11 +54,27 @@ impl AriaShell {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Shell(event) => self.on_shell_event(event),
-            Message::Panel(id, m) => match self.panels.get_mut(&id) {
-                Some(panel) => panel.update(m).map(move |m| Message::Panel(id, m)),
-                None => Task::none(),
-            },
+            Message::Panel(id, m) => {
+                let action = match self.panels.get_mut(&id) {
+                    Some(panel) => panel.update(m).map(move |m| Message::Panel(id, m)),
+                    None => Action::None,
+                };
+                self.perform(action)
+            }
+            Message::Compositor(event) => {
+                self.compositor.apply(event);
+                Task::none()
+            }
             _ => Task::none(), // runtime variants, handled by the runtime
+        }
+    }
+
+    /// Carry out what a panel/gadget `update` asked for.
+    fn perform(&self, action: Action<Message>) -> Task<Message> {
+        match action {
+            Action::None => Task::none(),
+            Action::Run(task) => task,
+            Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
         }
     }
 
@@ -111,8 +134,11 @@ impl AriaShell {
     }
 
     fn view(&self, window: Id) -> Element<'_, Message> {
+        let ctx = Context {
+            compositor: &self.compositor,
+        };
         match self.panels.get(&window) {
-            Some(panel) => panel.view().map(move |m| Message::Panel(window, m)),
+            Some(panel) => panel.view(ctx).map(move |m| Message::Panel(window, m)),
             None => iced::widget::Space::new().into(),
         }
     }
@@ -125,7 +151,12 @@ impl AriaShell {
                 .map(|(id, m)| Message::Panel(id, m))
         });
         Subscription::batch(
-            std::iter::once(self.shell_events.listen().map(Message::Shell)).chain(panels),
+            [
+                self.shell_events.listen().map(Message::Shell),
+                self.compositor.subscription().map(Message::Compositor),
+            ]
+            .into_iter()
+            .chain(panels),
         )
     }
 }

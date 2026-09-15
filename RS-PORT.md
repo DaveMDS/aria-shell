@@ -61,19 +61,36 @@ layer is a struct with its own `Message`, `update`, `view` and
 `subscription`; the parent routes by key and `.map()`s messages up.
 
 ```
-AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, panels: BTreeMap<window::Id, Panel>
+AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
   Message::Shell(ShellEvent)          monitors and surfaces appearing/disappearing
   Message::Panel(window::Id, panel::Message)
+  Message::Compositor(compositor::Event)   workspaces/windows changes, applied to `Compositor`
   + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
   Message::Gadget(index, gadget::Message)
 
 AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
-  Message::Clock(clock::Message) | ...
+  Message::Clock(clock::Message) | Message::Workspaces(..) | ...
 
-Clock      (gadgets/clock.rs)  impl Gadget: new / update / view / subscription
+Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / subscription
+
+Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
+  subscription()            the single IPC stream (compositor/hyprland.rs), yields `Event`s
+  apply(Event)              patches the state
+  run(Command) -> Task      sends a command (activate workspace/window) to the backend
 ```
+
+Two things flow between the daemon and the gadgets besides messages:
+
+- **`gadget::Context`** goes *down*, into `view`. It holds `&Compositor`
+  (later `&Audio`, `&Tray`, ...): daemon-owned, read-only. A gadget that
+  shows shared state keeps no copy of it, it filters the context in `view`.
+- **`gadget::Action`** comes *up*, out of `update`, in place of a bare
+  `Task`: `Action::Run(Task)` for the gadget's own async work,
+  `Action::Compositor(Command)` (and later `Action::Audio(..)`, ...) for
+  things only the daemon can do. `AriaShell::perform` turns it into a
+  `Task`. Gadgets never hold an IPC handle.
 
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
@@ -87,10 +104,10 @@ Clock      (gadgets/clock.rs)  impl Gadget: new / update / view / subscription
   on `OutputRemoved` it removes them. The broadcast replays current
   outputs to late subscribers, so startup and hot-plug are the same path.
 - **External event sources are `Subscription`s**, not services. A timer
-  is a stream; a compositor IPC socket or DBus connection will be a stream
-  too. Derived state lives in whichever struct needs it. Shared
-  connections, when they show up, are a `Subscription::run_with(key, ..)`
-  whose events fan out through `update`, not a mutex-guarded static.
+  is a stream; the compositor IPC socket is a stream (`compositor::hyprland::events`);
+  a DBus connection will be one too. Shared connections live in the
+  daemon's subscription, their events fan out through `update`, never a
+  mutex-guarded static.
 - **Subscription identity.** iced dedups subscriptions by hash. Every
   level keys its children's subscriptions with `.with(key)` (gadget index
   in `Panel`, `window::Id` in `AriaShell`) so two identical gadgets on two
@@ -100,8 +117,14 @@ Clock      (gadgets/clock.rs)  impl Gadget: new / update / view / subscription
   arm in each `match` in `gadget.rs`.
 - **Config sections** implement `config::Section` by hand
   (`const NAME` + `from_raw(&RawSection)`). `RawSection` has the typed
-  accessors (`str_or`, `list_or`; add `bool_or`/`int_or` when a section
-  needs them).
+  accessors (`str_or`, `bool_or`, `list_or`; add `int_or` when a section
+  needs it).
+- **Shared state is owned by the daemon**, one struct per source
+  (`Compositor` now; audio, tray, notifications later), each with the same
+  three verbs: `subscription()` (one stream for the whole process),
+  `apply(Event)`, `run(Command) -> Task`. Gadgets read it through
+  `Context` and change it through `Action`. This is the shape to copy for
+  the next shared source; don't give gadgets their own connection.
 
 ### Facts about the crates, verified in source (v0.20.1 / iced 0.14)
 
@@ -120,8 +143,25 @@ Clock      (gadgets/clock.rs)  impl Gadget: new / update / view / subscription
   value (Python needs leading whitespace). We disable inline comments
   entirely so `#ff0000` survives.
 - `configparser::Ini::new_cs()` is case-sensitive on sections and keys.
+- `configparser` stores sections in a `HashMap` unless its `indexmap`
+  feature is on; we need it, `Config::instances` (and so the order of
+  `[panel:*]` bars and of gadgets' sections) is file order.
+- Hyprland 0.56 (Lua config) changed the IPC dispatch syntax: the command
+  socket takes `dispatch hl.dsp.focus({ workspace = 3 })` /
+  `dispatch hl.dsp.focus({ window = "address:0x..." })`; the old
+  `dispatch workspace 3` is an error. `j/workspaces`, `j/clients`,
+  `j/monitors`, `j/activewindow` and the `.socket2.sock` event names are
+  unchanged. Dispatcher names: `/usr/share/hypr/stubs/hl.meta.lua`.
+- Hyprland's "active workspace" is one per monitor (`j/monitors[].activeWorkspace`),
+  and `workspacev2` only tells you the focused monitor switched. `Compositor`
+  models it that way: `ActiveWorkspace(id)` clears the flag only among
+  workspaces on the same output.
+- `j/workspaces` comes in creation order and includes special workspaces
+  (negative ids); we sort by id and drop those.
+- A `tooltip` on a 32px layer surface would be clipped to the surface, so
+  the Workspaces gadget has none (Python showed name/title tooltips).
 
-## Status (2026-09-15)
+## Status (2026-09-16)
 
 Verified on the real Hyprland session with two outputs:
 
@@ -130,22 +170,30 @@ Verified on the real Hyprland session with two outputs:
 - `assets/aria.conf` drives it: `[panel]` with `items_center = Clock` and
   `items_end = Clock:2`, each `[Clock*]` with its own `format`. Screenshots
   confirm both gadgets render on both bars and the seconds tick.
+- `[WorkSpaces]` (section spelled as in the Python config) on each bar
+  shows only that monitor's workspaces, the per-monitor active one
+  highlighted, one marker per window (filled for the active window),
+  and follows `hyprctl dispatch` switches live (Hyprland 0.56.2).
 - `cargo build`, `cargo clippy --all-targets`, `cargo test`: clean.
 
 Implemented: config loading, `[panel]` (`outputs`, `position`, `layer`,
-`items_*`), multi-output panels, Clock (`format`).
+`items_*`), multi-output panels, Clock (`format`), Workspaces (all four
+keys; windows are dots, not icons) over the Hyprland IPC, with the
+daemon-owned `Compositor` / `Context` / `Action` plumbing.
 
-Not yet: `[panel]` `size`/`align`/`margin`/`opacity`, panel height from
-content, hot-reload, styling/theme, click/popover on the Clock, every other
-gadget and component (tray, notifications, launcher, lock, wallpaper,
-terminal, idle).
+Not yet: Sway backend, window icons in Workspaces (XDG desktop lookup +
+icon theme + `svg`/`image` in iced), `[panel]`
+`size`/`align`/`margin`/`opacity`, panel height from content, hot-reload,
+styling/theme, click/popover on the Clock, every other gadget and
+component (tray, notifications, launcher, lock, wallpaper, terminal,
+idle).
 
 ## Next steps, in order
 
-1. A second gadget with its own event source (Workspaces over the
-   compositor IPC) to validate the subscription-per-gadget path.
-2. The Clock calendar popover: first non-panel surface, exercises
+1. The Clock calendar popover: first non-panel surface, exercises
    `NewPopUp` on the multi-window runtime.
-3. Styling: how the bar looks (background, fonts) before more gadgets pile
-   up on an unstyled row.
-4. Config hot-reload (watch the file, rebuild panels).
+2. Styling: how the bar looks (background, fonts, the workspace buttons)
+   before more gadgets pile up on an unstyled row.
+3. Config hot-reload (watch the file, rebuild panels).
+4. Window icons in Workspaces (needs the XDG/icon-theme service that the
+   launcher and tray will need too).

@@ -2,14 +2,14 @@
 //! slots (start / center / end).
 
 use iced::widget::{container, row};
-use iced::{Element, Length, Subscription, Task};
+use iced::{Element, Length, Subscription};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::config::{Config, RawSection, Section};
-use crate::gadget::{self, AnyGadget};
+use crate::gadget::{self, Action, AnyGadget, Context};
 
 /// Bar thickness. Fixed for now: layer-shell needs a size up front and
 /// iced can't report a content size before the first layout.
@@ -156,23 +156,23 @@ impl Panel {
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message) -> Action<Message> {
         match message {
             Message::Gadget(i, m) => match self.gadgets.get_mut(i) {
                 Some((_, g)) => g.update(m).map(move |m| Message::Gadget(i, m)),
-                None => Task::none(),
+                None => Action::None,
             },
         }
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let section = |slot| {
             row(self
                 .gadgets
                 .iter()
                 .enumerate()
                 .filter(move |(_, (s, _))| *s == slot)
-                .map(|(i, (_, g))| g.view().map(move |m| Message::Gadget(i, m))))
+                .map(move |(i, (_, g))| g.view(ctx).map(move |m| Message::Gadget(i, m))))
             .spacing(8)
         };
         row![

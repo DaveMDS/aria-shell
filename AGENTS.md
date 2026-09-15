@@ -45,9 +45,14 @@ open surface) → `Panel` (one layer surface on one output) → `AnyGadget`
 (closed enum over gadget types) → e.g. `Clock` (`impl Gadget`). Each
 level owns its state and `Message`, routes to children by key, and
 `.map()`s their messages up. No globals: `Config` is loaded once and
-passed by reference. External event sources are `Subscription`s. See
-RS-PORT.md's "Architecture" section before changing the shape of any of
-these.
+passed by reference. External event sources are `Subscription`s.
+
+Shared state (the compositor's workspaces/windows; later audio, tray,
+...) is owned by the daemon (`Compositor` in `compositor/`), reaches
+gadgets read-only through `gadget::Context` in `view`, and is changed by
+returning `gadget::Action::Compositor(cmd)` from `update`. Gadgets never
+open their own IPC connection. See RS-PORT.md's "Architecture" section
+before changing the shape of any of these.
 
 The Python implementation is a reference for **behaviour** (config
 format, gadget semantics, protocol usage), not for structure. Don't port

@@ -103,6 +103,20 @@ impl RawSection {
         self.get(key).unwrap_or(default).to_owned()
     }
 
+    /// `1 on yes true` / `0 off no false` (case-insensitive), as in the
+    /// Python implementation. Anything else is logged and gives `default`.
+    pub fn bool_or(&self, key: &str, default: bool) -> bool {
+        match self.get(key).map(str::to_ascii_lowercase).as_deref() {
+            None => default,
+            Some("1" | "on" | "yes" | "true") => true,
+            Some("0" | "off" | "no" | "false") => false,
+            Some(other) => {
+                log::warn!("invalid boolean {other:?} for {key}, using {default}");
+                default
+            }
+        }
+    }
+
     /// Whitespace-separated list; empty/missing gives `default`.
     pub fn list_or(&self, key: &str, default: &[&str]) -> Vec<String> {
         match self.get(key) {
@@ -147,6 +161,7 @@ mod tests {
     struct Demo {
         name: String,
         items: Vec<String>,
+        flag: bool,
     }
 
     impl Section for Demo {
@@ -155,6 +170,7 @@ mod tests {
             Self {
                 name: raw.str_or("name", "default"),
                 items: raw.list_or("items", &["a"]),
+                flag: raw.bool_or("flag", true),
             }
         }
     }
@@ -176,6 +192,18 @@ mod tests {
         let d: Demo = cfg.section(None);
         assert_eq!(d.name, "hi");
         assert_eq!(d.items, ["x", "y", "z"]);
+    }
+
+    #[test]
+    fn booleans() {
+        let cfg = Config::parse("[Demo]\nflag = No\n");
+        assert!(!cfg.section::<Demo>(None).flag);
+        let cfg = Config::parse("[Demo]\nflag = 1\n");
+        assert!(cfg.section::<Demo>(None).flag);
+        let cfg = Config::parse("[Demo]\nflag = maybe\n");
+        assert!(cfg.section::<Demo>(None).flag);
+        let cfg = Config::parse("[Demo]\nflag =\n");
+        assert!(cfg.section::<Demo>(None).flag);
     }
 
     #[test]

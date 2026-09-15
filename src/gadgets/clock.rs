@@ -5,11 +5,11 @@ use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
 use iced::futures::stream;
 use iced::widget::text;
-use iced::{Element, Subscription, Task};
+use iced::{Element, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::Gadget;
+use crate::gadget::{Action, Context, Gadget};
 
 /// `[Clock]` section. Same keys and defaults as the Python implementation.
 #[derive(Debug, Clone)]
@@ -50,14 +50,14 @@ impl Gadget for Clock {
         }
     }
 
-    fn update(&mut self, message: Message) -> Task<Message> {
+    fn update(&mut self, message: Message) -> Action<Message> {
         match message {
             Message::Tick(now) => self.now = now,
         }
-        Task::none()
+        Action::None
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Message> {
         text(self.now.format(&self.config.format).to_string()).into()
     }
 

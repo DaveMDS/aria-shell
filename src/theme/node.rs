@@ -6,6 +6,11 @@
 //! a child or a state variant is one small allocation and cloning is a
 //! refcount bump. Style closures handed to iced must own everything they
 //! use, so they own a `Node`.
+//!
+//! The `Debug` form is the element path as a selector would spell it
+//! (`panel.top[output="DP-1"] > slot.end > gadget.clock:nth-child(2)`);
+//! the theme helpers use it as the `widget::Id` of the widgets they
+//! build, which is what `debug widgets` reports.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -144,6 +149,11 @@ impl Node {
         self.0.index.is_some_and(|(i, n)| i + 1 == n)
     }
 
+    /// Position among siblings, 0-based, when known.
+    pub fn child_index(&self) -> Option<usize> {
+        self.0.index.map(|(i, _)| i)
+    }
+
     pub fn is_hover(&self) -> bool {
         self.0.hover
     }
@@ -188,6 +198,12 @@ impl fmt::Debug for Node {
         for (k, v) in &self.0.attrs {
             write!(f, "[{k}={v:?}]")?;
         }
+        if let Some((i, n)) = self.0.index {
+            write!(f, ":nth-child({})", i + 1)?;
+            if i + 1 == n {
+                f.write_str(":last-child")?;
+            }
+        }
         if self.0.hover {
             f.write_str(":hover")?;
         }
@@ -229,7 +245,7 @@ mod tests {
         assert_eq!(gadget.path().len(), 3);
         assert_eq!(
             format!("{gadget:?}"),
-            "panel#2.top[output=\"DP-1\"] > slot.end > gadget.clock"
+            "panel#2.top[output=\"DP-1\"] > slot.end > gadget.clock:nth-child(2):last-child"
         );
 
         let hovered = gadget.status(button::Status::Hovered);

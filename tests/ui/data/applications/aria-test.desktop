@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Aria Test App
+Comment=A harmless entry the UI scenarios launch
+Exec=true
+Icon=application-x-executable

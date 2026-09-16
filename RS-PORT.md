@@ -349,12 +349,43 @@ Two things flow between the daemon and the gadgets besides messages:
     surfaces`; `ydotool mousemove -a -x 900 -y 461; ydotool click 0xC0`
     on a row; the log says `launched "kitty"` and `debug surfaces` no
     longer lists the launcher. Kill what you launched.
-  - Not yet: `debug widgets` (rectangles of tagged widgets, so a driver
-    can say "the third row" instead of measuring a screenshot), and the
-    headless harness: a nested `sway` with `WLR_BACKENDS=headless
-    WLR_RENDERER=pixman`, the shell inside it, virtual keyboard/pointer
-    protocols for input, `grim` + `debug` for checks; no root, no
-    dependency on the desktop's compositor, runnable in CI.
+  - `aria-shell debug widgets [selector]` → `launcher > list >
+    item.selected:nth-child(1) 720,388 480x41; ...`: every themed widget
+    (the theme helpers tag containers, and buttons' content, with the
+    node path as `widget::Id`; the calendar cells go through the theme
+    for this) with its global rectangle, filtered by a theme selector
+    (`:nth-child(n)` was added for it). A driver says "the third row"
+    instead of measuring a screenshot.
+- **UI scenarios** (`tests/ui/`, see AGENTS.md "Verifying"): `run.sh`
+  starts a headless nested Sway (`WLR_BACKENDS=headless
+  WLR_RENDERER=pixman`, two 1920x1080 outputs, `sway.conf` execs
+  `inner.sh` so everything inherits the nested `WAYLAND_DISPLAY`), the
+  shell with `tests/ui/config` and `tests/ui/data` (a harmless
+  `aria-test.desktop` with `Exec=true`), then each scenario with
+  `lib.sh`'s vocabulary; `target/ui/<scenario>/` gets status, logs and
+  screenshots. Facts learned building it:
+  - The shell renders under the pixman compositor with wgpu on the real
+    GPU (Vulkan, Intel here); a GPU-less CI would need iced's
+    `tiny-skia` fallback, untested.
+  - The nested shell must not talk to the desktop: `run.sh` unsets
+    `HYPRLAND_INSTANCE_SIGNATURE`/`SWAYSOCK`, and the command socket is
+    per display (`$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`)
+    since the first run took over the desktop shell's socket.
+  - Sway's seat has no devices in headless mode: the deprecated `swaymsg
+    seat - cursor set/press` do nothing for clients (no pointer
+    capability) and `wtype` creates a virtual keyboard per run, and the
+    seat getting its *first* keyboard makes Sway reset keyboard focus
+    (three `Unfocused` on the launcher, which closes). Hence
+    `tests/ui/inject`: a tiny `wayland-client` program holding one
+    `zwp_virtual_keyboard_v1` and one `zwlr_virtual_pointer_v1` for the
+    whole scenario, driven over fifos (`move X Y` absolute over the
+    layout, `click`, `key Down`, `type text`), with its own generated
+    keymap (one keycode per keysym, Unicode `Uxxxx` names, as `wtype`
+    does). Virtual pointer absolute motion maps to the whole layout
+    when the pointer isn't bound to an output.
+  - `set -e` is ignored inside a subshell used as an `if` condition
+    (bash): the scenario runs as a plain command and its status is read
+    after.
 - COSMIC as reference (checked in `cosmic-launcher`, `cosmic-panel`,
   `cosmic-applets`, `cosmic-comp`, `libcosmic`, `cosmic-settings-daemon`
   at 2026-09): **no automated UI tests anywhere**, only unit tests in
@@ -483,8 +514,13 @@ Verified on the real Hyprland session with two outputs:
   the launcher, `alacr` + Enter launches Alacritty, Esc closes, a
   click outside (desktop, bar, other monitor) closes it through the
   grab surface, moving keyboard focus elsewhere closes it.
-- `cargo build`, `cargo clippy --all-targets`, `cargo test` (50 tests,
-  config + theme + desktop entries + commands + launcher search): clean.
+- `tests/ui/run.sh`: `launcher` (open, search, arrows, Esc, click
+  outside on both outputs, click a result, Enter, toggle/hide) and
+  `clock` (popup on both outputs, today, next/prev month, centred under
+  the clock, click outside) pass in the headless Sway.
+- `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
+  (53 tests: config, theme, selectors, desktop entries, commands,
+  launcher search): clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,

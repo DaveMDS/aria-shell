@@ -140,6 +140,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aria-inject"
+version = "0.0.1"
+dependencies = [
+ "wayland-client",
+ "wayland-protocols-misc",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "aria-shell"
 version = "0.0.1"
 dependencies = [

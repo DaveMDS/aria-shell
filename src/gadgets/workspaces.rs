@@ -80,7 +80,12 @@ impl Gadget for Workspaces {
                     .as_ref()
                     .is_none_or(|output| ws.output == *output)
         });
-        let children = shown.map(|ws| self.workspace_view(ws, &ctx));
+        let shown: Vec<&Workspace> = shown.collect();
+        let count = shown.len();
+        let children = shown
+            .into_iter()
+            .enumerate()
+            .map(|(i, ws)| self.workspace_view(ws, i, count, &ctx));
         ctx.theme
             .row(&ctx.node, children)
             .align_y(iced::Alignment::Center)
@@ -89,21 +94,31 @@ impl Gadget for Workspaces {
 }
 
 impl Workspaces {
-    fn workspace_view<'a>(&'a self, ws: &'a Workspace, ctx: &Context<'a>) -> Element<'a, Message> {
+    fn workspace_view<'a>(
+        &'a self,
+        ws: &'a Workspace,
+        index: usize,
+        count: usize,
+        ctx: &Context<'a>,
+    ) -> Element<'a, Message> {
         let node = ctx
             .node
             .child("workspace")
             .class_if("active", ws.active)
-            .class_if("urgent", ws.urgent);
+            .class_if("urgent", ws.urgent)
+            .nth(index, count);
         let mut children: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_name {
             children.push(ctx.theme.text(&node.child("text"), &ws.name).into());
         }
         if self.config.show_windows {
+            let windows: Vec<&Window> = ctx.compositor.windows_of(ws).collect();
+            let count = windows.len();
             children.extend(
-                ctx.compositor
-                    .windows_of(ws)
-                    .map(|w| self.window_view(w, &node, ctx)),
+                windows
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, w)| self.window_view(w, &node.child("window").nth(i, count), ctx)),
             );
         }
         let content = ctx
@@ -121,12 +136,11 @@ impl Workspaces {
     fn window_view<'a>(
         &'a self,
         win: &'a Window,
-        workspace: &Node,
+        node: &Node,
         ctx: &Context<'a>,
     ) -> Element<'a, Message> {
         let theme = ctx.theme;
-        let node = workspace
-            .child("window")
+        let node = node
             .class_if("active", win.active)
             .class_if("urgent", win.urgent);
         let style = theme.resolve(&node);

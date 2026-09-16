@@ -42,10 +42,10 @@ use iced::widget::{
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow};
 
 use crate::config::{self, Config, GeneralConfig};
-use selector::Selector;
 use value::Property;
 
 pub use node::Node;
+pub use selector::{Selector, node_from_path};
 pub use value::Length;
 
 use iced::Length as IcedLength;
@@ -231,7 +231,7 @@ impl Theme {
         content: impl Into<Element<'a, M>>,
     ) -> Container<'a, M> {
         let s = self.resolve(node);
-        let mut c = container(content).padding(s.padding);
+        let mut c = container(content).id(widget_id(node)).padding(s.padding);
         if let Some(w) = s.width {
             c = c.width(w).align_x(Alignment::Center);
         }
@@ -244,25 +244,24 @@ impl Theme {
     /// A `button` styled as `node`, re-resolved with `:hover`/`:active`
     /// as iced reports them. As for [`Theme::container`], content is
     /// centred on a themed axis (iced's button lays it out top-left).
+    /// The content sits in a container tagged with the node path (iced
+    /// buttons take no id), so `debug widgets` reports the button's
+    /// content area.
     pub fn button<'a, M: 'a>(
         &'a self,
         node: &Node,
         content: impl Into<Element<'a, M>>,
     ) -> Button<'a, M> {
         let s = self.resolve(node);
-        let node = node.clone();
-        let mut content: Element<'a, M> = content.into();
-        if s.width.is_some() || s.height.is_some() {
-            let mut inner = container(content);
-            if s.width.is_some() {
-                inner = inner.width(IcedLength::Fill).align_x(Alignment::Center);
-            }
-            if s.height.is_some() {
-                inner = inner.height(IcedLength::Fill).align_y(Alignment::Center);
-            }
-            content = inner.into();
+        let mut inner = container(content).id(widget_id(node));
+        if s.width.is_some() {
+            inner = inner.width(IcedLength::Fill).align_x(Alignment::Center);
         }
-        let mut b = button(content).padding(s.padding);
+        if s.height.is_some() {
+            inner = inner.height(IcedLength::Fill).align_y(Alignment::Center);
+        }
+        let node = node.clone();
+        let mut b = button(inner).padding(s.padding);
         if let Some(w) = s.width {
             b = b.width(w);
         }
@@ -338,6 +337,28 @@ impl Theme {
         let s = self.resolve(node);
         column(children).spacing(s.gap).padding(s.padding)
     }
+}
+
+/// The `widget::Id` of the widget built for `node`: its element path.
+fn widget_id(node: &Node) -> iced::widget::Id {
+    iced::widget::Id::from(format!("{node:?}"))
+}
+
+/// The element path back from a [`widget_id`], `None` for other ids.
+/// `Id` keeps its string private; its `Debug` form is
+/// `Id(Custom("..."))` with `str` escaping, undone here.
+pub fn widget_path(id: &iced::widget::Id) -> Option<String> {
+    let debug = format!("{id:?}");
+    let inner = debug.strip_prefix("Id(Custom(\"")?.strip_suffix("\"))")?;
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        out.push(match c {
+            '\\' => chars.next()?,
+            c => c,
+        });
+    }
+    Some(out)
 }
 
 impl Default for Theme {
@@ -531,6 +552,25 @@ fn locate(style: &str, config_dir: Option<&Path>) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn widget_id_round_trips_the_node_path() {
+        let node = Node::root("panel")
+            .attr("output", "DP-1")
+            .child("slot")
+            .class("end")
+            .nth(1, 2);
+        let path = format!("{node:?}");
+        assert_eq!(
+            path,
+            "panel[output=\"DP-1\"] > slot.end:nth-child(2):last-child"
+        );
+        assert_eq!(
+            widget_path(&widget_id(&node)).as_deref(),
+            Some(path.as_str())
+        );
+        assert_eq!(widget_path(&iced::widget::Id::unique()), None);
+    }
     use iced::widget::button::Status;
 
     fn theme(css: &str) -> Theme {

@@ -3,7 +3,7 @@
 //! Grammar (a CSS subset): a selector is compounds joined by ` `
 //! (descendant) or `>` (child); a compound is an optional type or `*`,
 //! then any of `.class`, `#id`, `[attr="value"]`, `:pseudo`. Supported
-//! pseudo-classes: `:root :hover :active :focus :disabled :first-child
+//! pseudo-classes: `:root :hover :active :focus :disabled :nth-child(n) :first-child
 //! :last-child`.
 
 use super::node::Node;
@@ -39,6 +39,8 @@ enum Pseudo {
     Disabled,
     FirstChild,
     LastChild,
+    /// `:nth-child(n)`, 1-based like CSS (the plain number form only).
+    NthChild(usize),
 }
 
 impl Selector {
@@ -132,6 +134,7 @@ impl Compound {
                 Pseudo::Disabled => node.is_disabled(),
                 Pseudo::FirstChild => node.is_first_child(),
                 Pseudo::LastChild => node.is_last_child(),
+                Pseudo::NthChild(n) => node.child_index() == Some(n - 1),
             })
     }
 }
@@ -196,6 +199,20 @@ fn parse_compound(
                     "disabled" => Pseudo::Disabled,
                     "first-child" => Pseudo::FirstChild,
                     "last-child" => Pseudo::LastChild,
+                    "nth-child" => {
+                        if chars.next() != Some('(') {
+                            return Err("expected `:nth-child(n)`".to_owned());
+                        }
+                        let digits = take_name(chars);
+                        let n: usize =
+                            digits.parse().ok().filter(|n| *n > 0).ok_or_else(|| {
+                                format!(":nth-child({digits}) isn't a number >= 1")
+                            })?;
+                        if chars.next() != Some(')') {
+                            return Err("expected `)` after :nth-child(n".to_owned());
+                        }
+                        Pseudo::NthChild(n)
+                    }
                     _ => return Err(format!("unsupported pseudo-class :{name}")),
                 });
             }
@@ -236,9 +253,77 @@ fn parse_compound(
     Ok(compound)
 }
 
+/// A [`Node`] back from its `Debug` form (`a.x > b#y[k="v"]:nth-child(2)`),
+/// the element path the theme helpers use as widget ids. Every step
+/// must be a child (`>`); interaction states are ignored, a `:last-child`
+/// marks the count as known.
+pub fn node_from_path(path: &str) -> Result<Node, String> {
+    let selector = Selector::parse(path)?;
+    let mut node: Option<Node> = None;
+    for (i, (combinator, c)) in selector.parts.iter().enumerate() {
+        if i > 0 && *combinator != Combinator::Child {
+            return Err("a path only has `>` between elements".to_owned());
+        }
+        let kind = c
+            .kind
+            .clone()
+            .ok_or_else(|| "a path element needs a type".to_owned())?;
+        let mut n = match &node {
+            None => Node::root(kind),
+            Some(parent) => parent.child(kind),
+        };
+        if let Some(id) = &c.id {
+            n = n.id(id.clone());
+        }
+        for class in &c.classes {
+            n = n.class(class.clone());
+        }
+        for (k, v) in &c.attrs {
+            n = n.attr(intern_attr(k), v.clone());
+        }
+        let index = c.pseudo.iter().find_map(|p| match p {
+            Pseudo::NthChild(k) => Some(k - 1),
+            _ => None,
+        });
+        if let Some(index) = index {
+            let last = c.pseudo.contains(&Pseudo::LastChild);
+            n = n.nth(index, if last { index + 1 } else { usize::MAX });
+        }
+        node = Some(n);
+    }
+    node.ok_or_else(|| "empty path".to_owned())
+}
+
+/// Attribute names are `&'static str` on nodes; the ones a path can
+/// carry are the ones the shell sets.
+fn intern_attr(name: &str) -> &'static str {
+    match name {
+        "output" => "output",
+        other => Box::leak(other.to_owned().into_boxed_str()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nth_child_and_paths() {
+        let path = "panel.top[output=\"DP-1\"] > slot.end > gadget.clock:nth-child(2):last-child";
+        let node = node_from_path(path).unwrap();
+        assert_eq!(format!("{node:?}"), path);
+        assert!(sel("gadget.clock:nth-child(2)").matches(&node));
+        assert!(!sel("gadget:nth-child(1)").matches(&node));
+        assert!(sel("panel[output=\"DP-1\"] gadget:last-child").matches(&node));
+        assert!(sel("slot.end > gadget").matches(&node));
+        assert!(!sel("slot.start > gadget").matches(&node));
+        assert!(Selector::parse("a:nth-child(0)").is_err());
+        assert!(Selector::parse("a:nth-child(x)").is_err());
+        assert!(node_from_path("a b").is_err());
+        assert!(node_from_path(".x").is_err());
+        let unknown_count = node_from_path("a > b:nth-child(3)").unwrap();
+        assert!(!unknown_count.is_last_child());
+    }
     use iced::widget::button;
 
     fn sel(s: &str) -> Selector {

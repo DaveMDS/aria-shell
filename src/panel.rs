@@ -216,6 +216,8 @@ impl Panel {
             })
             .id_opt(instance_id(&section))
             .attr("output", output.name.clone().unwrap_or_default());
+        let popup_root =
+            Node::root("popup").attr("output", output.name.clone().unwrap_or_default());
         let mut gadgets = Vec::new();
         for (slot, names) in [
             (Slot::Start, &config.items_start),
@@ -236,10 +238,7 @@ impl Panel {
                         .class(gadget.kind())
                         .id_opt(id)
                         .nth(i, count),
-                    popup_node: Node::root("popup")
-                        .child("gadget")
-                        .class(gadget.kind())
-                        .id_opt(id),
+                    popup_node: popup_root.child("gadget").class(gadget.kind()).id_opt(id),
                     slot,
                     gadget,
                 });
@@ -403,9 +402,14 @@ impl Panel {
             node: e.popup_node.clone(),
         };
         let content = e.gadget.popup_view(ctx).map(move |m| Message::Gadget(i, m));
+        let root = e
+            .popup_node
+            .parent()
+            .cloned()
+            .unwrap_or_else(|| Node::root("popup"));
         shared
             .theme
-            .container(&Node::root("popup"), content)
+            .container(&root, content)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()

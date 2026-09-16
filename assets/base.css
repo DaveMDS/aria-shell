@@ -60,7 +60,7 @@
  *   popup > gadget.clock
  *   ╰─ calendar
  *      ├─ header
- *      │  ├─ button                                           previous / next month
+ *      │  ├─ button.prev | button.next                        previous / next month
  *      │  ╰─ text                                             month and year
  *      ├─ weekday                                             one per column
  *      ╰─ day[.today]                                         one per cell

@@ -240,7 +240,14 @@ impl Launcher {
                     Key::Named(Named::Escape) => Message::Close,
                     _ => return None,
                 },
-                Event::Window(window::Event::Unfocused) => Message::Close,
+                Event::Window(window::Event::Unfocused) => {
+                    log::debug!("launcher: keyboard left window {window:?}");
+                    Message::Close
+                }
+                Event::Window(window::Event::Focused) => {
+                    log::debug!("launcher: keyboard entered window {window:?}");
+                    return None;
+                }
                 _ => return None,
             };
             Some((window, message))

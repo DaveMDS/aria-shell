@@ -3,6 +3,9 @@ name = "aria-shell"
 version = "0.0.1"
 edition = "2024"
 
+[workspace]
+members = [".", "tests/ui/inject"]
+
 [dependencies]
 iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs"] }
 iced_exwlshell = "0.20.1"

@@ -25,7 +25,7 @@ use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use commands::{Command, DebugCommand, LauncherCommand};
+use commands::{Command, DebugCommand, LauncherCommand, Reply};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use gadget::Shared;
@@ -59,6 +59,9 @@ enum Message {
     LauncherEvent(Id, launcher::Message),
     /// The pointer moved over one of our surfaces (for `debug cursor`).
     Cursor(Id, Point),
+    /// The widget tree answered `debug widgets`: element paths and
+    /// surface-local rectangles.
+    Widgets(Reply, Option<String>, Vec<(String, Rectangle)>),
     /// The anchor of a popup about to open was located in its panel.
     PopupAnchor {
         popup: Id,
@@ -178,11 +181,20 @@ impl AriaShell {
                 (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
-            Message::Command(Command::Debug(cmd, reply)) => {
-                reply.send(match cmd {
-                    DebugCommand::Surfaces => self.describe_surfaces(),
-                    DebugCommand::Cursor => self.describe_cursor(),
-                });
+            Message::Command(Command::Debug(cmd, reply)) => match cmd {
+                DebugCommand::Surfaces => {
+                    reply.send(self.describe_surfaces());
+                    Task::none()
+                }
+                DebugCommand::Cursor => {
+                    reply.send(self.describe_cursor());
+                    Task::none()
+                }
+                DebugCommand::Widgets(filter) => widget_rects()
+                    .map(move |rects| Message::Widgets(reply.clone(), filter.clone(), rects)),
+            },
+            Message::Widgets(reply, filter, rects) => {
+                reply.send(self.describe_widgets(&filter, rects));
                 Task::none()
             }
             Message::LauncherEvent(window, m) => match &self.launcher {
@@ -325,6 +337,54 @@ impl AriaShell {
                     r.width as i32,
                     r.height as i32
                 )
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    /// `debug widgets [selector]`: `<element path> <x>,<y> <w>x<h>` per
+    /// themed widget matching the selector (theme syntax, plus
+    /// `:nth-child(n)`; all of them without one), global coordinates
+    /// (as estimated by [`AriaShell::surfaces`]), `;`-separated. The
+    /// surface is found from the path's root: `panel[output=..]`,
+    /// `launcher`, `popup[output=..]`.
+    fn describe_widgets(&self, filter: &Option<String>, rects: Vec<(String, Rectangle)>) -> String {
+        let selector = match filter.as_deref().map(theme::Selector::parse) {
+            None => None,
+            Some(Ok(s)) => Some(s),
+            Some(Err(e)) => return format!("bad selector: {e}"),
+        };
+        let surfaces = self.surfaces();
+        let origin = |path: &str| -> Option<Point> {
+            let root = path.split(" > ").next()?;
+            let output = root
+                .split_once("[output=\"")
+                .and_then(|(_, rest)| rest.split_once('"'))
+                .map(|(name, _)| name);
+            let kind = root.split(['.', '#', '[', ':']).next()?;
+            surfaces
+                .iter()
+                .find(|(_, k, out, _)| {
+                    *k == kind && output.is_none_or(|o| self.output_name(*out) == o)
+                })
+                .map(|(_, _, _, r)| r.position())
+        };
+        rects
+            .into_iter()
+            .filter(|(path, _)| {
+                selector
+                    .as_ref()
+                    .is_none_or(|s| theme::node_from_path(path).is_ok_and(|node| s.matches(&node)))
+            })
+            .filter_map(|(path, r)| {
+                let o = origin(&path)?;
+                Some(format!(
+                    "{path} {},{} {}x{}",
+                    (o.x + r.x) as i32,
+                    (o.y + r.y) as i32,
+                    r.width as i32,
+                    r.height as i32
+                ))
             })
             .collect::<Vec<_>>()
             .join("; ")
@@ -712,6 +772,34 @@ fn widget_bounds(id: widget::Id) -> Task<Option<Rectangle>> {
     }
 
     iced::advanced::widget::operate(Find { id, bounds: None })
+}
+
+/// Element path and bounds of every widget the theme helpers tagged, in
+/// every window (the runtime runs the operation on all of them; the
+/// path's root tells the surface apart).
+fn widget_rects() -> Task<Vec<(String, Rectangle)>> {
+    struct Collect(Vec<(String, Rectangle)>);
+
+    impl Operation<Vec<(String, Rectangle)>> for Collect {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn Operation<Vec<(String, Rectangle)>>),
+        ) {
+            operate(self);
+        }
+
+        fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
+            if let Some(path) = id.and_then(theme::widget_path) {
+                self.0.push((path, bounds));
+            }
+        }
+
+        fn finish(&self) -> Outcome<Vec<(String, Rectangle)>> {
+            Outcome::Some(self.0.clone())
+        }
+    }
+
+    iced::advanced::widget::operate(Collect(Vec::new()))
 }
 
 fn main() -> iced_exwlshell::Result {

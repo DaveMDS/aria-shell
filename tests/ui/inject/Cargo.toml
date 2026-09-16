@@ -1,0 +1,10 @@
+[package]
+name = "aria-inject"
+version = "0.0.1"
+edition = "2024"
+description = "Virtual keyboard and pointer for the UI scenarios (tests/ui)"
+
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

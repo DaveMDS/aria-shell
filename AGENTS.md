@@ -28,14 +28,16 @@ cargo run
 
 Requires a Wayland compositor implementing `wlr-layer-shell-v1` (Hyprland,
 Sway, ...). Won't work under X11 or on compositors without layer-shell
-support. There's no headless/mock mode — verifying a change means actually
-running it on a live Wayland session.
+support. There's no mock mode, but there is a headless one: `tests/ui/`
+runs the shell inside a nested `sway` with no GPU output (see
+"Verifying").
 
-Verifying a layer-shell surface actually appeared (not just "it compiled
-and didn't crash"):
+With arguments the binary is a client of the running shell:
 ```bash
-hyprctl layers      # Hyprland
-swaymsg -t get_tree # Sway
+aria-shell launcher toggle          # what a compositor keybind runs
+aria-shell debug surfaces           # where our surfaces are (global rects)
+aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
+aria-shell debug cursor             # where the pointer was last seen on us
 ```
 
 ## Architecture
@@ -71,11 +73,27 @@ structure.
 
 ## Verifying
 
-`cargo test` covers the config and theme layers (the parts testable
-without a compositor). Everything else needs a real run: `cargo run`, then
-`hyprctl layers` to confirm the surfaces, and a screenshot (`grim -g
-"0,0 1920x40" out.png`) to confirm what's drawn. Logs go through `log`;
-`RUST_LOG=aria_shell=debug cargo run` for more.
+`cargo test` covers the config, theme, desktop-entry, command and search
+layers (the parts testable without a compositor).
+
+The UI is verified by **scenarios in `tests/ui/`**: `tests/ui/run.sh`
+starts a headless nested `sway` (two outputs, `WLR_BACKENDS=headless`),
+the shell inside it with the config in `tests/ui/config` and the desktop
+entries in `tests/ui/data`, and runs each `tests/ui/scenarios/*.sh` with
+the vocabulary of `tests/ui/lib.sh`: `click_widget '<selector>'`,
+`type_text`, `key Down`, `assert_surface popup`, `count_widgets`,
+`shot_surface`. Input goes through `tests/ui/inject` (a persistent
+virtual keyboard + pointer), positions through the shell's `debug`
+commands, so nothing depends on the desktop's compositor. Results land
+in `target/ui/<scenario>/` (status, logs, screenshots). Needs `sway` and
+`grim` installed; no root. Add a scenario for every new interactive
+piece; run them before reporting a UI change as done.
+
+On the live desktop, the same without the nested compositor: `ydotool`
+(uinput) for input, `aria-shell debug ...` for positions, `grim -g` for
+screenshots. Don't reach for `hyprctl`: the shell must work on other
+compositors, and the shell's own answers are what's being verified.
+Logs go through `log`; `RUST_LOG=aria_shell=debug cargo run` for more.
 
 ## Commit style
 

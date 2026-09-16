@@ -56,18 +56,22 @@ impl Calendar {
         theme: &'a Theme,
         node: &Node,
     ) -> Element<'a, Message> {
-        let cell = |content: Element<'a, Message>| {
-            container(content)
+        // Cells go through the theme so they carry their node (for
+        // `debug widgets`); the size is fixed regardless of it.
+        let cell = |node: &Node, content: Element<'a, Message>| {
+            theme
+                .container(node, content)
                 .width(CELL)
                 .height(CELL)
                 .align_x(Alignment::Center)
                 .align_y(Alignment::Center)
         };
         let header_node = node.child("header");
-        let nav = header_node.child("button");
+        let prev = header_node.child("button").class("prev");
+        let next = header_node.child("button").class("next");
         let header = row![
             theme
-                .button(&nav, theme.text(&nav.child("text"), "<"))
+                .button(&prev, theme.text(&prev.child("text"), "<"))
                 .on_press(Message::PrevMonth),
             container(theme.text(
                 &header_node.child("text"),
@@ -76,7 +80,7 @@ impl Calendar {
             .width(Length::Fill)
             .align_x(Alignment::Center),
             theme
-                .button(&nav, theme.text(&nav.child("text"), ">"))
+                .button(&next, theme.text(&next.child("text"), ">"))
                 .on_press(Message::NextMonth),
         ]
         .height(CELL)
@@ -84,7 +88,7 @@ impl Calendar {
         let weekday = node.child("weekday");
         let weekdays = row(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
             .into_iter()
-            .map(|d| cell(theme.text(&weekday, d).into()).into()));
+            .map(|d| cell(&weekday, theme.text(&weekday, d).into()).into()));
         let day_node = node.child("day");
         let days = month_grid(self.month)
             .chunks(7)
@@ -92,11 +96,11 @@ impl Calendar {
                 col.push(row(week.iter().map(|day| match day {
                     Some(day) => {
                         let date = self.month.with_day(*day).expect("day of this month");
-                        let label =
-                            theme.text(&day_node.class_if("today", date == today), day.to_string());
-                        cell(label.into()).into()
+                        let node = day_node.class_if("today", date == today);
+                        let label = theme.text(&node, day.to_string());
+                        cell(&node, label.into()).into()
                     }
-                    None => cell(Space::new().into()).into(),
+                    None => cell(&day_node, Space::new().into()).into(),
                 })))
             });
         theme

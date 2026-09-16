@@ -2,8 +2,10 @@
 //! shell (`aria-shell launcher toggle`).
 //!
 //! Same protocol as the Python implementation: a unix socket at
-//! `$XDG_RUNTIME_DIR/aria-shell/cmd.sock`, one command per line, one
-//! reply line per command starting with `OK` or `ERR`. Commands are
+//! `$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock` (one shell per
+//! display: a test shell in a nested compositor doesn't take over the
+//! desktop's), one command per line, one reply line per command
+//! starting with `OK` or `ERR`. Commands are
 //! parsed here, in the listener: an unknown one is refused on the spot,
 //! a valid one is acknowledged and delivered to the daemon as a
 //! [`Command`] (the reply doesn't wait for it to be carried out).
@@ -35,12 +37,15 @@ pub enum Command {
     Debug(DebugCommand, Reply),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DebugCommand {
     /// Every surface the shell has open, with its global rectangle.
     Surfaces,
     /// Where the pointer was last seen over one of our surfaces.
     Cursor,
+    /// Every themed widget (element path + global rectangle), or those
+    /// whose path contains the filter.
+    Widgets(Option<String>),
 }
 
 /// Where the daemon writes the answer to a [`Command::Debug`].
@@ -102,8 +107,12 @@ fn parse(line: &str) -> Result<Parsed, String> {
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
+            ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
+            ["widgets", filter @ ..] => {
+                Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
+            }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor)",
+                "invalid arguments for <debug>: {} (surfaces | cursor | widgets [filter])",
                 args.join(" ")
             )),
         },
@@ -111,10 +120,16 @@ fn parse(line: &str) -> Result<Parsed, String> {
     }
 }
 
-/// `$XDG_RUNTIME_DIR/aria-shell/cmd.sock`.
+/// `$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`, so the shell
+/// and its client agree on which compositor they mean.
 pub fn socket_path() -> Option<PathBuf> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")?;
-    Some(PathBuf::from(dir).join("aria-shell").join("cmd.sock"))
+    let display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_owned());
+    Some(
+        PathBuf::from(dir)
+            .join("aria-shell")
+            .join(format!("{display}.sock")),
+    )
 }
 
 /// The daemon side: every command received, for as long as the shell

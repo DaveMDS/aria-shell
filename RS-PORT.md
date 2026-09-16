@@ -86,7 +86,9 @@ Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, act
 Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once
   load / try_load(&Config)  css.rs (scanner) -> selector.rs + value.rs (typed rules)
   resolve(&Node) -> Style   cascade for one element path; container()/button()/text()/row() helpers
-  watch(files)              subscription over `notify`, yields `Event::Changed` -> reload
+
+watch::watch(files)         (watch.rs) one `notify` subscription for aria.conf + theme files,
+                            yields `Changed(paths)`: config -> rebuild panels, theme -> reload it
 ```
 
 Two things flow between the daemon and the gadgets besides messages:
@@ -288,10 +290,15 @@ Verified on the real Hyprland session with two outputs:
   `path:line:col` and keeps the running theme. The calendar popup has
   the themed background, rounded corners over a transparent surface,
   today in the accent colour. Screenshots on both outputs.
+- Config hot-reload: editing `items_end` and `style =` in `aria.conf`
+  while running closes and reopens the bars with the new gadgets and
+  theme (log shows the rebuild; `hyprctl layers` shows new surfaces at
+  the new height).
 - `cargo build`, `cargo clippy --all-targets`, `cargo test` (39 tests,
   config + theme layers): clean.
 
-Implemented: config loading, `[general]` (`style`, `reload_style`),
+Implemented: config loading and hot-reload, `[general]` (`style`,
+`reload_style`, `reload_config`),
 `[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
 panels, Clock (`format`, calendar popup), Workspaces (all four keys;
 windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
@@ -301,8 +308,8 @@ windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
 
 Not yet: Sway backend, window icons in Workspaces (XDG desktop lookup +
 icon theme + `svg`/`image` in iced), `[panel]`
-`size`/`align`/`margin`/`opacity`, panel height from content, config
-hot-reload (only the theme reloads), Clock `tooltip_format`, theme
+`size`/`align`/`margin`/`opacity`, panel height from content, Clock
+`tooltip_format`, theme
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
@@ -311,10 +318,8 @@ launcher, lock, wallpaper, terminal, idle).
 
 ## Next steps, in order
 
-1. Config hot-reload (watch `aria.conf`, rebuild panels), reusing the
-   theme watcher.
-2. Window icons in Workspaces (needs the XDG/icon-theme service that the
+1. Window icons in Workspaces (needs the XDG/icon-theme service that the
    launcher and tray will need too).
-3. More theme surface as gadgets need it (`margin` via a wrapping
+2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`); the `shader` widget for
    `background: shader("x.wgsl")` when a theme asks for more than CSS.

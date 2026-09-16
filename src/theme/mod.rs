@@ -14,6 +14,9 @@
 //! ([`Theme::container`], [`Theme::button`], [`Theme::text`],
 //! [`Theme::row`]) do the resolving and return plain iced widgets.
 //!
+//! The theme doesn't watch its own files: the daemon does (`watch.rs`)
+//! and calls [`Theme::try_load`] again.
+//!
 //! Interaction state is part of the node: a button's style closure
 //! re-resolves with `node.status(status)`, which is what makes `:hover`
 //! and `:active` rules apply.
@@ -25,7 +28,6 @@ mod css;
 mod node;
 mod selector;
 mod value;
-mod watch;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +44,6 @@ use value::Property;
 
 pub use node::Node;
 pub use value::Length;
-pub use watch::{Event, watch};
 
 /// Always loaded first; the neutral defaults every theme builds on.
 const BASE: &str = include_str!("../../assets/base.css");
@@ -53,7 +54,7 @@ pub const DEFAULT_PANEL_HEIGHT: f32 = 32.0;
 pub struct Theme {
     /// In cascade order: later rules win.
     rules: Vec<Rule>,
-    /// User files loaded, to watch for changes.
+    /// User files loaded, for the daemon to watch (see `watch.rs`).
     files: Vec<PathBuf>,
 }
 

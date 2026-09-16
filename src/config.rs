@@ -47,9 +47,14 @@ impl Config {
         Self { ini, path: None }
     }
 
+    /// The file it was loaded from, if any.
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
     /// Directory of the loaded file, if any.
     pub fn dir(&self) -> Option<&Path> {
-        self.path.as_deref().and_then(Path::parent)
+        self.path().and_then(Path::parent)
     }
 
     /// Typed section `name` (default: `T::NAME`). Missing sections and
@@ -152,6 +157,8 @@ pub struct GeneralConfig {
     pub style: Option<String>,
     /// Reload the theme when its file changes.
     pub reload_style: bool,
+    /// Rebuild the panels when the config file changes.
+    pub reload_config: bool,
 }
 
 impl Section for GeneralConfig {
@@ -161,6 +168,7 @@ impl Section for GeneralConfig {
         Self {
             style: raw.get("style").map(str::to_owned),
             reload_style: raw.bool_or("reload_style", true),
+            reload_config: raw.bool_or("reload_config", true),
         }
     }
 }

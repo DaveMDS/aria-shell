@@ -4,9 +4,11 @@ mod gadget;
 mod gadgets;
 mod panel;
 mod theme;
+mod watch;
 mod widgets;
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
@@ -35,8 +37,8 @@ enum Message {
     Panel(Id, panel::Message),
     /// Workspaces/windows changes from the compositor IPC.
     Compositor(compositor::Event),
-    /// A theme file changed on disk.
-    Theme(theme::Event),
+    /// Watched files (config, theme) changed on disk.
+    Files(watch::Changed),
 }
 
 struct AriaShell {
@@ -45,6 +47,9 @@ struct AriaShell {
     shell_events: ShellReceiver,
     compositor: Compositor,
     theme: Theme,
+    /// Monitors currently present, to rebuild the panels on a config
+    /// change.
+    outputs: BTreeMap<OutputId, OutputInfo>,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
     /// Open popup surfaces, to the panel each hangs off.
@@ -62,6 +67,7 @@ impl AriaShell {
             shell_events,
             compositor: Compositor::detect(),
             theme,
+            outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
         }
@@ -88,9 +94,42 @@ impl AriaShell {
                 self.compositor.apply(event);
                 Task::none()
             }
-            Message::Theme(theme::Event::Changed) => self.reload_theme(),
+            Message::Files(watch::Changed(paths)) => {
+                let config_changed = self
+                    .config
+                    .path()
+                    .is_some_and(|p| paths.contains(&p.to_path_buf()));
+                if config_changed && self.general.reload_config {
+                    self.reload_config()
+                } else if self.general.reload_style {
+                    self.reload_theme()
+                } else {
+                    Task::none()
+                }
+            }
             _ => Task::none(), // runtime variants, handled by the runtime
         }
+    }
+
+    /// Re-read the config (and the theme, it may name another one),
+    /// then close every panel and open them again for the monitors we
+    /// know: same path as a monitor being plugged in.
+    fn reload_config(&mut self) -> Task<Message> {
+        log::info!("config changed, rebuilding panels");
+        self.config = Config::load();
+        self.general = self.config.section(None);
+        self.theme = Theme::load(&self.config);
+        let mut tasks: Vec<Task<Message>> = self
+            .popups
+            .keys()
+            .chain(self.panels.keys())
+            .map(|&id| Task::done(Message::RemoveWindow(id)))
+            .collect();
+        self.popups.clear();
+        self.panels.clear();
+        let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
+        tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
+        Task::batch(tasks)
     }
 
     /// Re-read the theme files; views pick the new rules up on their
@@ -156,9 +195,13 @@ impl AriaShell {
 
     fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
         match event {
-            ShellEvent::OutputAdded(output) => self.open_panels(&output),
+            ShellEvent::OutputAdded(output) => {
+                self.outputs.insert(OutputId::from(&output), output.clone());
+                self.open_panels(&output)
+            }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
+                self.outputs.remove(&gone);
                 let ids: Vec<Id> = self
                     .panels
                     .iter()
@@ -237,16 +280,18 @@ impl AriaShell {
                 .with(*id)
                 .map(|(id, m)| Message::Panel(id, m))
         });
-        let theme_files = if self.general.reload_style {
-            theme::watch(self.theme.files()).map(Message::Theme)
-        } else {
-            Subscription::none()
-        };
+        let mut files = Vec::new();
+        if self.general.reload_config {
+            files.extend(self.config.path().map(Path::to_path_buf));
+        }
+        if self.general.reload_style {
+            files.extend(self.theme.files().iter().cloned());
+        }
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
-                theme_files,
+                watch::watch(&files).map(Message::Files),
             ]
             .into_iter()
             .chain(panels),

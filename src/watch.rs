@@ -1,6 +1,7 @@
-//! Theme hot-reload: a stream that yields when one of the theme files
-//! changes. The `notify` watcher runs its own thread and feeds a channel
-//! the stream reads from; the watcher lives as long as the stream.
+//! File hot-reload: a stream that yields which of the watched files
+//! changed (the config, the theme). The `notify` watcher runs its own
+//! thread and feeds a channel the stream reads from; the watcher lives as
+//! long as the stream.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -10,22 +11,20 @@ use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use notify::{EventKind, RecursiveMode, Watcher};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Event {
-    /// At least one theme file was written, created or removed.
-    Changed,
-}
+/// The watched files written, created or removed in one burst.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Changed(pub Vec<PathBuf>);
 
 /// Watch `files` for changes. The subscription is keyed on the file
-/// list, so a theme switch restarts it with the new files.
-pub fn watch(files: &[PathBuf]) -> Subscription<Event> {
+/// list, so a different set (a theme switch) restarts it.
+pub fn watch(files: &[PathBuf]) -> Subscription<Changed> {
     if files.is_empty() {
         return Subscription::none();
     }
     Subscription::run_with(files.to_vec(), |files| events(files.clone()))
 }
 
-fn events(files: Vec<PathBuf>) -> impl Stream<Item = Event> {
+fn events(files: Vec<PathBuf>) -> impl Stream<Item = Changed> {
     // Editors save by writing a temp file and renaming it over the
     // original, so watch the directories and filter on the file names.
     const SETTLE: Duration = Duration::from_millis(150);
@@ -55,22 +54,32 @@ fn events(files: Vec<PathBuf>) -> impl Stream<Item = Event> {
                 log::error!("cannot watch {}: {e}", dir.display());
             }
         }
-        log::debug!("watching theme files {files:?}");
+        log::debug!("watching {files:?}");
 
-        let relevant = |event: &notify::Event| {
-            matches!(
+        let touched = |event: &notify::Event, changed: &mut Vec<PathBuf>| {
+            if matches!(
                 event.kind,
                 EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
-            ) && event.paths.iter().any(|p| files.contains(p))
+            ) {
+                for p in &event.paths {
+                    if files.contains(p) && !changed.contains(p) {
+                        changed.push(p.clone());
+                    }
+                }
+            }
         };
         while let Some(event) = rx.next().await {
-            if !relevant(&event) {
+            let mut changed = Vec::new();
+            touched(&event, &mut changed);
+            if changed.is_empty() {
                 continue;
             }
             // Let the write finish, then collapse the burst into one.
             tokio::time::sleep(SETTLE).await;
-            while rx.try_recv().is_ok() {}
-            if output.send(Event::Changed).await.is_err() {
+            while let Ok(event) = rx.try_recv() {
+                touched(&event, &mut changed);
+            }
+            if output.send(Changed(changed)).await.is_err() {
                 break;
             }
         }

@@ -6,6 +6,11 @@
 //! mistake is logged with `file:line:col` and the offending rule or
 //! declaration is skipped, so a theme with a typo still mostly works.
 //!
+//! A theme is loaded for one colour [`Scheme`]: the variables of
+//! `:root.light { }` / `:root.dark { }` go over the plain `:root` ones,
+//! and every root element carries the scheme as a class while matching
+//! (`panel.dark { }`). Changing the scheme is a reload.
+//!
 //! In `view`, a widget describes where it is in the element tree with a
 //! [`Node`] (`panel > slot.start > gadget.clock > button`), and
 //! [`Theme::resolve`] gives it the cascaded [`Style`]: every matching
@@ -29,6 +34,7 @@ mod node;
 mod selector;
 mod value;
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -41,7 +47,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow, Size};
 
-use crate::config::{self, Config, GeneralConfig};
+use crate::config::{self, Config};
 use value::Property;
 
 pub use node::Node;
@@ -59,11 +65,61 @@ pub const DEFAULT_PANEL_HEIGHT: f32 = 32.0;
 /// iced's text size when no rule sets `font-size`.
 const DEFAULT_FONT_SIZE: f32 = 16.0;
 
+/// The colour scheme a theme is loaded for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Scheme {
+    #[default]
+    Light,
+    Dark,
+}
+
+impl Scheme {
+    /// The class root elements get, and the config value.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Light => Self::Dark,
+            Self::Dark => Self::Light,
+        }
+    }
+}
+
+impl std::str::FromStr for Scheme {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, ()> {
+        match s {
+            "light" => Ok(Self::Light),
+            "dark" => Ok(Self::Dark),
+            _ => Err(()),
+        }
+    }
+}
+
+/// What a gadget asks the daemon to change about the theme.
+#[derive(Debug, Clone)]
+pub enum Command {
+    ToggleScheme,
+    SetScheme(Scheme),
+    /// A theme name (as `[general] style`), or `None` for the base alone.
+    SetStyle(Option<String>),
+}
+
 pub struct Theme {
     /// In cascade order: later rules win.
     rules: Vec<Rule>,
     /// User files loaded, for the daemon to watch (see `watch.rs`).
     files: Vec<PathBuf>,
+    scheme: Scheme,
+    /// The user theme loaded, as named in the config or picked by the
+    /// user; `None` for the base alone.
+    name: Option<String>,
 }
 
 struct Rule {
@@ -105,25 +161,29 @@ pub struct LoadError {
 }
 
 impl Theme {
-    /// The base stylesheet plus the theme named by `[general] style`, if
-    /// any. Never fails: a missing or broken user theme is logged and
-    /// the base alone is used (its file still watched).
-    pub fn load(config: &Config) -> Self {
-        Self::try_load(config).unwrap_or_else(|e| {
+    /// The base stylesheet plus the user theme `style` (a name looked up
+    /// in the theme directories, or a path), if any, for `scheme`. Never
+    /// fails: a missing or broken user theme is logged and the base
+    /// alone is used (its file still watched).
+    pub fn load(config: &Config, style: Option<&str>, scheme: Scheme) -> Self {
+        Self::try_load(config, style, scheme).unwrap_or_else(|e| {
             log::error!("{}, using the base theme", e.message);
             Self {
                 files: e.files,
-                ..Self::default()
+                ..Self::base(scheme)
             }
         })
     }
 
     /// Like [`Theme::load`], but a user theme that can't be read or has a
     /// syntax error is an error, so a reload can keep the last good one.
-    pub fn try_load(config: &Config) -> Result<Self, LoadError> {
-        let general: GeneralConfig = config.section(None);
-        let Some(style) = &general.style else {
-            return Ok(Self::default());
+    pub fn try_load(
+        config: &Config,
+        style: Option<&str>,
+        scheme: Scheme,
+    ) -> Result<Self, LoadError> {
+        let Some(style) = style else {
+            return Ok(Self::base(scheme));
         };
         let Some(path) = locate(style, config.dir()) else {
             return Err(LoadError {
@@ -136,35 +196,53 @@ impl Theme {
             message: format!("cannot read theme {}: {e}", path.display()),
             files: files.clone(),
         })?;
-        log::info!("loading theme {}", path.display());
+        log::info!("loading theme {} ({})", path.display(), scheme.name());
         let name = path.display().to_string();
-        let mut theme =
-            Self::from_sources(&[("base.css", BASE), (&name, &text)]).map_err(|message| {
-                LoadError {
-                    message,
-                    files: files.clone(),
-                }
-            })?;
+        let mut theme = Self::from_sources(&[("base.css", BASE), (&name, &text)], scheme).map_err(
+            |message| LoadError {
+                message,
+                files: files.clone(),
+            },
+        )?;
         theme.files = files;
+        theme.name = Some(style.to_owned());
         Ok(theme)
+    }
+
+    /// The base stylesheet alone.
+    fn base(scheme: Scheme) -> Self {
+        Self::from_sources(&[("base.css", BASE)], scheme).expect("base.css is valid")
+    }
+
+    pub fn scheme(&self) -> Scheme {
+        self.scheme
+    }
+
+    /// The user theme loaded, `None` for the base alone.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     /// Build from `(name, text)` sources in cascade order. A scanner
     /// error in any source is an error; everything else (bad selector,
     /// unknown property, bad value) is logged and skipped.
-    fn from_sources(sources: &[(&str, &str)]) -> Result<Self, String> {
+    fn from_sources(sources: &[(&str, &str)], scheme: Scheme) -> Result<Self, String> {
         let mut sheets = Vec::new();
         for (name, text) in sources {
             let sheet = css::parse(text).map_err(|e| format!("{name}:{e}"))?;
             sheets.push((*name, sheet));
         }
         // Later files override earlier variables, and every file sees
-        // the final set.
-        let vars = sheets
-            .iter()
-            .flat_map(|(_, s)| s.vars.iter())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        // the final set. Within a file the scheme's variables go over
+        // the plain ones; a later file's plain ones still win over an
+        // earlier file's scheme ones.
+        let mut vars: HashMap<String, String> = HashMap::new();
+        for (_, sheet) in &sheets {
+            vars.extend(sheet.vars.iter().map(|(k, v)| (k.clone(), v.clone())));
+            if let Some(scheme_vars) = sheet.scheme_vars.get(&scheme) {
+                vars.extend(scheme_vars.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
 
         let mut rules = Vec::new();
         for (name, sheet) in &sheets {
@@ -201,6 +279,8 @@ impl Theme {
         Ok(Self {
             rules,
             files: Vec::new(),
+            scheme,
+            name: None,
         })
     }
 
@@ -212,6 +292,14 @@ impl Theme {
         let mut style = Style::default();
         for n in node.path() {
             let mut own = style.inherited();
+            // The root element carries the scheme: `panel.dark { }`.
+            let with_scheme;
+            let n = if n.is_root() {
+                with_scheme = n.class(self.scheme.name());
+                &with_scheme
+            } else {
+                n
+            };
             for rule in &self.rules {
                 if rule.selector.matches(n) {
                     for p in &rule.props {
@@ -394,9 +482,9 @@ pub fn widget_path(id: &iced::widget::Id) -> Option<String> {
 }
 
 impl Default for Theme {
-    /// The base stylesheet alone.
+    /// The base stylesheet alone, light.
     fn default() -> Self {
-        Self::from_sources(&[("base.css", BASE)]).expect("base.css is valid")
+        Self::base(Scheme::default())
     }
 }
 
@@ -563,6 +651,45 @@ fn intern(name: &str) -> &'static str {
 /// one (has a `/` or ends in `.css`, relative to the config file's
 /// directory), else `themes/<name>.css` under the config dirs, the data
 /// dirs, then the source tree's `assets/`.
+/// The directories a theme name is looked up in, in order.
+fn theme_dirs() -> Vec<PathBuf> {
+    config::config_dirs()
+        .into_iter()
+        .chain(config::data_dirs())
+        .chain(std::iter::once(config::dev_assets_dir()))
+        .collect()
+}
+
+/// Every theme a name resolves to: `(name, path)`, sorted by name; a
+/// name found in an earlier directory hides the later ones, as
+/// [`locate`] would pick it.
+pub fn available() -> Vec<(String, PathBuf)> {
+    available_in(&theme_dirs())
+}
+
+fn available_in(dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    for dir in dirs {
+        let Ok(entries) = fs::read_dir(dir.join("themes")) else {
+            continue;
+        };
+        for path in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
+            let Some(name) = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|_| path.extension().is_some_and(|e| e == "css") && path.is_file())
+            else {
+                continue;
+            };
+            if !found.iter().any(|(n, _)| n == name) {
+                found.push((name.to_owned(), path.clone()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
 fn locate(style: &str, config_dir: Option<&Path>) -> Option<PathBuf> {
     if style.contains('/') || style.ends_with(".css") {
         let path = Path::new(style);
@@ -573,10 +700,8 @@ fn locate(style: &str, config_dir: Option<&Path>) -> Option<PathBuf> {
         };
         return path.is_file().then_some(path);
     }
-    config::config_dirs()
+    theme_dirs()
         .into_iter()
-        .chain(config::data_dirs())
-        .chain(std::iter::once(config::dev_assets_dir()))
         .map(|dir| dir.join("themes").join(format!("{style}.css")))
         .find(|f| f.is_file())
 }
@@ -606,7 +731,7 @@ mod tests {
     use iced::widget::button::Status;
 
     fn theme(css: &str) -> Theme {
-        Theme::from_sources(&[("test.css", css)]).expect("valid css")
+        Theme::from_sources(&[("test.css", css)], Scheme::Light).expect("valid css")
     }
 
     fn red() -> Color {
@@ -616,16 +741,30 @@ mod tests {
     #[test]
     fn base_stylesheet_is_valid() {
         let base = css::parse(BASE).expect("base.css parses");
-        for rule in &base.rules {
-            for s in &rule.selectors {
-                Selector::parse(s).unwrap_or_else(|e| panic!("base.css {s:?}: {e}"));
-            }
-            for d in &rule.declarations {
-                let v = css::substitute_vars(&d.value, &base.vars)
-                    .unwrap_or_else(|e| panic!("base.css {}: {e}", d.pos));
-                value::parse(&d.name, &v).unwrap_or_else(|e| panic!("base.css {}: {e}", d.pos));
+        // Both schemes must define every variable the rules use.
+        for scheme in [Scheme::Light, Scheme::Dark] {
+            let mut vars = base.vars.clone();
+            vars.extend(base.scheme_vars[&scheme].clone());
+            for rule in &base.rules {
+                for s in &rule.selectors {
+                    Selector::parse(s).unwrap_or_else(|e| panic!("base.css {s:?}: {e}"));
+                }
+                for d in &rule.declarations {
+                    let v = css::substitute_vars(&d.value, &vars)
+                        .unwrap_or_else(|e| panic!("base.css {}: {e}", d.pos));
+                    value::parse(&d.name, &v).unwrap_or_else(|e| panic!("base.css {}: {e}", d.pos));
+                }
             }
         }
+        assert_eq!(
+            base.scheme_vars[&Scheme::Light]
+                .keys()
+                .collect::<std::collections::BTreeSet<_>>(),
+            base.scheme_vars[&Scheme::Dark]
+                .keys()
+                .collect::<std::collections::BTreeSet<_>>(),
+            "the two palettes define the same variables"
+        );
     }
 
     #[test]
@@ -689,13 +828,16 @@ mod tests {
 
     #[test]
     fn variables_across_sources() {
-        let t = Theme::from_sources(&[
-            (
-                "a.css",
-                ":root { --accent: blue } workspace { color: var(--accent) }",
-            ),
-            ("b.css", ":root { --accent: red }"),
-        ])
+        let t = Theme::from_sources(
+            &[
+                (
+                    "a.css",
+                    ":root { --accent: blue } workspace { color: var(--accent) }",
+                ),
+                ("b.css", ":root { --accent: red }"),
+            ],
+            Scheme::Light,
+        )
         .unwrap();
         let s = t.resolve(&Node::root("panel").child("workspace"));
         assert_eq!(
@@ -706,10 +848,59 @@ mod tests {
     }
 
     #[test]
+    fn scheme_variables_and_root_class() {
+        let css = ":root { --fg: blue } :root.dark { --fg: red } \
+                   panel { color: var(--fg) } panel.dark { padding: 3px }";
+        let light = Theme::from_sources(&[("t.css", css)], Scheme::Light).unwrap();
+        let dark = Theme::from_sources(&[("t.css", css)], Scheme::Dark).unwrap();
+        let panel = Node::root("panel");
+        assert_eq!(
+            light.resolve(&panel).color,
+            Some(Color::from_rgb(0.0, 0.0, 1.0))
+        );
+        assert_eq!(light.resolve(&panel).padding.top, 0.0);
+        assert_eq!(dark.resolve(&panel).color, Some(red()));
+        assert_eq!(dark.resolve(&panel).padding.top, 3.0);
+        assert_eq!(dark.scheme(), Scheme::Dark);
+
+        // A later file's plain variable beats an earlier file's scheme one.
+        let t = Theme::from_sources(
+            &[
+                (
+                    "base.css",
+                    ":root.dark { --fg: blue } panel { color: var(--fg) }",
+                ),
+                ("user.css", ":root { --fg: red }"),
+            ],
+            Scheme::Dark,
+        )
+        .unwrap();
+        assert_eq!(t.resolve(&panel).color, Some(red()));
+    }
+
+    #[test]
+    fn available_themes_dedup_and_sort() {
+        let dir = std::env::temp_dir().join(format!("aria-themes-{}", std::process::id()));
+        let (a, b) = (dir.join("a/themes"), dir.join("b/themes"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("zeta.css"), "").unwrap();
+        fs::write(a.join("alpha.css"), "").unwrap();
+        fs::write(b.join("alpha.css"), "").unwrap();
+        fs::write(b.join("beta.css"), "").unwrap();
+        fs::write(b.join("notes.txt"), "").unwrap();
+        let list = available_in(&[dir.join("a"), dir.join("b")]);
+        let names: Vec<&str> = list.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["alpha", "beta", "zeta"]);
+        assert_eq!(list[0].1, a.join("alpha.css"), "the first directory wins");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn bad_declarations_are_skipped_not_fatal() {
         let t = theme("panel { colour: red; color: red; margin: 1 } :nope { color: red }");
         assert_eq!(t.resolve(&Node::root("panel")).color, Some(red()));
-        let err = Theme::from_sources(&[("t.css", "panel { color: red ")])
+        let err = Theme::from_sources(&[("t.css", "panel { color: red ")], Scheme::Light)
             .err()
             .expect("scanner error");
         assert!(

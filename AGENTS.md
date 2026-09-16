@@ -60,7 +60,10 @@ after every update. See RS-PORT.md's "Architecture" section
 before changing the shape of any of these.
 
 Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
-plus `[general] style`), resolved per widget in `view`. Gadgets never
+plus `[general] style`), loaded for a light or dark scheme
+(`:root.light` / `:root.dark` variables, `panel.dark { }` rules; the
+`Themes` gadget switches scheme and theme at runtime), resolved per
+widget in `view`. Gadgets never
 hard-code colours, paddings or spacing: they derive a `theme::Node` from
 `ctx.node` (`ctx.node.child("workspace").class_if("active", ..)`) and
 build widgets with `ctx.theme.button/container/text/row`. A new element

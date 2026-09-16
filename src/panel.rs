@@ -193,6 +193,7 @@ pub enum Action {
     Run(Task<Message>),
     Compositor(compositor::Command),
     Tray(tray::Command),
+    Theme(theme::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -328,6 +329,7 @@ impl Panel {
             gadget::Action::Run(task) => Action::Run(task.map(move |m| Message::Gadget(i, m))),
             gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
             gadget::Action::Tray(cmd) => Action::Tray(cmd),
+            gadget::Action::Theme(cmd) => Action::Theme(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);
@@ -344,6 +346,11 @@ impl Panel {
                 Action::Many(actions.into_iter().map(|a| self.lift(i, a)).collect())
             }
         }
+    }
+
+    /// Icon names the gadgets draw, for the daemon to resolve.
+    pub fn icon_names(&self) -> impl Iterator<Item = String> + '_ {
+        self.gadgets.iter().flat_map(|e| e.gadget.icon_names())
     }
 
     /// Content size the gadget owning popup `id` wants for it now.

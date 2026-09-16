@@ -1,5 +1,6 @@
 //! `com.canonical.dbusmenu`: the menu a tray item exports, fetched as
-//! one layout tree and shown by the tray gadget in its popup.
+//! one layout tree into `widgets::menu` items, shown by the tray gadget
+//! in its popup.
 //!
 //! Reference: `libdbusmenu/libdbusmenu-glib/dbus-menu.xml`. Not
 //! handled: icon data, shortcuts, `disposition`, `TextDirection`,
@@ -13,6 +14,8 @@ use zbus::names::BusName;
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::{ObjectPath, OwnedValue, Value};
 use zbus::{Connection, proxy};
+
+use crate::widgets::menu::{Item, Toggle};
 
 /// `(id, properties, children)`, where each child is the same struct in
 /// a variant.
@@ -42,44 +45,21 @@ trait DbusMenu {
     ) -> zbus::Result<()>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Toggle {
-    Check,
-    Radio,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct MenuItem {
-    pub id: i32,
-    /// Without the `_` mnemonic markers.
-    pub label: String,
-    pub enabled: bool,
-    pub separator: bool,
-    pub toggle: Option<Toggle>,
-    /// `toggle-state`: 0 off, 1 on, anything else "indeterminate".
-    pub checked: Option<bool>,
-    pub icon_name: String,
-    /// Has (or may have, once `AboutToShow`n) children.
-    pub submenu: bool,
-    /// Visible children only.
-    pub children: Vec<MenuItem>,
-}
-
 /// A fetched layout: the root's children are the top-level entries.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Menu {
     pub revision: u32,
-    pub root: MenuItem,
+    pub root: Item,
 }
 
 impl Menu {
-    pub fn items(&self) -> &[MenuItem] {
+    pub fn items(&self) -> &[Item] {
         &self.root.children
     }
 
     #[cfg(test)]
-    pub fn find(&self, id: i32) -> Option<&MenuItem> {
-        fn walk(item: &MenuItem, id: i32) -> Option<&MenuItem> {
+    pub fn find(&self, id: i32) -> Option<&Item> {
+        fn walk(item: &Item, id: i32) -> Option<&Item> {
             if item.id == id {
                 return Some(item);
             }
@@ -89,7 +69,7 @@ impl Menu {
     }
 }
 
-fn parse(layout: Layout) -> MenuItem {
+fn parse(layout: Layout) -> Item {
     let (id, props, children) = layout;
     let str_prop = |name: &str| {
         props
@@ -104,14 +84,14 @@ fn parse(layout: Layout) -> MenuItem {
             .unwrap_or(default)
     };
     let visible = bool_prop("visible", true);
-    let children: Vec<MenuItem> = children
+    let children: Vec<Item> = children
         .into_iter()
         .filter_map(|v| Layout::try_from(v).ok())
         .map(parse)
         .filter(|c| c.id >= 0)
         .collect();
     // An invisible item is dropped by its parent (id -1 marks it).
-    MenuItem {
+    Item {
         id: if visible { id } else { -1 },
         label: strip_mnemonics(str_prop("label")),
         enabled: bool_prop("enabled", true),

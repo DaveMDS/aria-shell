@@ -11,7 +11,12 @@
  *   - comments, `selector, selector { property: value; }`
  *   - selectors: type, .class, #id, [attr="value"], *, descendant (space),
  *     child (>), :hover :active :focus :disabled :first-child :last-child :root
- *   - `:root { --name: value }` variables, used as `var(--name[, fallback])`
+ *   - `:root { --name: value }` variables, used as `var(--name[, fallback])`;
+ *     `:root.light { }` / `:root.dark { }` hold the variables of one colour
+ *     scheme, applied over the plain ones when that scheme is active
+ *     (`[general] color_scheme`, or the Themes gadget). Root elements
+ *     carry the scheme as a class: `panel.dark { }`, `popup.light { }`.
+ *     A theme that only sets `:root` looks the same in both schemes.
  *   - units: px or none; colours: #rgb, #rrggbbaa, rgb(), rgba(), hsl(), names
  *   - cascade: specificity, then source order (this file first)
  *   - not supported: @rules, !important, margin, opacity, gradients,
@@ -40,7 +45,8 @@
  *
  *   panel[.top|.bottom][#<instance>][output="<connector>"]   a bar; #2 for [panel:2]
  *   ╰─ slot.start | slot.center | slot.end
- *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces, gadget.tray; #2 for [Clock:2]
+ *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces, gadget.tray,
+ *                                                             gadget.themes; #2 for [Clock:2]
  *
  *   popup                                                     a popup surface
  *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
@@ -70,15 +76,23 @@
  *      ╰─ icon                                                its icon, drawn at the node's `height`
  *                                                             (symbolic icons take `color`)
  *   popup > gadget.tray
- *   ╰─ menu                                                   the item's menu: a column, gap between rows
- *      ├─ item[.checked][.submenu][.expanded]                 a row, a button (:disabled when the app says so)
- *      │  ├─ check                                            ✓ / ● / ○ (levels with toggles only)
- *      │  ├─ label
- *      │  ╰─ arrow                                            ▸ / ▾ on a submenu
- *      ├─ separator                                           sized by `height`
- *      ├─ submenu                                             an unfolded submenu: the same rows, nested
- *      │                                                      (its padding is the indent)
+ *   ╰─ menu                                                   the item's menu (see `menu` below)
  *      ╰─ text                                                "…" until the menu is loaded
+ *
+ *   gadget.themes
+ *   ╰─ button                                                 left click toggles light/dark, right opens the menu
+ *      ╰─ icon                                                the scheme's icon, drawn at the node's `height`
+ *   popup > gadget.themes
+ *   ╰─ menu                                                   Light / Dark, then Base and every theme found
+ *
+ *   menu                                                      a menu (tray items, themes): a column, gap between rows
+ *   ├─ item[.checked][.submenu][.expanded]                    a row, a button (:disabled when the app says so)
+ *   │  ├─ check                                               ✓ / ● / ○ (levels with toggles only)
+ *   │  ├─ label
+ *   │  ╰─ arrow                                               ▸ / ▾ on a submenu
+ *   ├─ separator                                              sized by `height`
+ *   ╰─ submenu                                                an unfolded submenu: the same rows, nested
+ *                                                             (its padding is the indent)
  *
  *   gadget.workspaces
  *   ╰─ workspace[.active][.urgent]                            a button, one per workspace
@@ -91,6 +105,20 @@
  */
 
 :root {
+  --aria-shadow: rgba(0, 0, 0, 0.4);
+}
+:root.light {
+  --aria-bg: #eff1f5;
+  --aria-fg: #4c4f69;
+  --aria-muted: #9ca0b0;
+  --aria-accent: #1e66f5;
+  --aria-on-accent: #eff1f5;
+  --aria-urgent: #d20f39;
+  --aria-border: #ccd0da;
+  --aria-separator: #ccd0da;
+  --aria-popup-bg: #eff1f5;
+}
+:root.dark {
   --aria-bg: #1e1e2e;
   --aria-fg: #cdd6f4;
   --aria-muted: #6c7086;
@@ -100,7 +128,6 @@
   --aria-border: #45475a;
   --aria-separator: #45475a;
   --aria-popup-bg: #1e1e2e;
-  --aria-shadow: rgba(0, 0, 0, 0.4);
 }
 
 /* Surfaces */
@@ -230,7 +257,18 @@ gadget.tray > item.attention icon {
   color: var(--aria-urgent);
 }
 
-/* Tray menu popup */
+gadget.themes > button {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+gadget.themes > button:hover {
+  background: var(--aria-border);
+}
+gadget.themes icon {
+  height: 16px;
+}
+
+/* Menu popups (tray items, themes) */
 
 menu {
   padding: 4px;

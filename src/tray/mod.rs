@@ -22,7 +22,7 @@ use iced::{Subscription, Task};
 use zbus::Connection;
 
 use crate::icons::Icon;
-pub use menu::{Menu, MenuItem, Toggle};
+pub use menu::Menu;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Status {

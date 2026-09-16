@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use super::Scheme;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pos {
     pub line: usize,
@@ -49,6 +51,8 @@ pub struct RawRule {
 
 /// A parsed file. Variables (`--name: value` inside `:root { }`) are
 /// pulled out; the remaining `:root` declarations stay as a normal rule.
+/// `:root.light { }` / `:root.dark { }` hold the variables of one colour
+/// scheme, applied over the plain ones when that scheme is active.
 /// `var()` references are left in place: substitution happens after all
 /// files are loaded, so a user theme can override a variable the base
 /// stylesheet uses.
@@ -56,6 +60,7 @@ pub struct RawRule {
 pub struct Sheet {
     pub rules: Vec<RawRule>,
     pub vars: HashMap<String, String>,
+    pub scheme_vars: HashMap<Scheme, HashMap<String, String>>,
 }
 
 pub fn parse(src: &str) -> Result<Sheet, Error> {
@@ -334,7 +339,15 @@ impl<'a> Scanner<'a> {
                 message: "rule without a selector".to_owned(),
             });
         }
+        // `:root` takes variables; `:root.light` / `:root.dark` take the
+        // variables of that scheme (and nothing else).
         let is_root = selectors.iter().all(|s| s == ":root");
+        let scheme = match selectors.as_slice() {
+            [s] => s
+                .strip_prefix(":root.")
+                .and_then(|name| name.parse::<Scheme>().ok()),
+            _ => None,
+        };
         let mut declarations = Vec::new();
         loop {
             self.skip_ws_and_comments()?;
@@ -378,13 +391,33 @@ impl<'a> Scanner<'a> {
                 });
             }
             if name.starts_with("--") {
-                if !is_root {
+                if let Some(scheme) = scheme {
+                    sheet
+                        .scheme_vars
+                        .entry(scheme)
+                        .or_default()
+                        .insert(name, value);
+                } else if is_root {
+                    sheet.vars.insert(name, value);
+                } else {
                     return Err(Error {
                         pos: decl_pos,
-                        message: "variables can only be declared in `:root { }`".to_owned(),
+                        message: "variables can only be declared in `:root { }` \
+                                  (or `:root.light` / `:root.dark`)"
+                            .to_owned(),
                     });
                 }
-                sheet.vars.insert(name, value);
+            } else if scheme.is_some() {
+                return Err(Error {
+                    pos: decl_pos,
+                    message: format!(
+                        "`{}` takes only variables; style the root elements \
+                         with `panel.{}`, `popup.{}`, ...",
+                        selectors[0],
+                        scheme.unwrap().name(),
+                        scheme.unwrap().name()
+                    ),
+                });
             } else {
                 declarations.push(Declaration {
                     name,
@@ -447,6 +480,27 @@ mod tests {
         assert_eq!(decls(&sheet.rules[0]), [("color", "var(--fg, black)")]);
 
         let err = parse("panel { --x: 1 }").unwrap_err();
+        assert!(err.message.contains(":root"), "{err}");
+    }
+
+    #[test]
+    fn scheme_variables() {
+        let sheet = parse(
+            ":root { --bg: grey }\n\
+             :root.dark { --bg: black; --fg: white }\n\
+             :root.light { --bg: white }",
+        )
+        .unwrap();
+        assert_eq!(sheet.vars["--bg"], "grey");
+        assert_eq!(sheet.scheme_vars[&Scheme::Dark]["--bg"], "black");
+        assert_eq!(sheet.scheme_vars[&Scheme::Dark]["--fg"], "white");
+        assert_eq!(sheet.scheme_vars[&Scheme::Light]["--bg"], "white");
+        assert!(sheet.rules.is_empty());
+
+        let err = parse(":root.dark { color: red }").unwrap_err();
+        assert!(err.message.contains("only variables"), "{err}");
+        // Not a scheme: an ordinary (unknown) selector, no variables.
+        let err = parse(":root.blue { --x: 1 }").unwrap_err();
         assert!(err.message.contains(":root"), "{err}");
     }
 

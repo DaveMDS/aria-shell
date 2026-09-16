@@ -78,7 +78,13 @@ Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_vie
   Message::Calendar(calendar::Message)
 
 TrayGadget (gadgets/tray.rs)   impl Gadget: a row of items from `ctx.tray`, the clicked item's menu in the popup
-  Message::OpenMenu(key, n) | MenuClick(id) | ToggleSubmenu(id) | Activate(key) | Scroll(key, delta) | ...
+  Message::OpenMenu(key, n) | Menu(menu::Message) | Activate(key) | Scroll(key, delta) | ...
+
+Themes     (gadgets/themes.rs) impl Gadget: the scheme's icon; left click toggles light/dark, right click a menu
+  Message::Toggle | OpenMenu | Menu(menu::Message)   -> Action::Theme(theme::Command)
+
+Menu       (widgets/menu.rs)  reusable component: Item tree (labels, toggles, separators, submenus unfolding in
+                              place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
 
 Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today, theme, node)
 
@@ -94,8 +100,11 @@ Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>
   run(Command, cursor)      Activate/SecondaryActivate/ContextMenu/Scroll on an item, LoadMenu/ExpandMenu/MenuClick
                             over `com.canonical.dbusmenu` (tray/menu.rs)
 
-Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once
-  load / try_load(&Config)  css.rs (scanner) -> selector.rs + value.rs (typed rules)
+Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once for one Scheme
+  load / try_load(&Config, style, scheme)   css.rs (scanner) -> selector.rs + value.rs (typed rules)
+  scheme() / name()         what's loaded; `available()` lists the themes/*.css of every theme dir
+  Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
+                            keeps `style`/`scheme` at runtime and reloads (no persistence)
   resolve(&Node) -> Style   cascade for one element path; container()/button()/text()/row() helpers
 
 Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)
@@ -158,6 +167,18 @@ Two things flow between the daemon and the gadgets besides messages:
   `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's
   `Popup` is marked closed and `Gadget::popup_closed` runs.
 
+- **Light/dark**: a theme is loaded for a `theme::Scheme` (`[general]
+  color_scheme`, default light; the `Themes` gadget switches it at
+  runtime, in memory only — following or setting the desktop's scheme is
+  for later, per DE). `:root.light { }` / `:root.dark { }` blocks hold
+  the scheme's variables, folded per file over the plain `:root` ones
+  (`base :root`, `base :root.<scheme>`, `user :root`, `user
+  :root.<scheme>`: a user theme's plain variable still beats the base's
+  scheme one); a theme that only sets `:root` looks the same in both.
+  `Theme::resolve` gives the root node of every path the scheme as a
+  class, so `panel.dark { }` rules work without touching the nodes
+  gadgets build. `base.css` carries both palettes (Catppuccin-like
+  Latte / Mocha). `debug theme` prints `style=<name|-> scheme=<..>`.
 - **Styling is a CSS-like theme file**, resolved per widget in `view`.
   `assets/base.css` (compiled in, always first) documents the element
   tree and the supported properties for theme authors; `[general] style`
@@ -622,10 +643,15 @@ Verified on the real Hyprland session with two outputs:
   `clicked` and closes the popup; `LayoutUpdated` reloads an open
   menu; `NewIcon` recolours the icon, `NewStatus` adds `.attention`;
   unregistering removes it) pass in the headless Sway.
+- Themes: `tests/ui/run.sh themes` (light at start, a left click on
+  either bar toggles, the menu lists Light/Dark/Base/manjaro/waybar
+  with the current ones checked, picking manjaro restyles live with
+  its 28px bars, Base goes back) passes; on the desktop a click flips
+  both bars' palette (`debug theme`).
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (62 tests: config, theme, selectors, desktop entries, commands,
-  launcher search, tray key/pixmap/props/menu parsing, wheel clicks):
-  clean.
+  (67 tests: config, theme incl. scheme variables and root class,
+  selectors, desktop entries, commands, launcher search, tray
+  key/pixmap/props/menu parsing, wheel clicks, menu widget): clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
@@ -637,7 +663,8 @@ window icons) over the Hyprland IPC, with the daemon-owned
 (`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),
 the command socket + CLI client, the launcher (`[launcher] terminal`),
 the tray (`[Tray]`, SNI watcher/host, pixmap and named icons, dbusmenu
-popups with inline submenus, popups sized from state and resized live).
+popups with inline submenus, popups sized from state and resized live),
+light/dark schemes and the `[Themes]` gadget (toggle, theme picker).
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -647,7 +674,9 @@ properties beyond the current set (`margin`, `opacity`, gradients,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
 wrapper), every other gadget and component (notifications,
 lock, wallpaper, terminal, idle), launcher `DBusActivatable` entries,
-a themed scrollbar (iced's default for now), tray tooltips / overlay
+a themed scrollbar (iced's default for now), persisting the theme
+picked at runtime and following/setting the desktop's colour scheme
+(portal / gsettings, per DE), tray tooltips / overlay
 icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
 (the KDE name is what every app uses).
 

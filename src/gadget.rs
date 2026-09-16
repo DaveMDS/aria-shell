@@ -20,6 +20,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
+use crate::gadgets::themes::{self, Themes};
 use crate::gadgets::tray::{self, TrayGadget};
 use crate::gadgets::workspaces::{self, Workspaces};
 use crate::icons::Icons;
@@ -59,6 +60,7 @@ pub enum Action<M> {
     Run(Task<M>),
     Compositor(compositor::Command),
     Tray(crate::tray::Command),
+    Theme(crate::theme::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -162,6 +164,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Run(task) => Action::Run(task.map(move |m| f(m))),
             Self::Compositor(cmd) => Action::Compositor(cmd),
             Self::Tray(cmd) => Action::Tray(cmd),
+            Self::Theme(cmd) => Action::Theme(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -203,6 +206,12 @@ pub trait Gadget: Sized {
     /// The popup surface is gone, whoever closed it.
     fn popup_closed(&mut self) {}
 
+    /// Icon names (from the icon theme) the gadget draws, for the
+    /// daemon to resolve; read back with `ctx.icons.get_name`.
+    fn icon_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Per-instance event source (timers, ...). The panel keys it by
     /// gadget index, so identical subscriptions on two gadgets stay
     /// distinct. Shared sources (compositor IPC, DBus) don't go here: they
@@ -217,6 +226,7 @@ pub enum AnyGadget {
     Clock(Clock),
     Workspaces(Workspaces),
     Tray(TrayGadget),
+    Themes(Themes),
 }
 
 #[derive(Clone, Debug)]
@@ -224,6 +234,7 @@ pub enum Message {
     Clock(clock::Message),
     Workspaces(workspaces::Message),
     Tray(tray::Message),
+    Themes(themes::Message),
 }
 
 impl AnyGadget {
@@ -244,6 +255,10 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
+            themes::ThemesConfig::NAME => Some(Self::Themes(Themes::new(
+                config.section(Some(name)),
+                output,
+            ))),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -257,6 +272,7 @@ impl AnyGadget {
             Self::Clock(_) => "clock",
             Self::Workspaces(_) => "workspaces",
             Self::Tray(_) => "tray",
+            Self::Themes(_) => "themes",
         }
     }
 
@@ -265,6 +281,7 @@ impl AnyGadget {
             (Self::Clock(g), Message::Clock(m)) => g.update(m).map(Message::Clock),
             (Self::Workspaces(g), Message::Workspaces(m)) => g.update(m).map(Message::Workspaces),
             (Self::Tray(g), Message::Tray(m)) => g.update(m).map(Message::Tray),
+            (Self::Themes(g), Message::Themes(m)) => g.update(m).map(Message::Themes),
             _ => Action::None,
         }
     }
@@ -274,6 +291,7 @@ impl AnyGadget {
             Self::Clock(g) => g.view(ctx).map(Message::Clock),
             Self::Workspaces(g) => g.view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.view(ctx).map(Message::Tray),
+            Self::Themes(g) => g.view(ctx).map(Message::Themes),
         }
     }
 
@@ -282,6 +300,7 @@ impl AnyGadget {
             Self::Clock(g) => g.popup_view(ctx).map(Message::Clock),
             Self::Workspaces(g) => g.popup_view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.popup_view(ctx).map(Message::Tray),
+            Self::Themes(g) => g.popup_view(ctx).map(Message::Themes),
         }
     }
 
@@ -290,6 +309,7 @@ impl AnyGadget {
             Self::Clock(g) => g.popup_size(ctx),
             Self::Workspaces(g) => g.popup_size(ctx),
             Self::Tray(g) => g.popup_size(ctx),
+            Self::Themes(g) => g.popup_size(ctx),
         }
     }
 
@@ -298,6 +318,7 @@ impl AnyGadget {
             Self::Clock(g) => g.popup(),
             Self::Workspaces(g) => g.popup(),
             Self::Tray(g) => g.popup(),
+            Self::Themes(g) => g.popup(),
         }
     }
 
@@ -315,6 +336,16 @@ impl AnyGadget {
             Self::Clock(g) => <Clock as Gadget>::popup_closed(g),
             Self::Workspaces(g) => <Workspaces as Gadget>::popup_closed(g),
             Self::Tray(g) => <TrayGadget as Gadget>::popup_closed(g),
+            Self::Themes(g) => <Themes as Gadget>::popup_closed(g),
+        }
+    }
+
+    pub fn icon_names(&self) -> Vec<String> {
+        match self {
+            Self::Clock(g) => g.icon_names(),
+            Self::Workspaces(g) => g.icon_names(),
+            Self::Tray(g) => g.icon_names(),
+            Self::Themes(g) => g.icon_names(),
         }
     }
 
@@ -323,6 +354,7 @@ impl AnyGadget {
             Self::Clock(g) => g.subscription().map(Message::Clock),
             Self::Workspaces(g) => g.subscription().map(Message::Workspaces),
             Self::Tray(g) => g.subscription().map(Message::Tray),
+            Self::Themes(g) => g.subscription().map(Message::Themes),
         }
     }
 }

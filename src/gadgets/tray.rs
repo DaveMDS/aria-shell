@@ -6,22 +6,22 @@
 //!
 //! Holds no item state: it reads the daemon's [`Tray`](crate::tray::Tray)
 //! from the view context. The popup shows the menu the daemon loaded
-//! for the clicked item; submenus unfold in place and the popup is
-//! resized (its size is a function of the state, see
-//! [`Gadget::popup_size`]).
+//! for the clicked item (a `widgets::menu::Menu`); submenus unfold in
+//! place and the popup is resized (its size is a function of the state,
+//! see [`Gadget::popup_size`]).
 
-use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
+use iced::Element;
 use iced::mouse::ScrollDelta;
 use iced::widget::{Space, mouse_area};
-use iced::{Element, Length};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
-use crate::theme::{self, Node, Theme};
-use crate::tray::{Command, MenuItem, Orientation, Status, Toggle};
+use crate::theme;
+use crate::tray::{Command, Orientation, Status};
+use crate::widgets::menu::{self, Menu};
 
 /// `[Tray]` section: no keys yet (the Python one had none either).
 #[derive(Debug, Clone)]
@@ -37,11 +37,6 @@ impl Section for TrayConfig {
 
 /// Icon size when the theme doesn't set `height` on `item icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;
-const CHECK_ON: &str = "✓";
-const RADIO_ON: &str = "●";
-const RADIO_OFF: &str = "○";
-const ARROW_CLOSED: &str = "▸";
-const ARROW_OPEN: &str = "▾";
 const LOADING: &str = "…";
 /// One wheel click on the continuous axis, in the units compositors
 /// use (libinput's), and how long after a discrete event its continuous
@@ -53,8 +48,7 @@ pub struct TrayGadget {
     popup: Popup,
     /// Key of the item whose menu the popup shows.
     menu_for: Option<String>,
-    /// Submenu ids unfolded in the popup.
-    expanded: BTreeSet<i32>,
+    menu: Menu,
     /// Continuous scroll not yet worth a click, and when the last
     /// discrete event came (a wheel sends both forms of the same click).
     scroll_pending: f32,
@@ -69,8 +63,7 @@ pub enum Message {
     Scroll(String, ScrollDelta),
     /// Show the menu of the item at index `n` (its anchor).
     OpenMenu(String, usize),
-    MenuClick(i32),
-    ToggleSubmenu(i32),
+    Menu(menu::Message),
 }
 
 impl Gadget for TrayGadget {
@@ -81,7 +74,7 @@ impl Gadget for TrayGadget {
         Self {
             popup: Popup::new(),
             menu_for: None,
-            expanded: BTreeSet::new(),
+            menu: Menu::new(),
             scroll_pending: 0.0,
             scroll_discrete_at: None,
         }
@@ -105,31 +98,26 @@ impl Gadget for TrayGadget {
                 // Another item's menu may be open: swap it.
                 let close = self.popup.close();
                 self.menu_for = Some(key.clone());
-                self.expanded.clear();
+                self.menu.reset();
                 Action::Many(vec![
                     close,
                     Action::Tray(Command::LoadMenu(key)),
                     self.popup.toggle_nth(n),
                 ])
             }
-            Message::MenuClick(id) => {
+            Message::Menu(m) => {
                 let Some(key) = self.menu_for.clone() else {
                     return Action::None;
                 };
-                Action::Many(vec![
-                    Action::Tray(Command::MenuClick(key, id)),
-                    self.popup.close(),
-                ])
-            }
-            Message::ToggleSubmenu(id) => {
-                if !self.expanded.remove(&id) {
-                    self.expanded.insert(id);
+                match self.menu.update(m) {
+                    menu::Event::None => Action::None,
+                    menu::Event::Clicked(id) => Action::Many(vec![
+                        Action::Tray(Command::MenuClick(key, id)),
+                        self.popup.close(),
+                    ]),
                     // Apps fill submenus on AboutToShow.
-                    if let Some(key) = self.menu_for.clone() {
-                        return Action::Tray(Command::ExpandMenu(key, id));
-                    }
+                    menu::Event::Unfolded(id) => Action::Tray(Command::ExpandMenu(key, id)),
                 }
-                Action::None
             }
         }
     }
@@ -194,7 +182,7 @@ impl Gadget for TrayGadget {
 
     fn popup_closed(&mut self) {
         self.menu_for = None;
-        self.expanded.clear();
+        self.menu.reset();
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
@@ -202,8 +190,13 @@ impl Gadget for TrayGadget {
         let node = ctx.node.child("menu");
         let menu = self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key));
         match menu {
-            Some(menu) => self.level(theme, &node, menu.items()).into(),
-            None => theme.text(&node.child("text"), LOADING).into(),
+            Some(menu) => self
+                .menu
+                .view(theme, &node, menu.items().to_vec())
+                .map(Message::Menu),
+            None => theme
+                .container(&node, theme.text(&node.child("text"), LOADING))
+                .into(),
         }
     }
 
@@ -212,13 +205,19 @@ impl Gadget for TrayGadget {
         let node = ctx.node.child("menu");
         let menu = self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key));
         let size = match menu {
-            Some(menu) => self.measure_level(theme, &node, menu.items()),
-            None => theme.measure(&node.child("text"), LOADING),
+            Some(menu) => self.menu.size(theme, &node, menu.items()),
+            None => {
+                let text = theme.measure(&node.child("text"), LOADING);
+                let pad = theme.resolve(&node).padding;
+                iced::Size::new(
+                    text.width + pad.left + pad.right,
+                    text.height + pad.top + pad.bottom,
+                )
+            }
         };
-        let pad = theme.resolve(&node).padding;
         (
-            (size.width + pad.left + pad.right).ceil().max(1.0) as u32,
-            (size.height + pad.top + pad.bottom).ceil().max(1.0) as u32,
+            size.width.ceil().max(1.0) as u32,
+            size.height.ceil().max(1.0) as u32,
         )
     }
 }
@@ -264,166 +263,6 @@ impl TrayGadget {
     }
 }
 
-/// What each entry of a menu level shows, shared by the view and its
-/// measurement so the two agree.
-struct Row<'a> {
-    item: &'a MenuItem,
-    node: Node,
-    /// The check column glyph, when this level has toggles.
-    check: Option<&'static str>,
-    arrow: Option<&'static str>,
-}
-
-impl TrayGadget {
-    fn rows<'a>(&self, node: &Node, items: &'a [MenuItem]) -> Vec<Row<'a>> {
-        let toggles = items.iter().any(|i| i.toggle.is_some());
-        let count = items.len();
-        items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let expanded = self.expanded.contains(&item.id);
-                let node = if item.separator {
-                    node.child("separator").nth(i, count)
-                } else {
-                    node.child("item")
-                        .class_if("checked", item.checked == Some(true))
-                        .class_if("submenu", item.submenu)
-                        .class_if("expanded", expanded)
-                        .nth(i, count)
-                };
-                let check = toggles.then_some(match (item.toggle, item.checked) {
-                    (Some(Toggle::Check), Some(true)) => CHECK_ON,
-                    (Some(Toggle::Radio), Some(true)) => RADIO_ON,
-                    (Some(Toggle::Radio), _) => RADIO_OFF,
-                    _ => " ",
-                });
-                let arrow =
-                    item.submenu
-                        .then_some(if expanded { ARROW_OPEN } else { ARROW_CLOSED });
-                Row {
-                    item,
-                    node,
-                    check,
-                    arrow,
-                }
-            })
-            .collect()
-    }
-
-    /// One level of the menu: a column of rows, unfolded submenus
-    /// nested under their row.
-    fn level<'a>(
-        &'a self,
-        theme: &'a Theme,
-        node: &Node,
-        items: &'a [MenuItem],
-    ) -> iced::widget::Column<'a, Message> {
-        let rows = self.rows(node, items).into_iter().flat_map(|row| {
-            let item = row.item;
-            if item.separator {
-                let sep: Element<'a, Message> = theme
-                    .container(&row.node, Space::new().width(Length::Fill))
-                    .width(Length::Fill)
-                    .into();
-                return vec![sep];
-            }
-            let mut parts: Vec<Element<'a, Message>> = Vec::new();
-            if let Some(glyph) = row.check {
-                parts.push(theme.text(&row.node.child("check"), glyph).into());
-            }
-            parts.push(
-                theme
-                    .text(&row.node.child("label"), &item.label)
-                    .width(Length::Fill)
-                    .into(),
-            );
-            if let Some(arrow) = row.arrow {
-                parts.push(theme.text(&row.node.child("arrow"), arrow).into());
-            }
-            // The button already has the node's padding: only its gap.
-            let content = iced::widget::row(parts)
-                .spacing(theme.resolve(&row.node).gap)
-                .align_y(iced::Alignment::Center)
-                .width(Length::Fill);
-            let on_press = item.enabled.then_some(if item.submenu {
-                Message::ToggleSubmenu(item.id)
-            } else {
-                Message::MenuClick(item.id)
-            });
-            let button: Element<'a, Message> = theme
-                .button(&row.node, content)
-                .width(Length::Fill)
-                .on_press_maybe(on_press)
-                .into();
-            let mut out = vec![button];
-            if item.submenu && self.expanded.contains(&item.id) {
-                out.push(
-                    self.level(theme, &node.child("submenu"), &item.children)
-                        .width(Length::Fill)
-                        .into(),
-                );
-            }
-            out
-        });
-        theme.column(node, rows).width(Length::Fill)
-    }
-
-    /// The size [`TrayGadget::level`] takes, without `node`'s padding.
-    fn measure_level(&self, theme: &Theme, node: &Node, items: &[MenuItem]) -> iced::Size {
-        let mut width: f32 = 0.0;
-        let mut height: f32 = 0.0;
-        let mut rows: usize = 0;
-        for row in self.rows(node, items) {
-            let item = row.item;
-            let s = theme.resolve(&row.node);
-            let pad = s.padding;
-            if item.separator {
-                let h = match s.height {
-                    Some(theme::Length::Px(px)) => px,
-                    _ => 1.0,
-                };
-                height += h + pad.top + pad.bottom;
-                rows += 1;
-                continue;
-            }
-            let mut w = pad.left + pad.right + 2.0 * s.border_width;
-            let mut parts = 0;
-            if let Some(glyph) = row.check {
-                w += theme.measure(&row.node.child("check"), glyph).width;
-                parts += 1;
-            }
-            let label = theme.measure(&row.node.child("label"), &item.label);
-            w += label.width;
-            parts += 1;
-            if let Some(arrow) = row.arrow {
-                w += theme.measure(&row.node.child("arrow"), arrow).width;
-                parts += 1;
-            }
-            w += s.gap * (parts - 1) as f32;
-            width = width.max(w);
-            height += label
-                .height
-                .max(theme.line_height(&row.node.child("label")))
-                + pad.top
-                + pad.bottom
-                + 2.0 * s.border_width;
-            rows += 1;
-            if item.submenu && self.expanded.contains(&item.id) {
-                let sub_node = node.child("submenu");
-                let sub = self.measure_level(theme, &sub_node, &item.children);
-                let sub_pad = theme.resolve(&sub_node).padding;
-                width = width.max(sub.width + sub_pad.left + sub_pad.right);
-                height += sub.height + sub_pad.top + sub_pad.bottom;
-                rows += 1;
-            }
-        }
-        let gap = theme.resolve(node).gap;
-        height += gap * rows.saturating_sub(1) as f32;
-        iced::Size::new(width.ceil(), height.ceil())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,7 +271,7 @@ mod tests {
         TrayGadget {
             popup: Popup::new(),
             menu_for: None,
-            expanded: BTreeSet::new(),
+            menu: Menu::new(),
             scroll_pending: 0.0,
             scroll_discrete_at: None,
         }

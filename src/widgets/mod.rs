@@ -2,3 +2,4 @@
 //! a shell window embeds and whose messages it maps.
 
 pub mod calendar;
+pub mod menu;

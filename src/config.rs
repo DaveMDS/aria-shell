@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use configparser::ini::Ini;
 
+use crate::theme::Scheme;
+
 /// The loaded configuration file. Plain data owned by the application
 /// state; pass it by reference to whoever needs a section.
 pub struct Config {
@@ -163,6 +165,8 @@ pub struct GeneralConfig {
     /// Theme to load on top of the built-in base: a name looked up in
     /// the theme directories, or a path. `None` for the base alone.
     pub style: Option<String>,
+    /// Colour scheme the theme is loaded for.
+    pub color_scheme: Scheme,
     /// Reload the theme when its file changes.
     pub reload_style: bool,
     /// Rebuild the panels when the config file changes.
@@ -175,8 +179,19 @@ impl Section for GeneralConfig {
     const NAME: &'static str = "general";
 
     fn from_raw(raw: &RawSection) -> Self {
+        let color_scheme = match raw.get("color_scheme") {
+            None => Scheme::default(),
+            Some(v) => v.parse().unwrap_or_else(|()| {
+                log::warn!(
+                    "invalid color_scheme {v:?}, using {}",
+                    Scheme::default().name()
+                );
+                Scheme::default()
+            }),
+        };
         Self {
             style: raw.get("style").map(str::to_owned),
+            color_scheme,
             reload_style: raw.bool_or("reload_style", true),
             reload_config: raw.bool_or("reload_config", true),
             icon_theme: raw.get("icon_theme").map(str::to_owned),

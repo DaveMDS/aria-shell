@@ -43,6 +43,8 @@ pub enum DebugCommand {
     Surfaces,
     /// Where the pointer was last seen over one of our surfaces.
     Cursor,
+    /// The theme in use: `style=<name|-> scheme=<light|dark>`.
+    Theme,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -107,12 +109,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
+            ["theme"] => Ok(Parsed::Debug(DebugCommand::Theme)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | widgets [filter])",
                 args.join(" ")
             )),
         },

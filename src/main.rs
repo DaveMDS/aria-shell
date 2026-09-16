@@ -78,6 +78,11 @@ enum Message {
 struct AriaShell {
     config: Config,
     general: GeneralConfig,
+    /// The theme in use, chosen at runtime (the `Themes` gadget) or
+    /// from `[general] style` / `color_scheme`; a config reload keeps
+    /// the runtime choice.
+    style: Option<String>,
+    scheme: theme::Scheme,
     shell_events: ShellReceiver,
     compositor: Compositor,
     theme: Theme,
@@ -126,13 +131,17 @@ impl OpenPopup {
 impl AriaShell {
     fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
-        let general = config.section(None);
-        let theme = Theme::load(&config);
+        let general: GeneralConfig = config.section(None);
+        let style = general.style.clone();
+        let scheme = general.color_scheme;
+        let theme = Theme::load(&config, style.as_deref(), scheme);
         let icons = Icons::new(&config);
         let load_icons = icons.load().map(Message::Icons);
         let shell = Self {
             config,
             general,
+            style,
+            scheme,
             shell_events,
             compositor: Compositor::detect(),
             theme,
@@ -175,6 +184,10 @@ impl AriaShell {
             if let Some(name) = item.icon_name() {
                 self.icons.resolve_name(name, item.icon_theme_path());
             }
+        }
+        let names: Vec<String> = self.panels.values().flat_map(Panel::icon_names).collect();
+        for name in names {
+            self.icons.resolve_name(&name, None);
         }
     }
 
@@ -280,6 +293,14 @@ impl AriaShell {
                     reply.send(self.describe_cursor());
                     Task::none()
                 }
+                DebugCommand::Theme => {
+                    reply.send(format!(
+                        "style={} scheme={}",
+                        self.theme.name().unwrap_or("-"),
+                        self.theme.scheme().name()
+                    ));
+                    Task::none()
+                }
                 DebugCommand::Widgets(filter) => widget_rects()
                     .map(move |rects| Message::Widgets(reply.clone(), filter.clone(), rects)),
             },
@@ -312,6 +333,7 @@ impl AriaShell {
                 if config_changed && self.general.reload_config {
                     self.reload_config()
                 } else if theme_changed && self.general.reload_style {
+                    log::info!("theme file changed, reloading");
                     self.reload_theme()
                 } else {
                     // An icon or applications directory: something was
@@ -520,7 +542,7 @@ impl AriaShell {
         log::info!("config changed, rebuilding panels");
         self.config = Config::load();
         self.general = self.config.section(None);
-        self.theme = Theme::load(&self.config);
+        self.theme = Theme::load(&self.config, self.style.as_deref(), self.scheme);
         let mut icons = Icons::new(&self.config);
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -544,8 +566,7 @@ impl AriaShell {
     /// next redraw, bars whose thickness changed get resized. A file
     /// that doesn't parse (mid-edit, typically) keeps the current theme.
     fn reload_theme(&mut self) -> Task<Message> {
-        log::info!("theme changed, reloading");
-        match Theme::try_load(&self.config) {
+        match Theme::try_load(&self.config, self.style.as_deref(), self.scheme) {
             Ok(theme) => self.theme = theme,
             Err(e) => {
                 log::error!("{}, keeping the current theme", e.message);
@@ -570,6 +591,19 @@ impl AriaShell {
             Action::Run(task) => task.map(move |m| Message::Panel(panel, m)),
             Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
             Action::Tray(cmd) => self.tray.run(cmd, self.cursor_global()).map(Message::Tray),
+            Action::Theme(cmd) => {
+                match cmd {
+                    theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
+                    theme::Command::SetScheme(scheme) => self.scheme = scheme,
+                    theme::Command::SetStyle(style) => self.style = style,
+                }
+                log::info!(
+                    "theme: {} ({})",
+                    self.style.as_deref().unwrap_or("base"),
+                    self.scheme.name()
+                );
+                self.reload_theme()
+            }
             Action::OpenPopup { id, anchor } => {
                 let Some(size) = self.popup_surface_size(panel, id) else {
                     return Task::none();
@@ -770,6 +804,8 @@ impl AriaShell {
             }));
             self.panels.insert(id, panel);
         }
+        // New gadgets may draw icons of their own.
+        self.resolve_icons();
         Task::batch(tasks)
     }
 

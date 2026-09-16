@@ -1,5 +1,6 @@
-//! Workspaces gadget: one button per workspace, with a marker per window
-//! on it; click to switch workspace (or focus a window).
+//! Workspaces gadget: one button per workspace, with the icon of each
+//! window on it (a dot until the icon is known); click to switch
+//! workspace (or focus a window).
 //!
 //! Holds no compositor state: it reads the daemon's [`Compositor`] from
 //! the view context and filters it for the output the panel is on.
@@ -10,7 +11,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::compositor::{Command, Window, Workspace};
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget};
-use crate::theme::{Node, Theme};
+use crate::theme::{Length, Node};
 
 /// `[WorkSpaces]` section (spelled as in the Python implementation).
 #[derive(Debug, Clone)]
@@ -102,7 +103,7 @@ impl Workspaces {
             children.extend(
                 ctx.compositor
                     .windows_of(ws)
-                    .map(|w| self.window_view(w, &node, ctx.theme)),
+                    .map(|w| self.window_view(w, &node, ctx)),
             );
         }
         let content = ctx
@@ -115,24 +116,37 @@ impl Workspaces {
             .into()
     }
 
+    /// The window's app icon at the CSS `height` of the `window` node
+    /// (its `width` if there's no height), or a dot until it resolves.
     fn window_view<'a>(
         &'a self,
         win: &'a Window,
         workspace: &Node,
-        theme: &'a Theme,
+        ctx: &Context<'a>,
     ) -> Element<'a, Message> {
+        let theme = ctx.theme;
         let node = workspace
             .child("window")
             .class_if("active", win.active)
             .class_if("urgent", win.urgent);
-        let marker = theme.text(&node.child("text"), if win.active { "◉" } else { "●" });
+        let style = theme.resolve(&node);
+        let size = style.height.or(style.width).and_then(|l| match l {
+            Length::Px(px) => Some(px),
+            _ => None,
+        });
+        let content: Element<'a, Message> = match (ctx.icons.get(&win.class), size) {
+            (Some(icon), Some(size)) => icon.view(size, style.color),
+            _ => theme
+                .text(&node.child("text"), if win.active { "◉" } else { "●" })
+                .into(),
+        };
         if self.config.focus_window_on_click {
             theme
-                .button(&node, marker)
+                .button(&node, content)
                 .on_press(Message::Focus(win.id.clone()))
                 .into()
         } else {
-            theme.container(&node, marker).into()
+            theme.container(&node, content).into()
         }
     }
 }

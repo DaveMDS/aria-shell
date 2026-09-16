@@ -2,6 +2,7 @@ mod compositor;
 mod config;
 mod gadget;
 mod gadgets;
+mod icons;
 mod panel;
 mod theme;
 mod watch;
@@ -22,6 +23,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use gadget::Shared;
+use icons::Icons;
 use panel::{Action, Panel, PanelConfig};
 use theme::{Node, Theme};
 
@@ -37,8 +39,10 @@ enum Message {
     Panel(Id, panel::Message),
     /// Workspaces/windows changes from the compositor IPC.
     Compositor(compositor::Event),
-    /// Watched files (config, theme) changed on disk.
+    /// Watched files (config, theme) or directories (icons) changed.
     Files(watch::Changed),
+    /// The icon index finished building.
+    Icons(icons::Event),
 }
 
 struct AriaShell {
@@ -47,6 +51,7 @@ struct AriaShell {
     shell_events: ShellReceiver,
     compositor: Compositor,
     theme: Theme,
+    icons: Icons,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
     outputs: BTreeMap<OutputId, OutputInfo>,
@@ -57,26 +62,41 @@ struct AriaShell {
 }
 
 impl AriaShell {
-    fn new(shell_events: ShellReceiver) -> Self {
+    fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
         let general = config.section(None);
         let theme = Theme::load(&config);
-        Self {
+        let icons = Icons::new(&config);
+        let load_icons = icons.load().map(Message::Icons);
+        let shell = Self {
             config,
             general,
             shell_events,
             compositor: Compositor::detect(),
             theme,
+            icons,
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
-        }
+        };
+        (shell, load_icons)
     }
 
     fn shared(&self) -> Shared<'_> {
         Shared {
             compositor: &self.compositor,
             theme: &self.theme,
+            icons: &self.icons,
+        }
+    }
+
+    /// Keep an icon resolved for every window there is.
+    fn resolve_icons(&mut self) {
+        if !self.icons.is_loaded() {
+            return;
+        }
+        for w in &self.compositor.windows {
+            self.icons.resolve(&w.class);
         }
     }
 
@@ -92,6 +112,12 @@ impl AriaShell {
             },
             Message::Compositor(event) => {
                 self.compositor.apply(event);
+                self.resolve_icons();
+                Task::none()
+            }
+            Message::Icons(event) => {
+                self.icons.apply(event);
+                self.resolve_icons();
                 Task::none()
             }
             Message::Files(watch::Changed(paths)) => {
@@ -99,12 +125,16 @@ impl AriaShell {
                     .config
                     .path()
                     .is_some_and(|p| paths.contains(&p.to_path_buf()));
+                let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
                 if config_changed && self.general.reload_config {
                     self.reload_config()
-                } else if self.general.reload_style {
+                } else if theme_changed && self.general.reload_style {
                     self.reload_theme()
                 } else {
-                    Task::none()
+                    // An icon or applications directory: something was
+                    // installed or removed.
+                    log::info!("icon directories changed, rebuilding the index");
+                    self.icons.load().map(Message::Icons)
                 }
             }
             _ => Task::none(), // runtime variants, handled by the runtime
@@ -119,6 +149,9 @@ impl AriaShell {
         self.config = Config::load();
         self.general = self.config.section(None);
         self.theme = Theme::load(&self.config);
+        let mut icons = Icons::new(&self.config);
+        icons.keep_index_of(&self.icons);
+        self.icons = icons;
         let mut tasks: Vec<Task<Message>> = self
             .popups
             .keys()
@@ -129,6 +162,7 @@ impl AriaShell {
         self.panels.clear();
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
+        tasks.push(self.icons.load().map(Message::Icons));
         Task::batch(tasks)
     }
 
@@ -287,6 +321,7 @@ impl AriaShell {
         if self.general.reload_style {
             files.extend(self.theme.files().iter().cloned());
         }
+        files.extend(self.icons.watch_dirs());
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),

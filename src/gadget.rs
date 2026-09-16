@@ -19,6 +19,7 @@ use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::workspaces::{self, Workspaces};
+use crate::icons::Icons;
 use crate::theme::{Node, Theme};
 
 /// Daemon-owned state a gadget can read while building its view.
@@ -26,6 +27,7 @@ use crate::theme::{Node, Theme};
 pub struct Shared<'a> {
     pub compositor: &'a Compositor,
     pub theme: &'a Theme,
+    pub icons: &'a Icons,
 }
 
 /// What a gadget gets in `view`: the shared state plus its own place in

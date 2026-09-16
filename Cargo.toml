@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [dependencies]
-iced = { version = "0.14", features = ["wgpu", "tokio", "advanced"] }
+iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs"] }
 iced_exwlshell = "0.20.1"
 iced_wayland_subscriber = "0.20.1"
 configparser = { version = "3", features = ["indexmap"] }
@@ -16,3 +16,4 @@ log = "0.4"
 env_logger = "0.11"
 csscolorparser = "0.8.4"
 notify = "8.2.0"
+image = { version = "0.25", default-features = false, features = ["png"] }

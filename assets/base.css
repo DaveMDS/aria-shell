@@ -56,8 +56,11 @@
  *   gadget.workspaces
  *   ╰─ workspace[.active][.urgent]                            a button, one per workspace
  *      ├─ text                                                the workspace name
- *      ╰─ window[.active][.urgent]                            one marker per window (a button
- *                                                             when focus_window_on_click is on)
+ *      ╰─ window[.active][.urgent]                            one per window: the app icon, drawn
+ *         ╰─ text                                             at the node's `height` (a dot until
+ *                                                             the icon is known; symbolic icons
+ *                                                             take `color`); a button when
+ *                                                             focus_window_on_click is on
  */
 
 :root {
@@ -128,6 +131,7 @@ workspace.urgent {
 }
 window {
   padding: 0;
+  height: 16px;
   font-size: 9px;
 }
 window.urgent {

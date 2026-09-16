@@ -105,6 +105,14 @@ pub trait Section: Sized {
 pub struct RawSection(HashMap<String, String>);
 
 impl RawSection {
+    /// Every non-empty key/value pair.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0
             .get(key)
@@ -159,6 +167,8 @@ pub struct GeneralConfig {
     pub reload_style: bool,
     /// Rebuild the panels when the config file changes.
     pub reload_config: bool,
+    /// Icon theme name; `None` to detect it from the GTK settings.
+    pub icon_theme: Option<String>,
 }
 
 impl Section for GeneralConfig {
@@ -169,6 +179,7 @@ impl Section for GeneralConfig {
             style: raw.get("style").map(str::to_owned),
             reload_style: raw.bool_or("reload_style", true),
             reload_config: raw.bool_or("reload_config", true),
+            icon_theme: raw.get("icon_theme").map(str::to_owned),
         }
     }
 }
@@ -187,8 +198,8 @@ pub fn config_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
-/// `$XDG_DATA_HOME/aria-shell` then each `$XDG_DATA_DIRS/aria-shell`.
-pub fn data_dirs() -> Vec<PathBuf> {
+/// `$XDG_DATA_HOME` then each `$XDG_DATA_DIRS`, in precedence order.
+pub fn xdg_data_dirs() -> Vec<PathBuf> {
     let home = env::var_os("HOME").map(PathBuf::from);
     let xdg_data_home = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -198,6 +209,13 @@ pub fn data_dirs() -> Vec<PathBuf> {
     xdg_data_home
         .into_iter()
         .chain(xdg_data_dirs.split(':').map(PathBuf::from))
+        .collect()
+}
+
+/// `$XDG_DATA_HOME/aria-shell` then each `$XDG_DATA_DIRS/aria-shell`.
+pub fn data_dirs() -> Vec<PathBuf> {
+    xdg_data_dirs()
+        .into_iter()
         .map(|dir| dir.join("aria-shell"))
         .collect()
 }

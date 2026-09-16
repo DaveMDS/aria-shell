@@ -47,8 +47,9 @@ level owns its state and `Message`, routes to children by key, and
 `.map()`s their messages up. No globals: `Config` is loaded once and
 passed by reference. External event sources are `Subscription`s.
 
-Shared state (the compositor's workspaces/windows; later audio, tray,
-...) is owned by the daemon (`Compositor` in `compositor/`), reaches
+Shared state (the compositor's workspaces/windows, the app icons; later
+audio, tray, ...) is owned by the daemon (`Compositor` in `compositor/`,
+`Icons` in `icons/`), reaches
 gadgets read-only through `gadget::Context` in `view`, and is changed by
 returning `gadget::Action::Compositor(cmd)` from `update`. Gadgets never
 open their own IPC connection. See RS-PORT.md's "Architecture" section

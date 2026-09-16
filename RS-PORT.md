@@ -87,8 +87,13 @@ Theme      (theme/)         daemon-owned styling: base.css + the user's theme, p
   load / try_load(&Config)  css.rs (scanner) -> selector.rs + value.rs (typed rules)
   resolve(&Node) -> Style   cascade for one element path; container()/button()/text()/row() helpers
 
-watch::watch(files)         (watch.rs) one `notify` subscription for aria.conf + theme files,
-                            yields `Changed(paths)`: config -> rebuild panels, theme -> reload it
+Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)
+  load() -> Task            builds `Index` (icons/theme.rs theme chain + icons/desktop.rs .desktop db) off-thread
+  apply(Event::Loaded)      installs it; resolve(class) fills the per-class cache; get(class) in `view`
+
+watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, theme files and the
+                            icon/applications dirs; yields `Changed(paths)`: config -> rebuild panels,
+                            theme -> reload it, anything else -> rebuild the icon index
 ```
 
 Two things flow between the daemon and the gadgets besides messages:
@@ -152,6 +157,29 @@ Two things flow between the daemon and the gadgets besides messages:
   background is what shows, so `rgba` bars and rounded popups work.
   Gadgets must not hard-code colours/paddings/spacing: derive nodes from
   `ctx.node` and go through the theme helpers.
+- **App icons** (`icons/`) are a daemon-owned source with the usual
+  verbs. Resolution is `class` -> desktop entry (by id, `StartupWMClass`,
+  `Exec` basename, reverse-DNS suffix) -> `Icon=` -> theme lookup, then
+  the `[apps_class_map]` override, the class as an icon name, and
+  `application-x-executable`. The theme lookup is an **in-memory index**:
+  every directory the `index.theme` chain lists (theme, `Inherits`,
+  `hicolor`, then `pixmaps/`) is read once into a name -> (dir, ext) map,
+  so a lookup is a hash probe plus the spec's size choice (exact match,
+  svg first, else closest; scale-1 dirs only; no xpm), with no `stat`
+  per candidate. Built with `spawn_blocking` from the boot `Task`, so the
+  bars show dots first and icons a few ms later. Warm timings in release
+  on this machine: Adwaita+AdwaitaLegacy+hicolor (2k icons, 700 dirs)
+  ≈ 10 ms, breeze+hicolor (8k names, 18.7k files) ≈ 23 ms, 80 desktop
+  entries ≈ 2 ms. The `applications/` dirs and every indexed theme dir
+  are watched (≈ 725 inotify watches here, the limit is 524k): an
+  install or removal rebuilds the index after the burst settles and the
+  daemon re-resolves the classes it shows (the Python version missed
+  this). `Icons::resolve` is called by the daemon after every compositor
+  event, never from `view`; handles are created once and cloned, since
+  iced caches decoded images by handle id. Icon size and tint come from
+  the theme (`window { height; color }`; only `-symbolic` svgs are
+  tinted). Not done: `icon-theme.cache` (GTK's mmap cache) as a
+  zero-scan fast path, worth it only if cold starts turn out slow.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
   possible later (replace the value, rebuild panels) and what makes the
@@ -260,6 +288,17 @@ Two things flow between the daemon and the gadgets besides messages:
   view's root container over a transparent background.
 - `Padding::horizontal(x)`/`vertical(y)` are *setters* in iced 0.14, not
   the sums (`left + right`).
+- iced image caches (`iced_wgpu/src/image/{vector,raster}.rs`):
+  `svg::Handle::from_path` id is the path hash (stable), the file is read
+  and parsed with usvg on the render thread at first draw, rasters are
+  cached per (handle, size, color); `image::Handle::from_rgba` gets a
+  *new* id per call. When a new entry lands, entries not drawn that
+  frame are evicted, so pre-warming icons that aren't on screen is
+  pointless. `svg::Style { color }` tints (for symbolic icons).
+  `iced` feature `image-without-codecs` + our own `image = { features
+  = ["png"] }` keeps only the PNG decoder in the binary.
+- The boot closure of `iced_exwlshell::daemon` may return `(State,
+  Task)`: that's where the icon index build starts.
 - `notify` 8: `recommended_watcher(handler)` runs its own thread; watch
   the parent directory (editors save by rename) and filter on paths.
   `futures::mpsc::UnboundedReceiver::try_next` is deprecated for
@@ -294,11 +333,17 @@ Verified on the real Hyprland session with two outputs:
   while running closes and reopens the bars with the new gadgets and
   theme (log shows the rebuild; `hyprctl layers` shows new surfaces at
   the new height).
+- Window icons: Firefox (hicolor PNG), Code (`com.visualstudio.code.oss`
+  svg via the desktop entry) and kitty drawn at 16px in the workspace
+  buttons on both outputs; creating/removing a `.desktop` in
+  `~/.local/share/applications` rebuilds the index (80 -> 81 -> 80
+  apps in the log); `icon_theme = breeze` via config reload switches
+  the chain live.
 - `cargo build`, `cargo clippy --all-targets`, `cargo test` (39 tests,
   config + theme layers): clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
-`reload_style`, `reload_config`),
+`reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
 `[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
 panels, Clock (`format`, calendar popup), Workspaces (all four keys;
 windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
@@ -306,8 +351,7 @@ windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
 (`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
 (`theme/`, `assets/base.css`, hot reload, bar thickness from the theme).
 
-Not yet: Sway backend, window icons in Workspaces (XDG desktop lookup +
-icon theme + `svg`/`image` in iced), `[panel]`
+Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
 `tooltip_format`, theme
 properties beyond the current set (`margin`, `opacity`, gradients,
@@ -318,8 +362,8 @@ launcher, lock, wallpaper, terminal, idle).
 
 ## Next steps, in order
 
-1. Window icons in Workspaces (needs the XDG/icon-theme service that the
-   launcher and tray will need too).
+1. The next gadget/component that needs a new shared source (tray over
+   SNI/DBus, or the launcher on top of the desktop db in `icons/`).
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`); the `shader` widget for
    `background: shader("x.wgsl")` when a theme asks for more than CSS.

@@ -76,19 +76,26 @@ AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(nam
 Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / subscription
   Message::Calendar(calendar::Message)
 
-Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today)
+Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today, theme, node)
 
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
   subscription()            the single IPC stream (compositor/hyprland.rs), yields `Event`s
   apply(Event)              patches the state
   run(Command) -> Task      sends a command (activate workspace/window) to the backend
+
+Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once
+  load / try_load(&Config)  css.rs (scanner) -> selector.rs + value.rs (typed rules)
+  resolve(&Node) -> Style   cascade for one element path; container()/button()/text()/row() helpers
+  watch(files)              subscription over `notify`, yields `Event::Changed` -> reload
 ```
 
 Two things flow between the daemon and the gadgets besides messages:
 
-- **`gadget::Context`** goes *down*, into `view`. It holds `&Compositor`
-  (later `&Audio`, `&Tray`, ...): daemon-owned, read-only. A gadget that
-  shows shared state keeps no copy of it, it filters the context in `view`.
+- **`gadget::Context`** goes *down*, into `view`. It holds
+  `gadget::Shared` (`&Compositor`, `&Theme`; later `&Audio`, `&Tray`,
+  ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
+  gadget that shows shared state keeps no copy of it, it filters the
+  context in `view`.
 - **`gadget::Action`** comes *up*, out of `update`, in place of a bare
   `Task`: `Action::Run(Task)` for the gadget's own async work,
   `Action::Compositor(Command)` (and later `Action::Audio(..)`, ...) for
@@ -114,6 +121,35 @@ Two things flow between the daemon and the gadgets besides messages:
   it ends in `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the
   gadget's `Popup` is marked closed.
 
+- **Styling is a CSS-like theme file**, resolved per widget in `view`.
+  `assets/base.css` (compiled in, always first) documents the element
+  tree and the supported properties for theme authors; `[general] style`
+  names a user theme loaded on top (`themes/<name>.css` in the config
+  dirs, the XDG data dirs, then `assets/`; or a path). Both are parsed
+  and type-checked at load (`theme/css.rs` scanner, `selector.rs`,
+  `value.rs`); bad selectors/declarations are logged with `file:line:col`
+  and skipped, a syntax error rejects the file (and on hot reload keeps
+  the last good theme). `:root { --x: v }` variables are substituted
+  textually after all files are merged, so a user theme can override a
+  variable the base uses. Cascade is specificity then source order.
+  In `view`, every widget has a `theme::Node`: its element path
+  (`panel.top#2 > slot.start > gadget.workspaces > workspace.active`),
+  an immutable `Arc` list so style closures can own one. `Theme::resolve`
+  walks root→leaf applying matching rules and inheriting `color` and
+  `font-*`; `Theme::button/container/text/row` do that and return plain
+  iced widgets. A button's style closure re-resolves with
+  `node.status(status)`, which is how `:hover`/`:active` work. Text gets
+  an explicit colour only when a rule set it on the text node itself;
+  otherwise iced's own cascade (container/button `text_color`) carries
+  it, so `workspace:hover { color }` reaches the label. Class names are
+  the Rust roles (`panel`, `slot`, `gadget.clock`, `workspace`, ...),
+  not the Python/GTK ones. The bar thickness is the theme's `min-height`
+  on `panel` (layer-shell needs it before layout); a reload that changes
+  it sends `LayoutChange` + `ExclusiveZoneChange`. Surfaces are created
+  transparent (`daemon(..).style`), the theme's `panel`/`popup`
+  background is what shows, so `rgba` bars and rounded popups work.
+  Gadgets must not hard-code colours/paddings/spacing: derive nodes from
+  `ctx.node` and go through the theme helpers.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
   possible later (replace the value, rebuild panels) and what makes the
@@ -205,7 +241,27 @@ Two things flow between the daemon and the gadgets besides messages:
   fixed size set before it; use `align_x`/`align_y` for a fixed cell.
 - No pointer injection on this setup (no `ydotool`/`wtype`, `/dev/uinput`
   is root-only, Hyprland's Lua dispatchers move the cursor but can't
-  click): clicks have to be done by the user, screenshots with `grim -g`.
+  click): clicks have to be done by the user, screenshots with `grim -g`
+  (`-s 3` for a zoomed crop).
+- `button.style(impl Fn(&Theme, Status) -> Style + 'a)` /
+  `container.style(Fn(&Theme) -> Style + 'a)`: the closures can own data
+  with the view's lifetime, which is what lets them hold a `theme::Node`
+  and a `&'a Theme`. `button::Style::text_color` is a plain `Color`
+  (falls back to `theme.palette().text`); `container::Style::text_color`
+  and `text::Style::color` are `Option`s and `None` inherits at draw time.
+- `iced::font::Family::Name` wants a `&'static str`: theme font names are
+  leaked once each (`theme::intern`). Fonts come from the system via
+  cosmic-text's fontdb (`FontSystem::new_with_fonts` loads system fonts);
+  `Font::with_name("JetBrainsMono NF")` works for an installed font.
+- `daemon(..).style(|state, theme| iced::theme::Style)` is one background
+  for every window (no window id); per-surface looks are done by the
+  view's root container over a transparent background.
+- `Padding::horizontal(x)`/`vertical(y)` are *setters* in iced 0.14, not
+  the sums (`left + right`).
+- `notify` 8: `recommended_watcher(handler)` runs its own thread; watch
+  the parent directory (editors save by rename) and filter on paths.
+  `futures::mpsc::UnboundedReceiver::try_next` is deprecated for
+  `try_recv`.
 
 ## Status (2026-09-16)
 
@@ -224,25 +280,41 @@ Verified on the real Hyprland session with two outputs:
   (weeks start on Monday, today highlighted, `<`/`>` change month, no
   locale for month names); clicking the clock again or anywhere outside
   closes it. Verified with screenshots on both outputs.
-- `cargo build`, `cargo clippy --all-targets`, `cargo test`: clean.
+- Theming: with `[general] style = example` the bar follows
+  `assets/themes/example.css` (36px, monospace, translucent `rgba`
+  background, `gadget.clock#2` in the accent colour, `workspace`
+  `height: fill`); editing the file restyles live, changing `min-height`
+  resizes the layer surfaces (`hyprctl layers`), a syntax error logs
+  `path:line:col` and keeps the running theme. The calendar popup has
+  the themed background, rounded corners over a transparent surface,
+  today in the accent colour. Screenshots on both outputs.
+- `cargo build`, `cargo clippy --all-targets`, `cargo test` (39 tests,
+  config + theme layers): clean.
 
-Implemented: config loading, `[panel]` (`outputs`, `position`, `layer`,
-`items_*`), multi-output panels, Clock (`format`, calendar popup),
-Workspaces (all four keys; windows are dots, not icons) over the Hyprland
-IPC, with the daemon-owned `Compositor` / `Context` / `Action` plumbing
-and the popup plumbing (`Panel` <-> `Gadget` popup hooks).
+Implemented: config loading, `[general]` (`style`, `reload_style`),
+`[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
+panels, Clock (`format`, calendar popup), Workspaces (all four keys;
+windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
+`Compositor` / `Context` / `Action` plumbing and the popup plumbing
+(`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
+(`theme/`, `assets/base.css`, hot reload, bar thickness from the theme).
 
 Not yet: Sway backend, window icons in Workspaces (XDG desktop lookup +
 icon theme + `svg`/`image` in iced), `[panel]`
-`size`/`align`/`margin`/`opacity`, panel height from content, hot-reload,
-styling/theme (the popup is a bare white box), Clock `tooltip_format`,
-every other gadget and component (tray, notifications, launcher, lock,
-wallpaper, terminal, idle).
+`size`/`align`/`margin`/`opacity`, panel height from content, config
+hot-reload (only the theme reloads), Clock `tooltip_format`, theme
+properties beyond the current set (`margin`, `opacity`, gradients,
+`@import`, `!important`, `@font-face` for theme-shipped fonts,
+transitions), `:hover` on non-button widgets (needs a `mouse_area`
+wrapper), every other gadget and component (tray, notifications,
+launcher, lock, wallpaper, terminal, idle).
 
 ## Next steps, in order
 
-1. Styling: how the bar and popups look (background, fonts, the workspace
-   buttons) before more gadgets pile up on an unstyled row.
-2. Config hot-reload (watch the file, rebuild panels).
-3. Window icons in Workspaces (needs the XDG/icon-theme service that the
+1. Config hot-reload (watch `aria.conf`, rebuild panels), reusing the
+   theme watcher.
+2. Window icons in Workspaces (needs the XDG/icon-theme service that the
    launcher and tray will need too).
+3. More theme surface as gadgets need it (`margin` via a wrapping
+   container, `opacity`, `@font-face`); the `shader` widget for
+   `background: shader("x.wgsl")` when a theme asks for more than CSS.

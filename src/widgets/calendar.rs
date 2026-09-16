@@ -1,10 +1,16 @@
 //! A month view: weekday header, the days in a 6x7 grid, prev/next month
 //! navigation. Weeks start on Monday; month names are English (chrono
 //! has no locale support without extra features).
+//!
+//! Styled through the host's theme node (`calendar > header | weekday |
+//! day`). The cell grid and outer padding are fixed so [`Calendar::SIZE`]
+//! can be known before layout, which a popup surface needs.
 
 use chrono::{Datelike, Months, NaiveDate};
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length};
+
+use crate::theme::{Node, Theme};
 
 const CELL: u32 = 32;
 const PADDING: u32 = 12;
@@ -42,8 +48,14 @@ impl Calendar {
         };
     }
 
-    /// `today` is highlighted when it falls in the month shown.
-    pub fn view<'a>(&'a self, today: NaiveDate) -> Element<'a, Message> {
+    /// `today` is highlighted when it falls in the month shown. `node`
+    /// is this calendar's element (`... > calendar`).
+    pub fn view<'a>(
+        &'a self,
+        today: NaiveDate,
+        theme: &'a Theme,
+        node: &Node,
+    ) -> Element<'a, Message> {
         let cell = |content: Element<'a, Message>| {
             container(content)
                 .width(CELL)
@@ -51,40 +63,44 @@ impl Calendar {
                 .align_x(Alignment::Center)
                 .align_y(Alignment::Center)
         };
+        let header_node = node.child("header");
+        let nav = header_node.child("button");
         let header = row![
-            button(text("<"))
-                .style(button::text)
+            theme
+                .button(&nav, theme.text(&nav.child("text"), "<"))
                 .on_press(Message::PrevMonth),
-            container(text(self.month.format("%B %Y").to_string()))
-                .width(Length::Fill)
-                .align_x(Alignment::Center),
-            button(text(">"))
-                .style(button::text)
+            container(theme.text(
+                &header_node.child("text"),
+                self.month.format("%B %Y").to_string()
+            ))
+            .width(Length::Fill)
+            .align_x(Alignment::Center),
+            theme
+                .button(&nav, theme.text(&nav.child("text"), ">"))
                 .on_press(Message::NextMonth),
         ]
         .height(CELL)
         .align_y(Alignment::Center);
+        let weekday = node.child("weekday");
         let weekdays = row(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
             .into_iter()
-            .map(|d| cell(text(d).size(12).into()).into()));
+            .map(|d| cell(theme.text(&weekday, d).into()).into()));
+        let day_node = node.child("day");
         let days = month_grid(self.month)
             .chunks(7)
             .fold(column![], |col, week| {
                 col.push(row(week.iter().map(|day| match day {
                     Some(day) => {
                         let date = self.month.with_day(*day).expect("day of this month");
-                        let label = text(day.to_string());
-                        let label = if date == today {
-                            label.style(text::primary)
-                        } else {
-                            label
-                        };
+                        let label =
+                            theme.text(&day_node.class_if("today", date == today), day.to_string());
                         cell(label.into()).into()
                     }
                     None => cell(Space::new().into()).into(),
                 })))
             });
-        container(column![header, weekdays, days])
+        theme
+            .container(node, column![header, weekdays, days])
             .padding(PADDING as f32)
             .into()
     }

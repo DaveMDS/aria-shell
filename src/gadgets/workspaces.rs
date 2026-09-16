@@ -4,13 +4,13 @@
 //! Holds no compositor state: it reads the daemon's [`Compositor`] from
 //! the view context and filters it for the output the panel is on.
 
-use iced::widget::{button, row, text};
-use iced::{Element, Theme};
+use iced::Element;
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::compositor::{Command, Compositor, Window, Workspace};
+use crate::compositor::{Command, Window, Workspace};
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget};
+use crate::theme::{Node, Theme};
 
 /// `[WorkSpaces]` section (spelled as in the Python implementation).
 #[derive(Debug, Clone)]
@@ -79,60 +79,60 @@ impl Gadget for Workspaces {
                     .as_ref()
                     .is_none_or(|output| ws.output == *output)
         });
-        row(shown.map(|ws| self.workspace_view(ws, ctx.compositor)))
-            .spacing(2)
+        let children = shown.map(|ws| self.workspace_view(ws, &ctx));
+        ctx.theme
+            .row(&ctx.node, children)
+            .align_y(iced::Alignment::Center)
             .into()
     }
 }
 
 impl Workspaces {
-    fn workspace_view<'a>(
-        &'a self,
-        ws: &'a Workspace,
-        compositor: &'a Compositor,
-    ) -> Element<'a, Message> {
-        let mut content = row![].spacing(4).align_y(iced::Alignment::Center);
+    fn workspace_view<'a>(&'a self, ws: &'a Workspace, ctx: &Context<'a>) -> Element<'a, Message> {
+        let node = ctx
+            .node
+            .child("workspace")
+            .class_if("active", ws.active)
+            .class_if("urgent", ws.urgent);
+        let mut children: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_name {
-            content = content.push(text(&ws.name));
+            children.push(ctx.theme.text(&node.child("text"), &ws.name).into());
         }
         if self.config.show_windows {
-            content = content.extend(compositor.windows_of(ws).map(|w| self.window_view(w)));
+            children.extend(
+                ctx.compositor
+                    .windows_of(ws)
+                    .map(|w| self.window_view(w, &node, ctx.theme)),
+            );
         }
-        button(content)
-            .padding([0, 6])
-            .style(move |theme, status| workspace_style(theme, status, ws))
+        let content = ctx
+            .theme
+            .row(&node, children)
+            .align_y(iced::Alignment::Center);
+        ctx.theme
+            .button(&node, content)
             .on_press(Message::Activate(ws.id.clone()))
             .into()
     }
 
-    fn window_view<'a>(&'a self, win: &'a Window) -> Element<'a, Message> {
-        let marker = text(if win.active { "◉" } else { "●" }).size(9);
+    fn window_view<'a>(
+        &'a self,
+        win: &'a Window,
+        workspace: &Node,
+        theme: &'a Theme,
+    ) -> Element<'a, Message> {
+        let node = workspace
+            .child("window")
+            .class_if("active", win.active)
+            .class_if("urgent", win.urgent);
+        let marker = theme.text(&node.child("text"), if win.active { "◉" } else { "●" });
         if self.config.focus_window_on_click {
-            button(marker)
-                .padding(0)
-                .style(move |theme, status| window_style(theme, status, win))
+            theme
+                .button(&node, marker)
                 .on_press(Message::Focus(win.id.clone()))
                 .into()
         } else {
-            marker.into()
+            theme.container(&node, marker).into()
         }
-    }
-}
-
-fn workspace_style(theme: &Theme, status: button::Status, ws: &Workspace) -> button::Style {
-    if ws.urgent {
-        button::danger(theme, status)
-    } else if ws.active {
-        button::primary(theme, status)
-    } else {
-        button::secondary(theme, status)
-    }
-}
-
-fn window_style(theme: &Theme, status: button::Status, win: &Window) -> button::Style {
-    if win.urgent {
-        button::danger(theme, status)
-    } else {
-        button::text(theme, status)
     }
 }

@@ -3,13 +3,14 @@ mod config;
 mod gadget;
 mod gadgets;
 mod panel;
+mod theme;
 mod widgets;
 
 use std::collections::BTreeMap;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
-use iced::{Element, Rectangle, Subscription, Task, widget};
+use iced::{Color, Element, Rectangle, Subscription, Task, widget};
 use iced_exwlshell::build_pattern::daemon;
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
 use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
@@ -17,9 +18,10 @@ use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use compositor::Compositor;
-use config::Config;
-use gadget::Context;
+use config::{Config, GeneralConfig};
+use gadget::Shared;
 use panel::{Action, Panel, PanelConfig};
+use theme::{Node, Theme};
 
 /// Top-level message. `#[to_layer_message(multi)]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
@@ -33,12 +35,16 @@ enum Message {
     Panel(Id, panel::Message),
     /// Workspaces/windows changes from the compositor IPC.
     Compositor(compositor::Event),
+    /// A theme file changed on disk.
+    Theme(theme::Event),
 }
 
 struct AriaShell {
     config: Config,
+    general: GeneralConfig,
     shell_events: ShellReceiver,
     compositor: Compositor,
+    theme: Theme,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
     /// Open popup surfaces, to the panel each hangs off.
@@ -47,12 +53,24 @@ struct AriaShell {
 
 impl AriaShell {
     fn new(shell_events: ShellReceiver) -> Self {
+        let config = Config::load();
+        let general = config.section(None);
+        let theme = Theme::load(&config);
         Self {
-            config: Config::load(),
+            config,
+            general,
             shell_events,
             compositor: Compositor::detect(),
+            theme,
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
+        }
+    }
+
+    fn shared(&self) -> Shared<'_> {
+        Shared {
+            compositor: &self.compositor,
+            theme: &self.theme,
         }
     }
 
@@ -70,8 +88,31 @@ impl AriaShell {
                 self.compositor.apply(event);
                 Task::none()
             }
+            Message::Theme(theme::Event::Changed) => self.reload_theme(),
             _ => Task::none(), // runtime variants, handled by the runtime
         }
+    }
+
+    /// Re-read the theme files; views pick the new rules up on their
+    /// next redraw, bars whose thickness changed get resized. A file
+    /// that doesn't parse (mid-edit, typically) keeps the current theme.
+    fn reload_theme(&mut self) -> Task<Message> {
+        log::info!("theme changed, reloading");
+        match Theme::try_load(&self.config) {
+            Ok(theme) => self.theme = theme,
+            Err(e) => {
+                log::error!("{}, keeping the current theme", e.message);
+                return Task::none();
+            }
+        }
+        let mut tasks = Vec::new();
+        for (&id, panel) in &mut self.panels {
+            if let Some((anchor, size, zone_size)) = panel.resize(&self.theme) {
+                tasks.push(Task::done(Message::LayoutChange { id, anchor, size }));
+                tasks.push(Task::done(Message::ExclusiveZoneChange { id, zone_size }));
+            }
+        }
+        Task::batch(tasks)
     }
 
     /// Carry out what the panel in window `panel` asked for.
@@ -85,6 +126,15 @@ impl AriaShell {
                     return Task::none();
                 };
                 self.popups.insert(id, panel);
+                // The gadget sized its content; the surface also holds
+                // the `popup` root's padding and border.
+                let chrome = self.theme.resolve(&Node::root("popup"));
+                let pad = chrome.padding;
+                let extra = 2.0 * chrome.border_width;
+                let size = (
+                    size.0 + (pad.left + pad.right + extra) as u32,
+                    size.1 + (pad.top + pad.bottom + extra) as u32,
+                );
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
                 widget_bounds(anchor).map(move |bounds| Message::NewPopUp {
@@ -154,7 +204,7 @@ impl AriaShell {
                 continue;
             }
             log::info!("opening [{section}] on output {:?}", output.name);
-            let panel = Panel::new(section, cfg, &self.config, output);
+            let panel = Panel::new(section, cfg, &self.config, &self.theme, output);
             let id = Id::unique();
             tasks.push(Task::done(Message::NewLayerShell {
                 settings: panel.layer_settings(),
@@ -166,17 +216,15 @@ impl AriaShell {
     }
 
     fn view(&self, window: Id) -> Element<'_, Message> {
-        let ctx = Context {
-            compositor: &self.compositor,
-        };
+        let shared = self.shared();
         if let Some(panel) = self.panels.get(&window) {
-            return panel.view(ctx).map(move |m| Message::Panel(window, m));
+            return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
         if let Some(&owner) = self.popups.get(&window)
             && let Some(panel) = self.panels.get(&owner)
         {
             return panel
-                .popup_view(window, ctx)
+                .popup_view(window, shared)
                 .map(move |m| Message::Panel(owner, m));
         }
         widget::Space::new().into()
@@ -189,10 +237,16 @@ impl AriaShell {
                 .with(*id)
                 .map(|(id, m)| Message::Panel(id, m))
         });
+        let theme_files = if self.general.reload_style {
+            theme::watch(self.theme.files()).map(Message::Theme)
+        } else {
+            Subscription::none()
+        };
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
+                theme_files,
             ]
             .into_iter()
             .chain(panels),
@@ -243,6 +297,12 @@ fn main() -> iced_exwlshell::Result {
         AriaShell::view,
     )
     .subscription(AriaShell::subscription)
+    // Surfaces start transparent: what shows is the theme's `panel` /
+    // `popup` background, which may itself be translucent or rounded.
+    .style(|_, theme| iced::theme::Style {
+        background_color: Color::TRANSPARENT,
+        text_color: theme.palette().text,
+    })
     .settings(Settings {
         shell_broadcast,
         layer_settings: LayerShellSettings {

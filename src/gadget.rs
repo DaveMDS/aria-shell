@@ -19,11 +19,31 @@ use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::workspaces::{self, Workspaces};
+use crate::theme::{Node, Theme};
 
 /// Daemon-owned state a gadget can read while building its view.
 #[derive(Clone, Copy)]
-pub struct Context<'a> {
+pub struct Shared<'a> {
     pub compositor: &'a Compositor,
+    pub theme: &'a Theme,
+}
+
+/// What a gadget gets in `view`: the shared state plus its own place in
+/// the element tree, to derive the nodes of its widgets from
+/// (`ctx.node.child("workspace")`). Derefs to [`Shared`], so
+/// `ctx.compositor` and `ctx.theme` read as before.
+#[derive(Clone)]
+pub struct Context<'a> {
+    pub shared: Shared<'a>,
+    pub node: Node,
+}
+
+impl<'a> std::ops::Deref for Context<'a> {
+    type Target = Shared<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.shared
+    }
 }
 
 /// What `update` asks the daemon to do. Like a `Task`, but it can also
@@ -161,6 +181,14 @@ impl AnyGadget {
                 log::warn!("unknown gadget {name:?}");
                 None
             }
+        }
+    }
+
+    /// The class selectors see: `gadget.clock`, `gadget.workspaces`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Clock(_) => "clock",
+            Self::Workspaces(_) => "workspaces",
         }
     }
 

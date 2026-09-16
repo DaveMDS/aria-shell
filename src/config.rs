@@ -16,6 +16,9 @@ use configparser::ini::Ini;
 /// state; pass it by reference to whoever needs a section.
 pub struct Config {
     ini: Ini,
+    /// The file it was loaded from, if any; relative paths in values
+    /// (a theme file) are resolved against its directory.
+    path: Option<PathBuf>,
 }
 
 impl Config {
@@ -26,14 +29,14 @@ impl Config {
     pub fn load() -> Self {
         let path = lookup_config_file().or_else(dev_fallback_config_file);
         let mut ini = new_parser();
-        match path {
-            Some(p) => match ini.load(&p) {
+        match &path {
+            Some(p) => match ini.load(p) {
                 Ok(_) => log::info!("using config file {}", p.display()),
                 Err(e) => log::error!("cannot parse {}: {e}", p.display()),
             },
             None => log::warn!("no configuration file found, using defaults"),
         }
-        Self { ini }
+        Self { ini, path }
     }
 
     /// Parse from an in-memory string (tests).
@@ -41,7 +44,12 @@ impl Config {
     pub fn parse(text: &str) -> Self {
         let mut ini = new_parser();
         ini.read(text.to_owned()).expect("valid ini text");
-        Self { ini }
+        Self { ini, path: None }
+    }
+
+    /// Directory of the loaded file, if any.
+    pub fn dir(&self) -> Option<&Path> {
+        self.path.as_deref().and_then(Path::parent)
     }
 
     /// Typed section `name` (default: `T::NAME`). Missing sections and
@@ -136,21 +144,70 @@ fn new_parser() -> Ini {
     ini
 }
 
-fn lookup_config_file() -> Option<PathBuf> {
-    let home = env::var_os("HOME").map(PathBuf::from)?;
+/// `[general]` section: shell-wide settings.
+#[derive(Debug, Clone)]
+pub struct GeneralConfig {
+    /// Theme to load on top of the built-in base: a name looked up in
+    /// the theme directories, or a path. `None` for the base alone.
+    pub style: Option<String>,
+    /// Reload the theme when its file changes.
+    pub reload_style: bool,
+}
+
+impl Section for GeneralConfig {
+    const NAME: &'static str = "general";
+
+    fn from_raw(raw: &RawSection) -> Self {
+        Self {
+            style: raw.get("style").map(str::to_owned),
+            reload_style: raw.bool_or("reload_style", true),
+        }
+    }
+}
+
+/// `$XDG_CONFIG_HOME/aria-shell` then each `$XDG_CONFIG_DIRS/aria-shell`.
+pub fn config_dirs() -> Vec<PathBuf> {
+    let home = env::var_os("HOME").map(PathBuf::from);
     let xdg_config_home = env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config"));
+        .or_else(|| home.map(|h| h.join(".config")));
     let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| "/etc/xdg".to_owned());
-
-    std::iter::once(xdg_config_home)
+    xdg_config_home
+        .into_iter()
         .chain(xdg_config_dirs.split(':').map(PathBuf::from))
-        .map(|dir| dir.join("aria-shell").join("aria.conf"))
+        .map(|dir| dir.join("aria-shell"))
+        .collect()
+}
+
+/// `$XDG_DATA_HOME/aria-shell` then each `$XDG_DATA_DIRS/aria-shell`.
+pub fn data_dirs() -> Vec<PathBuf> {
+    let home = env::var_os("HOME").map(PathBuf::from);
+    let xdg_data_home = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home.map(|h| h.join(".local/share")));
+    let xdg_data_dirs =
+        env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".to_owned());
+    xdg_data_home
+        .into_iter()
+        .chain(xdg_data_dirs.split(':').map(PathBuf::from))
+        .map(|dir| dir.join("aria-shell"))
+        .collect()
+}
+
+/// The source tree's `assets/`, for running out of a checkout.
+pub fn dev_assets_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("assets")
+}
+
+fn lookup_config_file() -> Option<PathBuf> {
+    config_dirs()
+        .into_iter()
+        .map(|dir| dir.join("aria.conf"))
         .find(|f| f.exists())
 }
 
 fn dev_fallback_config_file() -> Option<PathBuf> {
-    let candidate = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/aria.conf");
+    let candidate = dev_assets_dir().join("aria.conf");
     candidate.exists().then_some(candidate)
 }
 

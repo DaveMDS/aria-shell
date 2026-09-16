@@ -54,6 +54,14 @@ returning `gadget::Action::Compositor(cmd)` from `update`. Gadgets never
 open their own IPC connection. See RS-PORT.md's "Architecture" section
 before changing the shape of any of these.
 
+Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
+plus `[general] style`), resolved per widget in `view`. Gadgets never
+hard-code colours, paddings or spacing: they derive a `theme::Node` from
+`ctx.node` (`ctx.node.child("workspace").class_if("active", ..)`) and
+build widgets with `ctx.theme.button/container/text/row`. A new element
+or class is documented in the tree at the top of `assets/base.css`, and
+given a neutral default there.
+
 The Python implementation is a reference for **behaviour** (config
 format, gadget semantics, protocol usage), not for structure. Don't port
 its `Singleton`/`Service`/`Module` machinery, and only write a "mirrors
@@ -62,8 +70,8 @@ structure.
 
 ## Verifying
 
-`cargo test` covers the config layer (the only part testable without a
-compositor). Everything else needs a real run: `cargo run`, then
+`cargo test` covers the config and theme layers (the parts testable
+without a compositor). Everything else needs a real run: `cargo run`, then
 `hyprctl layers` to confirm the surfaces, and a screenshot (`grim -g
 "0,0 1920x40" out.png`) to confirm what's drawn. Logs go through `log`;
 `RUST_LOG=aria_shell=debug cargo run` for more.

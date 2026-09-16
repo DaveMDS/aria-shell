@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use chrono::{DateTime, Local, Timelike};
 use iced::futures::stream;
-use iced::widget::{button, text};
 use iced::{Element, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
@@ -73,23 +72,27 @@ impl Gadget for Clock {
         Action::None
     }
 
-    fn view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Message> {
-        let label = text(self.now.format(&self.config.format).to_string());
-        self.popup.anchor(
-            button(label)
-                .style(button::text)
-                .padding(0)
-                .on_press(Message::Toggle),
-        )
+    fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
+        let button = ctx.node.child("button");
+        let label = ctx.theme.text(
+            &button.child("text"),
+            self.now.format(&self.config.format).to_string(),
+        );
+        self.popup
+            .anchor(ctx.theme.button(&button, label).on_press(Message::Toggle))
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
         Some(&mut self.popup)
     }
 
-    fn popup_view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Message> {
+    fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         self.calendar
-            .view(self.now.date_naive())
+            .view(
+                self.now.date_naive(),
+                ctx.theme,
+                &ctx.node.child("calendar"),
+            )
             .map(Message::Calendar)
     }
 

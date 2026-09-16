@@ -14,11 +14,8 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::compositor;
 use crate::config::{Config, RawSection, Section};
-use crate::gadget::{self, AnyGadget, Context};
-
-/// Bar thickness. Fixed for now: layer-shell needs a size up front and
-/// iced can't report a content size before the first layout.
-const HEIGHT: u32 = 32;
+use crate::gadget::{self, AnyGadget, Context, Shared};
+use crate::theme::{self, Node, Theme};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation; `size`, `align`,
@@ -130,16 +127,43 @@ enum Slot {
     End,
 }
 
+impl Slot {
+    /// The class selectors see: `slot.start`, ...
+    fn name(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Center => "center",
+            Self::End => "end",
+        }
+    }
+}
+
 pub struct Panel {
     /// Config section this panel was built from, e.g. `panel:2`.
     pub section: String,
     pub output: OutputId,
     config: PanelConfig,
-    gadgets: Vec<(Slot, AnyGadget)>,
+    /// `panel[.top|.bottom][#instance][output=..]`, the root of every
+    /// node on this bar.
+    node: Node,
+    /// Bar thickness the surface was created (or last resized) with.
+    /// Layer-shell needs it up front, so it comes from the theme's
+    /// `min-height` on `panel`, not from the content.
+    height: u32,
+    gadgets: Vec<Entry>,
     /// Open popups, by window id, to the index of the gadget that owns
     /// each. The panel mints the ids so the daemon only has to map them
     /// back to the panel.
     popups: BTreeMap<window::Id, usize>,
+}
+
+struct Entry {
+    slot: Slot,
+    gadget: AnyGadget,
+    /// `panel > slot.<slot> > gadget.<kind>[#instance]:nth`.
+    node: Node,
+    /// `popup > gadget.<kind>[#instance]`.
+    popup_node: Node,
 }
 
 #[derive(Clone, Debug)]
@@ -165,44 +189,100 @@ pub enum Action {
 }
 
 impl Panel {
-    pub fn new(section: String, config: PanelConfig, shell: &Config, output: &OutputInfo) -> Self {
+    pub fn new(
+        section: String,
+        config: PanelConfig,
+        shell: &Config,
+        theme: &Theme,
+        output: &OutputInfo,
+    ) -> Self {
+        let node = Node::root("panel")
+            .class(match config.position {
+                Position::Top => "top",
+                Position::Bottom => "bottom",
+            })
+            .id_opt(instance_id(&section))
+            .attr("output", output.name.clone().unwrap_or_default());
         let mut gadgets = Vec::new();
         for (slot, names) in [
             (Slot::Start, &config.items_start),
             (Slot::Center, &config.items_center),
             (Slot::End, &config.items_end),
         ] {
-            for name in names {
-                if let Some(g) = AnyGadget::create(name, shell, output) {
-                    gadgets.push((slot, g));
-                }
+            let slot_node = node.child("slot").class(slot.name());
+            let created: Vec<(&String, AnyGadget)> = names
+                .iter()
+                .filter_map(|name| Some((name, AnyGadget::create(name, shell, output)?)))
+                .collect();
+            let count = created.len();
+            for (i, (name, gadget)) in created.into_iter().enumerate() {
+                let id = instance_id(name);
+                gadgets.push(Entry {
+                    node: slot_node
+                        .child("gadget")
+                        .class(gadget.kind())
+                        .id_opt(id)
+                        .nth(i, count),
+                    popup_node: Node::root("popup")
+                        .child("gadget")
+                        .class(gadget.kind())
+                        .id_opt(id),
+                    slot,
+                    gadget,
+                });
             }
         }
+        let height = Self::themed_height(theme, &node);
         Self {
             section,
             output: OutputId::from(output),
             config,
+            node,
+            height,
             gadgets,
             popups: BTreeMap::new(),
         }
     }
 
-    pub fn layer_settings(&self) -> NewLayerShellSettings {
+    fn themed_height(theme: &Theme, node: &Node) -> u32 {
+        theme
+            .resolve(node)
+            .min_height
+            .unwrap_or(theme::DEFAULT_PANEL_HEIGHT)
+            .max(1.0) as u32
+    }
+
+    fn anchor(&self) -> Anchor {
         let edge = match self.config.position {
             Position::Top => Anchor::Top,
             Position::Bottom => Anchor::Bottom,
         };
+        edge | Anchor::Left | Anchor::Right
+    }
+
+    pub fn layer_settings(&self) -> NewLayerShellSettings {
         NewLayerShellSettings {
-            anchor: edge | Anchor::Left | Anchor::Right,
-            size: LayerSize::fill_width(HEIGHT),
+            anchor: self.anchor(),
+            size: LayerSize::fill_width(self.height),
             layer: self.config.layer,
-            exclusive_zone: Some(HEIGHT as i32),
+            exclusive_zone: Some(self.height as i32),
             margin: None,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option: OutputOption::GlobalName(self.output.0),
             namespace: Some("aria-panel".to_owned()),
             ..Default::default()
         }
+    }
+
+    /// The theme changed: if the bar thickness did too, the new layout
+    /// (and exclusive zone) to send for this surface.
+    pub fn resize(&mut self, theme: &Theme) -> Option<(Anchor, LayerSize, i32)> {
+        let height = Self::themed_height(theme, &self.node);
+        if height == self.height {
+            return None;
+        }
+        self.height = height;
+        Some((self.anchor(), LayerSize::fill_width(height), height as i32))
     }
 
     pub fn position(&self) -> Position {
@@ -212,7 +292,7 @@ impl Panel {
     pub fn update(&mut self, message: Message) -> Action {
         match message {
             Message::Gadget(i, m) => {
-                let Some((_, g)) = self.gadgets.get_mut(i) else {
+                let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) else {
                     return Action::None;
                 };
                 match g.update(m) {
@@ -239,24 +319,41 @@ impl Panel {
     /// The popup surface `id` is gone, whoever closed it.
     pub fn popup_closed(&mut self, id: window::Id) {
         if let Some(i) = self.popups.remove(&id)
-            && let Some((_, g)) = self.gadgets.get_mut(i)
+            && let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i)
         {
             g.popup_closed();
         }
     }
 
-    pub fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let section = |slot| {
-            row(self
+    pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
+        let theme = shared.theme;
+        let section = |slot: Slot| {
+            let slot_node = self.node.child("slot").class(slot.name());
+            let children = self
                 .gadgets
                 .iter()
                 .enumerate()
-                .filter(move |(_, (s, _))| *s == slot)
-                .map(move |(i, (_, g))| g.view(ctx).map(move |m| Message::Gadget(i, m))))
-            .spacing(8)
+                .filter(move |(_, e)| e.slot == slot)
+                .map(move |(i, e)| {
+                    let ctx = Context {
+                        shared,
+                        node: e.node.clone(),
+                    };
+                    theme
+                        .container(
+                            &e.node,
+                            e.gadget.view(ctx).map(move |m| Message::Gadget(i, m)),
+                        )
+                        .into()
+                });
+            theme
+                .row(&slot_node, children)
+                .align_y(iced::Alignment::Center)
         };
-        row![
-            container(section(Slot::Start)).width(Length::Fill),
+        let bar = row![
+            container(section(Slot::Start))
+                .width(Length::Fill)
+                .align_left(Length::Fill),
             container(section(Slot::Center))
                 .width(Length::Fill)
                 .center_x(Length::Fill),
@@ -264,27 +361,52 @@ impl Panel {
                 .width(Length::Fill)
                 .align_right(Length::Fill),
         ]
-        .into()
+        .height(Length::Fill)
+        .align_y(iced::Alignment::Center);
+        theme
+            .container(&self.node, bar)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
-    /// Content of the popup surface `id`.
-    pub fn popup_view<'a>(&'a self, id: window::Id, ctx: Context<'a>) -> Element<'a, Message> {
-        match self
+    /// Content of the popup surface `id`: the gadget's popup view inside
+    /// a `popup` root filling the surface.
+    pub fn popup_view<'a>(&'a self, id: window::Id, shared: Shared<'a>) -> Element<'a, Message> {
+        let Some((i, e)) = self
             .popups
             .get(&id)
             .and_then(|&i| Some((i, self.gadgets.get(i)?)))
-        {
-            Some((i, (_, g))) => g.popup_view(ctx).map(move |m| Message::Gadget(i, m)),
-            None => Space::new().into(),
-        }
+        else {
+            return Space::new().into();
+        };
+        let ctx = Context {
+            shared,
+            node: e.popup_node.clone(),
+        };
+        let content = e.gadget.popup_view(ctx).map(move |m| Message::Gadget(i, m));
+        shared
+            .theme
+            .container(&Node::root("popup"), content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        Subscription::batch(
-            self.gadgets
-                .iter()
-                .enumerate()
-                .map(|(i, (_, g))| g.subscription().with(i).map(|(i, m)| Message::Gadget(i, m))),
-        )
+        Subscription::batch(self.gadgets.iter().enumerate().map(|(i, e)| {
+            e.gadget
+                .subscription()
+                .with(i)
+                .map(|(i, m)| Message::Gadget(i, m))
+        }))
     }
+}
+
+/// The `id` of a `[Name:id]` section, `None` for `[Name]`.
+fn instance_id(section: &str) -> Option<&str> {
+    section
+        .split_once(':')
+        .map(|(_, id)| id)
+        .filter(|id| !id.is_empty())
 }

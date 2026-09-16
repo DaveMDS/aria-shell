@@ -565,10 +565,9 @@ Verified on the real Hyprland session with two outputs:
   (weeks start on Monday, today highlighted, `<`/`>` change month, no
   locale for month names); clicking the clock again or anywhere outside
   closes it. Verified with screenshots on both outputs.
-- Theming: with `[general] style = example` the bar follows
-  `assets/themes/example.css` (36px, monospace, translucent `rgba`
-  background, `gadget.clock#2` in the accent colour, `workspace`
-  `height: fill`); editing the file restyles live, changing `min-height`
+- Theming: with no `[general] style` the bar is `base.css` alone; with
+  `style = manjaro` (or `waybar`) it follows `assets/themes/<name>.css`;
+  editing the file restyles live, changing `min-height`
   resizes the layer surfaces (`hyprctl layers`), a syntax error logs
   `path:line:col` and keeps the running theme. The calendar popup has
   the themed background, rounded corners over a transparent surface,

@@ -3,7 +3,7 @@
 //! Grammar (a CSS subset): a selector is compounds joined by ` `
 //! (descendant) or `>` (child); a compound is an optional type or `*`,
 //! then any of `.class`, `#id`, `[attr="value"]`, `:pseudo`. Supported
-//! pseudo-classes: `:root :hover :active :disabled :first-child
+//! pseudo-classes: `:root :hover :active :focus :disabled :first-child
 //! :last-child`.
 
 use super::node::Node;
@@ -35,6 +35,7 @@ enum Pseudo {
     Root,
     Hover,
     Active,
+    Focus,
     Disabled,
     FirstChild,
     LastChild,
@@ -127,6 +128,7 @@ impl Compound {
                 Pseudo::Root => node.is_root(),
                 Pseudo::Hover => node.is_hover(),
                 Pseudo::Active => node.is_pressed(),
+                Pseudo::Focus => node.is_focused(),
                 Pseudo::Disabled => node.is_disabled(),
                 Pseudo::FirstChild => node.is_first_child(),
                 Pseudo::LastChild => node.is_last_child(),
@@ -190,6 +192,7 @@ fn parse_compound(
                     "root" => Pseudo::Root,
                     "hover" => Pseudo::Hover,
                     "active" => Pseudo::Active,
+                    "focus" => Pseudo::Focus,
                     "disabled" => Pseudo::Disabled,
                     "first-child" => Pseudo::FirstChild,
                     "last-child" => Pseudo::LastChild,

@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
 
-use iced::widget::button;
+use iced::widget::{button, text_input};
 
 #[derive(Clone)]
 pub struct Node(Arc<Inner>);
@@ -27,6 +27,7 @@ struct Inner {
     index: Option<(usize, usize)>,
     hover: bool,
     pressed: bool,
+    focused: bool,
     disabled: bool,
 }
 
@@ -50,6 +51,7 @@ impl Node {
             index: None,
             hover: false,
             pressed: false,
+            focused: false,
             disabled: false,
         }))
     }
@@ -98,6 +100,18 @@ impl Node {
         })
     }
 
+    /// The interaction state iced reports for a text input.
+    pub fn input_status(&self, status: text_input::Status) -> Self {
+        self.with(|n| {
+            n.hover = matches!(
+                status,
+                text_input::Status::Hovered | text_input::Status::Focused { is_hovered: true }
+            );
+            n.focused = matches!(status, text_input::Status::Focused { .. });
+            n.disabled = status == text_input::Status::Disabled;
+        })
+    }
+
     pub fn parent(&self) -> Option<&Node> {
         self.0.parent.as_ref()
     }
@@ -138,6 +152,10 @@ impl Node {
         self.0.pressed
     }
 
+    pub fn is_focused(&self) -> bool {
+        self.0.focused
+    }
+
     pub fn is_disabled(&self) -> bool {
         self.0.disabled
     }
@@ -175,6 +193,9 @@ impl fmt::Debug for Node {
         }
         if self.0.pressed {
             f.write_str(":active")?;
+        }
+        if self.0.focused {
+            f.write_str(":focus")?;
         }
         if self.0.disabled {
             f.write_str(":disabled")?;

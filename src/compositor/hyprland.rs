@@ -79,6 +79,8 @@ struct HyprWorkspaceRef {
 
 #[derive(Deserialize)]
 struct HyprMonitor {
+    name: String,
+    focused: bool,
     #[serde(rename = "activeWorkspace")]
     active_workspace: HyprWorkspaceRef,
 }
@@ -125,12 +127,17 @@ async fn windows() -> Option<Event> {
     ))
 }
 
-/// The workspace shown on each monitor.
+/// The workspace shown on each monitor, and which monitor is focused.
 async fn active_workspaces() -> Vec<Event> {
     let monitors: Vec<HyprMonitor> = request_json("j/monitors").await.unwrap_or_default();
+    let focused = monitors
+        .iter()
+        .find(|m| m.focused)
+        .map(|m| Event::FocusedOutput(m.name.clone()));
     monitors
         .into_iter()
         .map(|m| Event::ActiveWorkspace(m.active_workspace.id.to_string()))
+        .chain(focused)
         .collect()
 }
 
@@ -191,8 +198,11 @@ async fn listen(tx: &mut mpsc::Sender<Event>) -> std::io::Result<()> {
             // `focusedmonv2>>MONITOR,WSID`: that monitor is already
             // showing WSID, but say so in case we missed the switch.
             "focusedmonv2" => {
-                let id = data.split_once(',').map(|(_, id)| id).unwrap_or(data);
-                vec![Some(Event::ActiveWorkspace(id.to_owned()))]
+                let (output, id) = data.split_once(',').unwrap_or((data, data));
+                vec![
+                    Some(Event::FocusedOutput(output.to_owned())),
+                    Some(Event::ActiveWorkspace(id.to_owned())),
+                ]
             }
             "activewindowv2" => vec![Some(Event::ActiveWindow(
                 (!data.is_empty()).then(|| data.to_owned()),

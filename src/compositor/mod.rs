@@ -45,6 +45,8 @@ pub enum Event {
     ActiveWorkspace(String),
     ActiveWindow(Option<String>),
     UrgentWindow(String),
+    /// Keyboard focus moved to this output (connector name).
+    FocusedOutput(String),
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +65,9 @@ pub struct Compositor {
     backend: Option<Backend>,
     pub workspaces: Vec<Workspace>,
     pub windows: Vec<Window>,
+    /// Connector name of the output with keyboard focus, where things
+    /// like the launcher should appear.
+    pub focused_output: Option<String>,
 }
 
 impl Compositor {
@@ -147,6 +152,7 @@ impl Compositor {
                 }
                 self.sync_urgent_workspaces();
             }
+            Event::FocusedOutput(name) => self.focused_output = Some(name),
         }
     }
 

@@ -90,6 +90,14 @@ Theme      (theme/)         daemon-owned styling: base.css + the user's theme, p
 Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)
   load() -> Task            builds `Index` (icons/theme.rs theme chain + icons/desktop.rs .desktop db) off-thread
   apply(Event::Loaded)      installs it; resolve(class) fills the per-class cache; get(class) in `view`
+  index() -> Arc<Index>     the desktop db is also what the launcher searches; desktop::launch runs an entry
+
+Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: Option<(window::Id, Launcher)>`
+  Message / update -> Action { Run(Task) | Close }, view(Shared), subscription() for Up/Down/Esc
+  + `grabs: Vec<window::Id>` in the daemon, one transparent surface per output behind it
+
+commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(Toggle|Show|Hide)`
+commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 
 watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, theme files and the
                             icon/applications dirs; yields `Changed(paths)`: config -> rebuild panels,
@@ -180,6 +188,40 @@ Two things flow between the daemon and the gadgets besides messages:
   the theme (`window { height; color }`; only `-symbolic` svgs are
   tinted). Not done: `icon-theme.cache` (GTK's mmap cache) as a
   zero-scan fast path, worth it only if cold starts turn out slow.
+- **The launcher is a component, not a gadget**: it has its own layer
+  surface and the keyboard, one instance at a time, on the focused
+  output (`Compositor::focused_output`, from Hyprland's `j/monitors[].focused`
+  and the `focusedmonv2` event; the first output if unknown). Opened by
+  `aria-shell launcher toggle|show|hide` over the command socket
+  (`$XDG_RUNTIME_DIR/aria-shell/cmd.sock`, the Python line protocol:
+  `OK ...` / `ERR ...` per line; parsing is in the listener, the daemon
+  only sees valid `Command`s). The surface is `Layer::Overlay`, no
+  anchors (the compositor centres it), sized by the theme's `launcher {
+  width; height }`, `KeyboardInteractivity::OnDemand` (Hyprland focuses
+  an on-demand layer when it maps; `Exclusive` would also force the
+  *pointer* onto it, see below); the search
+  field is focused with `operation::focus` on the `ShellEvent::NewShell`
+  of that surface (earlier, the widget tree doesn't exist yet). A click
+  outside closes it as it does for a popup: while it's open the daemon
+  keeps one full-screen transparent surface per output on `Layer::Top`
+  (above the bars, below the launcher, `exclusive_zone: -1`) whose
+  `mouse_area` yields `Close`; the click is swallowed. Any of those
+  surfaces closing (`ShellEvent::Closed`) closes the rest. It searches
+  the desktop db already in `icons::Index` (an `Arc` snapshot, replaced
+  when the index is rebuilt), scoring as the Python did (exact 10,
+  prefix 8, substring 6 over id/name/comment, empty query lists all);
+  `NoDisplay` and entries without `Exec` are skipped. Icons are
+  resolved by the daemon for the listed ids (`Icons::resolve` accepts
+  a desktop id, `for_class` tries `by_id` first) after every launcher
+  update, never in `view`. Launching is hand-rolled in
+  `icons::desktop::launch` (the Python used `gtk-launch`): spec
+  quoting, field codes, `Path=`, `Terminal=true` via `[launcher]
+  terminal` (default `$TERMINAL`, else `xterm`) with `-e`, own process
+  group, stdio to null, reaped by a thread. Not done: `DBusActivatable`,
+  startup notification, other providers (the Python had only apps too).
+  The Python `[launcher]` keys `width/height/icon_size/opacity` are
+  theme matters here (`launcher`, `launcher icon { height }`), not
+  config.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
   possible later (replace the value, rebuild panels) and what makes the
@@ -309,6 +351,30 @@ Two things flow between the daemon and the gadgets besides messages:
   the parent directory (editors save by rename) and filter on paths.
   `futures::mpsc::UnboundedReceiver::try_next` is deprecated for
   `try_recv`.
+- A layer surface with `Anchor::empty()` and `LayerSize::px(w, h)` is
+  centred on its output by Hyprland; `exclusive_zone: Some(-1)` on a
+  full-size surface covers the bars too.
+- Hyprland routes **all pointer input** (every output) to a layer
+  surface with `KeyboardInteractivity::Exclusive` while it's mapped:
+  the click-catching surfaces never saw a click (`listen_with` showed
+  every press on the launcher's window). `OnDemand` gets keyboard
+  focus on map just the same and leaves the pointer alone.
+- `iced::keyboard::listen()` only yields *ignored* key events, and a
+  focused `text_input` captures Escape (and drops its focus); use
+  `iced::event::listen_with` (gets every event with its status and
+  `window::Id`; takes a plain `fn`, so filter on the window afterwards)
+  for keys the launcher wants regardless. Up/Down aren't captured by
+  `text_input`.
+- The focus/scroll tasks live at `iced::widget::operation::{focus,
+  snap_to, scroll_to}`; they run on every window, so the widget ids
+  must be `Id::unique()`. `snap_to(id, RelativeOffset { y: i / (n-1) })`
+  always keeps item `i` of `n` in view without knowing the row height.
+- `tokio::spawn` inside a `stream::channel` subscription works (iced's
+  tokio executor runs it on the runtime) but needs the `rt` feature.
+- Hyprland `j/monitors[].focused` / `focusedmonv2>>NAME,WSID` give the
+  focused monitor by connector name.
+- `hyprctl dispatch 'hl.dsp.focus({ monitor = "HDMI-A-2" })'` moves
+  focus to a monitor, handy to test per-output behaviour.
 
 ## Status (2026-09-16)
 
@@ -351,17 +417,29 @@ Verified on the real Hyprland session with two outputs:
   `~/.local/share/applications` rebuilds the index (80 -> 81 -> 80
   apps in the log); `icon_theme = breeze` via config reload switches
   the chain live.
-- `cargo build`, `cargo clippy --all-targets`, `cargo test` (39 tests,
-  config + theme layers): clean.
+- Launcher: `aria-shell launcher toggle` from a terminal opens it centred
+  on the focused output (`hyprctl layers`: `aria-launcher` 520x420 at
+  700,330 on HDMI-A-1, at 2620,330 after `hl.dsp.focus({ monitor =
+  "HDMI-A-2" })`), with an `aria-launcher-grab` full-screen surface on
+  each output; screenshot shows the 80 apps with icons, names and
+  comments, the first row selected in the accent colour, the input
+  with its `:focus` border. `hide`/`show`/`toggle` and `ping` over the
+  socket verified, unknown commands get `ERR`. Typing filters live,
+  Esc closes, a click outside (desktop, bar, other monitor) closes it
+  through the grab surface (verified by hand; the log showed the press
+  captured on the grab window, then `Close`).
+- `cargo build`, `cargo clippy --all-targets`, `cargo test` (50 tests,
+  config + theme + desktop entries + commands + launcher search): clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
 `[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
-panels, Clock (`format`, calendar popup), Workspaces (all four keys;
-windows are dots, not icons) over the Hyprland IPC, with the daemon-owned
+panels, Clock (`format`, calendar popup), Workspaces (all four keys,
+window icons) over the Hyprland IPC, with the daemon-owned
 `Compositor` / `Context` / `Action` plumbing and the popup plumbing
 (`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
-(`theme/`, `assets/base.css`, hot reload, bar thickness from the theme).
+(`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),
+the command socket + CLI client, the launcher (`[launcher] terminal`).
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -370,12 +448,15 @@ properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
 wrapper), every other gadget and component (tray, notifications,
-launcher, lock, wallpaper, terminal, idle).
+lock, wallpaper, terminal, idle), launcher `DBusActivatable` entries and
+a themed scrollbar (iced's default for now).
 
 ## Next steps, in order
 
-1. The next gadget/component that needs a new shared source (tray over
-   SNI/DBus, or the launcher on top of the desktop db in `icons/`).
+1. The tray over SNI/DBus: the first DBus connection as a `Subscription`
+   (zbus), the pattern notifications and MPRIS will reuse; then
+   `com.canonical.dbusmenu` as popups.
 2. More theme surface as gadgets need it (`margin` via a wrapping
-   container, `opacity`, `@font-face`); the `shader` widget for
-   `background: shader("x.wgsl")` when a theme asks for more than CSS.
+   container, `opacity`, `@font-face`, scrollbars); the `shader` widget
+   for `background: shader("x.wgsl")` when a theme asks for more than
+   CSS.

@@ -10,13 +10,14 @@
  * Syntax: a CSS subset.
  *   - comments, `selector, selector { property: value; }`
  *   - selectors: type, .class, #id, [attr="value"], *, descendant (space),
- *     child (>), :hover :active :disabled :first-child :last-child :root
+ *     child (>), :hover :active :focus :disabled :first-child :last-child :root
  *   - `:root { --name: value }` variables, used as `var(--name[, fallback])`
  *   - units: px or none; colours: #rgb, #rrggbbaa, rgb(), rgba(), hsl(), names
  *   - cascade: specificity, then source order (this file first)
  *   - not supported: @rules, !important, margin, opacity, gradients,
  *     em/%, transitions/animations. `:hover`/`:active` only apply to
- *     buttons (iced containers have no hover state).
+ *     buttons and `:hover`/`:focus` to inputs (iced containers have no
+ *     hover state).
  *
  * Properties:
  *   color                       text colour (inherited)
@@ -26,7 +27,8 @@
  *   box-shadow                  <x> <y> [blur] <colour> | none
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
- *   width, height               <px> | auto | fill (content is centred on a sized axis)
+ *   width, height               <px> | auto | fill (content is centred on a sized axis);
+ *                               on `launcher`: the size of its surface
  *   min-height                  on `panel`: the bar thickness
  *   font-family                 font names and/or serif/sans-serif/monospace, comma-separated:
  *                               the first installed one is used; glyphs it lacks fall back
@@ -43,6 +45,14 @@
  *   popup                                                     a popup surface
  *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
  *      ╰─ ...the gadget's popup content
+ *
+ *   launcher                                                  the launcher surface (width/height size it)
+ *   ├─ input                                                  the search field (:focus when typing)
+ *   ╰─ list                                                   the results (a column; gap between items)
+ *      ╰─ item[.selected]                                     one result, a button
+ *         ├─ icon                                             the app icon, drawn at the node's `height`
+ *         ├─ title                                            the app name
+ *         ╰─ subtitle                                         its description, when it has one
  *
  *   gadget.clock
  *   ╰─ button                                                 the time; click opens the calendar
@@ -98,6 +108,52 @@ popup {
 slot {
   gap: 8px;
   padding: 0 8px;
+}
+
+launcher {
+  width: 520px;
+  height: 420px;
+  padding: 12px;
+  gap: 8px;
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  font-size: 14px;
+  border: 1px solid var(--aria-border);
+  border-radius: 8px;
+}
+launcher input {
+  padding: 8px 10px;
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 6px;
+}
+launcher input:focus {
+  border-color: var(--aria-accent);
+}
+launcher list {
+  gap: 2px;
+}
+launcher item {
+  padding: 4px 8px;
+  gap: 10px;
+  border-radius: 6px;
+}
+launcher item:hover {
+  background: var(--aria-border);
+}
+launcher item.selected {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+}
+launcher icon {
+  height: 32px;
+}
+launcher subtitle {
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+launcher item.selected subtitle {
+  color: var(--aria-on-accent);
 }
 
 /* Gadgets */

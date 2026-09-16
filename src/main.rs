@@ -1,8 +1,10 @@
+mod commands;
 mod compositor;
 mod config;
 mod gadget;
 mod gadgets;
 mod icons;
+mod launcher;
 mod panel;
 mod theme;
 mod watch;
@@ -13,17 +15,22 @@ use std::path::Path;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
-use iced::{Color, Element, Rectangle, Subscription, Task, widget};
+use iced::{Color, Element, Length, Rectangle, Subscription, Task, widget};
 use iced_exwlshell::build_pattern::daemon;
+use iced_exwlshell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+};
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
 use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use commands::{Command, LauncherCommand};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use gadget::Shared;
 use icons::Icons;
+use launcher::Launcher;
 use panel::{Action, Panel, PanelConfig};
 use theme::{Node, Theme};
 
@@ -43,6 +50,10 @@ enum Message {
     Files(watch::Changed),
     /// The icon index finished building.
     Icons(icons::Event),
+    /// From the command socket (`aria-shell launcher toggle`).
+    Command(Command),
+    /// Routed to the open launcher.
+    Launcher(launcher::Message),
 }
 
 struct AriaShell {
@@ -59,6 +70,11 @@ struct AriaShell {
     panels: BTreeMap<Id, Panel>,
     /// Open popup surfaces, to the panel each hangs off.
     popups: BTreeMap<Id, Id>,
+    /// The launcher, while shown: its surface and state.
+    launcher: Option<(Id, Launcher)>,
+    /// While the launcher is shown, one transparent surface per output
+    /// under it, so a click anywhere else closes it.
+    grabs: Vec<Id>,
 }
 
 impl AriaShell {
@@ -78,6 +94,8 @@ impl AriaShell {
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
+            launcher: None,
+            grabs: Vec::new(),
         };
         (shell, load_icons)
     }
@@ -90,13 +108,19 @@ impl AriaShell {
         }
     }
 
-    /// Keep an icon resolved for every window there is.
+    /// Keep an icon resolved for every window there is, and for what
+    /// the launcher lists.
     fn resolve_icons(&mut self) {
         if !self.icons.is_loaded() {
             return;
         }
         for w in &self.compositor.windows {
             self.icons.resolve(&w.class);
+        }
+        if let Some((_, launcher)) = &self.launcher {
+            for id in launcher.visible_ids() {
+                self.icons.resolve(id);
+            }
         }
     }
 
@@ -117,8 +141,30 @@ impl AriaShell {
             }
             Message::Icons(event) => {
                 self.icons.apply(event);
+                if let Some((_, launcher)) = &mut self.launcher
+                    && let Some(index) = self.icons.index()
+                {
+                    launcher.set_apps(index);
+                }
                 self.resolve_icons();
                 Task::none()
+            }
+            Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
+                (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
+                (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
+                _ => Task::none(),
+            },
+            Message::Launcher(m) => {
+                let Some((_, launcher)) = &mut self.launcher else {
+                    return Task::none();
+                };
+                match launcher.update(m) {
+                    launcher::Action::Run(task) => {
+                        self.resolve_icons();
+                        task.map(Message::Launcher)
+                    }
+                    launcher::Action::Close => self.close_launcher(),
+                }
             }
             Message::Files(watch::Changed(paths)) => {
                 let config_changed = self
@@ -160,6 +206,7 @@ impl AriaShell {
             .collect();
         self.popups.clear();
         self.panels.clear();
+        tasks.push(self.close_launcher());
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
         tasks.push(self.icons.load().map(Message::Icons));
@@ -227,8 +274,95 @@ impl AriaShell {
         }
     }
 
+    /// Show the launcher on the focused output (the first one if the
+    /// compositor didn't say), sized by the theme's `launcher` rule,
+    /// over a click-catching surface on every output.
+    fn open_launcher(&mut self) -> Task<Message> {
+        let output = self
+            .outputs
+            .values()
+            .find(|o| o.name.is_some() && o.name == self.compositor.focused_output)
+            .or_else(|| self.outputs.values().next())
+            .cloned();
+        let Some(output) = output else {
+            log::warn!("no output to show the launcher on");
+            return Task::none();
+        };
+        let style = self.theme.resolve(&Node::root("launcher"));
+        let px = |l: Option<theme::Length>, default: f32| match l {
+            Some(theme::Length::Px(px)) => px.max(1.0) as u32,
+            _ => default as u32,
+        };
+        let size = LayerSize::px(px(style.width, 500.0), px(style.height, 400.0));
+        let launcher = Launcher::new(self.config.section(None), self.icons.index());
+        let mut tasks = Vec::new();
+        for o in self.outputs.values() {
+            let id = Id::unique();
+            self.grabs.push(id);
+            tasks.push(Task::done(Message::NewLayerShell {
+                settings: NewLayerShellSettings {
+                    anchor: Anchor::all(),
+                    size: LayerSize::FILL,
+                    layer: Layer::Top,
+                    exclusive_zone: Some(-1),
+                    margin: None,
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    output_option: OutputOption::GlobalName(o.id),
+                    namespace: Some("aria-launcher-grab".to_owned()),
+                    ..Default::default()
+                },
+                id,
+            }));
+        }
+        let id = Id::unique();
+        log::info!(
+            "opening the launcher on output {:?} as window {id:?}, grabs {:?}",
+            output.name,
+            self.grabs
+        );
+        tasks.push(Task::done(Message::NewLayerShell {
+            settings: NewLayerShellSettings {
+                anchor: Anchor::empty(),
+                size,
+                layer: Layer::Overlay,
+                exclusive_zone: Some(-1),
+                margin: None,
+                keyboard_interactivity: KeyboardInteractivity::OnDemand,
+                output_option: OutputOption::GlobalName(output.id),
+                namespace: Some("aria-launcher".to_owned()),
+                ..Default::default()
+            },
+            id,
+        }));
+        self.launcher = Some((id, launcher));
+        self.resolve_icons();
+        Task::batch(tasks)
+    }
+
+    fn close_launcher(&mut self) -> Task<Message> {
+        let ids: Vec<Id> = self
+            .launcher
+            .take()
+            .map(|(id, _)| id)
+            .into_iter()
+            .chain(std::mem::take(&mut self.grabs))
+            .collect();
+        Task::batch(
+            ids.into_iter()
+                .map(|id| Task::done(Message::RemoveWindow(id))),
+        )
+    }
+
     fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
         match event {
+            ShellEvent::NewShell(info) => match &self.launcher {
+                // The search field can only take focus once its surface
+                // exists.
+                Some((id, launcher)) if *id == info.window => {
+                    launcher.focus().map(Message::Launcher)
+                }
+                _ => Task::none(),
+            },
             ShellEvent::OutputAdded(output) => {
                 self.outputs.insert(OutputId::from(&output), output.clone());
                 self.open_panels(&output)
@@ -253,6 +387,16 @@ impl AriaShell {
                 }))
             }
             ShellEvent::Closed(id) => {
+                let is_launcher = self.launcher.as_ref().is_some_and(|(l, _)| *l == id);
+                if is_launcher || self.grabs.contains(&id) {
+                    // One of the launcher's surfaces went away (on our
+                    // request, or not): the rest follows.
+                    self.grabs.retain(|g| *g != id);
+                    if is_launcher {
+                        self.launcher = None;
+                    }
+                    return self.close_launcher();
+                }
                 if self.panels.remove(&id).is_some() {
                     self.popups.retain(|_, panel| *panel != id);
                 } else if let Some(panel) = self.popups.remove(&id)
@@ -294,6 +438,20 @@ impl AriaShell {
 
     fn view(&self, window: Id) -> Element<'_, Message> {
         let shared = self.shared();
+        if let Some((id, launcher)) = &self.launcher
+            && *id == window
+        {
+            let root: Element<'_, launcher::Message> = self
+                .theme
+                .container(&Node::root("launcher"), launcher.view(shared))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+            return root.map(Message::Launcher);
+        }
+        if self.grabs.contains(&window) {
+            return launcher::grab_view().map(Message::Launcher);
+        }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
@@ -322,14 +480,26 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
+        let launcher = self.launcher.iter().map(|(id, launcher)| {
+            let id = *id;
+            launcher.subscription().with(id).map(|(id, (window, m))| {
+                if window == id {
+                    Message::Launcher(m)
+                } else {
+                    Message::Launcher(launcher::Message::Close)
+                }
+            })
+        });
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
+                commands::listen().map(Message::Command),
                 watch::watch(&files).map(Message::Files),
             ]
             .into_iter()
-            .chain(panels),
+            .chain(panels)
+            .chain(launcher),
         )
     }
 }
@@ -365,6 +535,23 @@ fn widget_bounds(id: widget::Id) -> Task<Option<Rectangle>> {
 }
 
 fn main() -> iced_exwlshell::Result {
+    // With arguments we're the client: send them to the running shell.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        match commands::send(&args) {
+            Ok(reply) => {
+                if !reply.is_empty() {
+                    println!("{reply}");
+                }
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("aria_shell=info"))
         .init();
 

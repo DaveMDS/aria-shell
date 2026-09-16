@@ -35,7 +35,10 @@ use std::sync::Mutex;
 
 use iced::border::Radius;
 use iced::font::{Family, Weight};
-use iced::widget::{Button, Container, Row, Text, button, container, row, text};
+use iced::widget::{
+    Button, Column, Container, Row, Text, TextInput, button, column, container, row, text,
+    text_input,
+};
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow};
 
 use crate::config::{self, Config, GeneralConfig};
@@ -288,6 +291,34 @@ impl Theme {
         t.style(move |_| s.text())
     }
 
+    /// A `text_input` styled as `node`: background, border, font and
+    /// colours (`color` is the value, the placeholder is it faded, the
+    /// selection is the border colour), re-resolved with `:hover` /
+    /// `:focus` as iced reports them.
+    pub fn text_input<'a, M: Clone + 'a>(
+        &'a self,
+        node: &Node,
+        placeholder: &str,
+        value: &str,
+    ) -> TextInput<'a, M> {
+        let s = self.resolve(node);
+        let node = node.clone();
+        let mut t = text_input(placeholder, value).padding(s.padding);
+        if let Some(font) = s.font() {
+            t = t.font(font);
+        }
+        if let Some(size) = s.font_size {
+            t = t.size(size);
+        }
+        if let Some(w) = s.width {
+            t = t.width(w);
+        }
+        t.style(move |theme: &iced::Theme, status| {
+            self.resolve(&node.input_status(status))
+                .text_input(theme.palette().text)
+        })
+    }
+
     /// A `row` styled as `node`: `gap` and padding.
     pub fn row<'a, M: 'a>(
         &self,
@@ -296,6 +327,16 @@ impl Theme {
     ) -> Row<'a, M> {
         let s = self.resolve(node);
         row(children).spacing(s.gap).padding(s.padding)
+    }
+
+    /// A `column` styled as `node`: `gap` and padding.
+    pub fn column<'a, M: 'a>(
+        &self,
+        node: &Node,
+        children: impl IntoIterator<Item = Element<'a, M>>,
+    ) -> Column<'a, M> {
+        let s = self.resolve(node);
+        column(children).spacing(s.gap).padding(s.padding)
     }
 }
 
@@ -372,6 +413,22 @@ impl Style {
     pub fn text(&self) -> text::Style {
         text::Style {
             color: self.color.filter(|_| self.own_color),
+        }
+    }
+
+    /// `fallback` is the text colour when no rule set one.
+    pub fn text_input(&self, fallback: Color) -> text_input::Style {
+        let value = self.color.unwrap_or(fallback);
+        text_input::Style {
+            background: self.background.unwrap_or(Color::TRANSPARENT).into(),
+            border: self.border(),
+            icon: value,
+            placeholder: Color {
+                a: value.a * 0.5,
+                ..value
+            },
+            value,
+            selection: self.border_color.unwrap_or(Color { a: 0.3, ..value }),
         }
     }
 

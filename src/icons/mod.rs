@@ -15,7 +15,7 @@
 //! theme dirs) changes, so an app installed while the shell runs gets
 //! its icon.
 
-mod desktop;
+pub mod desktop;
 mod theme;
 
 use std::collections::HashMap;
@@ -87,6 +87,12 @@ impl Icon {
 pub struct Index {
     icons: IconIndex,
     apps: DesktopDb,
+}
+
+impl Index {
+    pub fn apps(&self) -> &DesktopDb {
+        &self.apps
+    }
 }
 
 impl fmt::Debug for Index {
@@ -162,6 +168,11 @@ impl Icons {
 
     pub fn is_loaded(&self) -> bool {
         self.index.is_some()
+    }
+
+    /// The current index, shared: what the launcher searches.
+    pub fn index(&self) -> Option<Arc<Index>> {
+        self.index.clone()
     }
 
     /// Keep serving `previous`'s index until [`Icons::load`] delivers a

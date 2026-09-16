@@ -206,7 +206,12 @@ Two things flow between the daemon and the gadgets besides messages:
   keeps one full-screen transparent surface per output on `Layer::Top`
   (above the bars, below the launcher, `exclusive_zone: -1`) whose
   `mouse_area` yields `Close`; the click is swallowed. Any of those
-  surfaces closing (`ShellEvent::Closed`) closes the rest. It searches
+  surfaces closing (`ShellEvent::Closed`) closes the rest. It also
+  closes when the keyboard leaves its surface
+  (`window::Event::Unfocused`: a keybind moved focus, a click on a
+  window), which is how cosmic-launcher closes; on its own that isn't
+  enough here because a click on a bar or on an empty desktop doesn't
+  move keyboard focus on Hyprland/Sway. It searches
   the desktop db already in `icons::Index` (an `Arc` snapshot, replaced
   when the index is rebuilt), scoring as the Python did (exact 10,
   prefix 8, substring 6 over id/name/comment, empty query lists all);
@@ -311,10 +316,32 @@ Two things flow between the daemon and the gadgets besides messages:
   `container::visible_bounds` from iced 0.13 is gone in 0.14.
 - `container.center(Length::Fill)` sets width *and* height, overriding a
   fixed size set before it; use `align_x`/`align_y` for a fixed cell.
-- No pointer injection on this setup (no `ydotool`/`wtype`, `/dev/uinput`
-  is root-only, Hyprland's Lua dispatchers move the cursor but can't
-  click): clicks have to be done by the user, screenshots with `grim -g`
-  (`-s 3` for a zoomed crop).
+- Driving the app from the CLI: Hyprland's Lua dispatchers move the
+  cursor (`hl.dsp.cursor.move`) and focus (`hl.dsp.focus({ monitor = ..
+  })`) but can't click, and are Hyprland-only anyway (Sway is next).
+  Compositor-agnostic options: `ydotool` (uinput: keys, clicks,
+  `mousemove -a`; needs a udev rule for `/dev/uinput` + the `input`
+  group, `ydotoold` as a user service; not set up yet), `wtype`
+  (keyboard only, `zwp_virtual_keyboard_v1`, which Sway, Hyprland and
+  cosmic-comp all have; no root). `wlr-virtual-pointer` is *not*
+  universal (cosmic-comp doesn't implement it), so uinput is the only
+  pointer path that works everywhere. Positions of our surfaces can't
+  come from `hyprctl layers`: the shell knows them itself
+  (`OutputInfo::logical_position/logical_size` from xdg-output plus the
+  anchor/size it asked for), a `debug surfaces` socket command is the
+  plan. Screenshots with `grim -g` (`-s 3` for a zoomed crop).
+- COSMIC as reference (checked in `cosmic-launcher`, `cosmic-panel`,
+  `cosmic-applets`, `cosmic-comp`, `libcosmic`, `cosmic-settings-daemon`
+  at 2026-09): **no automated UI tests anywhere**, only unit tests in
+  the libraries and a manual QA checklist (`cosmic-launcher/TESTING.md`).
+  cosmic-comp has `winit`/`x11` backends to run nested for development,
+  no headless test harness. cosmic-launcher: a separate process,
+  toggled by DBus activation (`org.freedesktop.Application`,
+  `run_single_instance`), `KeyboardInteractivity::Exclusive` on a
+  top-anchored layer surface, closed on `LayerEvent::Unfocused` (their
+  compositor doesn't force the pointer onto exclusive layers), a dummy
+  layer surface + their `overlap-notify` protocol to keep clear of the
+  panel. Popups in the applets are xdg popups with the grab, as ours.
 - `button.style(impl Fn(&Theme, Status) -> Style + 'a)` /
   `container.style(Fn(&Theme) -> Style + 'a)`: the closures can own data
   with the view's lifetime, which is what lets them hold a `theme::Node`

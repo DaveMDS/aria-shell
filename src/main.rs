@@ -54,6 +54,9 @@ enum Message {
     Command(Command),
     /// Routed to the open launcher.
     Launcher(launcher::Message),
+    /// From the launcher's event subscription: only meant for it when
+    /// the window is its own.
+    LauncherEvent(Id, launcher::Message),
 }
 
 struct AriaShell {
@@ -152,6 +155,10 @@ impl AriaShell {
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
                 (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
                 (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
+                _ => Task::none(),
+            },
+            Message::LauncherEvent(window, m) => match &self.launcher {
+                Some((id, _)) if *id == window => self.update(Message::Launcher(m)),
                 _ => Task::none(),
             },
             Message::Launcher(m) => {
@@ -480,16 +487,10 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
-        let launcher = self.launcher.iter().map(|(id, launcher)| {
-            let id = *id;
-            launcher.subscription().with(id).map(|(id, (window, m))| {
-                if window == id {
-                    Message::Launcher(m)
-                } else {
-                    Message::Launcher(launcher::Message::Close)
-                }
-            })
-        });
+        let launcher = self
+            .launcher
+            .iter()
+            .map(|(_, l)| l.subscription().map(|(w, m)| Message::LauncherEvent(w, m)));
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),

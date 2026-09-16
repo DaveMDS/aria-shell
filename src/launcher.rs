@@ -225,18 +225,22 @@ impl Launcher {
             .into()
     }
 
-    /// The keys the search field doesn't handle itself. Esc is one it
-    /// does handle (it drops focus), but a captured event still reaches
-    /// `listen_with`, so closing works either way.
+    /// The keys the search field doesn't handle itself (Esc is one it
+    /// does handle, dropping focus, but a captured event still reaches
+    /// `listen_with`), and the keyboard leaving the surface: the
+    /// compositor gave the focus to something else (a click on a
+    /// window, a keybind), which closes the launcher as cosmic-launcher
+    /// does. The daemon checks that `window` is the launcher's.
     pub fn subscription(&self) -> Subscription<(window::Id, Message)> {
         iced::event::listen_with(|event, _status, window| {
-            let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event else {
-                return None;
-            };
-            let message = match key.as_ref() {
-                Key::Named(Named::ArrowUp) => Message::Up,
-                Key::Named(Named::ArrowDown) => Message::Down,
-                Key::Named(Named::Escape) => Message::Close,
+            let message = match event {
+                Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => match key.as_ref() {
+                    Key::Named(Named::ArrowUp) => Message::Up,
+                    Key::Named(Named::ArrowDown) => Message::Down,
+                    Key::Named(Named::Escape) => Message::Close,
+                    _ => return None,
+                },
+                Event::Window(window::Event::Unfocused) => Message::Close,
                 _ => return None,
             };
             Some((window, message))

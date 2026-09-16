@@ -157,3 +157,63 @@ key() {
     inject "key $1"
     settle
 }
+
+# --- tray items ------------------------------------------------------------
+# `aria-sni` (tests/ui/sni) is a status notifier item with a menu, on
+# the scenario's private session bus: two fifos, commands in
+# (`status`, `title`, `icon`, `menu-label`, answered `ok`), what the
+# host did to it out (`activate x y`, `menu-event id clicked`, ...).
+
+sni_start() {
+    sni_dir=$(mktemp -d)
+    mkfifo "$sni_dir/in" "$sni_dir/out"
+    "$ARIA_UI_ROOT/target/debug/aria-sni" < "$sni_dir/in" > "$sni_dir/out" 2> "$ARIA_UI_OUT/sni.log" &
+    sni_pid=$!
+    exec 5> "$sni_dir/in" 6< "$sni_dir/out"
+    line=$(sni_event)
+    [ "$line" = ready ] || { echo "the item didn't register: $line"; return 1; }
+}
+
+sni_stop() {
+    exec 5>&- 6<&-
+    kill "$sni_pid" 2> /dev/null
+    rm -rf "$sni_dir"
+}
+
+# One command to the item; fails unless answered `ok`.
+sni_send() {
+    echo "$1" >&5
+    read -r reply <&6
+    [ "$reply" = ok ] || { echo "sni '$1': $reply"; return 1; }
+    settle
+}
+
+# The next line the item reported (within 5s), else fails.
+sni_event() {
+    if read -r -t 5 line <&6; then
+        echo "$line"
+    else
+        echo "no event from the item"
+        return 1
+    fi
+}
+
+# Nothing reported by the item for a moment.
+sni_quiet() {
+    if read -r -t 1 line <&6; then
+        echo "unexpected event from the item: $line"
+        return 1
+    fi
+}
+
+scroll() {
+    inject "scroll $1"
+    settle
+}
+
+click_widget_with() {
+    set -- "$1" $(widget "$2")
+    pointer $(($2 + $4 / 2)) $(($3 + $5 / 2))
+    inject "click $1"
+    settle
+}

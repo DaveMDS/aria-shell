@@ -16,6 +16,7 @@ use crate::compositor;
 use crate::config::{Config, RawSection, Section};
 use crate::gadget::{self, AnyGadget, Context, Shared};
 use crate::theme::{self, Node, Theme};
+use crate::tray;
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation; `size`, `align`,
@@ -191,14 +192,15 @@ pub enum Action {
     None,
     Run(Task<Message>),
     Compositor(compositor::Command),
+    Tray(tray::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
         id: window::Id,
         anchor: widget::Id,
-        size: (u32, u32),
     },
     ClosePopup(window::Id),
+    Many(Vec<Action>),
 }
 
 impl Panel {
@@ -312,25 +314,46 @@ impl Panel {
                 let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) else {
                     return Action::None;
                 };
-                match g.update(m) {
-                    gadget::Action::None => Action::None,
-                    gadget::Action::Run(task) => {
-                        Action::Run(task.map(move |m| Message::Gadget(i, m)))
-                    }
-                    gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
-                    gadget::Action::OpenPopup { anchor, size } => {
-                        let id = window::Id::unique();
-                        self.popups.insert(id, i);
-                        g.popup_opened(id);
-                        Action::OpenPopup { id, anchor, size }
-                    }
-                    gadget::Action::ClosePopup(id) => {
-                        self.popups.remove(&id);
-                        Action::ClosePopup(id)
-                    }
-                }
+                let action = g.update(m);
+                self.lift(i, action)
             }
         }
+    }
+
+    /// A gadget's action as the daemon sees it: messages routed back to
+    /// gadget `i`, popups given their window id.
+    fn lift(&mut self, i: usize, action: gadget::Action<gadget::Message>) -> Action {
+        match action {
+            gadget::Action::None => Action::None,
+            gadget::Action::Run(task) => Action::Run(task.map(move |m| Message::Gadget(i, m))),
+            gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
+            gadget::Action::Tray(cmd) => Action::Tray(cmd),
+            gadget::Action::OpenPopup { anchor } => {
+                let id = window::Id::unique();
+                self.popups.insert(id, i);
+                if let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) {
+                    g.popup_opened(id);
+                }
+                Action::OpenPopup { id, anchor }
+            }
+            gadget::Action::ClosePopup(id) => {
+                self.popups.remove(&id);
+                Action::ClosePopup(id)
+            }
+            gadget::Action::Many(actions) => {
+                Action::Many(actions.into_iter().map(|a| self.lift(i, a)).collect())
+            }
+        }
+    }
+
+    /// Content size the gadget owning popup `id` wants for it now.
+    pub fn popup_size(&self, id: window::Id, shared: Shared<'_>) -> Option<(u32, u32)> {
+        let e = self.popups.get(&id).and_then(|&i| self.gadgets.get(i))?;
+        let ctx = Context {
+            shared,
+            node: e.popup_node.clone(),
+        };
+        Some(e.gadget.popup_size(ctx))
     }
 
     /// The popup surface `id` is gone, whoever closed it.

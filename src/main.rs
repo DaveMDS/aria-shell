@@ -7,6 +7,7 @@ mod icons;
 mod launcher;
 mod panel;
 mod theme;
+mod tray;
 mod watch;
 mod widgets;
 
@@ -33,6 +34,7 @@ use icons::Icons;
 use launcher::Launcher;
 use panel::{Action, Panel, PanelConfig};
 use theme::{Node, Theme};
+use tray::Tray;
 
 /// Top-level message. `#[to_layer_message(multi)]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
@@ -50,6 +52,8 @@ enum Message {
     Files(watch::Changed),
     /// The icon index finished building.
     Icons(icons::Event),
+    /// Tray items coming, going and changing, over DBus.
+    Tray(tray::Event),
     /// From the command socket (`aria-shell launcher toggle`).
     Command(Command),
     /// Routed to the open launcher.
@@ -78,15 +82,14 @@ struct AriaShell {
     compositor: Compositor,
     theme: Theme,
     icons: Icons,
+    tray: Tray,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
     outputs: BTreeMap<OutputId, OutputInfo>,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
-    /// Open popup surfaces, to the panel each hangs off and where it
-    /// was asked to be, relative to the panel's surface (the compositor
-    /// may slide it; a `debug surfaces` estimate).
-    popups: BTreeMap<Id, (Id, Rectangle)>,
+    /// Open popup surfaces.
+    popups: BTreeMap<Id, OpenPopup>,
     /// The launcher, while shown.
     launcher: Option<OpenLauncher>,
     /// While the launcher is shown, one transparent surface per output
@@ -103,6 +106,23 @@ struct OpenLauncher {
     launcher: Launcher,
 }
 
+/// A popup surface: the panel it hangs off, the anchor widget's bounds
+/// in that panel's surface, and the surface size it was last given
+/// (content plus the `popup` root's chrome).
+struct OpenPopup {
+    panel: Id,
+    anchor: Rectangle,
+    size: (u32, u32),
+}
+
+impl OpenPopup {
+    /// Where it was asked to be, relative to the panel's surface (the
+    /// compositor may slide it; a `debug surfaces` estimate).
+    fn estimate(&self, position: panel::Position) -> Rectangle {
+        panel::popup_estimate(position, self.anchor, self.size)
+    }
+}
+
 impl AriaShell {
     fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
@@ -117,6 +137,7 @@ impl AriaShell {
             compositor: Compositor::detect(),
             theme,
             icons,
+            tray: Tray::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
@@ -132,6 +153,7 @@ impl AriaShell {
             compositor: &self.compositor,
             theme: &self.theme,
             icons: &self.icons,
+            tray: &self.tray,
         }
     }
 
@@ -149,6 +171,67 @@ impl AriaShell {
                 self.icons.resolve(id);
             }
         }
+        for item in &self.tray.items {
+            if let Some(name) = item.icon_name() {
+                self.icons.resolve_name(name, item.icon_theme_path());
+            }
+        }
+    }
+
+    /// Where the pointer was last seen, in global coordinates (as
+    /// estimated by [`AriaShell::surfaces`]), for the tray's click
+    /// methods.
+    fn cursor_global(&self) -> (i32, i32) {
+        let Some((window, p)) = self.cursor else {
+            return (0, 0);
+        };
+        self.surfaces()
+            .into_iter()
+            .find(|(id, ..)| *id == window)
+            .map(|(_, _, _, r)| ((r.x + p.x) as i32, (r.y + p.y) as i32))
+            .unwrap_or((0, 0))
+    }
+
+    /// The popups' content may have changed with the shared state:
+    /// resize the surfaces whose gadget now wants another size.
+    fn sync_popups(&mut self) -> Task<Message> {
+        let mut tasks = Vec::new();
+        let ids: Vec<Id> = self.popups.keys().copied().collect();
+        for id in ids {
+            let Some(size) = self
+                .popups
+                .get(&id)
+                .and_then(|open| self.popup_surface_size(open.panel, id))
+            else {
+                continue;
+            };
+            let Some(open) = self.popups.get_mut(&id) else {
+                continue;
+            };
+            if open.size == size {
+                continue;
+            }
+            open.size = size;
+            let Some(position) = self.panels.get(&open.panel).map(Panel::position) else {
+                continue;
+            };
+            let settings = panel::popup_settings(open.panel, position, open.anchor, size);
+            tasks.push(Task::done(Message::PopUpReposition { settings, id }));
+        }
+        Task::batch(tasks)
+    }
+
+    /// Surface size for popup `id` of `panel`: what its gadget wants
+    /// for the content, plus the `popup` root's padding and border.
+    fn popup_surface_size(&self, panel: Id, id: Id) -> Option<(u32, u32)> {
+        let size = self.panels.get(&panel)?.popup_size(id, self.shared())?;
+        let chrome = self.theme.resolve(&Node::root("popup"));
+        let pad = chrome.padding;
+        let extra = 2.0 * chrome.border_width;
+        Some((
+            size.0 + (pad.left + pad.right + extra) as u32,
+            size.1 + (pad.top + pad.bottom + extra) as u32,
+        ))
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -157,7 +240,9 @@ impl AriaShell {
             Message::Panel(id, m) => match self.panels.get_mut(&id) {
                 Some(panel) => {
                     let action = panel.update(m);
-                    self.perform(id, action)
+                    // A gadget's own state may change what its popup
+                    // shows (a submenu unfolded).
+                    Task::batch([self.perform(id, action), self.sync_popups()])
                 }
                 None => Task::none(),
             },
@@ -175,6 +260,11 @@ impl AriaShell {
                 }
                 self.resolve_icons();
                 Task::none()
+            }
+            Message::Tray(event) => {
+                let follow_up = self.tray.apply(event).map(Message::Tray);
+                self.resolve_icons();
+                Task::batch([follow_up, self.sync_popups()])
             }
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
                 (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
@@ -244,8 +334,14 @@ impl AriaShell {
                     return Task::none();
                 };
                 let settings = panel::popup_settings(panel, position, anchor, size);
-                let estimate = panel::popup_estimate(position, anchor, size);
-                self.popups.insert(popup, (panel, estimate));
+                self.popups.insert(
+                    popup,
+                    OpenPopup {
+                        panel,
+                        anchor,
+                        size,
+                    },
+                );
                 Task::done(Message::NewPopUp {
                     settings,
                     id: popup,
@@ -286,8 +382,11 @@ impl AriaShell {
                 Rectangle::new(Point::new(out.x, y), Size::new(out.width, h)),
             ));
         }
-        for (&id, &(panel, rect)) in &self.popups {
-            if let Some(&(_, _, output, bar)) = list.iter().find(|(p, ..)| *p == panel) {
+        for (&id, open) in &self.popups {
+            if let Some(&(_, _, output, bar)) = list.iter().find(|(p, ..)| *p == open.panel)
+                && let Some(position) = self.panels.get(&open.panel).map(Panel::position)
+            {
+                let rect = open.estimate(position);
                 list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
             }
         }
@@ -460,6 +559,7 @@ impl AriaShell {
                 tasks.push(Task::done(Message::ExclusiveZoneChange { id, zone_size }));
             }
         }
+        tasks.push(self.sync_popups());
         Task::batch(tasks)
     }
 
@@ -469,19 +569,11 @@ impl AriaShell {
             Action::None => Task::none(),
             Action::Run(task) => task.map(move |m| Message::Panel(panel, m)),
             Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
-            Action::OpenPopup { id, anchor, size } => {
-                if !self.panels.contains_key(&panel) {
+            Action::Tray(cmd) => self.tray.run(cmd, self.cursor_global()).map(Message::Tray),
+            Action::OpenPopup { id, anchor } => {
+                let Some(size) = self.popup_surface_size(panel, id) else {
                     return Task::none();
-                }
-                // The gadget sized its content; the surface also holds
-                // the `popup` root's padding and border.
-                let chrome = self.theme.resolve(&Node::root("popup"));
-                let pad = chrome.padding;
-                let extra = 2.0 * chrome.border_width;
-                let size = (
-                    size.0 + (pad.left + pad.right + extra) as u32,
-                    size.1 + (pad.top + pad.bottom + extra) as u32,
-                );
+                };
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
                 widget_bounds(anchor).map(move |bounds| Message::PopupAnchor {
@@ -495,6 +587,12 @@ impl AriaShell {
                 self.popups.remove(&id);
                 Task::done(Message::RemoveWindow(id))
             }
+            Action::Many(actions) => Task::batch(
+                actions
+                    .into_iter()
+                    .map(|a| self.perform(panel, a))
+                    .collect::<Vec<_>>(),
+            ),
         }
     }
 
@@ -637,9 +735,9 @@ impl AriaShell {
                     return self.close_launcher();
                 }
                 if self.panels.remove(&id).is_some() {
-                    self.popups.retain(|_, (panel, _)| *panel != id);
-                } else if let Some((panel, _)) = self.popups.remove(&id)
-                    && let Some(panel) = self.panels.get_mut(&panel)
+                    self.popups.retain(|_, open| open.panel != id);
+                } else if let Some(open) = self.popups.remove(&id)
+                    && let Some(panel) = self.panels.get_mut(&open.panel)
                 {
                     panel.popup_closed(id);
                 }
@@ -694,7 +792,7 @@ impl AriaShell {
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
-        if let Some(&(owner, _)) = self.popups.get(&window)
+        if let Some(owner) = self.popups.get(&window).map(|p| p.panel)
             && let Some(panel) = self.panels.get(&owner)
         {
             return panel
@@ -728,6 +826,7 @@ impl AriaShell {
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
+                self.tray.subscription().map(Message::Tray),
                 commands::listen().map(Message::Command),
                 watch::watch(&files).map(Message::Files),
                 iced::event::listen_with(|event, _, window| match event {

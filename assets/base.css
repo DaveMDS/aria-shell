@@ -40,7 +40,7 @@
  *
  *   panel[.top|.bottom][#<instance>][output="<connector>"]   a bar; #2 for [panel:2]
  *   ╰─ slot.start | slot.center | slot.end
- *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces; #2 for [Clock:2]
+ *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces, gadget.tray; #2 for [Clock:2]
  *
  *   popup                                                     a popup surface
  *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
@@ -65,6 +65,21 @@
  *      ├─ weekday                                             one per column
  *      ╰─ day[.today]                                         one per cell
  *
+ *   gadget.tray                                               a row; gap between items
+ *   ╰─ item[.passive][.attention]                             a button, one per status notifier item
+ *      ╰─ icon                                                its icon, drawn at the node's `height`
+ *                                                             (symbolic icons take `color`)
+ *   popup > gadget.tray
+ *   ╰─ menu                                                   the item's menu: a column, gap between rows
+ *      ├─ item[.checked][.submenu][.expanded]                 a row, a button (:disabled when the app says so)
+ *      │  ├─ check                                            ✓ / ● / ○ (levels with toggles only)
+ *      │  ├─ label
+ *      │  ╰─ arrow                                            ▸ / ▾ on a submenu
+ *      ├─ separator                                           sized by `height`
+ *      ├─ submenu                                             an unfolded submenu: the same rows, nested
+ *      │                                                      (its padding is the indent)
+ *      ╰─ text                                                "…" until the menu is loaded
+ *
  *   gadget.workspaces
  *   ╰─ workspace[.active][.urgent]                            a button, one per workspace
  *      ├─ text                                                the workspace name
@@ -83,6 +98,7 @@
   --aria-on-accent: #1e1e2e;
   --aria-urgent: #f38ba8;
   --aria-border: #45475a;
+  --aria-separator: #45475a;
   --aria-popup-bg: #1e1e2e;
   --aria-shadow: rgba(0, 0, 0, 0.4);
 }
@@ -194,6 +210,57 @@ window {
 }
 window.urgent {
   color: var(--aria-urgent);
+}
+
+gadget.tray {
+  gap: 4px;
+}
+/* `>`: the menu popup has `item`s too, under `gadget.tray > menu`. */
+gadget.tray > item {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+gadget.tray > item:hover {
+  background: var(--aria-border);
+}
+gadget.tray > item icon {
+  height: 16px;
+}
+gadget.tray > item.attention icon {
+  color: var(--aria-urgent);
+}
+
+/* Tray menu popup */
+
+menu {
+  padding: 4px;
+  gap: 2px;
+}
+menu item {
+  padding: 4px 10px;
+  gap: 8px;
+  border-radius: 4px;
+}
+menu item:hover {
+  background: var(--aria-border);
+}
+menu item:disabled {
+  color: var(--aria-muted);
+}
+menu arrow,
+menu check {
+  color: var(--aria-muted);
+}
+menu item.checked check {
+  color: var(--aria-accent);
+}
+menu separator {
+  height: 1px;
+  background: var(--aria-separator);
+}
+menu submenu {
+  padding: 0 0 0 16px;
+  gap: 2px;
 }
 
 /* Calendar popup */

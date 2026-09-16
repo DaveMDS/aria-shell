@@ -65,6 +65,7 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Shell(ShellEvent)          monitors and surfaces appearing/disappearing
   Message::Panel(window::Id, panel::Message)
   Message::Compositor(compositor::Event)   workspaces/windows changes, applied to `Compositor`
+  Message::Tray(tray::Event)               status notifier items and their menus, applied to `Tray`
   + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
@@ -73,8 +74,11 @@ Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadget
 AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
   Message::Clock(clock::Message) | Message::Workspaces(..) | ...
 
-Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / subscription
+Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / popup_size(ctx) / subscription
   Message::Calendar(calendar::Message)
+
+TrayGadget (gadgets/tray.rs)   impl Gadget: a row of items from `ctx.tray`, the clicked item's menu in the popup
+  Message::OpenMenu(key, n) | MenuClick(id) | ToggleSubmenu(id) | Activate(key) | Scroll(key, delta) | ...
 
 Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today, theme, node)
 
@@ -82,6 +86,13 @@ Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, act
   subscription()            the single IPC stream (compositor/hyprland.rs), yields `Event`s
   apply(Event)              patches the state
   run(Command) -> Task      sends a command (activate workspace/window) to the backend
+
+Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>` (props + pixmap icons), loaded menus
+  subscription()            one session-bus connection (tray/dbus.rs): the watcher we serve or defer to, the
+                            host, one task per item; yields `Event`s (Connected, Added/Updated/Removed, Menu, ..)
+  apply(Event) -> Task      patches the state; a `MenuChanged` for a loaded menu re-fetches it
+  run(Command, cursor)      Activate/SecondaryActivate/ContextMenu/Scroll on an item, LoadMenu/ExpandMenu/MenuClick
+                            over `com.canonical.dbusmenu` (tray/menu.rs)
 
 Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once
   load / try_load(&Config)  css.rs (scanner) -> selector.rs + value.rs (typed rules)
@@ -107,34 +118,45 @@ watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, 
 Two things flow between the daemon and the gadgets besides messages:
 
 - **`gadget::Context`** goes *down*, into `view`. It holds
-  `gadget::Shared` (`&Compositor`, `&Theme`; later `&Audio`, `&Tray`,
-  ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
+  `gadget::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`; later
+  `&Audio`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.
 - **`gadget::Action`** comes *up*, out of `update`, in place of a bare
   `Task`: `Action::Run(Task)` for the gadget's own async work,
-  `Action::Compositor(Command)` (and later `Action::Audio(..)`, ...) for
-  things only the daemon can do, `Action::OpenPopup`/`ClosePopup` for a
-  popup surface. `Panel::update` turns it into the concrete
+  `Action::Compositor(Command)` / `Action::Tray(Command)` (and later
+  `Action::Audio(..)`, ...) for things only the daemon can do,
+  `Action::OpenPopup`/`ClosePopup` for a popup surface, `Action::Many`
+  for several at once. `Panel::update` turns it into the concrete
   `panel::Action` (same variants, popup bookkeeping done) and
   `AriaShell::perform` into a `Task`. Gadgets never hold an IPC handle.
 
 - **Popups** are xdg popups parented to the panel's layer surface. A
   gadget with one keeps a `gadget::Popup` field, exposes it through
   `Gadget::popup()`, wraps the widget the popup hangs from in
-  `popup.anchor(..)` (a `container` tagged with a unique `widget::Id`) and
-  returns `popup.toggle(size)` from `update`; the content is
-  `Gadget::popup_view`. Under the hood `toggle` yields
-  `Action::OpenPopup { anchor, size }` / `ClosePopup(id)`; the panel mints
-  the `window::Id`, remembers `popup -> gadget index` and records it in
-  the gadget's `Popup`. The daemon keeps `popup -> panel`, asks the widget
-  tree for the anchor's bounds with a custom `Operation` (`widget_bounds`
-  in `main.rs`) and sends `NewPopUp` placed by `panel::popup_settings`
-  (centred on the anchor, below a top bar / above a bottom one).
-  `view(popup_id)` routes to `Panel::popup_view` -> `Gadget::popup_view`.
-  Whoever closes it (the gadget, or the compositor on a click outside),
-  it ends in `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the
-  gadget's `Popup` is marked closed.
+  `popup.anchor(..)` (a `container` tagged with a `widget::Id` unique to
+  the `Popup`; `anchor_nth(n, ..)` / `toggle_nth(n)` when several widgets
+  may host it, one per tray item) and returns `popup.toggle()` from
+  `update`; the content is `Gadget::popup_view`. **Its size is a
+  function of the state**: `Gadget::popup_size(ctx)` (a Wayland surface
+  needs it up front, iced can't size it from the content). The daemon
+  asks for it when the popup opens and again after every shared-state
+  or gadget update (`sync_popups`); a different answer is sent as
+  `PopUpReposition` with the same anchor, which is how a tray menu
+  grows when a submenu unfolds. `Theme::measure(node, text)` /
+  `line_height(node)` exist for that (cosmic-text through
+  `iced::advanced::graphics::text::Paragraph`). Under the hood `toggle`
+  yields `Action::OpenPopup { anchor }` / `ClosePopup(id)`; the panel
+  mints the `window::Id`, remembers `popup -> gadget index` and records
+  it in the gadget's `Popup`. The daemon keeps `popup -> (panel, anchor
+  rect, size)`, asks the widget tree for the anchor's bounds with a
+  custom `Operation` (`widget_bounds` in `main.rs`) and sends `NewPopUp`
+  placed by `panel::popup_settings` (centred on the anchor, below a top
+  bar / above a bottom one). `view(popup_id)` routes to
+  `Panel::popup_view` -> `Gadget::popup_view`. Whoever closes it (the
+  gadget, or the compositor on a click outside), it ends in
+  `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's
+  `Popup` is marked closed and `Gadget::popup_closed` runs.
 
 - **Styling is a CSS-like theme file**, resolved per widget in `view`.
   `assets/base.css` (compiled in, always first) documents the element
@@ -227,6 +249,38 @@ Two things flow between the daemon and the gadgets besides messages:
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
   theme matters here (`launcher`, `launcher icon { height }`), not
   config.
+- **The tray** (`tray/`) is the first DBus source, the shape notifications
+  and MPRIS will copy: one `zbus::Connection` (tokio feature) opened in
+  the subscription's stream, handed to the daemon as
+  `Event::Connected(conn)` so `Tray::run` can call methods with it; the
+  stream runs the host loop. The
+  `org.kde.StatusNotifierWatcher` object is always served
+  (`#[interface]`, item keys are `<bus name><path>`, an item is
+  unregistered when its name leaves the bus via `NameOwnerChanged`);
+  the name is requested with `DoNotQueue`, and if another bar owns it
+  (noctalia on this desktop) we act as a plain host of that watcher,
+  which uses the same proxy and signals as talking to our own, and
+  retry when the owner goes away. One tokio task per item: `GetAll`
+  on `org.freedesktop.DBus.Properties`, then `NewIcon`/`NewStatus`/...
+  re-read the properties they cover (`PropertiesChanged` too, for the
+  apps that emit it; proxies are built with `CacheProperties::No`,
+  most items never emit it). `IconPixmap` (`a(iiay)`, ARGB32 network
+  order) is picked (largest <= 64px) and converted to RGBA once per
+  change into an `image::Handle` kept in the `Item`; `IconName` goes
+  through `Icons::resolve_name` (the item's `IconThemePath` searched
+  first, then the theme, then the generic fallback). Menus:
+  `com.canonical.dbusmenu` `GetLayout(0, -1)` after `AboutToShow`
+  (apps build their menus on it: nm-applet's VPN submenu appears
+  then), parsed into a `Menu` tree (invisible items dropped, `_`
+  mnemonics stripped), shown by the gadget as a column of buttons with
+  submenus unfolding in place; a click sends `Event(id, "clicked")` and
+  closes the popup; `LayoutUpdated`/`ItemsPropertiesUpdated` re-fetch
+  a loaded menu. Left click: `Activate`, or the menu if `ItemIsMenu`;
+  right: the menu, or `ContextMenu` when there's none; middle:
+  `SecondaryActivate`; wheel: `Scroll(clicks, orientation)`, positive
+  up as KDE sends it. The click methods get the pointer's global
+  position as the daemon estimates it. No tooltips (a 32px surface
+  would clip them), no overlay icons, no menu icons or shortcuts.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
   possible later (replace the value, rebuild panels) and what makes the
@@ -268,6 +322,41 @@ Two things flow between the daemon and the gadgets besides messages:
 
 ### Facts about the crates, verified in source (v0.20.1 / iced 0.14)
 
+- zbus 5 with `default-features = false, features = ["tokio"]` runs on
+  iced's tokio runtime (`tokio::spawn` from a subscription works). A
+  `#[proxy]` caches properties by default and only invalidates them on
+  `PropertiesChanged`, which SNI items rarely emit: build item proxies
+  with `.cache_properties(CacheProperties::No)`.
+  `request_name_with_flags(.., DoNotQueue)` returns
+  `Err(Error::NameTaken)`, not `Ok(RequestNameReply::Exists)`, when
+  another connection owns the name. A `#[interface]` method gets the
+  caller with `#[zbus(header)] h: Header<'_>` (`h.sender()`) and emits
+  signals through `#[zbus(signal_emitter)]`; from outside a method,
+  `SignalEmitter::new(&conn, path)`. Signal streams from different
+  signals are different types: merge them with `stream::select_all`
+  over `BoxStream`s. `zvariant` converts an `OwnedValue` to a tuple /
+  `Vec` / `String` with `try_from`; a `Structure` inside an `av` comes
+  back as a tuple the same way.
+- `Message::PopUpReposition { settings: IcedNewPopupSettings, id }`
+  resizes and re-places a mapped popup (xdg_popup v3 `reposition`;
+  Hyprland and Sway have it, older compositors log and ignore); the
+  runtime updates the surface size on the following configure.
+- One wheel click reaches iced as **several** `WheelScrolled` events
+  in `iced_exwlshell`: `Pixels { 0, 0 }` (from `axis_source`), `Lines
+  { y }` (from `axis_value120`/`axis_discrete`) and `Pixels { y: 15 }`
+  (from `axis`), signs negated (up is positive). Touchpads send only
+  `Pixels`. The tray counts `Lines` as clicks, accumulates `Pixels`
+  into clicks of 15 and drops a `Pixels` arriving within 100ms of a
+  `Lines` (the same click); `-0.0.signum()` is `-1.0`, so a zero delta
+  must be filtered before taking its sign.
+- A widget's on-screen bounds for `debug widgets` are the container's
+  outer bounds; `Theme::button` puts the node's padding on the button,
+  so the row inside must not get it again (`theme.row(&node, ..)`
+  would: the Workspaces gadget does that, doubling `workspace`
+  padding; left as is since the shipped themes are tuned to it).
+- Theme selectors are global: `gadget.tray item` matched the menu
+  rows under `popup > gadget.tray > menu > item` too and won on
+  specificity, so base.css uses `gadget.tray > item` for the bar.
 - `iced::time::every` needs the `tokio` feature on `iced`. We use
   `tokio::time::sleep` directly for the wall-clock-aligned clock tick.
 - `LayerSize::FILL` with only `Anchor::Top` fills the whole output height;
@@ -514,13 +603,30 @@ Verified on the real Hyprland session with two outputs:
   the launcher, `alacr` + Enter launches Alacritty, Esc closes, a
   click outside (desktop, bar, other monitor) closes it through the
   grab surface, moving keyboard focus elsewhere closes it.
+- Tray: on the real desktop (noctalia owns the watcher, we host
+  through it) nm-applet (icon by name, from Adwaita) and MEGAsync
+  (22px `IconPixmap`) show on both bars at 16px; a right click on
+  MEGAsync opens its 3-row menu sized to its labels, on nm-applet the
+  full menu with disabled rows, separators, ✓ on the two checkmarks,
+  "Connessioni VPN ▸" unfolding in place (the app fills it on
+  `AboutToShow`) and the popup growing 451 -> 480px; a click outside
+  closes it. Not clicked on the live desktop (the rows do things).
 - `tests/ui/run.sh`: `launcher` (open, search, arrows, Esc, click
-  outside on both outputs, click a result, Enter, toggle/hide) and
+  outside on both outputs, click a result, Enter, toggle/hide),
   `clock` (popup on both outputs, today, next/prev month, centred under
-  the clock, click outside) pass in the headless Sway.
+  the clock, click outside) and `tray` (a fake item registers with our
+  watcher and shows on both bars; left/middle click and the wheel
+  reach it with the expected arguments; the menu opens after
+  `AboutToShow(0)` with 4 rows, a separator, the hidden row dropped;
+  the submenu unfolds after `AboutToShow(3)`, the checked child shows,
+  the popup grows; a disabled row does nothing; a row click sends
+  `clicked` and closes the popup; `LayoutUpdated` reloads an open
+  menu; `NewIcon` recolours the icon, `NewStatus` adds `.attention`;
+  unregistering removes it) pass in the headless Sway.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (53 tests: config, theme, selectors, desktop entries, commands,
-  launcher search): clean.
+  (62 tests: config, theme, selectors, desktop entries, commands,
+  launcher search, tray key/pixmap/props/menu parsing, wheel clicks):
+  clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
@@ -530,7 +636,9 @@ window icons) over the Hyprland IPC, with the daemon-owned
 `Compositor` / `Context` / `Action` plumbing and the popup plumbing
 (`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
 (`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),
-the command socket + CLI client, the launcher (`[launcher] terminal`).
+the command socket + CLI client, the launcher (`[launcher] terminal`),
+the tray (`[Tray]`, SNI watcher/host, pixmap and named icons, dbusmenu
+popups with inline submenus, popups sized from state and resized live).
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -538,15 +646,18 @@ Not yet: Sway backend, `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (tray, notifications,
-lock, wallpaper, terminal, idle), launcher `DBusActivatable` entries and
-a themed scrollbar (iced's default for now).
+wrapper), every other gadget and component (notifications,
+lock, wallpaper, terminal, idle), launcher `DBusActivatable` entries,
+a themed scrollbar (iced's default for now), tray tooltips / overlay
+icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
+(the KDE name is what every app uses).
 
 ## Next steps, in order
 
-1. The tray over SNI/DBus: the first DBus connection as a `Subscription`
-   (zbus), the pattern notifications and MPRIS will reuse; then
-   `com.canonical.dbusmenu` as popups.
+1. Notifications: the `org.freedesktop.Notifications` daemon on the
+   tray's bus pattern (a served `#[interface]`, events into a
+   daemon-owned `Notifications`), with its own layer surfaces per
+   notification; COSMIC's `cosmic-notifications` as reference.
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`, scrollbars); the `shader` widget
    for `background: shader("x.wgsl")` when a theme asks for more than

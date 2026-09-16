@@ -20,7 +20,7 @@ mod theme;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -120,6 +120,9 @@ pub struct Icons {
     index: Option<Arc<Index>>,
     /// Window class -> its icon (`None`: nothing found, don't retry).
     cache: HashMap<String, Option<Icon>>,
+    /// Plain icon names (tray items), with the extra directory each
+    /// was looked up in; always resolves to something.
+    named: HashMap<(String, Option<PathBuf>), Icon>,
 }
 
 impl Icons {
@@ -135,6 +138,7 @@ impl Icons {
             overrides,
             index: None,
             cache: HashMap::new(),
+            named: HashMap::new(),
         }
     }
 
@@ -162,6 +166,7 @@ impl Icons {
             Event::Loaded(index) => {
                 self.index = Some(index);
                 self.cache.clear();
+                self.named.clear();
             }
         }
     }
@@ -202,6 +207,36 @@ impl Icons {
         self.cache.get(class).and_then(Option::as_ref)
     }
 
+    /// Make sure the icon called `name` has an entry: from `dir` (an
+    /// app's own icon directory, searched as-is) if given, else the
+    /// theme, else the generic fallback. A no-op until the index is
+    /// loaded.
+    pub fn resolve_name(&mut self, name: &str, dir: Option<&str>) {
+        let Some(index) = &self.index else {
+            return;
+        };
+        let key = (name.to_owned(), dir.map(PathBuf::from));
+        if self.named.contains_key(&key) {
+            return;
+        }
+        let found = key
+            .1
+            .as_deref()
+            .and_then(|d| find_in_dir(d, name, 0))
+            .or_else(|| index.icons.lookup(name, LOOKUP_SIZE))
+            .or_else(|| index.icons.lookup(FALLBACK, LOOKUP_SIZE));
+        let Some(path) = found else {
+            log::debug!("no icon named {name:?}, and no fallback");
+            return;
+        };
+        self.named.insert(key, Icon::from_path(path));
+    }
+
+    /// The icon called `name`, once resolved.
+    pub fn get_name(&self, name: &str, dir: Option<&str>) -> Option<&Icon> {
+        self.named.get(&(name.to_owned(), dir.map(PathBuf::from)))
+    }
+
     /// Directories whose changes should rebuild the index: where the
     /// desktop entries and the theme icons live.
     pub fn watch_dirs(&self) -> Vec<PathBuf> {
@@ -238,6 +273,30 @@ fn application_dirs() -> Vec<PathBuf> {
         .into_iter()
         .map(|d| d.join("applications"))
         .collect()
+}
+
+/// `name.svg` or `name.png` under `dir` (a few levels deep: apps ship
+/// `hicolor/<size>/apps/` trees), svg preferred.
+fn find_in_dir(dir: &Path, name: &str, depth: usize) -> Option<PathBuf> {
+    let svg = dir.join(format!("{name}.svg"));
+    if svg.is_file() {
+        return Some(svg);
+    }
+    let png = dir.join(format!("{name}.png"));
+    if png.is_file() {
+        return Some(png);
+    }
+    if depth >= 4 {
+        return None;
+    }
+    let mut subdirs: Vec<PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    subdirs.sort();
+    subdirs.iter().find_map(|d| find_in_dir(d, name, depth + 1))
 }
 
 /// Class -> file. The desktop entry's `Icon` first (by id,

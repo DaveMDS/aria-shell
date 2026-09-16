@@ -11,6 +11,8 @@
 //! a gadget that wants to change it returns an [`Action`] carrying a
 //! command, which the daemon executes.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use iced::widget::{Space, container};
 use iced::{Element, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
@@ -18,6 +20,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
+use crate::gadgets::tray::{self, TrayGadget};
 use crate::gadgets::workspaces::{self, Workspaces};
 use crate::icons::Icons;
 use crate::theme::{Node, Theme};
@@ -28,6 +31,7 @@ pub struct Shared<'a> {
     pub compositor: &'a Compositor,
     pub theme: &'a Theme,
     pub icons: &'a Icons,
+    pub tray: &'a crate::tray::Tray,
 }
 
 /// What a gadget gets in `view`: the shared state plus its own place in
@@ -54,14 +58,15 @@ pub enum Action<M> {
     None,
     Run(Task<M>),
     Compositor(compositor::Command),
-    /// Open a popup surface of `size` pixels, hanging off the widget
-    /// tagged `anchor`. Gadgets don't build this by hand, they call
-    /// [`Popup::toggle`].
+    Tray(crate::tray::Command),
+    /// Open a popup surface hanging off the widget tagged `anchor`,
+    /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
+    /// hand, they call [`Popup::toggle`].
     OpenPopup {
         anchor: widget::Id,
-        size: (u32, u32),
     },
     ClosePopup(window::Id),
+    Many(Vec<Action<M>>),
 }
 
 /// A gadget's popup surface, as far as the gadget is concerned: the
@@ -69,15 +74,21 @@ pub enum Action<M> {
 /// field and hands it out through [`Gadget::popup`]; the panel reports
 /// the surface coming and going through it, whoever closed it (the
 /// gadget, or the compositor on a click outside).
+///
+/// A gadget with several widgets a popup may hang from (one per tray
+/// item) numbers them: [`Popup::anchor_nth`] / [`Popup::toggle_nth`].
 pub struct Popup {
-    anchor: widget::Id,
+    /// Makes the anchor ids unique across gadgets and windows (the
+    /// runtime searches every window for them).
+    serial: u64,
     id: Option<window::Id>,
 }
 
 impl Popup {
     pub fn new() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
         Self {
-            anchor: widget::Id::unique(),
+            serial: NEXT.fetch_add(1, Ordering::Relaxed),
             id: None,
         }
     }
@@ -86,19 +97,43 @@ impl Popup {
         self.id.is_some()
     }
 
-    /// Tag `content` as the widget the popup hangs from.
-    pub fn anchor<'a, M: 'a>(&self, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
-        container(content).id(self.anchor.clone()).into()
+    fn anchor_id(&self, n: usize) -> widget::Id {
+        widget::Id::from(format!("popup-anchor-{}-{n}", self.serial))
     }
 
-    /// Close the popup if open, else open one of `size` pixels.
-    pub fn toggle<M>(&mut self, size: (u32, u32)) -> Action<M> {
+    /// Tag `content` as the widget the popup hangs from.
+    pub fn anchor<'a, M: 'a>(&self, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
+        self.anchor_nth(0, content)
+    }
+
+    pub fn anchor_nth<'a, M: 'a>(
+        &self,
+        n: usize,
+        content: impl Into<Element<'a, M>>,
+    ) -> Element<'a, M> {
+        container(content).id(self.anchor_id(n)).into()
+    }
+
+    /// Close the popup if open, else open one.
+    pub fn toggle<M>(&mut self) -> Action<M> {
+        self.toggle_nth(0)
+    }
+
+    /// Close the popup if open, else open one on anchor `n`.
+    pub fn toggle_nth<M>(&mut self, n: usize) -> Action<M> {
         match self.id.take() {
             Some(id) => Action::ClosePopup(id),
             None => Action::OpenPopup {
-                anchor: self.anchor.clone(),
-                size,
+                anchor: self.anchor_id(n),
             },
+        }
+    }
+
+    /// Close it if open.
+    pub fn close<M>(&mut self) -> Action<M> {
+        match self.id.take() {
+            Some(id) => Action::ClosePopup(id),
+            None => Action::None,
         }
     }
 
@@ -113,12 +148,25 @@ impl Popup {
 
 impl<M: Send + 'static> Action<M> {
     pub fn map<N: Send + 'static>(self, f: impl Fn(M) -> N + Send + Sync + 'static) -> Action<N> {
+        self.map_dyn(std::sync::Arc::new(f))
+    }
+
+    /// `map` with a shared function, so `Many` can recurse without
+    /// nesting closure types.
+    fn map_dyn<N: Send + 'static>(
+        self,
+        f: std::sync::Arc<dyn Fn(M) -> N + Send + Sync>,
+    ) -> Action<N> {
         match self {
             Self::None => Action::None,
-            Self::Run(task) => Action::Run(task.map(f)),
+            Self::Run(task) => Action::Run(task.map(move |m| f(m))),
             Self::Compositor(cmd) => Action::Compositor(cmd),
-            Self::OpenPopup { anchor, size } => Action::OpenPopup { anchor, size },
+            Self::Tray(cmd) => Action::Tray(cmd),
+            Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
+            Self::Many(actions) => {
+                Action::Many(actions.into_iter().map(|a| a.map_dyn(f.clone())).collect())
+            }
         }
     }
 }
@@ -144,6 +192,17 @@ pub trait Gadget: Sized {
         Space::new().into()
     }
 
+    /// Size of the popup content, in pixels, from the gadget's state and
+    /// the shared one (a Wayland surface needs it up front, iced can't
+    /// size it from the content). Asked when the popup opens and again
+    /// after any state change: a different answer resizes the surface.
+    fn popup_size(&self, _ctx: Context<'_>) -> (u32, u32) {
+        (1, 1)
+    }
+
+    /// The popup surface is gone, whoever closed it.
+    fn popup_closed(&mut self) {}
+
     /// Per-instance event source (timers, ...). The panel keys it by
     /// gadget index, so identical subscriptions on two gadgets stay
     /// distinct. Shared sources (compositor IPC, DBus) don't go here: they
@@ -157,12 +216,14 @@ pub trait Gadget: Sized {
 pub enum AnyGadget {
     Clock(Clock),
     Workspaces(Workspaces),
+    Tray(TrayGadget),
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
     Clock(clock::Message),
     Workspaces(workspaces::Message),
+    Tray(tray::Message),
 }
 
 impl AnyGadget {
@@ -179,6 +240,10 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
+            tray::TrayConfig::NAME => Some(Self::Tray(TrayGadget::new(
+                config.section(Some(name)),
+                output,
+            ))),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -191,6 +256,7 @@ impl AnyGadget {
         match self {
             Self::Clock(_) => "clock",
             Self::Workspaces(_) => "workspaces",
+            Self::Tray(_) => "tray",
         }
     }
 
@@ -198,6 +264,7 @@ impl AnyGadget {
         match (self, message) {
             (Self::Clock(g), Message::Clock(m)) => g.update(m).map(Message::Clock),
             (Self::Workspaces(g), Message::Workspaces(m)) => g.update(m).map(Message::Workspaces),
+            (Self::Tray(g), Message::Tray(m)) => g.update(m).map(Message::Tray),
             _ => Action::None,
         }
     }
@@ -206,6 +273,7 @@ impl AnyGadget {
         match self {
             Self::Clock(g) => g.view(ctx).map(Message::Clock),
             Self::Workspaces(g) => g.view(ctx).map(Message::Workspaces),
+            Self::Tray(g) => g.view(ctx).map(Message::Tray),
         }
     }
 
@@ -213,6 +281,15 @@ impl AnyGadget {
         match self {
             Self::Clock(g) => g.popup_view(ctx).map(Message::Clock),
             Self::Workspaces(g) => g.popup_view(ctx).map(Message::Workspaces),
+            Self::Tray(g) => g.popup_view(ctx).map(Message::Tray),
+        }
+    }
+
+    pub fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
+        match self {
+            Self::Clock(g) => g.popup_size(ctx),
+            Self::Workspaces(g) => g.popup_size(ctx),
+            Self::Tray(g) => g.popup_size(ctx),
         }
     }
 
@@ -220,6 +297,7 @@ impl AnyGadget {
         match self {
             Self::Clock(g) => g.popup(),
             Self::Workspaces(g) => g.popup(),
+            Self::Tray(g) => g.popup(),
         }
     }
 
@@ -233,12 +311,18 @@ impl AnyGadget {
         if let Some(p) = self.popup() {
             p.closed();
         }
+        match self {
+            Self::Clock(g) => <Clock as Gadget>::popup_closed(g),
+            Self::Workspaces(g) => <Workspaces as Gadget>::popup_closed(g),
+            Self::Tray(g) => <TrayGadget as Gadget>::popup_closed(g),
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
         match self {
             Self::Clock(g) => g.subscription().map(Message::Clock),
             Self::Workspaces(g) => g.subscription().map(Message::Workspaces),
+            Self::Tray(g) => g.subscription().map(Message::Tray),
         }
     }
 }

@@ -39,7 +39,7 @@ use iced::widget::{
     Button, Column, Container, Row, Text, TextInput, button, column, container, row, text,
     text_input,
 };
-use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow};
+use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow, Size};
 
 use crate::config::{self, Config, GeneralConfig};
 use value::Property;
@@ -55,6 +55,9 @@ const BASE: &str = include_str!("../../assets/base.css");
 
 /// Bar thickness when no rule sets `min-height` on `panel`.
 pub const DEFAULT_PANEL_HEIGHT: f32 = 32.0;
+
+/// iced's text size when no rule sets `font-size`.
+const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 pub struct Theme {
     /// In cascade order: later rules win.
@@ -316,6 +319,35 @@ impl Theme {
             self.resolve(&node.input_status(status))
                 .text_input(theme.palette().text)
         })
+    }
+
+    /// The size `text` takes as a [`Theme::text`] of `node` (font and
+    /// size from the theme; iced's default 16px and 1.3 line height
+    /// otherwise), for surfaces that must be sized before layout.
+    pub fn measure(&self, node: &Node, content: &str) -> Size {
+        use iced::advanced::text::Paragraph as _;
+        let s = self.resolve(node);
+        let size = s.font_size.unwrap_or(DEFAULT_FONT_SIZE);
+        let paragraph =
+            iced::advanced::graphics::text::Paragraph::with_text(iced::advanced::Text {
+                content,
+                bounds: Size::INFINITE,
+                size: size.into(),
+                line_height: text::LineHeight::default(),
+                font: s.font().unwrap_or_default(),
+                align_x: text::Alignment::Left,
+                align_y: iced::alignment::Vertical::Top,
+                shaping: text::Shaping::Advanced,
+                wrapping: text::Wrapping::None,
+            });
+        paragraph.min_bounds()
+    }
+
+    /// The height of one line of text of `node`, as [`Theme::measure`]
+    /// sees it.
+    pub fn line_height(&self, node: &Node) -> f32 {
+        let size = self.resolve(node).font_size.unwrap_or(DEFAULT_FONT_SIZE);
+        text::LineHeight::default().to_absolute(size.into()).0
     }
 
     /// A `row` styled as `node`: `gap` and padding.

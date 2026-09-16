@@ -11,6 +11,7 @@
 //!   layout W H      the global space `move` refers to (default 3840x1080)
 //!   move X Y        pointer to global X,Y
 //!   click [button]  press and release (left, right, middle; left by default)
+//!   scroll N        N wheel clicks down (negative: up)
 //!   key NAME        press and release an xkb keysym name: Down, Return,
 //!                   Escape, BackSpace, Tab, space, a, ...
 //!   type TEXT       each character, as a Unicode keysym
@@ -193,6 +194,20 @@ impl Injector {
                 self.pointer.frame();
                 self.pointer
                     .button(self.now(), button, wl_pointer::ButtonState::Released);
+                self.pointer.frame();
+            }
+            "scroll" => {
+                let clicks: i32 = rest
+                    .parse()
+                    .map_err(|_| format!("scroll needs a number, got {rest:?}"))?;
+                self.pointer.axis_source(wl_pointer::AxisSource::Wheel);
+                // A wheel click is 15 units on the continuous axis.
+                self.pointer.axis_discrete(
+                    self.now(),
+                    wl_pointer::Axis::VerticalScroll,
+                    f64::from(clicks) * 15.0,
+                    clicks,
+                );
                 self.pointer.frame();
             }
             "key" => {

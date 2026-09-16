@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [workspace]
-members = [".", "tests/ui/inject"]
+members = [".", "tests/ui/inject", "tests/ui/sni"]
 
 [dependencies]
 iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs"] }
@@ -12,7 +12,7 @@ iced_exwlshell = "0.20.1"
 iced_wayland_subscriber = "0.20.1"
 configparser = { version = "3", features = ["indexmap"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-tokio = { version = "1", features = ["rt", "time", "net", "io-util"] }
+tokio = { version = "1", features = ["rt", "time", "net", "io-util", "macros"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
@@ -20,3 +20,4 @@ env_logger = "0.11"
 csscolorparser = "0.8.4"
 notify = "8.2.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }

@@ -65,7 +65,7 @@ impl Gadget for Clock {
                 if !self.popup.is_open() {
                     self.calendar.show(self.now.date_naive());
                 }
-                return self.popup.toggle(Calendar::SIZE);
+                return self.popup.toggle();
             }
             Message::Calendar(m) => self.calendar.update(m),
         }
@@ -84,6 +84,10 @@ impl Gadget for Clock {
 
     fn popup(&mut self) -> Option<&mut Popup> {
         Some(&mut self.popup)
+    }
+
+    fn popup_size(&self, _ctx: Context<'_>) -> (u32, u32) {
+        Calendar::SIZE
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {

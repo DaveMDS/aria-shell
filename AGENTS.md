@@ -49,12 +49,14 @@ level owns its state and `Message`, routes to children by key, and
 `.map()`s their messages up. No globals: `Config` is loaded once and
 passed by reference. External event sources are `Subscription`s.
 
-Shared state (the compositor's workspaces/windows, the app icons; later
-audio, tray, ...) is owned by the daemon (`Compositor` in `compositor/`,
-`Icons` in `icons/`), reaches
+Shared state (the compositor's workspaces/windows, the app icons, the
+tray items; later audio, ...) is owned by the daemon (`Compositor` in
+`compositor/`, `Icons` in `icons/`, `Tray` in `tray/`), reaches
 gadgets read-only through `gadget::Context` in `view`, and is changed by
-returning `gadget::Action::Compositor(cmd)` from `update`. Gadgets never
-open their own IPC connection. See RS-PORT.md's "Architecture" section
+returning `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` from
+`update`. Gadgets never open their own IPC or DBus connection. A popup's
+size is `Gadget::popup_size(ctx)`, a function of the state, re-asked
+after every update. See RS-PORT.md's "Architecture" section
 before changing the shape of any of these.
 
 Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
@@ -81,12 +83,15 @@ starts a headless nested `sway` (two outputs, `WLR_BACKENDS=headless`),
 the shell inside it with the config in `tests/ui/config` and the desktop
 entries in `tests/ui/data`, and runs each `tests/ui/scenarios/*.sh` with
 the vocabulary of `tests/ui/lib.sh`: `click_widget '<selector>'`,
-`type_text`, `key Down`, `assert_surface popup`, `count_widgets`,
-`shot_surface`. Input goes through `tests/ui/inject` (a persistent
-virtual keyboard + pointer), positions through the shell's `debug`
-commands, so nothing depends on the desktop's compositor. Results land
-in `target/ui/<scenario>/` (status, logs, screenshots). Needs `sway` and
-`grim` installed; no root. Add a scenario for every new interactive
+`type_text`, `key Down`, `scroll 2`, `assert_surface popup`,
+`count_widgets`, `shot_surface`, `sni_start`/`sni_event`/`sni_send`.
+Input goes through `tests/ui/inject` (a persistent virtual keyboard +
+pointer), positions through the shell's `debug` commands, tray items
+through `tests/ui/sni` (a fake status notifier item with a menu, on a
+private session bus from `dbus-run-session`), so nothing depends on the
+desktop's compositor or bus. Results land in `target/ui/<scenario>/`
+(status, logs, screenshots). Needs `sway`, `grim` and `dbus-run-session`
+installed; no root. Add a scenario for every new interactive
 piece; run them before reporting a UI change as done.
 
 On the live desktop, the same without the nested compositor: `ydotool`

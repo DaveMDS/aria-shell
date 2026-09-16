@@ -41,7 +41,8 @@ pub enum Property {
     Width(Length),
     Height(Length),
     MinHeight(f32),
-    FontFamily(String),
+    /// The comma list, in order of preference.
+    FontFamily(Vec<String>),
     FontSize(f32),
     FontWeight(Weight),
 }
@@ -195,19 +196,25 @@ fn shadow(words: &[&str]) -> Result<Option<Shadow>, String> {
     }))
 }
 
-/// The first family of a comma list, unquoted. iced has no fallback
-/// list, the font system falls back on its own.
-fn font_family(value: &str) -> Result<String, String> {
-    let first = value.split(',').next().unwrap_or_default().trim();
-    let name = first
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .or_else(|| first.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
-        .unwrap_or(first);
-    if name.is_empty() {
+/// The comma list, each name unquoted. Which one is used is decided
+/// when the style is applied (the first installed one).
+fn font_family(value: &str) -> Result<Vec<String>, String> {
+    let names: Vec<String> = value
+        .split(',')
+        .map(str::trim)
+        .map(|n| {
+            n.strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .or_else(|| n.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+                .unwrap_or(n)
+                .to_owned()
+        })
+        .filter(|n| !n.is_empty())
+        .collect();
+    if names.is_empty() {
         return Err("empty font-family".to_owned());
     }
-    Ok(name.to_owned())
+    Ok(names)
 }
 
 fn weight(word: &str) -> Result<Weight, String> {
@@ -349,13 +356,18 @@ mod tests {
     #[test]
     fn fonts() {
         assert_eq!(
-            one("font-family", "\"Fira Code\", monospace"),
-            Property::FontFamily("Fira Code".to_owned())
+            one("font-family", "\"Fira Code\", 'Noto Sans',monospace"),
+            Property::FontFamily(vec![
+                "Fira Code".to_owned(),
+                "Noto Sans".to_owned(),
+                "monospace".to_owned()
+            ])
         );
         assert_eq!(
             one("font-family", "monospace"),
-            Property::FontFamily("monospace".to_owned())
+            Property::FontFamily(vec!["monospace".to_owned()])
         );
+        assert!(parse("font-family", ",").is_err());
         assert_eq!(
             one("font-weight", "bold"),
             Property::FontWeight(Weight::Bold)

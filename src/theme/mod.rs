@@ -257,10 +257,12 @@ impl Theme {
     }
 
     /// A `text` styled as `node`: font, size, and colour when a rule sets
-    /// it on the text itself.
+    /// it on the text itself. Shaped with per-glyph font fallback, so a
+    /// theme font missing a glyph (an icon font, a nerd font without
+    /// some script) doesn't show boxes.
     pub fn text<'a>(&self, node: &Node, content: impl text::IntoFragment<'a>) -> Text<'a> {
         let s = self.resolve(node);
-        let mut t = text(content);
+        let mut t = text(content).shaping(text::Shaping::Advanced);
         if let Some(font) = s.font() {
             t = t.font(font);
         }
@@ -316,7 +318,7 @@ impl Style {
             Property::Width(l) => self.width = Some(*l),
             Property::Height(l) => self.height = Some(*l),
             Property::MinHeight(h) => self.min_height = Some(*h),
-            Property::FontFamily(f) => self.font_family = Some(intern(f)),
+            Property::FontFamily(names) => self.font_family = Some(intern(pick_family(names))),
             Property::FontSize(s) => self.font_size = Some(*s),
             Property::FontWeight(w) => self.font_weight = Some(*w),
         }
@@ -369,6 +371,41 @@ impl Style {
             ..Font::DEFAULT
         })
     }
+}
+
+const GENERIC_FAMILIES: [&str; 5] = ["serif", "sans-serif", "monospace", "cursive", "fantasy"];
+
+/// The first of `names` that is a generic family or an installed font,
+/// else the first one (and the font system falls back on its own).
+/// Only asks the font database when there's a choice to make.
+fn pick_family(names: &[String]) -> &str {
+    if names.len() == 1 {
+        return &names[0];
+    }
+    let picked = names
+        .iter()
+        .find(|n| GENERIC_FAMILIES.contains(&n.as_str()) || font_installed(n));
+    match picked {
+        Some(n) => n,
+        None => {
+            log::warn!("none of the fonts {names:?} is installed");
+            &names[0]
+        }
+    }
+}
+
+/// Is a font family with this name installed? Uses the renderer's font
+/// database (it loads the system fonts on first use, which iced would
+/// do at the first text draw anyway).
+fn font_installed(name: &str) -> bool {
+    let mut system = iced::advanced::graphics::text::font_system()
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    system
+        .raw()
+        .db()
+        .faces()
+        .any(|face| face.families.iter().any(|(family, _)| family == name))
 }
 
 /// CSS generic families map to iced's; anything else is a font name.

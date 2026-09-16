@@ -1,0 +1,76 @@
+/*
+ * Waybar: the look of waybar's default style, translucent grey bar with
+ * coloured gadget cells.
+ *
+ * Ported from the GTK-era theme. The original marked the active
+ * workspace and the hovered cells with inset box-shadows (a 3px line
+ * along the bottom edge); iced has no inset shadows, so those are
+ * plain backgrounds here. See assets/base.css for the element tree and
+ * the supported properties.
+ */
+
+:root {
+  --aria-fg: #ffffff;
+  --aria-bg: rgba(43, 48, 59, 0.5);
+  --aria-border: rgba(100, 114, 125, 0.5);
+
+  --color-gray: #64727d;
+  --color-green: #2ecc71;
+  --color-yellow: #f1c40f;
+}
+
+panel {
+  /* `otf-font-awesome` is required to be installed for icons */
+  font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  min-height: 30px;
+  color: var(--aria-fg);
+}
+
+slot {
+  padding: 0;
+  gap: 0;
+}
+gadget {
+  padding: 0 10px;
+  height: fill;
+}
+
+/* gadget: workspaces */
+gadget.workspaces {
+  padding: 0;
+  gap: 0;
+}
+workspace {
+  border: none;
+  border-radius: 0;
+  padding: 0 5px;
+  height: fill;
+  color: var(--aria-fg);
+}
+workspace:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+workspace.active {
+  background: var(--color-gray);
+}
+workspace.urgent {
+  background: var(--aria-urgent);
+}
+
+gadget.clock {
+  background: var(--color-gray);
+}
+gadget.cpu {
+  background: var(--color-green);
+  color: black;
+}
+gadget.audio {
+  background: var(--color-yellow);
+  color: black;
+}
+
+popup {
+  border-radius: 0;
+  border: 3px solid var(--aria-border);
+}

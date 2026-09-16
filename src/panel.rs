@@ -339,11 +339,14 @@ impl Panel {
                         shared,
                         node: e.node.clone(),
                     };
+                    // Centred, so a gadget given `height: fill` by the
+                    // theme keeps its content in the middle of the bar.
                     theme
                         .container(
                             &e.node,
                             e.gadget.view(ctx).map(move |m| Message::Gadget(i, m)),
                         )
+                        .align_y(iced::Alignment::Center)
                         .into()
                 });
             theme

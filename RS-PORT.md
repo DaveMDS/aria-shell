@@ -282,7 +282,13 @@ Two things flow between the daemon and the gadgets besides messages:
 - `iced::font::Family::Name` wants a `&'static str`: theme font names are
   leaked once each (`theme::intern`). Fonts come from the system via
   cosmic-text's fontdb (`FontSystem::new_with_fonts` loads system fonts);
-  `Font::with_name("JetBrainsMono NF")` works for an installed font.
+  `Font::with_name("JetBrainsMono NF")` works for an installed font. A
+  `Font` is one family, so a CSS `font-family` list is resolved at theme
+  load to the first installed name, asking
+  `iced::advanced::graphics::text::font_system()` (`.raw().db().faces()`).
+  `text` defaults to `Shaping::Basic`, which does **no per-glyph font
+  fallback** (an icon font as the family shows boxes for digits);
+  `Theme::text` sets `Shaping::Advanced`.
 - `daemon(..).style(|state, theme| iced::theme::Style)` is one background
   for every window (no window id); per-surface looks are done by the
   view's root container over a transparent background.
@@ -333,6 +339,12 @@ Verified on the real Hyprland session with two outputs:
   while running closes and reopens the bars with the new gadgets and
   theme (log shows the rebuild; `hyprctl layers` shows new surfaces at
   the new height).
+- The two GTK-era themes ported to the new vocabulary
+  (`assets/themes/manjaro.css`, `waybar.css`): reversed-colour cells via
+  `slot.start > gadget:first-child` / `gadget { height: fill }`,
+  translucent `rgba` bar, font fallback lists. What didn't port: inset
+  box-shadows (iced has none; plain backgrounds instead), gadgets that
+  don't exist yet (kept as rules for `gadget.cpu`/`gadget.audio`).
 - Window icons: Firefox (hicolor PNG), Code (`com.visualstudio.code.oss`
   svg via the desktop entry) and kitty drawn at 16px in the workspace
   buttons on both outputs; creating/removing a `.desktop` in

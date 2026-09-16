@@ -1,0 +1,63 @@
+/*
+ * Manjaro: "highly inspired" by the waybar theme used in manjaro sway.
+ * A flat monospace bar; the clock, the first gadget on the left and the
+ * last on the right in reversed colours.
+ *
+ * Ported from the GTK-era theme. See assets/base.css for the element
+ * tree and the supported properties.
+ */
+
+panel {
+  font-family: "JetBrainsMono NF", "Roboto Mono", monospace;
+  min-height: 28px;
+}
+
+/* Gadgets sit flush against each other and fill the bar height, so a
+   background covers the whole cell. */
+slot {
+  padding: 0;
+  gap: 0;
+}
+gadget {
+  padding: 0 8px;
+  height: fill;
+}
+
+/* Bold clock */
+gadget.clock text {
+  font-weight: bold;
+}
+
+/* First gadget, last gadget and the clock use reversed colours */
+gadget.clock,
+slot.start > gadget:first-child,
+slot.end > gadget:last-child {
+  color: var(--aria-bg);
+  background: var(--aria-accent);
+}
+/* ...except the workspaces, whose buttons are accent-coloured. */
+slot.start > gadget.workspaces:first-child {
+  color: var(--aria-fg);
+  background: transparent;
+}
+
+/* Workspaces gadget */
+workspace {
+  color: var(--aria-accent);
+  border: none;
+  border-radius: 0;
+  padding: 0 6px;
+  height: fill;
+}
+workspace.active {
+  color: var(--aria-bg);
+  background: var(--aria-accent);
+}
+workspace.urgent {
+  color: var(--aria-on-accent);
+  background: var(--aria-urgent);
+}
+
+popup {
+  border-radius: 0;
+}

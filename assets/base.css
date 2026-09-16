@@ -5,7 +5,7 @@
  * defaults a theme overrides, not a look. Don't edit it to restyle the
  * shell, write a theme (`[general] style = <name>` in aria.conf, looked
  * up as `themes/<name>.css` under ~/.config/aria-shell/, the XDG data
- * dirs, then assets/; or a path).
+ * dirs, then assets/; or a path). assets/themes/ has examples.
  *
  * Syntax: a CSS subset.
  *   - comments, `selector, selector { property: value; }`
@@ -28,7 +28,9 @@
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill
  *   min-height                  on `panel`: the bar thickness
- *   font-family                 a font name, or serif/sans-serif/monospace (inherited)
+ *   font-family                 font names and/or serif/sans-serif/monospace, comma-separated:
+ *                               the first installed one is used; glyphs it lacks fall back
+ *                               per glyph (inherited)
  *   font-size                   px (inherited)
  *   font-weight                 normal | bold | 100..900 (inherited)
  *

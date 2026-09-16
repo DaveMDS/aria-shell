@@ -26,7 +26,7 @@
  *   box-shadow                  <x> <y> [blur] <colour> | none
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
- *   width, height               <px> | auto | fill
+ *   width, height               <px> | auto | fill (content is centred on a sized axis)
  *   min-height                  on `panel`: the bar thickness
  *   font-family                 font names and/or serif/sans-serif/monospace, comma-separated:
  *                               the first installed one is used; glyphs it lacks fall back

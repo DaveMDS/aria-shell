@@ -36,7 +36,7 @@ use std::sync::Mutex;
 use iced::border::Radius;
 use iced::font::{Family, Weight};
 use iced::widget::{Button, Container, Row, Text, button, container, row, text};
-use iced::{Border, Color, Element, Font, Padding, Shadow};
+use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow};
 
 use crate::config::{self, Config, GeneralConfig};
 use selector::Selector;
@@ -44,6 +44,8 @@ use value::Property;
 
 pub use node::Node;
 pub use value::Length;
+
+use iced::Length as IcedLength;
 
 /// Always loaded first; the neutral defaults every theme builds on.
 const BASE: &str = include_str!("../../assets/base.css");
@@ -217,7 +219,9 @@ impl Theme {
     }
 
     /// A `container` styled as `node`: padding, size, background,
-    /// border, shadow, text colour.
+    /// border, shadow, text colour. Content is centred on an axis the
+    /// theme sizes (`height: fill` shouldn't leave the content at the
+    /// top).
     pub fn container<'a, M: 'a>(
         &self,
         node: &Node,
@@ -226,16 +230,17 @@ impl Theme {
         let s = self.resolve(node);
         let mut c = container(content).padding(s.padding);
         if let Some(w) = s.width {
-            c = c.width(w);
+            c = c.width(w).align_x(Alignment::Center);
         }
         if let Some(h) = s.height {
-            c = c.height(h);
+            c = c.height(h).align_y(Alignment::Center);
         }
         c.style(move |_| s.container())
     }
 
     /// A `button` styled as `node`, re-resolved with `:hover`/`:active`
-    /// as iced reports them.
+    /// as iced reports them. As for [`Theme::container`], content is
+    /// centred on a themed axis (iced's button lays it out top-left).
     pub fn button<'a, M: 'a>(
         &'a self,
         node: &Node,
@@ -243,6 +248,17 @@ impl Theme {
     ) -> Button<'a, M> {
         let s = self.resolve(node);
         let node = node.clone();
+        let mut content: Element<'a, M> = content.into();
+        if s.width.is_some() || s.height.is_some() {
+            let mut inner = container(content);
+            if s.width.is_some() {
+                inner = inner.width(IcedLength::Fill).align_x(Alignment::Center);
+            }
+            if s.height.is_some() {
+                inner = inner.height(IcedLength::Fill).align_y(Alignment::Center);
+            }
+            content = inner.into();
+        }
         let mut b = button(content).padding(s.padding);
         if let Some(w) = s.width {
             b = b.width(w);

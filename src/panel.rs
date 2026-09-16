@@ -92,6 +92,19 @@ pub fn popup_settings(
     .gravity(gravity)
 }
 
+/// Where [`popup_settings`] asks the popup to go, relative to the
+/// panel surface, before the compositor slides it on screen: for
+/// `debug surfaces`.
+pub fn popup_estimate(position: Position, anchor: Rectangle, size: (u32, u32)) -> Rectangle {
+    let (w, h) = (size.0 as f32, size.1 as f32);
+    let x = anchor.x + (anchor.width - w) / 2.0;
+    let y = match position {
+        Position::Top => anchor.y + anchor.height,
+        Position::Bottom => anchor.y - h,
+    };
+    Rectangle::new(iced::Point::new(x, y), iced::Size::new(w, h))
+}
+
 impl PanelConfig {
     /// The `[panel*]` sections to instantiate. With none configured, a
     /// single default bar with just a clock.
@@ -287,6 +300,11 @@ impl Panel {
 
     pub fn position(&self) -> Position {
         self.config.position
+    }
+
+    /// Bar thickness, as the surface was requested.
+    pub fn height(&self) -> u32 {
+        self.height
     }
 
     pub fn update(&mut self, message: Message) -> Action {

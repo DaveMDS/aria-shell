@@ -10,20 +10,47 @@
 //!
 //! The same binary is the client: with arguments, `main` sends them as
 //! one line and prints the reply.
+//!
+//! `debug` commands are answered by the daemon: they carry a [`Reply`]
+//! channel and the listener waits for the text. They exist so a test
+//! driver can ask the shell where things are without going through
+//! compositor-specific tools (`hyprctl layers`), see RS-PORT.md.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
+use std::time::Duration;
+
 use iced::Subscription;
 use iced::futures::channel::mpsc;
-use iced::futures::{SinkExt, Stream};
+use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::stream;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum Command {
     Launcher(LauncherCommand),
+    /// Answered through the channel.
+    Debug(DebugCommand, Reply),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugCommand {
+    /// Every surface the shell has open, with its global rectangle.
+    Surfaces,
+    /// Where the pointer was last seen over one of our surfaces.
+    Cursor,
+}
+
+/// Where the daemon writes the answer to a [`Command::Debug`].
+#[derive(Debug, Clone)]
+pub struct Reply(mpsc::Sender<String>);
+
+impl Reply {
+    pub fn send(mut self, text: impl Into<String>) {
+        let _ = self.0.try_send(text.into());
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +64,9 @@ pub enum LauncherCommand {
 #[derive(Debug, PartialEq, Eq)]
 enum Parsed {
     /// Deliver to the daemon (and reply `OK`).
-    Command(Command),
+    Launcher(LauncherCommand),
+    /// Deliver to the daemon and relay its answer.
+    Debug(DebugCommand),
     /// Answered by the listener itself.
     Reply(String),
 }
@@ -68,8 +97,16 @@ fn parse(line: &str) -> Result<Parsed, String> {
                     ));
                 }
             };
-            Ok(Parsed::Command(Command::Launcher(cmd)))
+            Ok(Parsed::Launcher(cmd))
         }
+        "debug" => match args.as_slice() {
+            ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
+            ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
+            _ => Err(format!(
+                "invalid arguments for <debug>: {} (surfaces | cursor)",
+                args.join(" ")
+            )),
+        },
         other => Err(format!("unknown command <{other}>")),
     }
 }
@@ -126,9 +163,17 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
     while let Ok(Some(line)) = lines.next_line().await {
         log::debug!("command: {line:?}");
         let reply = match parse(&line) {
-            Ok(Parsed::Command(cmd)) => {
-                let _ = tx.send(cmd).await;
+            Ok(Parsed::Launcher(cmd)) => {
+                let _ = tx.send(Command::Launcher(cmd)).await;
                 "OK".to_owned()
+            }
+            Ok(Parsed::Debug(cmd)) => {
+                let (reply_tx, mut reply_rx) = mpsc::channel(1);
+                let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
+                match tokio::time::timeout(Duration::from_secs(2), reply_rx.next()).await {
+                    Ok(Some(text)) => format!("OK {text}").trim_end().to_owned(),
+                    _ => "ERR no answer from the shell".to_owned(),
+                }
             }
             Ok(Parsed::Reply(text)) => format!("OK {text}"),
             Err(e) => format!("ERR {e}"),
@@ -173,21 +218,37 @@ mod tests {
 
     #[test]
     fn parses_launcher_commands() {
-        let toggle = Parsed::Command(Command::Launcher(LauncherCommand::Toggle));
-        assert_eq!(parse("launcher"), Ok(toggle));
+        assert_eq!(
+            parse("launcher"),
+            Ok(Parsed::Launcher(LauncherCommand::Toggle))
+        );
         assert_eq!(
             parse("  aria launcher toggle \n"),
-            Ok(Parsed::Command(Command::Launcher(LauncherCommand::Toggle)))
+            Ok(Parsed::Launcher(LauncherCommand::Toggle))
         );
         assert_eq!(
             parse("launcher show"),
-            Ok(Parsed::Command(Command::Launcher(LauncherCommand::Show)))
+            Ok(Parsed::Launcher(LauncherCommand::Show))
         );
         assert_eq!(
             parse("launcher hide"),
-            Ok(Parsed::Command(Command::Launcher(LauncherCommand::Hide)))
+            Ok(Parsed::Launcher(LauncherCommand::Hide))
         );
         assert!(parse("launcher what").is_err());
+    }
+
+    #[test]
+    fn parses_debug_commands() {
+        assert_eq!(
+            parse("debug surfaces"),
+            Ok(Parsed::Debug(DebugCommand::Surfaces))
+        );
+        assert_eq!(
+            parse("debug cursor"),
+            Ok(Parsed::Debug(DebugCommand::Cursor))
+        );
+        assert!(parse("debug").is_err());
+        assert!(parse("debug nope").is_err());
     }
 
     #[test]

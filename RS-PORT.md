@@ -316,20 +316,45 @@ Two things flow between the daemon and the gadgets besides messages:
   `container::visible_bounds` from iced 0.13 is gone in 0.14.
 - `container.center(Length::Fill)` sets width *and* height, overriding a
   fixed size set before it; use `align_x`/`align_y` for a fixed cell.
-- Driving the app from the CLI: Hyprland's Lua dispatchers move the
-  cursor (`hl.dsp.cursor.move`) and focus (`hl.dsp.focus({ monitor = ..
-  })`) but can't click, and are Hyprland-only anyway (Sway is next).
-  Compositor-agnostic options: `ydotool` (uinput: keys, clicks,
-  `mousemove -a`; needs a udev rule for `/dev/uinput` + the `input`
-  group, `ydotoold` as a user service; not set up yet), `wtype`
-  (keyboard only, `zwp_virtual_keyboard_v1`, which Sway, Hyprland and
-  cosmic-comp all have; no root). `wlr-virtual-pointer` is *not*
-  universal (cosmic-comp doesn't implement it), so uinput is the only
-  pointer path that works everywhere. Positions of our surfaces can't
-  come from `hyprctl layers`: the shell knows them itself
-  (`OutputInfo::logical_position/logical_size` from xdg-output plus the
-  anchor/size it asked for), a `debug surfaces` socket command is the
-  plan. Screenshots with `grim -g` (`-s 3` for a zoomed crop).
+- **Driving the app from the CLI**, without compositor-specific tools
+  (Sway and others are next): input with `ydotool` (uinput, so it works
+  under any compositor; keys, clicks, `mousemove -a` absolute moves
+  which land exactly with a flat pointer profile), positions from the
+  shell's own `debug` socket commands. Setup done on this machine:
+  `uinput` module loaded at boot (`/etc/modules-load.d/uinput.conf`),
+  udev rule `KERNEL=="uinput", GROUP="input", MODE="0660"`, user in
+  `input`, `ydotoold` as a systemd user service (`newgrp` isn't enough
+  for the user manager, a re-login was). Alternatives weighed:
+  Hyprland's `hl.dsp.cursor.move` / `hl.dsp.focus` (no click,
+  Hyprland-only), `wtype` (keyboard only, `zwp_virtual_keyboard_v1`,
+  which Sway, Hyprland and cosmic-comp all have), `wlr-virtual-pointer`
+  (not universal: cosmic-comp lacks it).
+  - `aria-shell debug surfaces` → `panel HDMI-A-1 0,0 1920x30; grab
+    ...; launcher HDMI-A-1 700,330 520x420`: every surface with the
+    global rectangle it *asked for* (`OutputInfo::logical_position/
+    logical_size` from xdg-output plus anchor and size; popups are the
+    requested placement, before any slide). Wayland doesn't tell a
+    client where it really is: another client's exclusive zone shifts
+    a bar (noctalia's bar reserves 35px here, so our top bar sits at
+    y=35 while `debug surfaces` says 0). Exact in a harness where only
+    the shell runs.
+  - `aria-shell debug cursor` → `panel HDMI-A-1 local 960,15 global
+    960,15`: where the pointer was last seen over one of our surfaces
+    (the daemon tracks `CursorMoved`). The driver knows where it put the
+    pointer, so `asked - local` is the surface's real origin: the
+    calibration for the case above (asked 960,50, local 960,15 → y=35).
+  - A session: `aria-shell launcher show; ydotool type 'term'; ydotool
+    key 108:1 108:0` (evdev codes: 103 Up, 108 Down, 28 Enter, 1 Esc);
+    `grim -g "700,330 520x420" shot.png` with the rectangle from `debug
+    surfaces`; `ydotool mousemove -a -x 900 -y 461; ydotool click 0xC0`
+    on a row; the log says `launched "kitty"` and `debug surfaces` no
+    longer lists the launcher. Kill what you launched.
+  - Not yet: `debug widgets` (rectangles of tagged widgets, so a driver
+    can say "the third row" instead of measuring a screenshot), and the
+    headless harness: a nested `sway` with `WLR_BACKENDS=headless
+    WLR_RENDERER=pixman`, the shell inside it, virtual keyboard/pointer
+    protocols for input, `grim` + `debug` for checks; no root, no
+    dependency on the desktop's compositor, runnable in CI.
 - COSMIC as reference (checked in `cosmic-launcher`, `cosmic-panel`,
   `cosmic-applets`, `cosmic-comp`, `libcosmic`, `cosmic-settings-daemon`
   at 2026-09): **no automated UI tests anywhere**, only unit tests in
@@ -451,10 +476,13 @@ Verified on the real Hyprland session with two outputs:
   each output; screenshot shows the 80 apps with icons, names and
   comments, the first row selected in the accent colour, the input
   with its `:focus` border. `hide`/`show`/`toggle` and `ping` over the
-  socket verified, unknown commands get `ERR`. Typing filters live,
-  Esc closes, a click outside (desktop, bar, other monitor) closes it
-  through the grab surface (verified by hand; the log showed the press
-  captured on the grab window, then `Close`).
+  socket verified, unknown commands get `ERR`. Driven with `ydotool`
+  and the `debug` commands (no hands): typing filters live (`term` →
+  Alacritty, kitty, Micro), Down/Down/Up move the selection and the
+  input keeps focus, a click on the kitty row launches it and closes
+  the launcher, `alacr` + Enter launches Alacritty, Esc closes, a
+  click outside (desktop, bar, other monitor) closes it through the
+  grab surface, moving keyboard focus elsewhere closes it.
 - `cargo build`, `cargo clippy --all-targets`, `cargo test` (50 tests,
   config + theme + desktop entries + commands + launcher search): clean.
 

@@ -15,7 +15,7 @@ use std::path::Path;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
-use iced::{Color, Element, Length, Rectangle, Subscription, Task, widget};
+use iced::{Color, Element, Event, Length, Point, Rectangle, Size, Subscription, Task, widget};
 use iced_exwlshell::build_pattern::daemon;
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
@@ -25,7 +25,7 @@ use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use commands::{Command, LauncherCommand};
+use commands::{Command, DebugCommand, LauncherCommand};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use gadget::Shared;
@@ -57,6 +57,15 @@ enum Message {
     /// From the launcher's event subscription: only meant for it when
     /// the window is its own.
     LauncherEvent(Id, launcher::Message),
+    /// The pointer moved over one of our surfaces (for `debug cursor`).
+    Cursor(Id, Point),
+    /// The anchor of a popup about to open was located in its panel.
+    PopupAnchor {
+        popup: Id,
+        panel: Id,
+        anchor: Rectangle,
+        size: (u32, u32),
+    },
 }
 
 struct AriaShell {
@@ -71,13 +80,24 @@ struct AriaShell {
     outputs: BTreeMap<OutputId, OutputInfo>,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
-    /// Open popup surfaces, to the panel each hangs off.
-    popups: BTreeMap<Id, Id>,
-    /// The launcher, while shown: its surface and state.
-    launcher: Option<(Id, Launcher)>,
+    /// Open popup surfaces, to the panel each hangs off and where it
+    /// was asked to be, relative to the panel's surface (the compositor
+    /// may slide it; a `debug surfaces` estimate).
+    popups: BTreeMap<Id, (Id, Rectangle)>,
+    /// The launcher, while shown.
+    launcher: Option<OpenLauncher>,
     /// While the launcher is shown, one transparent surface per output
     /// under it, so a click anywhere else closes it.
-    grabs: Vec<Id>,
+    grabs: Vec<(Id, OutputId)>,
+    /// Last pointer position reported by one of our surfaces.
+    cursor: Option<(Id, Point)>,
+}
+
+struct OpenLauncher {
+    window: Id,
+    output: OutputId,
+    size: (u32, u32),
+    launcher: Launcher,
 }
 
 impl AriaShell {
@@ -99,6 +119,7 @@ impl AriaShell {
             popups: BTreeMap::new(),
             launcher: None,
             grabs: Vec::new(),
+            cursor: None,
         };
         (shell, load_icons)
     }
@@ -120,8 +141,8 @@ impl AriaShell {
         for w in &self.compositor.windows {
             self.icons.resolve(&w.class);
         }
-        if let Some((_, launcher)) = &self.launcher {
-            for id in launcher.visible_ids() {
+        if let Some(open) = &self.launcher {
+            for id in open.launcher.visible_ids() {
                 self.icons.resolve(id);
             }
         }
@@ -144,10 +165,10 @@ impl AriaShell {
             }
             Message::Icons(event) => {
                 self.icons.apply(event);
-                if let Some((_, launcher)) = &mut self.launcher
+                if let Some(open) = &mut self.launcher
                     && let Some(index) = self.icons.index()
                 {
-                    launcher.set_apps(index);
+                    open.launcher.set_apps(index);
                 }
                 self.resolve_icons();
                 Task::none()
@@ -157,15 +178,22 @@ impl AriaShell {
                 (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
+            Message::Command(Command::Debug(cmd, reply)) => {
+                reply.send(match cmd {
+                    DebugCommand::Surfaces => self.describe_surfaces(),
+                    DebugCommand::Cursor => self.describe_cursor(),
+                });
+                Task::none()
+            }
             Message::LauncherEvent(window, m) => match &self.launcher {
-                Some((id, _)) if *id == window => self.update(Message::Launcher(m)),
+                Some(open) if open.window == window => self.update(Message::Launcher(m)),
                 _ => Task::none(),
             },
             Message::Launcher(m) => {
-                let Some((_, launcher)) = &mut self.launcher else {
+                let Some(open) = &mut self.launcher else {
                     return Task::none();
                 };
-                match launcher.update(m) {
+                match open.launcher.update(m) {
                     launcher::Action::Run(task) => {
                         self.resolve_icons();
                         task.map(Message::Launcher)
@@ -190,7 +218,139 @@ impl AriaShell {
                     self.icons.load().map(Message::Icons)
                 }
             }
+            Message::Cursor(window, position) => {
+                self.cursor = Some((window, position));
+                Task::none()
+            }
+            Message::PopupAnchor {
+                popup,
+                panel,
+                anchor,
+                size,
+            } => {
+                let Some(position) = self.panels.get(&panel).map(Panel::position) else {
+                    return Task::none();
+                };
+                let settings = panel::popup_settings(panel, position, anchor, size);
+                let estimate = panel::popup_estimate(position, anchor, size);
+                self.popups.insert(popup, (panel, estimate));
+                Task::done(Message::NewPopUp {
+                    settings,
+                    id: popup,
+                })
+            }
             _ => Task::none(), // runtime variants, handled by the runtime
+        }
+    }
+
+    /// Logical rectangle of an output in the global space (xdg-output).
+    fn output_rect(&self, output: OutputId) -> Option<Rectangle> {
+        let info = self.outputs.get(&output)?;
+        let (x, y) = info.logical_position?;
+        let (w, h) = info.logical_size?;
+        Some(Rectangle::new(
+            Point::new(x as f32, y as f32),
+            Size::new(w as f32, h as f32),
+        ))
+    }
+
+    /// Every surface we have open: its kind, output and global
+    /// rectangle, computed from what we asked the compositor for.
+    fn surfaces(&self) -> Vec<(Id, &'static str, OutputId, Rectangle)> {
+        let mut list = Vec::new();
+        for (&id, panel) in &self.panels {
+            let Some(out) = self.output_rect(panel.output) else {
+                continue;
+            };
+            let h = panel.height() as f32;
+            let y = match panel.position() {
+                panel::Position::Top => out.y,
+                panel::Position::Bottom => out.y + out.height - h,
+            };
+            list.push((
+                id,
+                "panel",
+                panel.output,
+                Rectangle::new(Point::new(out.x, y), Size::new(out.width, h)),
+            ));
+        }
+        for (&id, &(panel, rect)) in &self.popups {
+            if let Some(&(_, _, output, bar)) = list.iter().find(|(p, ..)| *p == panel) {
+                list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
+            }
+        }
+        for &(id, output) in &self.grabs {
+            if let Some(out) = self.output_rect(output) {
+                list.push((id, "grab", output, out));
+            }
+        }
+        if let Some(open) = &self.launcher
+            && let Some(out) = self.output_rect(open.output)
+        {
+            let (w, h) = (open.size.0 as f32, open.size.1 as f32);
+            list.push((
+                open.window,
+                "launcher",
+                open.output,
+                Rectangle::new(
+                    Point::new(
+                        out.x + (out.width - w) / 2.0,
+                        out.y + (out.height - h) / 2.0,
+                    ),
+                    Size::new(w, h),
+                ),
+            ));
+        }
+        list
+    }
+
+    fn output_name(&self, output: OutputId) -> &str {
+        self.outputs
+            .get(&output)
+            .and_then(|o| o.name.as_deref())
+            .unwrap_or("?")
+    }
+
+    /// `debug surfaces`: `<kind> <output> <x>,<y> <w>x<h>` per surface,
+    /// `;`-separated (the protocol is one line per reply).
+    fn describe_surfaces(&self) -> String {
+        self.surfaces()
+            .into_iter()
+            .map(|(_, kind, output, r)| {
+                format!(
+                    "{kind} {} {},{} {}x{}",
+                    self.output_name(output),
+                    r.x as i32,
+                    r.y as i32,
+                    r.width as i32,
+                    r.height as i32
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    /// `debug cursor`: where the pointer was last seen over one of our
+    /// surfaces, `<kind> <output> local <x>,<y> global <x>,<y>`. The
+    /// local position is what the surface got; the global one assumes
+    /// the surface is where [`AriaShell::surfaces`] thinks (another
+    /// client's exclusive zone can shift a bar without us knowing), so a
+    /// driver that placed the pointer itself can compare the two and
+    /// learn the surface's real origin.
+    fn describe_cursor(&self) -> String {
+        let Some((window, p)) = self.cursor else {
+            return "unknown".to_owned();
+        };
+        match self.surfaces().into_iter().find(|(id, ..)| *id == window) {
+            Some((_, kind, output, r)) => format!(
+                "{kind} {} local {},{} global {},{}",
+                self.output_name(output),
+                p.x as i32,
+                p.y as i32,
+                (r.x + p.x) as i32,
+                (r.y + p.y) as i32
+            ),
+            None => "unknown".to_owned(),
         }
     }
 
@@ -214,6 +374,7 @@ impl AriaShell {
         self.popups.clear();
         self.panels.clear();
         tasks.push(self.close_launcher());
+        self.cursor = None;
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
         tasks.push(self.icons.load().map(Message::Icons));
@@ -249,10 +410,9 @@ impl AriaShell {
             Action::Run(task) => task.map(move |m| Message::Panel(panel, m)),
             Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
             Action::OpenPopup { id, anchor, size } => {
-                let Some(position) = self.panels.get(&panel).map(Panel::position) else {
+                if !self.panels.contains_key(&panel) {
                     return Task::none();
-                };
-                self.popups.insert(id, panel);
+                }
                 // The gadget sized its content; the surface also holds
                 // the `popup` root's padding and border.
                 let chrome = self.theme.resolve(&Node::root("popup"));
@@ -264,14 +424,11 @@ impl AriaShell {
                 );
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
-                widget_bounds(anchor).map(move |bounds| Message::NewPopUp {
-                    settings: panel::popup_settings(
-                        panel,
-                        position,
-                        bounds.unwrap_or_default(),
-                        size,
-                    ),
-                    id,
+                widget_bounds(anchor).map(move |bounds| Message::PopupAnchor {
+                    popup: id,
+                    panel,
+                    anchor: bounds.unwrap_or_default(),
+                    size,
                 })
             }
             Action::ClosePopup(id) => {
@@ -305,7 +462,7 @@ impl AriaShell {
         let mut tasks = Vec::new();
         for o in self.outputs.values() {
             let id = Id::unique();
-            self.grabs.push(id);
+            self.grabs.push((id, OutputId::from(o)));
             tasks.push(Task::done(Message::NewLayerShell {
                 settings: NewLayerShellSettings {
                     anchor: Anchor::all(),
@@ -341,7 +498,12 @@ impl AriaShell {
             },
             id,
         }));
-        self.launcher = Some((id, launcher));
+        self.launcher = Some(OpenLauncher {
+            window: id,
+            output: OutputId::from(&output),
+            size: (size.width.to_set(), size.height.to_set()),
+            launcher,
+        });
         self.resolve_icons();
         Task::batch(tasks)
     }
@@ -350,9 +512,13 @@ impl AriaShell {
         let ids: Vec<Id> = self
             .launcher
             .take()
-            .map(|(id, _)| id)
+            .map(|open| open.window)
             .into_iter()
-            .chain(std::mem::take(&mut self.grabs))
+            .chain(
+                std::mem::take(&mut self.grabs)
+                    .into_iter()
+                    .map(|(id, _)| id),
+            )
             .collect();
         Task::batch(
             ids.into_iter()
@@ -365,12 +531,18 @@ impl AriaShell {
             ShellEvent::NewShell(info) => match &self.launcher {
                 // The search field can only take focus once its surface
                 // exists.
-                Some((id, launcher)) if *id == info.window => {
-                    launcher.focus().map(Message::Launcher)
+                Some(open) if open.window == info.window => {
+                    open.launcher.focus().map(Message::Launcher)
                 }
                 _ => Task::none(),
             },
             ShellEvent::OutputAdded(output) => {
+                log::debug!(
+                    "output {:?}: logical position {:?}, size {:?}",
+                    output.name,
+                    output.logical_position,
+                    output.logical_size
+                );
                 self.outputs.insert(OutputId::from(&output), output.clone());
                 self.open_panels(&output)
             }
@@ -394,19 +566,19 @@ impl AriaShell {
                 }))
             }
             ShellEvent::Closed(id) => {
-                let is_launcher = self.launcher.as_ref().is_some_and(|(l, _)| *l == id);
-                if is_launcher || self.grabs.contains(&id) {
+                let is_launcher = self.launcher.as_ref().is_some_and(|l| l.window == id);
+                if is_launcher || self.grabs.iter().any(|(g, _)| *g == id) {
                     // One of the launcher's surfaces went away (on our
                     // request, or not): the rest follows.
-                    self.grabs.retain(|g| *g != id);
+                    self.grabs.retain(|(g, _)| *g != id);
                     if is_launcher {
                         self.launcher = None;
                     }
                     return self.close_launcher();
                 }
                 if self.panels.remove(&id).is_some() {
-                    self.popups.retain(|_, panel| *panel != id);
-                } else if let Some(panel) = self.popups.remove(&id)
+                    self.popups.retain(|_, (panel, _)| *panel != id);
+                } else if let Some((panel, _)) = self.popups.remove(&id)
                     && let Some(panel) = self.panels.get_mut(&panel)
                 {
                     panel.popup_closed(id);
@@ -445,24 +617,24 @@ impl AriaShell {
 
     fn view(&self, window: Id) -> Element<'_, Message> {
         let shared = self.shared();
-        if let Some((id, launcher)) = &self.launcher
-            && *id == window
+        if let Some(open) = &self.launcher
+            && open.window == window
         {
             let root: Element<'_, launcher::Message> = self
                 .theme
-                .container(&Node::root("launcher"), launcher.view(shared))
+                .container(&Node::root("launcher"), open.launcher.view(shared))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
             return root.map(Message::Launcher);
         }
-        if self.grabs.contains(&window) {
+        if self.grabs.iter().any(|(g, _)| *g == window) {
             return launcher::grab_view().map(Message::Launcher);
         }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
-        if let Some(&owner) = self.popups.get(&window)
+        if let Some(&(owner, _)) = self.popups.get(&window)
             && let Some(panel) = self.panels.get(&owner)
         {
             return panel
@@ -487,16 +659,23 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
-        let launcher = self
-            .launcher
-            .iter()
-            .map(|(_, l)| l.subscription().map(|(w, m)| Message::LauncherEvent(w, m)));
+        let launcher = self.launcher.iter().map(|open| {
+            open.launcher
+                .subscription()
+                .map(|(w, m)| Message::LauncherEvent(w, m))
+        });
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
                 commands::listen().map(Message::Command),
                 watch::watch(&files).map(Message::Files),
+                iced::event::listen_with(|event, _, window| match event {
+                    Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                        Some(Message::Cursor(window, position))
+                    }
+                    _ => None,
+                }),
             ]
             .into_iter()
             .chain(panels)

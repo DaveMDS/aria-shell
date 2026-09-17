@@ -233,6 +233,8 @@ pub enum Message {
     Sort(Column),
     /// A right click on the row of that pid.
     RowMenu(u32),
+    /// A left click on a row while a menu is open.
+    CloseMenu,
     Menu(menu::Message),
 }
 
@@ -280,6 +282,10 @@ impl Gadget for SystemMonitor {
                 } else {
                     Some(pid)
                 };
+                Action::None
+            }
+            Message::CloseMenu => {
+                self.menu_for = None;
                 Action::None
             }
             Message::Menu(m) => match self.menu.update(m) {
@@ -584,10 +590,13 @@ impl SystemMonitor {
                     .row(&r, cells)
                     .align_y(Alignment::Center)
                     .width(Length::Fill);
-                let row: Element<'a, Message> =
-                    mouse_area(theme.container(&r, content).width(Length::Fill))
-                        .on_right_press(Message::RowMenu(p.pid))
-                        .into();
+                // A left click on any row puts an open menu away.
+                let mut area = mouse_area(theme.container(&r, content).width(Length::Fill))
+                    .on_right_press(Message::RowMenu(p.pid));
+                if self.menu_for.is_some() {
+                    area = area.on_press(Message::CloseMenu);
+                }
+                let row: Element<'a, Message> = area.into();
                 let mut out = vec![row];
                 if self.menu_for == Some(p.pid) {
                     let items = vec![

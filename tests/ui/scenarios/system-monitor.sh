@@ -117,6 +117,15 @@ while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"] menu > item')" !
     click_widget_with right 'table row[pid="'"$victim"'"]' || settle 1
 done
 shot_surface popup-menu popup
+# A left click on a row puts the menu away; the menu again for Terminate.
+click_widget 'table row.selected[pid="'"$victim"'"]'
+assert_eq "$(count_widgets 'table row menu')" 0 "a left click closes the menu"
+i=0
+while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"] menu > item')" != 2 ]; do
+    i=$((i + 1))
+    [ $i -le 5 ] || { echo "couldn't reopen the sleep's menu"; exit 1; }
+    click_widget_with right 'table row[pid="'"$victim"'"]' || settle 1
+done
 kill -0 "$victim" 2> /dev/null || { echo "the sleep died on its own"; exit 1; }
 i=0
 while kill -0 "$victim" 2> /dev/null; do

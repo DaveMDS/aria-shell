@@ -26,9 +26,23 @@ use crate::theme::{self, Node};
 #[derive(Debug, Clone)]
 pub struct LauncherConfig {
     /// Terminal emulator for `Terminal=true` entries, run as
-    /// `<terminal> -e <command>`. Empty: `$TERMINAL`, else `xterm`.
+    /// `<terminal> -e <command>`. Empty: `$TERMINAL`, else the first
+    /// of [`TERMINALS`] on the PATH, else `xterm`.
     pub terminal: String,
 }
+
+/// Terminals tried when neither the config nor `$TERMINAL` says.
+pub const TERMINALS: &[&str] = &[
+    "kitty",
+    "alacritty",
+    "foot",
+    "wezterm",
+    "ghostty",
+    "gnome-terminal",
+    "konsole",
+    "xfce4-terminal",
+    "xterm",
+];
 
 impl Section for LauncherConfig {
     const NAME: &'static str = "launcher";
@@ -37,7 +51,12 @@ impl Section for LauncherConfig {
         let terminal = raw
             .get("terminal")
             .map(str::to_owned)
-            .unwrap_or_else(|| std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_owned()));
+            .or_else(|| std::env::var("TERMINAL").ok().filter(|t| !t.is_empty()))
+            .unwrap_or_else(|| {
+                crate::process::first_on_path(TERMINALS)
+                    .unwrap_or("xterm")
+                    .to_owned()
+            });
         Self { terminal }
     }
 }

@@ -372,7 +372,7 @@ Two things flow between the daemon and the gadgets besides messages:
   update, never in `view`. Launching is hand-rolled in
   `icons::desktop::launch` (the Python used `gtk-launch`): spec
   quoting, field codes, `Path=`, `Terminal=true` via `[launcher]
-  terminal` (default `$TERMINAL`, else `xterm`) with `-e`, own process
+  terminal` (default `$TERMINAL`, else the first common terminal on the PATH, `launcher::TERMINALS`) with `-e`, own process
   group, stdio to null, reaped by a thread. Not done: `DBusActivatable`,
   startup notification, other providers (the Python had only apps too).
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
@@ -622,6 +622,15 @@ Two things flow between the daemon and the gadgets besides messages:
   Hyprland-only), `wtype` (keyboard only, `zwp_virtual_keyboard_v1`,
   which Sway, Hyprland and cosmic-comp all have), `wlr-virtual-pointer`
   (not universal: cosmic-comp lacks it).
+  - On Hyprland a button press sent right after an absolute uinput
+    warp (`ydotool mousemove -a`) is dropped more often than not, and
+    `ydotool click` (press and release a few ms apart) is lost too:
+    warp near the target, then a few small relative moves onto it,
+    then press and release ~80ms apart, lands every time. A real mouse
+    does both by itself. Once, after a Terminate from the processes
+    tab and an outside click closing the popup, the bar got no pointer
+    events until another surface of ours (the launcher) was mapped;
+    not reproduced since.
   - `aria-shell debug surfaces` → `panel HDMI-A-1 0,0 1920x30; grab
     ...; launcher HDMI-A-1 700,330 520x420`: every surface with the
     global rectangle it *asked for* (`OutputInfo::logical_position/
@@ -946,7 +955,12 @@ placeholders, `icon`, `command`), a sparkline of its history, and the
 btop-like popup, one tab per section, opened on the tab of the value
 shown (cpu graph and per-core meters, memory/swap, disks, network,
 amdgpu/nvidia, the process table with sort and Terminate/Kill).
-`[SystemMonitor]` is the sampler's and the popup's section (`interval`,
+Tried on the Hyprland desktop (2026-09-17): memory (used 9.7 GiB of
+31.1, cached, available), disks (`/`, `/boot`, an ext4 usb) and the
+wlan totals match `free` / `df` / `/proc/net/dev`; load, uptime,
+frequency and the package temperature read right; the popup's tabs,
+sorting by every column, a `sleep`'s row menu and Terminate, and the
+right click (btop in kitty) all work. `[SystemMonitor]` is the sampler's and the popup's section (`interval`,
 `history`, `disks`, `interfaces`, `temperature`, `processes`, `sort`);
 the gadgets are its instances (`show`, required; `mode = text |
 sparkline | gauge`, the `format` text alone or over the value's
@@ -988,9 +1002,8 @@ icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
 
 ## Next steps, in order
 
-1. Try the system monitor on the real desktop: the bar values against
-   btop's, the popup on Hyprland, a right click (btop in the
-   terminal), amdgpu/nvidia on a machine that has one.
+1. amdgpu/nvidia in the system monitor on a machine that has one
+   (this one is Intel: `gpu=0`, no tab).
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`, scrollbars); the `shader` widget
    for `background: shader("x.wgsl")` when a theme asks for more than

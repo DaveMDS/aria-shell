@@ -321,8 +321,9 @@ Two things flow between the daemon and the gadgets besides messages:
   closed within a second. Hyprland routes every pointer event to an
   exclusive layer, so there the outside click comes tagged with the
   launcher's window and is told from the coordinates being outside
-  its size; **to verify on Hyprland**, the bounds check was written
-  under Sway); the search
+  its size: verified on Hyprland 0.56, an outside click arrives as
+  e.g. `(-400, 570)` on a 520x420 launcher, one on the other output as
+  `(-2320, 370)`); the search
   field is focused with `operation::focus` on the `ShellEvent::NewShell`
   of that surface (earlier, the widget tree doesn't exist yet). A click
   outside closes it as it does for a popup: while it's open the daemon

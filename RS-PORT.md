@@ -835,7 +835,8 @@ Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
 `[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
 panels, Clock (`format`, calendar popup), Workspaces (all four keys,
-window icons) over the Hyprland IPC, with the daemon-owned
+window icons, `show_title`: the active window's icon and title after
+the workspaces) over the Hyprland IPC, with the daemon-owned
 `Compositor` / `Context` / `Action` plumbing and the popup plumbing
 (`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
 (`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),

@@ -1,6 +1,7 @@
 //! Workspaces gadget: one button per workspace, with the icon of each
 //! window on it (a dot until the icon is known); click to switch
-//! workspace (or focus a window).
+//! workspace (or focus a window). After them, the icon and title of the
+//! active window, when it's on this panel's output.
 //!
 //! Holds no compositor state: it reads the daemon's [`Compositor`] from
 //! the view context and filters it for the output the panel is on.
@@ -23,6 +24,8 @@ pub struct WorkspacesConfig {
     /// Clicking a window marker focuses that window instead of just
     /// switching to its workspace.
     pub focus_window_on_click: bool,
+    /// The active window's icon and title after the workspaces.
+    pub show_title: bool,
 }
 
 impl Section for WorkspacesConfig {
@@ -34,6 +37,7 @@ impl Section for WorkspacesConfig {
             show_windows: raw.bool_or("show_windows", true),
             all_monitors: raw.bool_or("all_monitors", false),
             focus_window_on_click: raw.bool_or("focus_window_on_click", false),
+            show_title: raw.bool_or("show_title", true),
         }
     }
 }
@@ -82,10 +86,20 @@ impl Gadget for Workspaces {
         });
         let shown: Vec<&Workspace> = shown.collect();
         let count = shown.len();
-        let children = shown
-            .into_iter()
+        let mut children: Vec<Element<'a, Message>> = shown
+            .iter()
             .enumerate()
-            .map(|(i, ws)| self.workspace_view(ws, i, count, &ctx));
+            .map(|(i, ws)| self.workspace_view(ws, i, count, &ctx))
+            .collect();
+        if self.config.show_title
+            && let Some(win) = ctx
+                .compositor
+                .windows
+                .iter()
+                .find(|w| w.active && shown.iter().any(|ws| ws.id == w.workspace_id))
+        {
+            children.push(self.title_view(win, &ctx));
+        }
         ctx.theme
             .row(&ctx.node, children)
             .align_y(iced::Alignment::Center)
@@ -128,6 +142,30 @@ impl Workspaces {
         ctx.theme
             .button(&node, content)
             .on_press(Message::Activate(ws.id.clone()))
+            .into()
+    }
+
+    /// The active window's icon (at the `icon` node's `height`) and
+    /// title, as `title[class="<app id>"]`.
+    fn title_view<'a>(&'a self, win: &'a Window, ctx: &Context<'a>) -> Element<'a, Message> {
+        let theme = ctx.theme;
+        let node = ctx.node.child("title").attr("class", win.class.clone());
+        let icon_node = node.child("icon");
+        let style = theme.resolve(&icon_node);
+        let size = style.height.or(style.width).and_then(|l| match l {
+            Length::Px(px) => Some(px),
+            _ => None,
+        });
+        let mut parts: Vec<Element<'a, Message>> = Vec::new();
+        if let (Some(icon), Some(size)) = (ctx.icons.get(&win.class), size) {
+            parts.push(icon.view(size, style.color));
+        }
+        parts.push(theme.text(&node.child("text"), &win.title).into());
+        theme
+            .container(
+                &node,
+                theme.row(&node, parts).align_y(iced::Alignment::Center),
+            )
             .into()
     }
 

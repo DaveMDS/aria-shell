@@ -58,9 +58,13 @@
  *                                                             edges, `gap` the space between notifications
  *   notification[.low|.normal|.critical][#<id>][app="<name>"]  one notification surface (`width` sizes it;
  *                                                             the height follows the content); the id is the
- *                                                             notification's, the app what it called itself
+ *                                                             notification's, the app what it called itself.
+ *                                                             The same element, with the same rules, is a row
+ *                                                             of the Notifications gadget's popup (see below)
  *   ├─ icon                                                   the app's image or icon, drawn at the node's `height`
  *   ├─ summary                                                the title
+ *   ├─ time                                                   how long ago it came (popup rows only)
+ *   ├─ button.close                                           ✕ (popup rows only)
  *   ├─ body                                                   the text, wrapped at the width
  *   ╰─ actions                                                a row, right-aligned
  *      ╰─ button                                              one per action the app offers
@@ -98,6 +102,19 @@
  *      ╰─ icon                                                the scheme's icon, drawn at the node's `height`
  *   popup > gadget.themes
  *   ╰─ menu                                                   Light / Dark, then Base and every theme found
+ *
+ *   gadget.notifications
+ *   ╰─ button[.dnd][.new]                                     left: the history popup, right: do-not-disturb,
+ *      ├─ icon                                                middle: closes the toasts; drawn at the node's `height`
+ *      ╰─ text                                                the count of notifications not looked at (when > 0)
+ *   popup > gadget.notifications
+ *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
+ *      ├─ header
+ *      │  ├─ title
+ *      │  ├─ button.dnd[.on]                                  toggles do-not-disturb
+ *      │  ╰─ button.clear                                     empties the history
+ *      ├─ empty                                               "No notifications"
+ *      ╰─ notification[.unseen]...                            one per notification kept, as on the desktop
  *
  *   gadget.custom
  *   ╰─ button[.<class>...]                                    the classes come from the exec's JSON output;
@@ -259,6 +276,18 @@ notification actions button {
 notification actions button:hover {
   border-color: var(--aria-accent);
 }
+notification time {
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+notification button.close {
+  padding: 0 4px;
+  color: var(--aria-muted);
+  border-radius: 4px;
+}
+notification button.close:hover {
+  background: var(--aria-border);
+}
 
 /* Gadgets */
 
@@ -327,6 +356,65 @@ gadget.themes > button:hover {
 }
 gadget.themes icon {
   height: 16px;
+}
+
+gadget.notifications > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.notifications > button:hover {
+  background: var(--aria-border);
+}
+/* `> button`: the popup rows have an `icon` too, under `list > notification`. */
+gadget.notifications > button icon {
+  height: 16px;
+}
+gadget.notifications > button.new text {
+  color: var(--aria-accent);
+  font-weight: bold;
+}
+gadget.notifications > button.dnd icon {
+  color: var(--aria-muted);
+}
+gadget.notifications list {
+  width: 380px;
+  height: 480px;
+  padding: 8px;
+  gap: 6px;
+}
+gadget.notifications header {
+  gap: 6px;
+  padding: 0 0 4px 0;
+}
+gadget.notifications header title {
+  font-weight: bold;
+}
+gadget.notifications header button {
+  padding: 2px 8px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.notifications header button:hover {
+  border-color: var(--aria-accent);
+}
+gadget.notifications header button.dnd.on {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+  border-color: transparent;
+}
+gadget.notifications empty {
+  padding: 12px;
+  color: var(--aria-muted);
+}
+/* The rows: the desktop `notification` rules, without the shadow, as
+   wide as the list. */
+gadget.notifications list notification {
+  width: fill;
+  box-shadow: none;
+}
+gadget.notifications list notification.unseen summary {
+  color: var(--aria-accent);
 }
 
 gadget.custom > button {

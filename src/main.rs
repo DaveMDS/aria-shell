@@ -196,6 +196,7 @@ impl AriaShell {
             theme: &self.theme,
             icons: &self.icons,
             tray: &self.tray,
+            notifications: &self.notifications,
             scripts: &self.scripts,
         }
     }
@@ -333,13 +334,11 @@ impl AriaShell {
                 Task::batch([follow_up, self.sync_toasts()])
             }
             Message::Toast(m) => {
-                let command = match m {
-                    toast::Message::Activate(id) => notifications::Command::Activate(id),
-                    toast::Message::Invoke(id, key) => notifications::Command::Invoke(id, key),
-                    toast::Message::Dismiss(id) => notifications::Command::Dismiss(id),
-                };
-                let signals = self.notifications.run(command).map(Message::Notifications);
-                Task::batch([signals, self.sync_toasts()])
+                let signals = self
+                    .notifications
+                    .run(notifications::Command::from(m))
+                    .map(Message::Notifications);
+                Task::batch([signals, self.sync_toasts(), self.sync_popups()])
             }
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
                 (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
@@ -703,6 +702,10 @@ impl AriaShell {
                 self.scripts.run(cmd);
                 Task::none()
             }
+            Action::Notifications(cmd) => {
+                let signals = self.notifications.run(cmd).map(Message::Notifications);
+                Task::batch([signals, self.sync_toasts(), self.sync_popups()])
+            }
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -797,7 +800,14 @@ impl AriaShell {
             };
             let output_name = self.output_name(self.toasts[i].output).to_owned();
             let node = toast::node(n, &output_name);
-            let size = toast::size(&self.theme, &node, n, &self.notifications, &self.icons);
+            let size = toast::size(
+                &self.theme,
+                &node,
+                n,
+                &self.notifications,
+                &self.icons,
+                &toast::Extras::default(),
+            );
             let offset = offsets.entry(self.toasts[i].output).or_insert(0);
             let along = *offset;
             *offset += size.1 as i32 + gap;
@@ -1107,7 +1117,14 @@ impl AriaShell {
             && let Some(n) = self.notifications.get(t.id)
         {
             let node = toast::node(n, self.output_name(t.output));
-            let content = toast::view(&self.theme, &node, n, &self.notifications, &self.icons);
+            let content = toast::view(
+                &self.theme,
+                &node,
+                n,
+                &self.notifications,
+                &self.icons,
+                toast::Extras::default(),
+            );
             let root: Element<'_, toast::Message> = self
                 .theme
                 .container(&node, content)

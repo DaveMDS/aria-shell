@@ -123,7 +123,7 @@ fn shows_seconds(format: &str) -> bool {
 }
 
 /// Yields the current time every `step` seconds, on the boundary.
-fn aligned_ticks(step: u32) -> impl stream::Stream<Item = DateTime<Local>> {
+pub(crate) fn aligned_ticks(step: u32) -> impl stream::Stream<Item = DateTime<Local>> {
     stream::unfold((), move |()| async move {
         let now = Local::now();
         let elapsed = now.second() % step;

@@ -15,7 +15,7 @@ mod dbus;
 pub mod toast;
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use iced::{Subscription, Task};
 use zbus::Connection;
@@ -23,7 +23,8 @@ use zbus::Connection;
 use crate::config::{RawSection, Section};
 use crate::icons::Icon;
 
-/// `[notifications]` section.
+/// `[Notifications]` section: the daemon's settings and the bar
+/// gadget's, together (as `[Tray]` is the one place for the tray).
 #[derive(Debug, Clone)]
 pub struct NotificationsConfig {
     pub enabled: bool,
@@ -31,10 +32,16 @@ pub struct NotificationsConfig {
     /// (`expire_timeout = -1`, what most send).
     pub duration: u64,
     pub position: Position,
+    /// How many notifications the history keeps (0: none).
+    pub history: usize,
+    /// Icon names (from the icon theme) for the gadget's bell, and for
+    /// it while do-not-disturb is on.
+    pub icon: String,
+    pub dnd_icon: String,
 }
 
 impl Section for NotificationsConfig {
-    const NAME: &'static str = "notifications";
+    const NAME: &'static str = "Notifications";
 
     fn from_raw(raw: &RawSection) -> Self {
         let position = match raw.get("position") {
@@ -48,6 +55,9 @@ impl Section for NotificationsConfig {
             enabled: raw.bool_or("enabled", true),
             duration: raw.u64_or("duration", 20).max(1),
             position,
+            history: raw.u64_or("history", 50) as usize,
+            icon: raw.str_or("icon", "preferences-system-notifications-symbolic"),
+            dnd_icon: raw.str_or("dnd_icon", "notifications-disabled-symbolic"),
         }
     }
 }
@@ -206,7 +216,9 @@ pub enum Event {
     Expired(u32, u64),
 }
 
-/// What the toasts ask the daemon to do.
+/// What the toasts and the bar gadget ask the daemon to do. The three
+/// on one notification (by id) act on its toast, if up, and drop it
+/// from the history: the user dealt with it.
 #[derive(Debug, Clone)]
 pub enum Command {
     /// The user clicked it: invoke `default` if the app offered it,
@@ -214,13 +226,33 @@ pub enum Command {
     Activate(u32),
     Invoke(u32, String),
     Dismiss(u32),
+    /// Close every toast on screen; the history keeps them.
+    DismissAll,
+    ToggleDnd,
+    /// The history was looked at: nothing is new any more.
+    MarkSeen,
+    /// Empty the history (and close the toasts up).
+    Clear,
+}
+
+/// A notification in the history: as received, and whether the user
+/// has seen the list since.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    pub notification: Notification,
+    pub received: SystemTime,
+    pub seen: bool,
 }
 
 pub struct Notifications {
     config: NotificationsConfig,
     conn: Option<Connection>,
-    /// Newest first.
+    /// The toasts on screen, newest first.
     pub items: Vec<Notification>,
+    /// What came in, newest first, up to the configured count.
+    history: Vec<Entry>,
+    /// Do not disturb: no toasts but the critical ones.
+    dnd: bool,
     /// Icons of the notifications whose icon is a file, by path (read
     /// once per path while any shows it).
     files: Vec<(PathBuf, Icon)>,
@@ -232,8 +264,24 @@ impl Notifications {
             config,
             conn: None,
             items: Vec::new(),
+            history: Vec::new(),
+            dnd: false,
             files: Vec::new(),
         }
+    }
+
+    pub fn dnd(&self) -> bool {
+        self.dnd
+    }
+
+    /// Newest first.
+    pub fn history(&self) -> &[Entry] {
+        &self.history
+    }
+
+    /// How many the user hasn't looked at.
+    pub fn unseen(&self) -> usize {
+        self.history.iter().filter(|e| !e.seen).count()
     }
 
     /// A config reload: what shows stays, new notifications follow the
@@ -283,19 +331,40 @@ impl Notifications {
                     self.files
                         .push((path.clone(), Icon::from_path(path.clone())));
                 }
-                let timer = self.timeout(&n).map(|t| {
-                    let (id, serial) = (n.id, n.serial);
-                    Task::future(async move {
-                        tokio::time::sleep(t).await;
-                        Event::Expired(id, serial)
-                    })
-                });
-                match self.items.iter_mut().find(|i| i.id == n.id) {
-                    Some(item) => *item = *n,
-                    None => self.items.insert(0, *n),
+                // Into the history, replacing in place or first.
+                if self.config.history > 0 {
+                    let entry = Entry {
+                        notification: (*n).clone(),
+                        received: SystemTime::now(),
+                        seen: false,
+                    };
+                    match self.history.iter_mut().find(|e| e.notification.id == n.id) {
+                        Some(e) => *e = entry,
+                        None => self.history.insert(0, entry),
+                    }
+                    self.history.truncate(self.config.history);
+                }
+                // On screen, unless quiet: then only what can't wait.
+                let show = !self.dnd || n.urgency == Urgency::Critical;
+                let mut timer = Task::none();
+                if show {
+                    timer = self.timeout(&n).map_or_else(Task::none, |t| {
+                        let (id, serial) = (n.id, n.serial);
+                        Task::future(async move {
+                            tokio::time::sleep(t).await;
+                            Event::Expired(id, serial)
+                        })
+                    });
+                    match self.items.iter_mut().find(|i| i.id == n.id) {
+                        Some(item) => *item = *n,
+                        None => self.items.insert(0, *n),
+                    }
+                } else if let Some(i) = self.items.iter().position(|i| i.id == n.id) {
+                    // A replacement while quiet: the old toast goes too.
+                    self.items.remove(i);
                 }
                 self.prune_files();
-                return timer.unwrap_or_else(Task::none);
+                return timer;
             }
             Event::Close(id) => return self.close(id, Reason::Closed),
             Event::Expired(id, serial) => {
@@ -307,8 +376,26 @@ impl Notifications {
         Task::none()
     }
 
+    /// The toast `id`, while on screen.
     pub fn get(&self, id: u32) -> Option<&Notification> {
         self.items.iter().find(|i| i.id == id)
+    }
+
+    /// Notification `id`, on screen or in the history.
+    fn lookup(&self, id: u32) -> Option<&Notification> {
+        self.get(id).or_else(|| {
+            self.history
+                .iter()
+                .find(|e| e.notification.id == id)
+                .map(|e| &e.notification)
+        })
+    }
+
+    /// Every notification held, for the icons and files they draw.
+    fn all(&self) -> impl Iterator<Item = &Notification> {
+        self.items
+            .iter()
+            .chain(self.history.iter().map(|e| &e.notification))
     }
 
     /// The icon of a file-backed notification, once read.
@@ -319,17 +406,24 @@ impl Notifications {
     /// Names of the theme icons the notifications ask for, for the
     /// daemon to resolve.
     pub fn icon_names(&self) -> impl Iterator<Item = &str> {
-        self.items
-            .iter()
+        self.all()
             .filter_map(|n| n.icon.as_ref().and_then(IconSource::name))
     }
 
     fn prune_files(&mut self) {
-        self.files.retain(|(path, _)| {
-            self.items
-                .iter()
-                .any(|n| matches!(&n.icon, Some(IconSource::Path(p)) if p == path))
-        });
+        let used: Vec<PathBuf> = self
+            .all()
+            .filter_map(|n| match &n.icon {
+                Some(IconSource::Path(p)) => Some(p.clone()),
+                _ => None,
+            })
+            .collect();
+        self.files.retain(|(path, _)| used.contains(path));
+    }
+
+    /// Drop `id` from the history.
+    fn forget(&mut self, id: u32) {
+        self.history.retain(|e| e.notification.id != id);
     }
 
     /// Forget `id` and tell the app why.
@@ -352,22 +446,56 @@ impl Notifications {
             Some(conn) => Task::future(dbus::invoked(conn, id, key)).discard(),
             None => Task::none(),
         };
-        match command {
+        let task = match command {
             Command::Activate(id) => {
-                let default = self.get(id).is_some_and(Notification::has_default_action);
+                let default = self
+                    .lookup(id)
+                    .is_some_and(Notification::has_default_action);
                 let signal = if default {
                     invoke(self.conn.clone(), id, "default".to_owned())
                 } else {
                     Task::none()
                 };
+                self.forget(id);
                 Task::batch([signal, self.close(id, Reason::Dismissed)])
             }
-            Command::Invoke(id, key) => Task::batch([
-                invoke(self.conn.clone(), id, key),
-                self.close(id, Reason::Dismissed),
-            ]),
-            Command::Dismiss(id) => self.close(id, Reason::Dismissed),
-        }
+            Command::Invoke(id, key) => {
+                self.forget(id);
+                Task::batch([
+                    invoke(self.conn.clone(), id, key),
+                    self.close(id, Reason::Dismissed),
+                ])
+            }
+            Command::Dismiss(id) => {
+                self.forget(id);
+                self.close(id, Reason::Dismissed)
+            }
+            Command::DismissAll => self.close_all(),
+            Command::ToggleDnd => {
+                self.dnd = !self.dnd;
+                log::info!(
+                    "notifications: do not disturb {}",
+                    if self.dnd { "on" } else { "off" }
+                );
+                Task::none()
+            }
+            Command::MarkSeen => {
+                self.history.iter_mut().for_each(|e| e.seen = true);
+                Task::none()
+            }
+            Command::Clear => {
+                self.history.clear();
+                self.close_all()
+            }
+        };
+        self.prune_files();
+        task
+    }
+
+    /// Close every toast on screen.
+    fn close_all(&mut self) -> Task<Event> {
+        let ids: Vec<u32> = self.items.iter().map(|n| n.id).collect();
+        Task::batch(ids.into_iter().map(|id| self.close(id, Reason::Dismissed)))
     }
 }
 
@@ -455,6 +583,57 @@ mod tests {
         assert!(n.get(1).is_none());
         let _ = n.apply(Event::Close(2));
         assert!(n.items.is_empty());
+    }
+
+    #[test]
+    fn history_dnd_and_seen() {
+        let config = crate::config::Config::parse("[Notifications]\nhistory = 3\n").section(None);
+        let mut n = Notifications::new(config);
+        let _ = n.apply(Event::Notify(notification(1, 1)));
+        let _ = n.apply(Event::Notify(notification(2, 2)));
+        assert_eq!(n.unseen(), 2);
+        assert_eq!(n.items.len(), 2);
+        // Expiry and an app's close keep the entry.
+        let _ = n.apply(Event::Expired(1, 1));
+        let _ = n.apply(Event::Close(2));
+        assert!(n.items.is_empty());
+        assert_eq!(n.history().len(), 2);
+        // Seen: the count drops, the entries stay.
+        let _ = n.run(Command::MarkSeen);
+        assert_eq!(n.unseen(), 0);
+        // Quiet: no toast, but the critical one; replacing an entry
+        // makes it new again.
+        let _ = n.run(Command::ToggleDnd);
+        assert!(n.dnd());
+        let _ = n.apply(Event::Notify(notification(3, 3)));
+        assert!(n.items.is_empty());
+        assert_eq!(n.unseen(), 1);
+        let mut critical = notification(4, 4);
+        critical.urgency = Urgency::Critical;
+        let _ = n.apply(Event::Notify(critical));
+        assert_eq!(n.items.len(), 1);
+        // Capped at 3, newest first: 4, 3, 2.
+        assert_eq!(
+            n.history()
+                .iter()
+                .map(|e| e.notification.id)
+                .collect::<Vec<_>>(),
+            [4, 3, 2]
+        );
+        let _ = n.apply(Event::Notify(notification(2, 5)));
+        assert_eq!(n.unseen(), 3);
+        // The user dealt with one: gone from both; dismiss all keeps
+        // the history; clear empties it.
+        let _ = n.run(Command::Dismiss(4));
+        assert!(n.items.is_empty());
+        assert_eq!(n.history().len(), 2);
+        let _ = n.run(Command::ToggleDnd);
+        let _ = n.apply(Event::Notify(notification(5, 6)));
+        let _ = n.run(Command::DismissAll);
+        assert!(n.items.is_empty());
+        assert_eq!(n.history().len(), 3);
+        let _ = n.run(Command::Clear);
+        assert!(n.history().is_empty());
     }
 
     #[test]

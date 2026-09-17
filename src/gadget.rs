@@ -23,6 +23,7 @@ use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
+use crate::gadgets::notifications::{self, NotificationsGadget};
 use crate::gadgets::themes::{self, Themes};
 use crate::gadgets::tray::{self, TrayGadget};
 use crate::gadgets::workspaces::{self, Workspaces};
@@ -36,6 +37,7 @@ pub struct Shared<'a> {
     pub theme: &'a Theme,
     pub icons: &'a Icons,
     pub tray: &'a crate::tray::Tray,
+    pub notifications: &'a crate::notifications::Notifications,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -66,6 +68,7 @@ pub enum Action<M> {
     Tray(crate::tray::Command),
     Theme(crate::theme::Command),
     Script(crate::scripts::Command),
+    Notifications(crate::notifications::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -171,6 +174,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Tray(cmd) => Action::Tray(cmd),
             Self::Theme(cmd) => Action::Theme(cmd),
             Self::Script(cmd) => Action::Script(cmd),
+            Self::Notifications(cmd) => Action::Notifications(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -240,6 +244,7 @@ pub enum AnyGadget {
     Workspaces(Workspaces),
     Tray(TrayGadget),
     Themes(Themes),
+    Notifications(NotificationsGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -249,6 +254,7 @@ pub enum Message {
     Workspaces(workspaces::Message),
     Tray(tray::Message),
     Themes(themes::Message),
+    Notifications(notifications::Message),
 }
 
 impl AnyGadget {
@@ -277,6 +283,9 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
+            crate::notifications::NotificationsConfig::NAME => Some(Self::Notifications(
+                NotificationsGadget::new(config.section(Some(name)), output),
+            )),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -292,6 +301,7 @@ impl AnyGadget {
             Self::Workspaces(_) => "workspaces",
             Self::Tray(_) => "tray",
             Self::Themes(_) => "themes",
+            Self::Notifications(_) => "notifications",
         }
     }
 
@@ -302,6 +312,9 @@ impl AnyGadget {
             (Self::Workspaces(g), Message::Workspaces(m)) => g.update(m).map(Message::Workspaces),
             (Self::Tray(g), Message::Tray(m)) => g.update(m).map(Message::Tray),
             (Self::Themes(g), Message::Themes(m)) => g.update(m).map(Message::Themes),
+            (Self::Notifications(g), Message::Notifications(m)) => {
+                g.update(m).map(Message::Notifications)
+            }
             _ => Action::None,
         }
     }
@@ -313,6 +326,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.view(ctx).map(Message::Tray),
             Self::Themes(g) => g.view(ctx).map(Message::Themes),
+            Self::Notifications(g) => g.view(ctx).map(Message::Notifications),
         }
     }
 
@@ -323,6 +337,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.popup_view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.popup_view(ctx).map(Message::Tray),
             Self::Themes(g) => g.popup_view(ctx).map(Message::Themes),
+            Self::Notifications(g) => g.popup_view(ctx).map(Message::Notifications),
         }
     }
 
@@ -333,6 +348,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.popup_size(ctx),
             Self::Tray(g) => g.popup_size(ctx),
             Self::Themes(g) => g.popup_size(ctx),
+            Self::Notifications(g) => g.popup_size(ctx),
         }
     }
 
@@ -343,6 +359,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.popup(),
             Self::Tray(g) => g.popup(),
             Self::Themes(g) => g.popup(),
+            Self::Notifications(g) => g.popup(),
         }
     }
 
@@ -362,6 +379,7 @@ impl AnyGadget {
             Self::Workspaces(g) => <Workspaces as Gadget>::popup_closed(g),
             Self::Tray(g) => <TrayGadget as Gadget>::popup_closed(g),
             Self::Themes(g) => <Themes as Gadget>::popup_closed(g),
+            Self::Notifications(g) => <NotificationsGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -372,6 +390,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.icon_names(),
             Self::Tray(g) => g.icon_names(),
             Self::Themes(g) => g.icon_names(),
+            Self::Notifications(g) => g.icon_names(),
         }
     }
 
@@ -382,6 +401,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.script(),
             Self::Tray(g) => g.script(),
             Self::Themes(g) => g.script(),
+            Self::Notifications(g) => g.script(),
         }
     }
 
@@ -392,6 +412,7 @@ impl AnyGadget {
             Self::Workspaces(g) => g.subscription().map(Message::Workspaces),
             Self::Tray(g) => g.subscription().map(Message::Tray),
             Self::Themes(g) => g.subscription().map(Message::Themes),
+            Self::Notifications(g) => g.subscription().map(Message::Notifications),
         }
     }
 }

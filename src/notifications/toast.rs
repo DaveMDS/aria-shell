@@ -1,16 +1,22 @@
-//! One notification on screen: the content of its layer surface, and
-//! its size, which the surface must be given before anything is laid
-//! out (measured the way the view lays it out).
+//! One notification as drawn: the content of its layer surface on the
+//! desktop, and of its row in the history popup (the same code, with
+//! [`Extras`] for what only the popup shows), and its size, which a
+//! surface must be given before anything is laid out (measured the way
+//! the view lays it out).
 //!
 //! ```text
-//! notification            the root container (the daemon applies it)
+//! notification            the container the caller applies
 //! ├─ icon                 image-data, image-path or app_icon
 //! ├─ summary
+//! ├─ time                 how long ago (popup only)
+//! ├─ button.close         ✕ (popup only)
 //! ├─ body
 //! ╰─ actions              a row of buttons, one per action but `default`
 //!    ╰─ button
 //!       ╰─ text
 //! ```
+
+use std::time::{Duration, SystemTime};
 
 use iced::widget::text::Wrapping;
 use iced::widget::{column, mouse_area, row};
@@ -35,14 +41,52 @@ pub enum Message {
     Invoke(u32, String),
 }
 
-/// The root node of notification `n`: its urgency as a class, its id,
-/// the app as an attribute.
+/// The root node of notification `n`'s surface: its urgency as a
+/// class, its id, the app as an attribute.
 pub fn node(n: &Notification, output: &str) -> Node {
-    Node::root("notification")
-        .class(n.urgency.name())
+    classify(Node::root("notification"), n).attr("output", output.to_owned())
+}
+
+/// The node of notification `n` shown under `parent` (a popup list).
+pub fn node_under(parent: &Node, n: &Notification) -> Node {
+    classify(parent.child("notification"), n)
+}
+
+fn classify(node: Node, n: &Notification) -> Node {
+    node.class(n.urgency.name())
         .id(n.id.to_string())
         .attr("app", n.app_name.clone())
-        .attr("output", output.to_owned())
+}
+
+/// What the popup shows on top of the notification itself.
+#[derive(Debug, Clone, Default)]
+pub struct Extras {
+    /// The width to lay out in, instead of the node's `width`.
+    pub width: Option<f32>,
+    /// How long ago it came, next to the summary.
+    pub age: Option<String>,
+    /// A ✕ button that dismisses it.
+    pub close: bool,
+}
+
+const CLOSE_GLYPH: &str = "✕";
+
+/// "now", "5 min", "2 h", "yesterday", or the date, for the popup.
+pub fn age(received: SystemTime, now: SystemTime) -> String {
+    let elapsed = now
+        .duration_since(received)
+        .unwrap_or(Duration::ZERO)
+        .as_secs();
+    match elapsed {
+        0..60 => "now".to_owned(),
+        60..3600 => format!("{} min", elapsed / 60),
+        3600..86400 => format!("{} h", elapsed / 3600),
+        86400..172800 => "yesterday".to_owned(),
+        _ => {
+            let date = chrono::DateTime::<chrono::Local>::from(received);
+            date.format("%d %b").to_string()
+        }
+    }
 }
 
 /// The surface width the theme asks for, and the layout inside it.
@@ -65,9 +109,13 @@ fn px(l: Option<theme::Length>) -> Option<f32> {
     }
 }
 
-fn layout(theme: &Theme, node: &Node, has_icon: bool) -> Layout {
+fn layout(theme: &Theme, node: &Node, has_icon: bool, extras: &Extras) -> Layout {
     let root = theme.resolve(node);
-    let width = px(root.width).unwrap_or(DEFAULT_WIDTH).max(1.0);
+    let width = extras
+        .width
+        .or(px(root.width))
+        .unwrap_or(DEFAULT_WIDTH)
+        .max(1.0);
     let pad = root.padding;
     let frame = (pad.top, pad.right, pad.bottom, pad.left);
     let icon = has_icon.then(|| {
@@ -107,13 +155,16 @@ pub fn size(
     n: &Notification,
     notifications: &Notifications,
     icons: &Icons,
+    extras: &Extras,
 ) -> (u32, u32) {
-    let l = layout(theme, node, icon(n, notifications, icons).is_some());
-    let text_height = |kind: &'static str, content: &str| {
+    let l = layout(theme, node, icon(n, notifications, icons).is_some(), extras);
+    // The summary shares its line with the age and the ✕.
+    let (side_width, side_height) = side_size(theme, node, extras);
+    let text_height = |kind: &'static str, content: &str, taken: f32| {
         let node = node.child(kind);
         let s = theme.resolve(&node);
         let pad = s.padding;
-        let inner = (l.text_width - pad.left - pad.right).max(1.0);
+        let inner = (l.text_width - taken - pad.left - pad.right).max(1.0);
         theme
             .measure_in(&node, content, inner)
             .height
@@ -121,9 +172,9 @@ pub fn size(
             + pad.top
             + pad.bottom
     };
-    let mut texts = text_height("summary", &n.summary);
+    let mut texts = text_height("summary", &n.summary, side_width).max(side_height);
     if !n.body.is_empty() {
-        texts += text_height("body", &n.body);
+        texts += text_height("body", &n.body, 0.0);
     }
     let mut height = texts.max(l.icon.unwrap_or(0.0));
     if n.buttons().next().is_some() {
@@ -148,28 +199,67 @@ pub fn size(
     (size.width.ceil() as u32, size.height.ceil() as u32)
 }
 
-/// The content of `n`'s surface, inside the root the daemon applies. A
-/// left click anywhere but on a button activates it, a right click
-/// dismisses it.
+/// The room the age and the ✕ take on the summary's line: their
+/// width (with the gaps before them) and their height.
+fn side_size(theme: &Theme, node: &Node, extras: &Extras) -> (f32, f32) {
+    let gap = theme.resolve(node).gap;
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    if let Some(age) = &extras.age {
+        let t = node.child("time");
+        let s = theme.resolve(&t);
+        let m = theme.measure(&t, age);
+        width += gap + m.width + s.padding.left + s.padding.right;
+        height = height.max(m.height.max(theme.line_height(&t)) + s.padding.top + s.padding.bottom);
+    }
+    if extras.close {
+        let b = node.child("button").class("close");
+        let s = theme.resolve(&b);
+        let m = theme.measure(&b.child("text"), CLOSE_GLYPH);
+        width += gap + m.width + s.padding.left + s.padding.right;
+        height = height.max(
+            m.height.max(theme.line_height(&b.child("text"))) + s.padding.top + s.padding.bottom,
+        );
+    }
+    (width, height)
+}
+
+/// The content of `n`, inside the `notification` container the caller
+/// applies. A left click anywhere but on a button activates it, a
+/// right click dismisses it.
 pub fn view<'a>(
     theme: &'a Theme,
     node: &Node,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
+    extras: Extras,
 ) -> Element<'a, Message> {
     let icon = icon(n, notifications, icons);
-    let l = layout(theme, node, icon.is_some());
-    let mut texts = column![
-        theme
-            .container(
-                &node.child("summary"),
-                theme
-                    .text(&node.child("summary"), &n.summary)
-                    .wrapping(Wrapping::Word)
-            )
-            .width(Length::Fill)
-    ];
+    let l = layout(theme, node, icon.is_some(), &extras);
+    let summary: Element<'a, Message> = theme
+        .container(
+            &node.child("summary"),
+            theme
+                .text(&node.child("summary"), &n.summary)
+                .wrapping(Wrapping::Word),
+        )
+        .width(Length::Fill)
+        .into();
+    let mut first = row![summary].spacing(l.gap).align_y(Alignment::Start);
+    if let Some(age) = extras.age {
+        let t = node.child("time");
+        first = first.push(theme.container(&t, theme.text(&t, age)));
+    }
+    if extras.close {
+        let b = node.child("button").class("close");
+        first = first.push(
+            theme
+                .button(&b, theme.text(&b.child("text"), CLOSE_GLYPH))
+                .on_press(Message::Dismiss(n.id)),
+        );
+    }
+    let mut texts = column![first.width(Length::Fill)];
     if !n.body.is_empty() {
         texts = texts.push(
             theme
@@ -215,4 +305,25 @@ pub fn view<'a>(
         .on_press(Message::Activate(n.id))
         .on_right_press(Message::Dismiss(n.id))
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ages() {
+        let t0 = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let at = |secs: u64| age(t0, t0 + Duration::from_secs(secs));
+        assert_eq!(at(0), "now");
+        assert_eq!(at(59), "now");
+        assert_eq!(at(60), "1 min");
+        assert_eq!(at(3599), "59 min");
+        assert_eq!(at(3600), "1 h");
+        assert_eq!(at(86399), "23 h");
+        assert_eq!(at(86400), "yesterday");
+        assert!(at(200_000).contains(' '), "a date: {}", at(200_000));
+        // A clock that went back: still "now".
+        assert_eq!(age(t0 + Duration::from_secs(10), t0), "now");
+    }
 }

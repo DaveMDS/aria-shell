@@ -113,8 +113,18 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
-  toast.rs                  node(n, output) / view(..) / size(..): one layer surface per notification, the
-                            daemon stacks them (`AriaShell::sync_toasts`) from the configured corner by margin
+  toast.rs                  node(n, output) / node_under(parent, n) / view(.., Extras) / size(.., &Extras):
+                            the one view of a notification, on its own layer surface (the daemon stacks them,
+                            `AriaShell::sync_toasts`, from the configured corner by margin) and as a row of the
+                            gadget's popup (`Extras`: the width to lay out in, the age, a ✕)
+  history / dnd / unseen()  what the gadget shows: the last `history` notifications (newest first, `seen`
+                            flag), do-not-disturb (no toasts but critical ones), the count not looked at
+
+NotificationsGadget (gadgets/notifications.rs)  impl Gadget: the bell with the unseen count; left click the
+                            history popup (header: do-not-disturb, clear; one `toast::view` row per entry),
+                            right click do-not-disturb, middle click closes the toasts
+  Message::TogglePopup(unseen ids) | ToggleDnd | DismissAll | Clear | Toast(toast::Message) | Tick
+                            -> Action::Notifications(notifications::Command)
 
 Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
                             return_type) -> last `Output` (text, icon, classes); one run per distinct spec
@@ -431,6 +441,13 @@ Two things flow between the daemon and the gadgets besides messages:
   a container of that width to the pixel.
 - `gdbus call` infers `[255, 0]` as `ai`: an `image-data` hint from
   the shell needs `@ay [..]` in the tuple.
+- `debug widgets` only reports what the theme helpers tag (containers
+  and buttons): a bare `Theme::text` isn't found, wrap it in a
+  `Theme::container` of its node when a scenario needs it. A popup
+  wider than the room left at the edge of the output is slid back by
+  the compositor but not by the `debug surfaces` estimate, so the
+  test config keeps gadgets with wide popups (Notifications: 380px)
+  away from the ends of the bar.
 - `iced::time::every` needs the `tokio` feature on `iced`. We use
   `tokio::time::sleep` directly for the wall-clock-aligned clock tick.
 - `LayerSize::FILL` with only `Anchor::Top` fills the whole output height;
@@ -732,8 +749,23 @@ Verified on the real Hyprland session with two outputs:
   expire; markup shown as text; an image file and an `image-data`
   hint draw) passes, screenshots in `target/ui/notifications/`. Not
   yet run on the real desktop.
+- Notifications gadget: `tests/ui/run.sh notifications-gadget` (a bell
+  per bar, no count at rest; two notifications → "2" on both bars and
+  `.new`; the popup lists them, both `.unseen`, the count clears; a row
+  and the desktop toast of one notification are the same view: same
+  body width relative to their container, the icon at the toast's
+  size; ✕ on a row drops it and its toast; do-not-disturb from the
+  popup marks both bars `.dnd`, a new notification is listed but not
+  shown, a critical one shows; a click outside closes the popup and the
+  count shows the two new ones; right click turns quiet off, middle
+  click dismisses every toast with the history intact; Clear empties
+  it ("No notifications"); six in with `history = 5` keeps the newest
+  five; a row click sends the `default` action to the client and drops
+  the row and its toast) passes, screenshots in
+  `target/ui/notifications-gadget/`.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (81 tests: notifications config/timeouts/replacement/markup/image-data, config, theme incl. scheme variables and root class,
+  (83 tests: notifications config/timeouts/replacement/history/dnd/
+  markup/image-data/ages, config, theme incl. scheme variables and root class,
   selectors, desktop entries, commands, launcher search, tray
   key/pixmap/props/menu parsing, wheel clicks, menu widget, command
   line splitting, script outputs, custom gadget): clean.
@@ -753,14 +785,19 @@ light/dark schemes and the `[Themes]` gadget (toggle, theme picker),
 `[Custom]` gadgets (label/icon, a program per button and wheel
 direction, `exec` with `interval`/`format`/`return_type`/`hide_empty`,
 run once by the daemon for every panel), the notification daemon
-(`[notifications]` `enabled`/`duration`/`position`; one overlay layer
+(`[Notifications]` `enabled`/`duration`/`position`; one overlay layer
 surface per notification, sized from the theme's `notification { width }`
 and the measured content, stacked by margin from the corner with the
 `notifications { padding, gap }` of the theme; summary, body with the
 markup stripped, icon from `image-data` / `image-path` / `app_icon`,
 action buttons, `default` on click, right click dismisses, expiry with
 critical ones staying; `NotificationClosed` / `ActionInvoked`; another
-daemon owning the name is waited out).
+daemon owning the name is waited out), the `Notifications` gadget
+(bell and unseen count; the history popup with the same notification
+view as the desktop plus age and ✕, do-not-disturb, clear; all in
+memory). One `[Notifications]` section for both, as `[Tray]` is for the
+tray: `history` and the gadget's `icon`/`dnd_icon` sit next to the
+daemon's keys.
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -769,9 +806,10 @@ properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
 wrapper), every other gadget and component (lock, wallpaper,
-terminal, idle), notification niceties (a "do not disturb" / history
-gadget, `resident`/`transient` hints, sound, a per-app `image-data`
-downscale, `x`/`y` hints, animation), launcher `DBusActivatable` entries,
+terminal, idle), notification niceties (`resident`/`transient` hints,
+sound, a per-app `image-data` downscale, `x`/`y` hints, animation,
+persisting the history and do-not-disturb, `:hover` on the popup rows
+— they're containers), launcher `DBusActivatable` entries,
 a themed scrollbar (iced's default for now), persisting the theme
 picked at runtime and following/setting the desktop's colour scheme
 (portal / gsettings, per DE), tray tooltips / overlay
@@ -782,8 +820,7 @@ icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
 
 1. Try the notifications on the real desktop (nothing owns the name
    there): `notify-send` from a terminal, a Firefox download, an
-   `image-data` app (a chat client); a Notifications gadget on the bar
-   (count, do-not-disturb, the recent ones in a popup) if wanted.
+   `image-data` app (a chat client), the bell and its popup.
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`, scrollbars); the `shader` widget
    for `background: shader("x.wgsl")` when a theme asks for more than

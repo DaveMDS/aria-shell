@@ -120,6 +120,7 @@ impl Workspaces {
             .child("workspace")
             .class_if("active", ws.active)
             .class_if("urgent", ws.urgent)
+            .attr("name", ws.name.clone())
             .nth(index, count);
         let mut children: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_name {
@@ -180,7 +181,8 @@ impl Workspaces {
         let theme = ctx.theme;
         let node = node
             .class_if("active", win.active)
-            .class_if("urgent", win.urgent);
+            .class_if("urgent", win.urgent)
+            .attr("class", win.class.clone());
         let style = theme.resolve(&node);
         let size = style.height.or(style.width).and_then(|l| match l {
             Length::Px(px) => Some(px),

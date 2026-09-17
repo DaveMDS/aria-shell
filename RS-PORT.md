@@ -96,7 +96,7 @@ Menu       (widgets/menu.rs)  reusable component: Item tree (labels, toggles, se
 Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today, theme, node)
 
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
-  subscription()            the single IPC stream (compositor/hyprland.rs), yields `Event`s
+  subscription()            the single IPC stream (compositor/hyprland.rs or sway.rs), yields `Event`s
   apply(Event)              patches the state
   run(Command) -> Task      sends a command (activate workspace/window) to the backend
 
@@ -519,6 +519,20 @@ Two things flow between the daemon and the gadgets besides messages:
   workspaces on the same output.
 - `j/workspaces` comes in creation order and includes special workspaces
   (negative ids); we sort by id and drop those.
+- Sway (`compositor/sway.rs`, the i3 IPC on `$SWAYSOCK`: `i3-ipc` +
+  native-endian u32 length and type + JSON): a con id doesn't select a
+  workspace (criteria only match views), so workspaces are identified
+  by name, unique in Sway, and activated with `workspace
+  --no-auto-back-and-forth "<name>"` (a bar click means "go there", not
+  "go back"); windows by con id, `[con_id=N] focus`. The window list
+  is a walk of `get_tree` (views are the nodes with a `pid`; the
+  `__i3` output is the hidden scratchpad), since the `window` events
+  carry the container but not its workspace; `get_workspaces` gives the
+  list (`num` order, named ones last) plus `visible` (active per
+  output) and `focused` (the focused output). A `workspace focus`
+  event on an empty workspace comes with no `window focus`: the active
+  window is taken from the event's `current` node (its focused
+  descendant, or none).
 - A `tooltip` on a 32px layer surface would be clipped to the surface, so
   the Workspaces gadget has none (Python showed name/title tooltips).
 - `Message::NewPopUp { settings: IcedNewPopupSettings, id }` (added by the
@@ -588,6 +602,9 @@ Two things flow between the daemon and the gadgets besides messages:
   - The shell renders under the pixman compositor with wgpu on the real
     GPU (Vulkan, Intel here); a GPU-less CI would need iced's
     `tiny-skia` fallback, untested.
+  - `aria-inject` also opens plain xdg-shell windows (`window`, `title`,
+    `close`) so the workspaces scenario needs no real application
+    (`tests/ui/scenarios/workspaces.sh` exercises the Sway backend).
   - The nested shell must not talk to the desktop: `run.sh` unsets
     `HYPRLAND_INSTANCE_SIGNATURE`/`SWAYSOCK`, and the command socket is
     per display (`$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`)
@@ -836,7 +853,7 @@ Implemented: config loading and hot-reload, `[general]` (`style`,
 `[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
 panels, Clock (`format`, calendar popup), Workspaces (all four keys,
 window icons, `show_title`: the active window's icon and title after
-the workspaces) over the Hyprland IPC, with the daemon-owned
+the workspaces) over the Hyprland and Sway IPCs, with the daemon-owned
 `Compositor` / `Context` / `Action` plumbing and the popup plumbing
 (`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
 (`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),

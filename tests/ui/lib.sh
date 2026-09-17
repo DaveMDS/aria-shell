@@ -162,6 +162,27 @@ key() {
     settle
 }
 
+# --- windows ---------------------------------------------------------------
+# Plain windows of the injector (xdg-shell toplevels, a solid colour),
+# for what the compositor's state shows: the compositor puts them on
+# the focused workspace, `swaymsg` (the nested Sway's own control, the
+# scenario's environment, not what's being verified) arranges the rest.
+
+open_window() {
+    inject "window $1 ${2:-$1}"
+    settle
+}
+
+retitle_window() {
+    inject "title $1 $2"
+    settle
+}
+
+close_window() {
+    inject "close $1"
+    settle
+}
+
 # --- tray items ------------------------------------------------------------
 # `aria-sni` (tests/ui/sni) is a status notifier item with a menu, on
 # the scenario's private session bus: two fifos, commands in

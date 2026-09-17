@@ -7,9 +7,10 @@
 //! reference from its view context. Gadgets never talk to the IPC socket:
 //! they emit a [`Command`], the daemon runs it with [`Compositor::run`].
 //!
-//! Backends are detected from the environment, Hyprland only for now.
+//! Backends are detected from the environment: Hyprland, then Sway.
 
 mod hyprland;
+mod sway;
 
 use iced::{Subscription, Task};
 
@@ -58,6 +59,7 @@ pub enum Command {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Backend {
     Hyprland,
+    Sway,
 }
 
 #[derive(Debug, Default)]
@@ -74,6 +76,8 @@ impl Compositor {
     pub fn detect() -> Self {
         let backend = if hyprland::available() {
             Some(Backend::Hyprland)
+        } else if sway::available() {
+            Some(Backend::Sway)
         } else {
             None
         };
@@ -90,6 +94,7 @@ impl Compositor {
     pub fn subscription(&self) -> Subscription<Event> {
         match self.backend {
             Some(Backend::Hyprland) => Subscription::run(hyprland::events),
+            Some(Backend::Sway) => Subscription::run(sway::events),
             None => Subscription::none(),
         }
     }
@@ -97,6 +102,7 @@ impl Compositor {
     pub fn run(&self, command: Command) -> Task<Event> {
         match self.backend {
             Some(Backend::Hyprland) => Task::future(hyprland::run(command)).discard(),
+            Some(Backend::Sway) => Task::future(sway::run(command)).discard(),
             None => Task::none(),
         }
     }

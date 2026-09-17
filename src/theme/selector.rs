@@ -299,6 +299,8 @@ pub fn node_from_path(path: &str) -> Result<Node, String> {
 fn intern_attr(name: &str) -> &'static str {
     match name {
         "output" => "output",
+        "class" => "class",
+        "name" => "name",
         other => Box::leak(other.to_owned().into_boxed_str()),
     }
 }

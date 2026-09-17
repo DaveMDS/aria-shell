@@ -142,10 +142,12 @@ SysMon     (sysmon/)        daemon-owned system readings: `sample()` (cpu total 
 SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[SystemMonitor:mem]`; the base section
                             is the sampler's), one value each (`show =`, required) as text, a sparkline or a gauge (`mode =`);
                             the popup: tabs cpu (graph, per-core meters, details), mem, disk, net, gpu,
-                            processes (sortable columns, Terminate/Kill from a row's right click), opened
+                            processes (sortable columns; a click selects a row, a bar pinned under the
+                            scrolling table offers Terminate/Kill for it; the list's scrollbar is embedded,
+                            `scrollable::Scrollbar::spacing`, so it doesn't cover the last column), opened
                             on the value's tab;
                             right click on the bar: `command`, else btop/htop/top in the launcher's terminal
-  Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | RowMenu(pid) | Menu(..)
+  Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | Select(pid) | Signal(..)
 
 Audio      (audio/)          daemon-owned mixer and players: `channels_of(kind)` (outputs, inputs, the streams
                             playing: label, icon hints, volume as a fraction of 100%, mute, `default`),
@@ -586,6 +588,13 @@ Two things flow between the daemon and the gadgets besides messages:
   descendant, or none).
 - A `tooltip` on a 32px layer surface would be clipped to the surface, so
   the Workspaces gadget has none (Python showed name/title tooltips).
+- A popup's size is asked twice: at `OpenPopup` (to have one) and
+  again when the anchor's bounds come back from the widget tree
+  (`PopupAnchor`), since the state may have moved on in between: the
+  tray's menu loads over the bus faster than a render pass, and a
+  popup created with the size of the "…" placeholder stayed that size
+  until some unrelated event resized it (the tray scenario flaked once
+  audio events existed to do so, a second too late).
 - `Message::NewPopUp { settings: IcedNewPopupSettings, id }` (added by the
   macro). `IcedNewPopupSettings::new(parent, size, anchor_pos, anchor_size)`
   then `.anchor(PopupAnchor::Bottom).gravity(PopupGravity::Bottom)` puts
@@ -959,7 +968,7 @@ Tried on the Hyprland desktop (2026-09-17): memory (used 9.7 GiB of
 31.1, cached, available), disks (`/`, `/boot`, an ext4 usb) and the
 wlan totals match `free` / `df` / `/proc/net/dev`; load, uptime,
 frequency and the package temperature read right; the popup's tabs,
-sorting by every column, a `sleep`'s row menu and Terminate, and the
+sorting by every column, selecting a `sleep` and Terminate from the bar under the table (a right-click menu before: nobody found it), and the
 right click (btop in kitty) all work. `[SystemMonitor]` is the sampler's and the popup's section (`interval`,
 `history`, `disks`, `interfaces`, `temperature`, `processes`, `sort`);
 the gadgets are its instances (`show`, required; `mode = text |

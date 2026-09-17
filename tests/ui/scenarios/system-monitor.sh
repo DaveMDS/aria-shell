@@ -2,7 +2,7 @@
 # and a sparkline once the history has two readings); the popup opens
 # on the tab of the instance's value, with the cpu (graph, one meter
 # per core), memory, disks, network and process tabs; the table sorts
-# by column; a right click on a row
+# by column; a click on a row selects it and a bar under the table
 # offers Terminate/Kill, and Terminate ends the `sleep` we started; a
 # right click on the bar runs `command`, or the terminal monitor.
 
@@ -96,7 +96,7 @@ for p in $(row_pids); do
 done
 
 # A process of ours, started now so that by pid descending it's among
-# the newest (the five rows); its menu, then Terminate ends it.
+# the newest (the five rows); selected, then Terminate ends it.
 sleep 1000 &
 victim=$!
 click_widget 'table header column.pid'
@@ -109,38 +109,41 @@ done
 # The table is re-read every second and our own `aria` clients show
 # up at the top (newest pids), so a click may land on a shifted row:
 # try until the right row is the selected one.
-i=0
-while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"] menu > item')" != 2 ]; do
-    i=$((i + 1))
-    [ $i -le 5 ] || { echo "couldn't open the sleep's menu"; exit 1; }
-    # The row may be out for a tick (a burst of our own clients).
-    click_widget_with right 'table row[pid="'"$victim"'"]' || settle 1
-done
-shot_surface popup-menu popup
-# A left click on a row puts the menu away; the menu again for Terminate.
+assert_eq "$(count_widgets 'section.processes > actions.none')" 1 "the bar with the help, nothing selected"
+select_victim() {
+    i=0
+    while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"]')" != 1 ]; do
+        i=$((i + 1))
+        [ $i -le 5 ] || { echo "couldn't select the sleep"; return 1; }
+        # The row may be out for a tick (a burst of our own clients).
+        click_widget 'table row[pid="'"$victim"'"]' || settle 1
+    done
+}
+select_victim
+assert_eq "$(count_widgets 'section.processes > actions.none')" 0 "the bar for the selection"
+assert_eq "$(count_widgets 'section.processes > actions > button.terminate')" 1
+assert_eq "$(count_widgets 'section.processes > actions > button.kill')" 1
+shot_surface popup-actions popup
+# A click on the selected row deselects it; selected again for Terminate.
 click_widget 'table row.selected[pid="'"$victim"'"]'
-assert_eq "$(count_widgets 'table row menu')" 0 "a left click closes the menu"
-i=0
-while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"] menu > item')" != 2 ]; do
-    i=$((i + 1))
-    [ $i -le 5 ] || { echo "couldn't reopen the sleep's menu"; exit 1; }
-    click_widget_with right 'table row[pid="'"$victim"'"]' || settle 1
-done
+assert_eq "$(count_widgets 'section.processes > actions.none')" 1 "a second click deselects"
+select_victim
 kill -0 "$victim" 2> /dev/null || { echo "the sleep died on its own"; exit 1; }
 i=0
 while kill -0 "$victim" 2> /dev/null; do
     i=$((i + 1))
     [ $i -le 5 ] || { echo "the sleep survived Terminate"; exit 1; }
-    if [ "$(count_widgets 'table row.selected[pid="'"$victim"'"] menu > item')" = 2 ]; then
-        click_widget 'table row.selected menu > item:nth-child(1)' || :
+    if [ "$(count_widgets 'table row.selected[pid="'"$victim"'"]')" = 1 ]; then
+        click_widget 'section.processes > actions > button.terminate' || :
     else
-        click_widget_with right 'table row[pid="'"$victim"'"]' || :
+        click_widget 'table row[pid="'"$victim"'"]' || :
     fi
     sleep 0.3
 done
 wait "$victim" 2> /dev/null || :
 assert_logged "sent Terminate to $victim"
-assert_eq "$(count_widgets 'table row menu')" 0 "the menu is gone"
+settle 1.2
+assert_eq "$(count_widgets 'section.processes > actions.none')" 1 "back to the help once the process is gone"
 
 # A click outside closes the popup; the mem instance opens on its tab.
 click 300 900

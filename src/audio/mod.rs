@@ -93,7 +93,10 @@ pub enum Event {
     Channel(Channel),
     ChannelGone(Kind, u32),
     /// The default devices, by name.
-    Defaults { sink: String, source: String },
+    Defaults {
+        sink: String,
+        source: String,
+    },
     /// The session bus is up; player commands can be sent.
     Bus(Connection),
     /// A player appeared or changed.
@@ -109,7 +112,11 @@ pub enum Command {
     /// Make a device the default of its kind.
     SetDefault(Kind, u32),
     /// The default device's volume, by this much (clamped to `max`).
-    StepDefault { kind: Kind, delta: f32, max: f32 },
+    StepDefault {
+        kind: Kind,
+        delta: f32,
+        max: f32,
+    },
     /// Mute or unmute the default device.
     ToggleDefaultMute(Kind),
     PlayPause(String),
@@ -141,12 +148,20 @@ impl Audio {
         ])
     }
 
-    pub fn apply(&mut self, event: Event) {
+    /// Apply an event; whether what gadgets see changed (the server
+    /// reports a stream "changed" several times a second while it
+    /// plays, mostly with nothing new for us).
+    pub fn apply(&mut self, event: Event) -> bool {
         match event {
-            Event::Connected(handle) => self.mixer = Some(handle),
+            Event::Connected(handle) => {
+                self.mixer = Some(handle);
+                true
+            }
             Event::Disconnected => {
                 self.mixer = None;
+                let had = !self.channels.is_empty();
                 self.channels.clear();
+                had
             }
             Event::Channel(mut channel) => {
                 channel.default = self.is_default(&channel);
@@ -155,7 +170,13 @@ impl Audio {
                     .iter_mut()
                     .find(|c| c.kind == channel.kind && c.index == channel.index)
                 {
-                    Some(old) => *old = channel,
+                    Some(old) => {
+                        if *old == channel {
+                            return false;
+                        }
+                        *old = channel;
+                        true
+                    }
                     None => {
                         // Keep the groups together: after the last of
                         // its kind, or of the kinds before it.
@@ -165,14 +186,20 @@ impl Audio {
                             .rposition(|c| c.kind as u8 <= channel.kind as u8)
                             .map_or(0, |i| i + 1);
                         self.channels.insert(at, channel);
+                        true
                     }
                 }
             }
             Event::ChannelGone(kind, index) => {
+                let before = self.channels.len();
                 self.channels
                     .retain(|c| !(c.kind == kind && c.index == index));
+                self.channels.len() != before
             }
             Event::Defaults { sink, source } => {
+                if self.default_sink == sink && self.default_source == source {
+                    return false;
+                }
                 self.default_sink = sink;
                 self.default_source = source;
                 for c in &mut self.channels {
@@ -182,18 +209,33 @@ impl Audio {
                         Kind::Stream => false,
                     };
                 }
+                true
             }
-            Event::Bus(conn) => self.bus = Some(conn),
+            Event::Bus(conn) => {
+                self.bus = Some(conn);
+                true
+            }
             Event::Player(player) => {
                 self.load_cover(&player);
                 match self.players.iter_mut().find(|p| p.bus == player.bus) {
-                    Some(old) => *old = player,
-                    None => self.players.push(player),
+                    Some(old) => {
+                        if *old == player {
+                            return false;
+                        }
+                        *old = player;
+                        true
+                    }
+                    None => {
+                        self.players.push(player);
+                        true
+                    }
                 }
             }
             Event::PlayerGone(bus) => {
-                self.players.retain(|p| p.bus != bus);
                 self.covers.remove(&bus);
+                let before = self.players.len();
+                self.players.retain(|p| p.bus != bus);
+                self.players.len() != before
             }
         }
     }
@@ -285,10 +327,11 @@ impl Audio {
     /// Classes (application names, desktop ids) whose icons the daemon
     /// should resolve from the desktop entries.
     pub fn app_classes(&self) -> impl Iterator<Item = &str> {
-        self.channels
-            .iter()
-            .filter_map(|c| c.app.as_deref())
-            .chain(self.players.iter().filter_map(|p| p.desktop_entry.as_deref()))
+        self.channels.iter().filter_map(|c| c.app.as_deref()).chain(
+            self.players
+                .iter()
+                .filter_map(|p| p.desktop_entry.as_deref()),
+        )
     }
 
     pub fn run(&self, command: Command) -> Task<Event> {
@@ -413,7 +456,11 @@ mod tests {
     #[test]
     fn channels_grouped_by_kind_and_defaults_marked() {
         let mut a = Audio::default();
-        a.apply(Event::Channel(channel(Kind::Stream, 7, "song")));
+        assert!(a.apply(Event::Channel(channel(Kind::Stream, 7, "song"))));
+        assert!(
+            !a.apply(Event::Channel(channel(Kind::Stream, 7, "song"))),
+            "unchanged: not a change"
+        );
         a.apply(Event::Channel(channel(Kind::Output, 1, "spk")));
         a.apply(Event::Channel(channel(Kind::Input, 3, "mic")));
         a.apply(Event::Channel(channel(Kind::Output, 2, "hp")));

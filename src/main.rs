@@ -1,3 +1,4 @@
+mod audio;
 mod commands;
 mod compositor;
 mod config;
@@ -10,7 +11,6 @@ mod panel;
 mod process;
 mod scripts;
 mod sysmon;
-mod audio;
 mod theme;
 mod tray;
 mod watch;
@@ -31,6 +31,7 @@ use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use audio::Audio;
 use commands::{Command, DebugCommand, LauncherCommand, Reply};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
@@ -40,7 +41,6 @@ use launcher::Launcher;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
 use sysmon::SysMon;
-use audio::Audio;
 use theme::{Node, Theme};
 use tray::Tray;
 
@@ -360,7 +360,9 @@ impl AriaShell {
                 Task::none()
             }
             Message::Audio(event) => {
-                self.audio.apply(event);
+                if !self.audio.apply(event) {
+                    return Task::none();
+                }
                 self.resolve_icons();
                 self.sync_popups()
             }
@@ -426,10 +428,7 @@ impl AriaShell {
                 // exclusive-keyboard layer, surface-local).
                 let on_grab = self.grabs.iter().any(|(g, _)| *g == window);
                 let outside = |p: Point| {
-                    p.x < 0.0
-                        || p.y < 0.0
-                        || p.x >= open.size.0 as f32
-                        || p.y >= open.size.1 as f32
+                    p.x < 0.0 || p.y < 0.0 || p.x >= open.size.0 as f32 || p.y >= open.size.1 as f32
                 };
                 let elsewhere = window == open.window
                     && self
@@ -496,6 +495,10 @@ impl AriaShell {
                 let Some(position) = self.panels.get(&panel).map(Panel::position) else {
                     return Task::none();
                 };
+                // The state may have moved on while the widget tree was
+                // asked (a tray menu loads faster than that): size the
+                // surface from the state now, not from `OpenPopup`'s.
+                let size = self.popup_surface_size(panel, popup).unwrap_or(size);
                 let settings = panel::popup_settings(panel, position, anchor, size);
                 self.popups.insert(
                     popup,

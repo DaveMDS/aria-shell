@@ -2,7 +2,8 @@
 //! disk, network, gpu, temperature or load) as text and a sparkline,
 //! and a popup in the spirit of btop, one tab per section: cpu history
 //! and per-core meters, memory and swap, disks, network, GPUs, and the
-//! process table (sort by column, Terminate/Kill from a right click).
+//! process table (sort by column; a click selects a row, a bar under
+//! the table offers Terminate / Kill for it).
 //! The popup opens on the tab of the value shown. A right click on the
 //! bar runs `command` (by default a terminal monitor: btop, htop or
 //! top, in the launcher's terminal).
@@ -25,7 +26,6 @@ use crate::sysmon::{
 };
 use crate::theme::{self, Node, Theme};
 use crate::widgets::graph;
-use crate::widgets::menu::{self, Item, Menu};
 
 /// `[SystemMonitor:<id>]`: a gadget's keys (the sampler's and the
 /// popup's are `sysmon::MonitorConfig`, from the base `[SystemMonitor]`;
@@ -207,8 +207,9 @@ const CORES_PER_ROW: usize = 8;
 /// The terminal monitors tried for the default `command`.
 const MONITORS: [&str; 3] = ["btop", "htop", "top"];
 
-const MENU_TERMINATE: i32 = 1;
-const MENU_KILL: i32 = 2;
+const TERMINATE_LABEL: &str = "Terminate";
+const KILL_LABEL: &str = "Kill";
+const SELECT_HELP: &str = "Select a process to signal it";
 
 pub struct SystemMonitor {
     config: InstanceConfig,
@@ -216,9 +217,9 @@ pub struct SystemMonitor {
     /// The tab shown.
     tab: SectionKind,
     sort: (Column, bool),
-    /// The row whose menu is unfolded.
-    menu_for: Option<u32>,
-    menu: Menu,
+    /// The process row selected, whose signals the bar under the
+    /// table offers.
+    selected: Option<u32>,
     /// The interval the ticks follow while the popup is open.
     interval: u64,
 }
@@ -231,11 +232,11 @@ pub enum Message {
     /// While the popup is open: time to read the processes again.
     Tick,
     Sort(Column),
-    /// A right click on the row of that pid.
-    RowMenu(u32),
-    /// A left click on a row while a menu is open.
-    CloseMenu,
-    Menu(menu::Message),
+    /// A click on the row of that pid: selects it, or deselects it
+    /// when it was.
+    Select(u32),
+    /// A button of the action bar: the signal for the selected process.
+    Signal(Signal),
 }
 
 impl Gadget for SystemMonitor {
@@ -264,7 +265,7 @@ impl Gadget for SystemMonitor {
             }
             Message::Tab(tab) => {
                 self.tab = tab;
-                self.menu_for = None;
+                self.selected = None;
                 Action::None
             }
             Message::Tick => Action::SysMon(Command::Processes),
@@ -276,31 +277,17 @@ impl Gadget for SystemMonitor {
                 };
                 Action::None
             }
-            Message::RowMenu(pid) => {
-                self.menu_for = if self.menu_for == Some(pid) {
+            Message::Select(pid) => {
+                self.selected = if self.selected == Some(pid) {
                     None
                 } else {
                     Some(pid)
                 };
                 Action::None
             }
-            Message::CloseMenu => {
-                self.menu_for = None;
-                Action::None
-            }
-            Message::Menu(m) => match self.menu.update(m) {
-                menu::Event::Clicked(id) => {
-                    let Some(pid) = self.menu_for.take() else {
-                        return Action::None;
-                    };
-                    let signal = if id == MENU_KILL {
-                        Signal::Kill
-                    } else {
-                        Signal::Terminate
-                    };
-                    Action::SysMon(Command::Signal(pid, signal))
-                }
-                menu::Event::None | menu::Event::Unfolded(_) => Action::None,
+            Message::Signal(signal) => match self.selected {
+                Some(pid) => Action::SysMon(Command::Signal(pid, signal)),
+                None => Action::None,
             },
         }
     }
@@ -376,8 +363,7 @@ impl Gadget for SystemMonitor {
     }
 
     fn popup_closed(&mut self) {
-        self.menu_for = None;
-        self.menu.reset();
+        self.selected = None;
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
@@ -433,11 +419,23 @@ impl Gadget for SystemMonitor {
             )
             .width(Length::Fill)
             .into();
+        // The action bar stays under the scrolling table.
+        let footer = (tab == SectionKind::Processes).then(|| self.actions(theme, &node, sysmon));
+        // The process list always overflows: its scrollbar is embedded
+        // (taking its own column) so it doesn't cover the last column;
+        // the other tabs' floats, shown only when needed.
+        let mut scroll = scrollable(section).width(Length::Fill).height(Length::Fill);
+        if tab == SectionKind::Processes {
+            scroll = scroll.direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(6)
+                    .scroller_width(6)
+                    .spacing(6),
+            ));
+        }
+        let scroll: Element<'a, Message> = scroll.into();
         let content = theme
-            .column(
-                &monitor,
-                [tabs, scrollable(section).width(Length::Fill).into()],
-            )
+            .column(&monitor, [tabs, scroll].into_iter().chain(footer))
             .width(Length::Fill)
             .height(Length::Fill);
         theme
@@ -472,8 +470,7 @@ impl SystemMonitor {
             popup: Popup::new(),
             tab,
             sort: (Column::Cpu, true),
-            menu_for: None,
-            menu: Menu::new(),
+            selected: None,
             interval: 2,
         }
     }
@@ -516,8 +513,7 @@ impl SystemMonitor {
         }
     }
 
-    /// The process table: sortable header, the top rows, the menu of
-    /// the right-clicked one under it.
+    /// The process table: sortable header, the top rows.
     fn processes<'a>(
         &'a self,
         theme: &'a Theme,
@@ -559,64 +555,87 @@ impl SystemMonitor {
             };
             if desc { ord.reverse() } else { ord }
         });
-        let rows = procs
-            .into_iter()
-            .take(sysmon.config().processes)
-            .flat_map(|p| {
-                let r = table
-                    .child("row")
-                    .attr("pid", p.pid.to_string())
-                    .attr("name", p.name.clone())
-                    .attr("state", p.state.to_string())
-                    .class_if("selected", self.menu_for == Some(p.pid));
-                let cells = Column::ALL.iter().map(|&c| {
-                    let n = r.child(c.name());
-                    let text = match c {
-                        Column::Name => p.name.clone(),
-                        Column::Pid => p.pid.to_string(),
-                        Column::User => p.user.clone(),
-                        Column::Cpu => format!("{:.1}", p.cpu),
-                        Column::Mem => format::bytes(p.rss),
-                    };
-                    let cell = theme
-                        .container(&n, theme.text(&n, text))
-                        .align_x(column_alignment(c));
-                    match cell_width(theme, &header_node.child("column").class(c.name()), c) {
-                        Some(w) => cell.width(Length::Fixed(w)).into(),
-                        None => cell.width(Length::Fill).into(),
-                    }
-                });
-                let content = theme
-                    .row(&r, cells)
-                    .align_y(Alignment::Center)
-                    .width(Length::Fill);
-                // A left click on any row puts an open menu away.
-                let mut area = mouse_area(theme.container(&r, content).width(Length::Fill))
-                    .on_right_press(Message::RowMenu(p.pid));
-                if self.menu_for.is_some() {
-                    area = area.on_press(Message::CloseMenu);
+        let rows = procs.into_iter().take(sysmon.config().processes).map(|p| {
+            let r = table
+                .child("row")
+                .attr("pid", p.pid.to_string())
+                .attr("name", p.name.clone())
+                .attr("state", p.state.to_string())
+                .class_if("selected", self.selected == Some(p.pid));
+            let cells = Column::ALL.iter().map(|&c| {
+                let n = r.child(c.name());
+                let text = match c {
+                    Column::Name => p.name.clone(),
+                    Column::Pid => p.pid.to_string(),
+                    Column::User => p.user.clone(),
+                    Column::Cpu => format!("{:.1}", p.cpu),
+                    Column::Mem => format::bytes(p.rss),
+                };
+                let cell = theme
+                    .container(&n, theme.text(&n, text))
+                    .align_x(column_alignment(c));
+                match cell_width(theme, &header_node.child("column").class(c.name()), c) {
+                    Some(w) => cell.width(Length::Fixed(w)).into(),
+                    None => cell.width(Length::Fill).into(),
                 }
-                let row: Element<'a, Message> = area.into();
-                let mut out = vec![row];
-                if self.menu_for == Some(p.pid) {
-                    let items = vec![
-                        Item::new(MENU_TERMINATE, "Terminate"),
-                        Item::new(MENU_KILL, "Kill"),
-                    ];
-                    out.push(
-                        self.menu
-                            .view(theme, &r.child("menu"), items)
-                            .map(Message::Menu),
-                    );
-                }
-                out
             });
+            let content = theme
+                .row(&r, cells)
+                .align_y(Alignment::Center)
+                .width(Length::Fill);
+            mouse_area(theme.container(&r, content).width(Length::Fill))
+                .on_press(Message::Select(p.pid))
+                .into()
+        });
         vec![
             theme
                 .column(&table, std::iter::once(header).chain(rows))
                 .width(Length::Fill)
                 .into(),
         ]
+    }
+
+    /// The bar under the (scrolling) process table: the selected
+    /// process (while it's still there) and its signals, or the help
+    /// and the buttons disabled.
+    fn actions<'a>(
+        &'a self,
+        theme: &'a Theme,
+        node: &Node,
+        sysmon: &'a SysMon,
+    ) -> Element<'a, Message> {
+        let p = self
+            .selected
+            .and_then(|pid| sysmon.processes().iter().find(|p| p.pid == pid));
+        let actions = node.child("actions").class_if("none", p.is_none());
+        let text = actions.child("text");
+        let label = match p {
+            Some(p) => format!("{} ({})", p.name, p.pid),
+            None => SELECT_HELP.to_owned(),
+        };
+        let button = |class: &'static str, label: &'static str, signal: Signal| {
+            let b = actions.child("button").class(class);
+            let mut button = theme.button(&b, theme.text(&b.child("text"), label));
+            if p.is_some() {
+                button = button.on_press(Message::Signal(signal));
+            }
+            button
+        };
+        let bar = theme
+            .row(
+                &actions,
+                [
+                    theme
+                        .container(&text, theme.text(&text, label))
+                        .width(Length::Fill)
+                        .into(),
+                    button("terminate", TERMINATE_LABEL, Signal::Terminate).into(),
+                    button("kill", KILL_LABEL, Signal::Kill).into(),
+                ],
+            )
+            .align_y(Alignment::Center)
+            .width(Length::Fill);
+        theme.container(&actions, bar).width(Length::Fill).into()
     }
 }
 

@@ -152,9 +152,11 @@
  *            ├─ header
  *            │  ╰─ column.name|.pid|.user|.cpu|.mem[.sorted][.reverse]   buttons: click sorts; `width` sizes
  *            │     ╰─ text                                                the column (the name takes the rest)
- *            ╰─ row[pid="1234"][name="comm"][state="S"][.selected]      one per process; right click: the menu
- *               ├─ name | pid | user | cpu | mem              texts
- *               ╰─ menu                                       Terminate / Kill (see `menu`)
+ *            ╰─ row[pid="1234"][name="comm"][state="S"][.selected]      one per process; a click selects it
+ *               ╰─ name | pid | user | cpu | mem              texts
+ *      ╰─ section.processes > actions[.none]                  under the scrolling table: the selected
+ *         ├─ text                                             process's name and pid and the signals, or
+ *         ╰─ button.terminate | button.kill ╰─ text           (.none) the help and the buttons :disabled
  *
  *   gadget.audio                                              `gap` between its buttons
  *   ├─ button.output[.muted][.none]                           the default output's level (.none: no output);
@@ -643,8 +645,30 @@ gadget.system-monitor table row cpu,
 gadget.system-monitor table row mem {
   color: var(--aria-muted);
 }
-gadget.system-monitor table row menu {
-  padding: 2px 16px;
+gadget.system-monitor section.processes > actions {
+  padding: 6px 12px 0 12px;
+  gap: 6px;
+}
+gadget.system-monitor section.processes > actions button {
+  padding: 2px 8px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.system-monitor section.processes > actions button:hover {
+  border-color: var(--aria-accent);
+}
+gadget.system-monitor section.processes > actions button.kill text {
+  color: var(--aria-urgent);
+}
+gadget.system-monitor section.processes > actions button.kill:hover {
+  border-color: var(--aria-urgent);
+}
+gadget.system-monitor section.processes > actions.none text,
+gadget.system-monitor section.processes > actions.none button.kill text {
+  color: var(--aria-muted);
+}
+gadget.system-monitor section.processes > actions.none button:hover {
+  border-color: var(--aria-border);
 }
 
 gadget.audio {

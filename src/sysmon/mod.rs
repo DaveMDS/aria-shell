@@ -484,7 +484,9 @@ impl SysMon {
         let Some(s) = &self.last else {
             return "no sample yet".to_owned();
         };
-        let pct = |used: u64, total: u64| (used * 100).checked_div(total).unwrap_or(0).to_string();
+        // Rounded, as the bar and the popup show it.
+        let pct =
+            |used: u64, total: u64| format!("{:.0}", used as f64 * 100.0 / total.max(1) as f64);
         format!(
             "cpu={:.0}% cores={} mem={}% swap={}% disks={} net={} gpu={} procs={} samples={}",
             s.cpu.total,

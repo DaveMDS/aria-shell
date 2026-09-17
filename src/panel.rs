@@ -94,6 +94,21 @@ pub fn popup_settings(
     .gravity(gravity)
 }
 
+/// Mouse buttons pressed on any of our windows that no widget took (a
+/// click on a bar beside its gadgets): the daemon closes the popups. A
+/// popup's grab makes the compositor dismiss it on a click outside, but
+/// wlroots (Sway) delivers a click on the same client's other surfaces
+/// instead, so that one is ours to act on.
+pub fn presses_outside() -> Subscription<window::Id> {
+    iced::event::listen_with(|event, status, window| match (event, status) {
+        (
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_)),
+            iced::event::Status::Ignored,
+        ) => Some(window),
+        _ => None,
+    })
+}
+
 /// Where [`popup_settings`] asks the popup to go, relative to the
 /// panel surface, before the compositor slides it on screen: for
 /// `debug surfaces`.

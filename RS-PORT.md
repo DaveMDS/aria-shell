@@ -314,9 +314,15 @@ Two things flow between the daemon and the gadgets besides messages:
   `OK ...` / `ERR ...` per line; parsing is in the listener, the daemon
   only sees valid `Command`s). The surface is `Layer::Overlay`, no
   anchors (the compositor centres it), sized by the theme's `launcher {
-  width; height }`, `KeyboardInteractivity::OnDemand` (Hyprland focuses
-  an on-demand layer when it maps; `Exclusive` would also force the
-  *pointer* onto it, see below); the search
+  width; height }`, `KeyboardInteractivity::Exclusive` (`OnDemand`
+  works on Hyprland but not on Sway, whose `arrange_layers`, run on
+  any layer-surface commit on the output, our grab surfaces mapping
+  included, unfocuses a non-exclusive focused layer: the launcher
+  closed within a second. Hyprland routes every pointer event to an
+  exclusive layer, so there the outside click comes tagged with the
+  launcher's window and is told from the coordinates being outside
+  its size; **to verify on Hyprland**, the bounds check was written
+  under Sway); the search
   field is focused with `operation::focus` on the `ShellEvent::NewShell`
   of that surface (earlier, the widget tree doesn't exist yet). A click
   outside closes it as it does for a popup: while it's open the daemon
@@ -542,7 +548,14 @@ Two things flow between the daemon and the gadgets besides messages:
   screen. The runtime takes the grab serial from the last pointer button
   itself, so a popup opened from a click gets the implicit grab: a click
   outside dismisses it (`xdg_popup.popup_done` -> `ShellEvent::Closed`)
-  and the compositor swallows that click.
+  and the compositor swallows that click. On Hyprland. wlroots' popup
+  grab (Sway) only dismisses on a click outside *the client's*
+  surfaces: a click on our own bar is delivered to the bar. So the
+  daemon also closes the popups on a button press no widget took on
+  any non-popup window of ours (`panel::presses_outside`, `Status::
+  Ignored`: a press on a gadget's button is that gadget's business),
+  and opening a popup closes the others (`AriaShell::close_popups`,
+  telling the panel itself since no `Closed` will).
 - A widget's on-screen bounds are only known to the widget tree: query
   them with a custom `widget::Operation` via `iced::advanced::widget::operate`
   (needs the `advanced` feature). The runtime runs the operation on every

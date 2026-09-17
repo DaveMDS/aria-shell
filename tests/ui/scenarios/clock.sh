@@ -25,3 +25,19 @@ for output in HEADLESS-1 HEADLESS-2; do
     click 600 600
     assert_no_surface popup
 done
+
+# A click on the bar itself, beside the gadgets, closes the popup too
+# (Sway delivers it to us instead of dismissing the popup), and so does
+# opening another gadget's popup: one at a time.
+click_widget 'panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+assert_surface popup
+click 600 16
+assert_no_surface popup
+
+click_widget 'panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+assert_surface popup
+click_widget 'panel[output="HEADLESS-1"] gadget.notifications > button'
+assert_eq "$(surfaces | tr ';' '\n' | grep -c popup)" 1 "one popup at a time"
+assert_eq "$(count_widgets 'popup calendar')" 0 "the calendar's popup is gone"
+click 600 600
+assert_no_surface popup

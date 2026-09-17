@@ -78,6 +78,9 @@ enum Message {
     /// A mouse button was released on window `Id` while the launcher is
     /// open: closes it when the click wasn't on the launcher.
     GrabClicked(Id),
+    /// A mouse button was pressed on window `Id` and no widget took it:
+    /// closes the popups, when the window isn't one of them.
+    PressedOutside(Id),
     /// The pointer moved over one of our surfaces (for `debug cursor`).
     Cursor(Id, Point),
     /// The widget tree answered `debug widgets`: element paths and
@@ -394,22 +397,40 @@ impl AriaShell {
                     return Task::none();
                 };
                 // On a grab, or reported on the launcher's window while
-                // the pointer was last seen elsewhere (Hyprland keeps
-                // pointer focus where it was until the pointer moves,
-                // so a press on the bar button that opened the launcher
-                // comes tagged with the launcher's window).
+                // the pointer was last seen elsewhere: on another window
+                // (Hyprland keeps pointer focus where it was until the
+                // pointer moves, so a press on the bar button that
+                // opened the launcher comes tagged with the launcher's
+                // window), or on the launcher's window but outside its
+                // bounds (Hyprland routes every pointer event to an
+                // exclusive-keyboard layer, surface-local).
                 let on_grab = self.grabs.iter().any(|(g, _)| *g == window);
-                let elsewhere =
-                    window == open.window && self.cursor.is_some_and(|(w, _)| w != open.window);
+                let outside = |p: Point| {
+                    p.x < 0.0
+                        || p.y < 0.0
+                        || p.x >= open.size.0 as f32
+                        || p.y >= open.size.1 as f32
+                };
+                let elsewhere = window == open.window
+                    && self
+                        .cursor
+                        .is_some_and(|(w, p)| w != open.window || outside(p));
                 log::debug!(
                     "click on window {window:?} (launcher {:?}, pointer last on {:?}): grab {on_grab}, elsewhere {elsewhere}",
                     open.window,
-                    self.cursor.map(|(w, _)| w)
+                    self.cursor
                 );
                 if on_grab || elsewhere {
                     self.close_launcher()
                 } else {
                     Task::none()
+                }
+            }
+            Message::PressedOutside(window) => {
+                if self.popups.contains_key(&window) {
+                    Task::none()
+                } else {
+                    self.close_popups()
                 }
             }
             Message::Launcher(m) => {
@@ -741,14 +762,19 @@ impl AriaShell {
                 let Some(size) = self.popup_surface_size(panel, id) else {
                     return Task::none();
                 };
+                // One popup at a time (the compositor's grab already
+                // dismisses the open one on Hyprland, not on Sway,
+                // where a click on our own surfaces is delivered).
+                let close = self.close_popups();
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
-                widget_bounds(anchor).map(move |bounds| Message::PopupAnchor {
+                let open = widget_bounds(anchor).map(move |bounds| Message::PopupAnchor {
                     popup: id,
                     panel,
                     anchor: bounds.unwrap_or_default(),
                     size,
-                })
+                });
+                Task::batch([close, open])
             }
             Action::ClosePopup(id) => {
                 self.popups.remove(&id);
@@ -969,7 +995,7 @@ impl AriaShell {
                 layer: Layer::Overlay,
                 exclusive_zone: Some(-1),
                 margin: None,
-                keyboard_interactivity: KeyboardInteractivity::OnDemand,
+                keyboard_interactivity: KeyboardInteractivity::Exclusive,
                 output_option: OutputOption::GlobalName(output.id),
                 namespace: Some("aria-launcher".to_owned()),
                 ..Default::default()
@@ -1002,6 +1028,22 @@ impl AriaShell {
             ids.into_iter()
                 .map(|id| Task::done(Message::RemoveWindow(id))),
         )
+    }
+
+    /// Close every open popup, telling its panel (the runtime's
+    /// `Closed` won't, the popup is forgotten here first).
+    fn close_popups(&mut self) -> Task<Message> {
+        let popups = std::mem::take(&mut self.popups);
+        let tasks: Vec<Task<Message>> = popups
+            .into_iter()
+            .map(|(id, open)| {
+                if let Some(panel) = self.panels.get_mut(&open.panel) {
+                    panel.popup_closed(id);
+                }
+                Task::done(Message::RemoveWindow(id))
+            })
+            .collect();
+        Task::batch(tasks)
     }
 
     fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
@@ -1179,6 +1221,8 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
+        let popups = (!self.popups.is_empty())
+            .then(|| panel::presses_outside().map(Message::PressedOutside));
         let launcher = self.launcher.iter().flat_map(|open| {
             [
                 open.launcher
@@ -1210,6 +1254,7 @@ impl AriaShell {
             ]
             .into_iter()
             .chain(panels)
+            .chain(popups)
             .chain(launcher),
         )
     }

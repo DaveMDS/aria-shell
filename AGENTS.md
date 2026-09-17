@@ -50,11 +50,17 @@ level owns its state and `Message`, routes to children by key, and
 passed by reference. External event sources are `Subscription`s.
 
 Shared state (the compositor's workspaces/windows, the app icons, the
-tray items; later audio, ...) is owned by the daemon (`Compositor` in
-`compositor/`, `Icons` in `icons/`, `Tray` in `tray/`), reaches
-gadgets read-only through `gadget::Context` in `view`, and is changed by
-returning `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` from
-`update`. Gadgets never open their own IPC or DBus connection. A popup's
+tray items, the outputs of gadget scripts; later audio, ...) is owned by
+the daemon (`Compositor` in `compositor/`, `Icons` in `icons/`, `Tray`
+in `tray/`, `Scripts` in `scripts.rs`), reaches gadgets read-only
+through `gadget::Context` in `view`, and is changed by returning
+`gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
+`Action::Script(cmd)` from `update`. Gadgets never open their own IPC
+or DBus connection, and never run a periodic program themselves (a
+`Gadget::script` spec, run once by the daemon for every panel). Command
+lines from the config go through `process.rs`: split with shell-like
+quoting and run directly, no implicit shell, `aria-shell` meaning this
+binary. A popup's
 size is `Gadget::popup_size(ctx)`, a function of the state, re-asked
 after every update. See RS-PORT.md's "Architecture" section
 before changing the shape of any of these.

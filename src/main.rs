@@ -6,6 +6,8 @@ mod gadgets;
 mod icons;
 mod launcher;
 mod panel;
+mod process;
+mod scripts;
 mod theme;
 mod tray;
 mod watch;
@@ -54,6 +56,8 @@ enum Message {
     Icons(icons::Event),
     /// Tray items coming, going and changing, over DBus.
     Tray(tray::Event),
+    /// A gadget's program ran.
+    Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
     Command(Command),
     /// Routed to the open launcher.
@@ -61,6 +65,9 @@ enum Message {
     /// From the launcher's event subscription: only meant for it when
     /// the window is its own.
     LauncherEvent(Id, launcher::Message),
+    /// A mouse button was released on window `Id` while the launcher is
+    /// open: closes it when the click wasn't on the launcher.
+    GrabClicked(Id),
     /// The pointer moved over one of our surfaces (for `debug cursor`).
     Cursor(Id, Point),
     /// The widget tree answered `debug widgets`: element paths and
@@ -88,6 +95,7 @@ struct AriaShell {
     theme: Theme,
     icons: Icons,
     tray: Tray,
+    scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
     outputs: BTreeMap<OutputId, OutputInfo>,
@@ -147,6 +155,7 @@ impl AriaShell {
             theme,
             icons,
             tray: Tray::default(),
+            scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             popups: BTreeMap::new(),
@@ -163,6 +172,7 @@ impl AriaShell {
             theme: &self.theme,
             icons: &self.icons,
             tray: &self.tray,
+            scripts: &self.scripts,
         }
     }
 
@@ -185,7 +195,12 @@ impl AriaShell {
                 self.icons.resolve_name(name, item.icon_theme_path());
             }
         }
-        let names: Vec<String> = self.panels.values().flat_map(Panel::icon_names).collect();
+        let names: Vec<String> = self
+            .panels
+            .values()
+            .flat_map(Panel::icon_names)
+            .chain(self.scripts.icon_names().map(str::to_owned))
+            .collect();
         for name in names {
             self.icons.resolve_name(&name, None);
         }
@@ -254,7 +269,9 @@ impl AriaShell {
                 Some(panel) => {
                     let action = panel.update(m);
                     // A gadget's own state may change what its popup
-                    // shows (a submenu unfolded).
+                    // shows (a submenu unfolded) or which icons it
+                    // draws (a Custom's output named one).
+                    self.resolve_icons();
                     Task::batch([self.perform(id, action), self.sync_popups()])
                 }
                 None => Task::none(),
@@ -278,6 +295,12 @@ impl AriaShell {
                 let follow_up = self.tray.apply(event).map(Message::Tray);
                 self.resolve_icons();
                 Task::batch([follow_up, self.sync_popups()])
+            }
+            Message::Scripts(event) => {
+                self.scripts.apply(event);
+                // The output may name an icon.
+                self.resolve_icons();
+                Task::none()
             }
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
                 (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
@@ -312,6 +335,29 @@ impl AriaShell {
                 Some(open) if open.window == window => self.update(Message::Launcher(m)),
                 _ => Task::none(),
             },
+            Message::GrabClicked(window) => {
+                let Some(open) = &self.launcher else {
+                    return Task::none();
+                };
+                // On a grab, or reported on the launcher's window while
+                // the pointer was last seen elsewhere (Hyprland keeps
+                // pointer focus where it was until the pointer moves,
+                // so a press on the bar button that opened the launcher
+                // comes tagged with the launcher's window).
+                let on_grab = self.grabs.iter().any(|(g, _)| *g == window);
+                let elsewhere =
+                    window == open.window && self.cursor.is_some_and(|(w, _)| w != open.window);
+                log::debug!(
+                    "click on window {window:?} (launcher {:?}, pointer last on {:?}): grab {on_grab}, elsewhere {elsewhere}",
+                    open.window,
+                    self.cursor.map(|(w, _)| w)
+                );
+                if on_grab || elsewhere {
+                    self.close_launcher()
+                } else {
+                    Task::none()
+                }
+            }
             Message::Launcher(m) => {
                 let Some(open) = &mut self.launcher else {
                     return Task::none();
@@ -591,6 +637,10 @@ impl AriaShell {
             Action::Run(task) => task.map(move |m| Message::Panel(panel, m)),
             Action::Compositor(cmd) => self.compositor.run(cmd).map(Message::Compositor),
             Action::Tray(cmd) => self.tray.run(cmd, self.cursor_global()).map(Message::Tray),
+            Action::Script(cmd) => {
+                self.scripts.run(cmd);
+                Task::none()
+            }
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -853,16 +903,22 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
-        let launcher = self.launcher.iter().map(|open| {
-            open.launcher
-                .subscription()
-                .map(|(w, m)| Message::LauncherEvent(w, m))
+        let launcher = self.launcher.iter().flat_map(|open| {
+            [
+                open.launcher
+                    .subscription()
+                    .map(|(w, m)| Message::LauncherEvent(w, m)),
+                launcher::grab_clicks().map(Message::GrabClicked),
+            ]
         });
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
                 self.tray.subscription().map(Message::Tray),
+                self.scripts
+                    .subscription(self.panels.values().flat_map(Panel::scripts))
+                    .map(Message::Scripts),
                 commands::listen().map(Message::Command),
                 watch::watch(&files).map(Message::Files),
                 iced::event::listen_with(|event, _, window| match event {

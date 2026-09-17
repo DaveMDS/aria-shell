@@ -15,6 +15,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use crate::compositor;
 use crate::config::{Config, RawSection, Section};
 use crate::gadget::{self, AnyGadget, Context, Shared};
+use crate::scripts;
 use crate::theme::{self, Node, Theme};
 use crate::tray;
 
@@ -194,6 +195,7 @@ pub enum Action {
     Compositor(compositor::Command),
     Tray(tray::Command),
     Theme(theme::Command),
+    Script(scripts::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -330,6 +332,7 @@ impl Panel {
             gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
             gadget::Action::Tray(cmd) => Action::Tray(cmd),
             gadget::Action::Theme(cmd) => Action::Theme(cmd),
+            gadget::Action::Script(cmd) => Action::Script(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);
@@ -351,6 +354,11 @@ impl Panel {
     /// Icon names the gadgets draw, for the daemon to resolve.
     pub fn icon_names(&self) -> impl Iterator<Item = String> + '_ {
         self.gadgets.iter().flat_map(|e| e.gadget.icon_names())
+    }
+
+    /// Programs the gadgets want run, for the daemon.
+    pub fn scripts(&self) -> impl Iterator<Item = scripts::Spec> + '_ {
+        self.gadgets.iter().filter_map(|e| e.gadget.script())
     }
 
     /// Content size the gadget owning popup `id` wants for it now.

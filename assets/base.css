@@ -46,7 +46,8 @@
  *   panel[.top|.bottom][#<instance>][output="<connector>"]   a bar; #2 for [panel:2]
  *   ╰─ slot.start | slot.center | slot.end
  *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces, gadget.tray,
- *                                                             gadget.themes; #2 for [Clock:2]
+ *                                                             gadget.themes, gadget.custom; #2 for [Clock:2],
+ *                                                             #search for [Custom:search]
  *
  *   popup                                                     a popup surface
  *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
@@ -84,6 +85,11 @@
  *      ╰─ icon                                                the scheme's icon, drawn at the node's `height`
  *   popup > gadget.themes
  *   ╰─ menu                                                   Light / Dark, then Base and every theme found
+ *
+ *   gadget.custom
+ *   ╰─ button[.<class>...]                                    the classes come from the exec's JSON output;
+ *      ├─ icon                                                `gap` between icon and text; the icon is drawn
+ *      ╰─ text                                                at the node's `height` (symbolic ones take `color`)
  *
  *   menu                                                      a menu (tray items, themes): a column, gap between rows
  *   ├─ item[.checked][.submenu][.expanded]                    a row, a button (:disabled when the app says so)
@@ -266,6 +272,22 @@ gadget.themes > button:hover {
 }
 gadget.themes icon {
   height: 16px;
+}
+
+gadget.custom > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.custom > button:hover {
+  background: var(--aria-border);
+}
+gadget.custom icon {
+  height: 16px;
+}
+/* Classes a script may set: `{"text": "3", "class": "warning"}` */
+gadget.custom > button.warning {
+  color: var(--aria-urgent);
 }
 
 /* Menu popups (tray items, themes) */

@@ -83,6 +83,10 @@ TrayGadget (gadgets/tray.rs)   impl Gadget: a row of items from `ctx.tray`, the 
 Themes     (gadgets/themes.rs) impl Gadget: the scheme's icon; left click toggles light/dark, right click a menu
   Message::Toggle | OpenMenu | Menu(menu::Message)   -> Action::Theme(theme::Command)
 
+Custom     (gadgets/custom.rs) impl Gadget: icon and/or label, a program per mouse button / wheel direction
+  Message::Left | Right | Middle | Scroll(delta)   -> process::run; with `exec`, Action::Script(Refresh(spec))
+  script() -> Option<scripts::Spec>                the `exec` for the daemon; its output read from `ctx.scripts`
+
 Menu       (widgets/menu.rs)  reusable component: Item tree (labels, toggles, separators, submenus unfolding in
                               place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
 
@@ -99,6 +103,16 @@ Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>
   apply(Event) -> Task      patches the state; a `MenuChanged` for a loaded menu re-fetches it
   run(Command, cursor)      Activate/SecondaryActivate/ContextMenu/Scroll on an item, LoadMenu/ExpandMenu/MenuClick
                             over `com.canonical.dbusmenu` (tray/menu.rs)
+
+Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
+                            return_type) -> last `Output` (text, icon, classes); one run per distinct spec
+  subscription(specs)       from `Panel::scripts()` every time: one runner per spec, restarted by `Refresh`
+                            (the generation is part of its identity); yields `Event::Ran(spec, output)`
+  apply(Event) / run(Command::Refresh)
+
+process    (process.rs)     split_words (shell-like quoting, no shell), command(line), spawn_detached, run(line):
+                            the config's command lines and the launcher's desktop entries; `aria-shell` as
+                            the program is this very binary
 
 Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once for one Scheme
   load / try_load(&Config, style, scheme)   css.rs (scanner) -> selector.rs + value.rs (typed rules)
@@ -179,6 +193,18 @@ Two things flow between the daemon and the gadgets besides messages:
   class, so `panel.dark { }` rules work without touching the nodes
   gadgets build. `base.css` carries both palettes (Catppuccin-like
   Latte / Mocha). `debug theme` prints `style=<name|-> scheme=<..>`.
+- **Programs, not shells**: every command line in the config
+  (`[Custom] command*`, `command_wheel_*`, `exec`) is a program and its
+  arguments, split with shell-like quoting (`process::split_words`) and
+  run directly, detached; the user writes `sh -c '...'` when a shell
+  is wanted. The shell's own commands are its CLI (`command =
+  aria-shell launcher toggle`), with that name resolved to the running
+  binary so a dev build works the same; no `aria ` prefix magic as the
+  Python one had. `exec` programs are run by the daemon (`scripts.rs`),
+  once per distinct spec however many panels show the gadget: two
+  monitors don't run `checkupdates` twice (it fails when they do), and
+  the output is shared state read from `ctx.scripts`; a gadget asking
+  for a fresh run after a click returns `Action::Script(Refresh)`.
 - **Styling is a CSS-like theme file**, resolved per widget in `view`.
   `assets/base.css` (compiled in, always first) documents the element
   tree and the supported properties for theme authors; `[general] style`
@@ -622,7 +648,18 @@ Verified on the real Hyprland session with two outputs:
   input keeps focus, a click on the kitty row launches it and closes
   the launcher, `alacr` + Enter launches Alacritty, Esc closes, a
   click outside (desktop, bar, other monitor) closes it through the
-  grab surface, moving keyboard focus elsewhere closes it.
+  grab surface, moving keyboard focus elsewhere closes it. The click
+  outside is caught by a `listen_with` on button *release*
+  (`launcher::grab_clicks`), not a `mouse_area` on the grab: Hyprland
+  keeps pointer focus where it was until the pointer moves, so a
+  second click on the bar button that opened the launcher, without
+  moving, comes tagged with the launcher's window and no cursor
+  position; the daemon closes on a click reported on the launcher
+  while the pointer was last seen (`Message::Cursor`) on another
+  window. On the release because closing on the press destroys the
+  surface before its release, and Hyprland then swallows the next
+  click. Verified: button → open, same click again → closed, again →
+  open; clicks on the search field and on rows behave as before.
 - Tray: on the real desktop (noctalia owns the watcher, we host
   through it) nm-applet (icon by name, from Adwaita) and MEGAsync
   (22px `IconPixmap`) show on both bars at 16px; a right click on
@@ -643,15 +680,23 @@ Verified on the real Hyprland session with two outputs:
   `clicked` and closes the popup; `LayoutUpdated` reloads an open
   menu; `NewIcon` recolours the icon, `NewStatus` adds `.attention`;
   unregistering removes it) pass in the headless Sway.
+- Custom: `tests/ui/run.sh custom` (a static button with icon and
+  label, left click opens the launcher through `aria-shell launcher
+  show`, right/middle/wheel run their programs; `exec` output as text
+  and as JSON with a class and an icon, an empty output hides the
+  gadget, one run for both panels and another after a click) passes;
+  on the desktop `[Custom]` opens the launcher and `[Custom:updates]`
+  shows `checkupdates`' count on both bars.
 - Themes: `tests/ui/run.sh themes` (light at start, a left click on
   either bar toggles, the menu lists Light/Dark/Base/manjaro/waybar
   with the current ones checked, picking manjaro restyles live with
   its 28px bars, Base goes back) passes; on the desktop a click flips
   both bars' palette (`debug theme`).
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (67 tests: config, theme incl. scheme variables and root class,
+  (74 tests: config, theme incl. scheme variables and root class,
   selectors, desktop entries, commands, launcher search, tray
-  key/pixmap/props/menu parsing, wheel clicks, menu widget): clean.
+  key/pixmap/props/menu parsing, wheel clicks, menu widget, command
+  line splitting, script outputs, custom gadget): clean.
 
 Implemented: config loading and hot-reload, `[general]` (`style`,
 `reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
@@ -664,7 +709,10 @@ window icons) over the Hyprland IPC, with the daemon-owned
 the command socket + CLI client, the launcher (`[launcher] terminal`),
 the tray (`[Tray]`, SNI watcher/host, pixmap and named icons, dbusmenu
 popups with inline submenus, popups sized from state and resized live),
-light/dark schemes and the `[Themes]` gadget (toggle, theme picker).
+light/dark schemes and the `[Themes]` gadget (toggle, theme picker),
+`[Custom]` gadgets (label/icon, a program per button and wheel
+direction, `exec` with `interval`/`format`/`return_type`/`hide_empty`,
+run once by the daemon for every panel).
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock

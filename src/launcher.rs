@@ -13,7 +13,7 @@ use std::sync::Arc;
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::RelativeOffset;
-use iced::widget::{Space, column, mouse_area, operation, scrollable};
+use iced::widget::{Space, column, operation, scrollable};
 use iced::{Element, Event, Length, Subscription, Task, widget, window};
 
 use crate::config::{RawSection, Section};
@@ -257,11 +257,24 @@ impl Launcher {
 
 /// The surface behind the launcher on every output: transparent, and a
 /// click on it closes the launcher (the click is swallowed, as a
-/// compositor does for a popup's).
+/// compositor does for a popup's). The click is caught by
+/// [`grab_clicks`], not a `mouse_area`: the surface appears under a
+/// pointer that may not move before clicking (the bar button that
+/// opened the launcher, clicked again), and iced places the cursor
+/// only on motion.
 pub fn grab_view<'a>() -> Element<'a, Message> {
-    mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-        .on_press(Message::Close)
-        .into()
+    Space::new().width(Length::Fill).height(Length::Fill).into()
+}
+
+/// Mouse buttons released on any of our windows; the daemon closes the
+/// launcher when the click wasn't on it. On the release, not the press:
+/// closing on the press destroys the surface before the release
+/// reaches it, and Hyprland then swallows the next click.
+pub fn grab_clicks() -> Subscription<window::Id> {
+    iced::event::listen_with(|event, _status, window| match event {
+        Event::Mouse(iced::mouse::Event::ButtonReleased(_)) => Some(window),
+        _ => None,
+    })
 }
 
 /// Indices of the entries matching `query`, best first: an empty query

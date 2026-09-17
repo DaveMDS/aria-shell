@@ -13,11 +13,12 @@ aria() {
     "$ARIA_UI_ROOT/target/debug/aria-shell" "$@"
 }
 
-# Until the shell answers `ping` (5s), else fails.
+# Until the shell answers on its socket and has a panel on both outputs
+# (5s), else fails.
 wait_for_shell() {
     i=0
     while [ $i -lt 50 ]; do
-        aria ping > /dev/null 2>&1 && return 0
+        [ "$(aria debug surfaces 2> /dev/null | tr ';' '\n' | grep -c '^ *panel')" = 2 ] && return 0
         sleep 0.1
         i=$((i + 1))
     done

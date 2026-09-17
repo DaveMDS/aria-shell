@@ -140,6 +140,22 @@ impl RawSection {
         }
     }
 
+    /// A non-negative integer; anything else is logged and gives
+    /// `default`.
+    pub fn u64_or(&self, key: &str, default: u64) -> u64 {
+        match self.get(key).map(str::parse) {
+            None => default,
+            Some(Ok(n)) => n,
+            Some(Err(_)) => {
+                log::warn!(
+                    "invalid number {:?} for {key}, using {default}",
+                    self.get(key).unwrap_or("")
+                );
+                default
+            }
+        }
+    }
+
     /// Whitespace-separated list; empty/missing gives `default`.
     pub fn list_or(&self, key: &str, default: &[&str]) -> Vec<String> {
         match self.get(key) {

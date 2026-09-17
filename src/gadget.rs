@@ -12,7 +12,9 @@
 //! command, which the daemon executes.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
+use iced::mouse::ScrollDelta;
 use iced::widget::{Space, container};
 use iced::{Element, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
@@ -20,6 +22,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::clock::{self, Clock};
+use crate::gadgets::custom::{self, Custom};
 use crate::gadgets::themes::{self, Themes};
 use crate::gadgets::tray::{self, TrayGadget};
 use crate::gadgets::workspaces::{self, Workspaces};
@@ -33,6 +36,7 @@ pub struct Shared<'a> {
     pub theme: &'a Theme,
     pub icons: &'a Icons,
     pub tray: &'a crate::tray::Tray,
+    pub scripts: &'a crate::scripts::Scripts,
 }
 
 /// What a gadget gets in `view`: the shared state plus its own place in
@@ -61,6 +65,7 @@ pub enum Action<M> {
     Compositor(compositor::Command),
     Tray(crate::tray::Command),
     Theme(crate::theme::Command),
+    Script(crate::scripts::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -165,6 +170,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Compositor(cmd) => Action::Compositor(cmd),
             Self::Tray(cmd) => Action::Tray(cmd),
             Self::Theme(cmd) => Action::Theme(cmd),
+            Self::Script(cmd) => Action::Script(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -212,6 +218,12 @@ pub trait Gadget: Sized {
         Vec::new()
     }
 
+    /// A program the daemon should run for the gadget (`[Custom] exec`),
+    /// its output read back with `ctx.scripts.output(&spec)`.
+    fn script(&self) -> Option<crate::scripts::Spec> {
+        None
+    }
+
     /// Per-instance event source (timers, ...). The panel keys it by
     /// gadget index, so identical subscriptions on two gadgets stay
     /// distinct. Shared sources (compositor IPC, DBus) don't go here: they
@@ -224,6 +236,7 @@ pub trait Gadget: Sized {
 /// One variant per gadget type.
 pub enum AnyGadget {
     Clock(Clock),
+    Custom(Box<Custom>),
     Workspaces(Workspaces),
     Tray(TrayGadget),
     Themes(Themes),
@@ -232,6 +245,7 @@ pub enum AnyGadget {
 #[derive(Clone, Debug)]
 pub enum Message {
     Clock(clock::Message),
+    Custom(custom::Message),
     Workspaces(workspaces::Message),
     Tray(tray::Message),
     Themes(themes::Message),
@@ -247,6 +261,10 @@ impl AnyGadget {
             clock::ClockConfig::NAME => {
                 Some(Self::Clock(Clock::new(config.section(Some(name)), output)))
             }
+            custom::CustomConfig::NAME => Some(Self::Custom(Box::new(Custom::new(
+                config.section(Some(name)),
+                output,
+            )))),
             workspaces::WorkspacesConfig::NAME => Some(Self::Workspaces(Workspaces::new(
                 config.section(Some(name)),
                 output,
@@ -270,6 +288,7 @@ impl AnyGadget {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Clock(_) => "clock",
+            Self::Custom(_) => "custom",
             Self::Workspaces(_) => "workspaces",
             Self::Tray(_) => "tray",
             Self::Themes(_) => "themes",
@@ -279,6 +298,7 @@ impl AnyGadget {
     pub fn update(&mut self, message: Message) -> Action<Message> {
         match (self, message) {
             (Self::Clock(g), Message::Clock(m)) => g.update(m).map(Message::Clock),
+            (Self::Custom(g), Message::Custom(m)) => g.update(m).map(Message::Custom),
             (Self::Workspaces(g), Message::Workspaces(m)) => g.update(m).map(Message::Workspaces),
             (Self::Tray(g), Message::Tray(m)) => g.update(m).map(Message::Tray),
             (Self::Themes(g), Message::Themes(m)) => g.update(m).map(Message::Themes),
@@ -289,6 +309,7 @@ impl AnyGadget {
     pub fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         match self {
             Self::Clock(g) => g.view(ctx).map(Message::Clock),
+            Self::Custom(g) => g.view(ctx).map(Message::Custom),
             Self::Workspaces(g) => g.view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.view(ctx).map(Message::Tray),
             Self::Themes(g) => g.view(ctx).map(Message::Themes),
@@ -298,6 +319,7 @@ impl AnyGadget {
     pub fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         match self {
             Self::Clock(g) => g.popup_view(ctx).map(Message::Clock),
+            Self::Custom(g) => g.popup_view(ctx).map(Message::Custom),
             Self::Workspaces(g) => g.popup_view(ctx).map(Message::Workspaces),
             Self::Tray(g) => g.popup_view(ctx).map(Message::Tray),
             Self::Themes(g) => g.popup_view(ctx).map(Message::Themes),
@@ -307,6 +329,7 @@ impl AnyGadget {
     pub fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
         match self {
             Self::Clock(g) => g.popup_size(ctx),
+            Self::Custom(g) => g.popup_size(ctx),
             Self::Workspaces(g) => g.popup_size(ctx),
             Self::Tray(g) => g.popup_size(ctx),
             Self::Themes(g) => g.popup_size(ctx),
@@ -316,6 +339,7 @@ impl AnyGadget {
     fn popup(&mut self) -> Option<&mut Popup> {
         match self {
             Self::Clock(g) => g.popup(),
+            Self::Custom(g) => g.popup(),
             Self::Workspaces(g) => g.popup(),
             Self::Tray(g) => g.popup(),
             Self::Themes(g) => g.popup(),
@@ -334,6 +358,7 @@ impl AnyGadget {
         }
         match self {
             Self::Clock(g) => <Clock as Gadget>::popup_closed(g),
+            Self::Custom(g) => <Custom as Gadget>::popup_closed(g),
             Self::Workspaces(g) => <Workspaces as Gadget>::popup_closed(g),
             Self::Tray(g) => <TrayGadget as Gadget>::popup_closed(g),
             Self::Themes(g) => <Themes as Gadget>::popup_closed(g),
@@ -343,18 +368,133 @@ impl AnyGadget {
     pub fn icon_names(&self) -> Vec<String> {
         match self {
             Self::Clock(g) => g.icon_names(),
+            Self::Custom(g) => g.icon_names(),
             Self::Workspaces(g) => g.icon_names(),
             Self::Tray(g) => g.icon_names(),
             Self::Themes(g) => g.icon_names(),
         }
     }
 
+    pub fn script(&self) -> Option<crate::scripts::Spec> {
+        match self {
+            Self::Clock(g) => g.script(),
+            Self::Custom(g) => g.script(),
+            Self::Workspaces(g) => g.script(),
+            Self::Tray(g) => g.script(),
+            Self::Themes(g) => g.script(),
+        }
+    }
+
     pub fn subscription(&self) -> Subscription<Message> {
         match self {
             Self::Clock(g) => g.subscription().map(Message::Clock),
+            Self::Custom(g) => g.subscription().map(Message::Custom),
             Self::Workspaces(g) => g.subscription().map(Message::Workspaces),
             Self::Tray(g) => g.subscription().map(Message::Tray),
             Self::Themes(g) => g.subscription().map(Message::Themes),
         }
+    }
+}
+
+/// One wheel click on the continuous axis, in the units compositors
+/// use (libinput's), and how long after a discrete event its continuous
+/// twin may follow.
+const WHEEL_CLICK: f32 = 15.0;
+const WHEEL_TWIN: Duration = Duration::from_millis(100);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+/// Turns scroll events into wheel clicks, for a gadget that reacts per
+/// click: discrete events as they are, continuous ones (a touchpad)
+/// accumulated into clicks, dropped when they merely repeat a discrete
+/// one (a wheel produces both).
+#[derive(Debug, Default)]
+pub struct Wheel {
+    /// Continuous scroll not yet worth a click.
+    pending: f32,
+    /// When the last discrete event came.
+    discrete_at: Option<Instant>,
+}
+
+impl Wheel {
+    /// The clicks `delta` amounts to, positive upwards / leftwards, or
+    /// `None` when it isn't a whole one yet.
+    pub fn clicks(&mut self, delta: ScrollDelta) -> Option<(i32, Axis)> {
+        let now = Instant::now();
+        let (x, y) = match delta {
+            ScrollDelta::Lines { x, y } => {
+                self.discrete_at = Some(now);
+                self.pending = 0.0;
+                (x, y)
+            }
+            ScrollDelta::Pixels { x, y } => {
+                let twin = self
+                    .discrete_at
+                    .is_some_and(|t| now.duration_since(t) < WHEEL_TWIN);
+                if twin {
+                    return None;
+                }
+                let (x, y) = if y != 0.0 { (0.0, y) } else { (x, 0.0) };
+                self.pending += x + y;
+                let clicks = (self.pending / WHEEL_CLICK).trunc();
+                self.pending -= clicks * WHEEL_CLICK;
+                if y != 0.0 {
+                    (0.0, clicks)
+                } else {
+                    (clicks, 0.0)
+                }
+            }
+        };
+        let (clicks, axis) = if y != 0.0 {
+            (y, Axis::Vertical)
+        } else {
+            (x, Axis::Horizontal)
+        };
+        let clicks = clicks as i32;
+        (clicks != 0).then_some((clicks, axis))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wheel_clicks() {
+        let mut w = Wheel::default();
+        assert_eq!(
+            w.clicks(ScrollDelta::Lines { x: 0.0, y: -2.0 }),
+            Some((-2, Axis::Vertical))
+        );
+        // The continuous twin of the same wheel event.
+        assert_eq!(w.clicks(ScrollDelta::Pixels { x: 0.0, y: -30.0 }), None);
+        assert_eq!(
+            w.clicks(ScrollDelta::Lines { x: 1.0, y: 0.0 }),
+            Some((1, Axis::Horizontal))
+        );
+        assert_eq!(w.clicks(ScrollDelta::Pixels { x: 0.0, y: 0.0 }), None);
+    }
+
+    #[test]
+    fn touchpad_accumulates() {
+        let mut w = Wheel::default();
+        assert_eq!(w.clicks(ScrollDelta::Pixels { x: 0.0, y: 10.0 }), None);
+        assert_eq!(
+            w.clicks(ScrollDelta::Pixels { x: 0.0, y: 10.0 }),
+            Some((1, Axis::Vertical))
+        );
+        // 5 left over, plus 10: another click.
+        assert_eq!(
+            w.clicks(ScrollDelta::Pixels { x: 0.0, y: 10.0 }),
+            Some((1, Axis::Vertical))
+        );
+        assert_eq!(
+            w.clicks(ScrollDelta::Pixels { x: 0.0, y: -40.0 }),
+            Some((-2, Axis::Vertical))
+        );
     }
 }

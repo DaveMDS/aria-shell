@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+use crate::process;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
@@ -201,9 +202,8 @@ fn exec_basename(exec: &str) -> Option<String> {
 /// unwound, field codes expanded (no files or URLs to pass, so
 /// `%f %F %u %U` vanish; `%i` is the icon, `%c` the name, `%k` the
 /// file), in `Path=` if set, inside `terminal` (a command line, given
-/// `-e`) when `Terminal=true`. The child gets its own process group
-/// and no stdio, so it outlives the shell and doesn't write on its
-/// log; a thread reaps it. `DBusActivatable` is not honoured.
+/// `-e`) when `Terminal=true`, detached (see [`process::spawn_detached`]).
+/// `DBusActivatable` is not honoured.
 pub fn launch(entry: &DesktopEntry, terminal: &str) -> io::Result<()> {
     let line = entry
         .exec_line
@@ -220,19 +220,12 @@ pub fn launch(entry: &DesktopEntry, terminal: &str) -> io::Result<()> {
         .split_first()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "empty Exec"))?;
     let mut cmd = Command::new(program);
-    cmd.args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0);
+    cmd.args(args);
     if let Some(dir) = &entry.working_dir {
         cmd.current_dir(dir);
     }
-    let mut child = cmd.spawn()?;
+    process::spawn_detached(cmd)?;
     log::info!("launched {:?}: {argv:?}", entry.id);
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
     Ok(())
 }
 

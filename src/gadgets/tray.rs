@@ -10,15 +10,13 @@
 //! place and the popup is resized (its size is a function of the state,
 //! see [`Gadget::popup_size`]).
 
-use std::time::{Duration, Instant};
-
 use iced::Element;
 use iced::mouse::ScrollDelta;
 use iced::widget::{Space, mouse_area};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadget::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::theme;
 use crate::tray::{Command, Orientation, Status};
 use crate::widgets::menu::{self, Menu};
@@ -38,21 +36,13 @@ impl Section for TrayConfig {
 /// Icon size when the theme doesn't set `height` on `item icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;
 const LOADING: &str = "…";
-/// One wheel click on the continuous axis, in the units compositors
-/// use (libinput's), and how long after a discrete event its continuous
-/// twin may follow.
-const WHEEL_CLICK: f32 = 15.0;
-const WHEEL_TWIN: Duration = Duration::from_millis(100);
 
 pub struct TrayGadget {
     popup: Popup,
     /// Key of the item whose menu the popup shows.
     menu_for: Option<String>,
     menu: Menu,
-    /// Continuous scroll not yet worth a click, and when the last
-    /// discrete event came (a wheel sends both forms of the same click).
-    scroll_pending: f32,
-    scroll_discrete_at: Option<Instant>,
+    wheel: Wheel,
 }
 
 #[derive(Clone, Debug)]
@@ -75,8 +65,7 @@ impl Gadget for TrayGadget {
             popup: Popup::new(),
             menu_for: None,
             menu: Menu::new(),
-            scroll_pending: 0.0,
-            scroll_discrete_at: None,
+            wheel: Wheel::default(),
         }
     }
 
@@ -85,9 +74,13 @@ impl Gadget for TrayGadget {
             Message::Activate(key) => Action::Tray(Command::Activate(key)),
             Message::SecondaryActivate(key) => Action::Tray(Command::SecondaryActivate(key)),
             Message::ContextMenu(key) => Action::Tray(Command::ContextMenu(key)),
-            Message::Scroll(key, delta) => match self.scroll_steps(delta) {
-                Some((steps, orientation)) => {
-                    Action::Tray(Command::Scroll(key, steps, orientation))
+            Message::Scroll(key, delta) => match self.wheel.clicks(delta) {
+                Some((clicks, axis)) => {
+                    let orientation = match axis {
+                        Axis::Horizontal => Orientation::Horizontal,
+                        Axis::Vertical => Orientation::Vertical,
+                    };
+                    Action::Tray(Command::Scroll(key, clicks, orientation))
                 }
                 None => Action::None,
             },
@@ -219,102 +212,5 @@ impl Gadget for TrayGadget {
             size.width.ceil().max(1.0) as u32,
             size.height.ceil().max(1.0) as u32,
         )
-    }
-}
-
-impl TrayGadget {
-    /// Wheel clicks to send for a scroll event, positive upwards (as
-    /// KDE's host does): discrete events as they are, continuous ones
-    /// accumulated into clicks, dropped when they merely repeat a
-    /// discrete one (a wheel produces both).
-    fn scroll_steps(&mut self, delta: ScrollDelta) -> Option<(i32, Orientation)> {
-        let now = Instant::now();
-        let (x, y) = match delta {
-            ScrollDelta::Lines { x, y } => {
-                self.scroll_discrete_at = Some(now);
-                self.scroll_pending = 0.0;
-                (x, y)
-            }
-            ScrollDelta::Pixels { x, y } => {
-                let twin = self
-                    .scroll_discrete_at
-                    .is_some_and(|t| now.duration_since(t) < WHEEL_TWIN);
-                if twin {
-                    return None;
-                }
-                let (x, y) = if y != 0.0 { (0.0, y) } else { (x, 0.0) };
-                self.scroll_pending += x + y;
-                let clicks = (self.scroll_pending / WHEEL_CLICK).trunc();
-                self.scroll_pending -= clicks * WHEEL_CLICK;
-                if y != 0.0 {
-                    (0.0, clicks)
-                } else {
-                    (clicks, 0.0)
-                }
-            }
-        };
-        let (steps, orientation) = if y != 0.0 {
-            (y, Orientation::Vertical)
-        } else {
-            (x, Orientation::Horizontal)
-        };
-        let steps = steps as i32;
-        (steps != 0).then_some((steps, orientation))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn gadget() -> TrayGadget {
-        TrayGadget {
-            popup: Popup::new(),
-            menu_for: None,
-            menu: Menu::new(),
-            scroll_pending: 0.0,
-            scroll_discrete_at: None,
-        }
-    }
-
-    #[test]
-    fn wheel_clicks() {
-        let mut g = gadget();
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Lines { x: 0.0, y: -2.0 }),
-            Some((-2, Orientation::Vertical))
-        );
-        // The continuous twin of the same wheel event.
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: -30.0 }),
-            None
-        );
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Lines { x: 1.0, y: 0.0 }),
-            Some((1, Orientation::Horizontal))
-        );
-        assert_eq!(g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: 0.0 }), None);
-    }
-
-    #[test]
-    fn touchpad_accumulates() {
-        let mut g = gadget();
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: 10.0 }),
-            None
-        );
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: 10.0 }),
-            Some((1, Orientation::Vertical))
-        );
-        // 5 left over, plus 10: another click.
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: 10.0 }),
-            Some((1, Orientation::Vertical))
-        );
-        assert_eq!(
-            g.scroll_steps(ScrollDelta::Pixels { x: 0.0, y: -40.0 }),
-            Some((-2, Orientation::Vertical))
-        );
     }
 }

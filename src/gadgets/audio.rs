@@ -259,7 +259,11 @@ fn anchor(kind: Kind) -> usize {
 /// The volume icon for a channel's level; the microphone for an input.
 fn level_icon(c: &Channel) -> &'static str {
     if c.kind == Kind::Input {
-        if c.muted { ICON_INPUT_MUTED } else { ICON_INPUT }
+        if c.muted {
+            ICON_INPUT_MUTED
+        } else {
+            ICON_INPUT
+        }
     } else if c.muted || c.volume <= 0.0 {
         ICON_MUTED
     } else if c.volume < 0.34 {
@@ -456,7 +460,10 @@ impl AudioGadget {
         let name = node.child("name");
         let ns = theme.resolve(&name);
         let text = name.child("text");
-        let head = (theme.measure(&text, &c.label).height.max(theme.line_height(&text))
+        let head = (theme
+            .measure(&text, &c.label)
+            .height
+            .max(theme.line_height(&text))
             + ns.padding.top
             + ns.padding.bottom)
             .max(theme.line_height(&node.child("value")));
@@ -512,7 +519,14 @@ impl AudioGadget {
         let title = node.child("title");
         texts.push(
             theme
-                .text(&title, if p.title.is_empty() { &p.identity } else { &p.title })
+                .text(
+                    &title,
+                    if p.title.is_empty() {
+                        &p.identity
+                    } else {
+                        &p.title
+                    },
+                )
                 .into(),
         );
         for (class, value) in [("artist", &p.artist), ("album", &p.album)] {

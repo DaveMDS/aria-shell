@@ -42,8 +42,8 @@ use std::sync::Mutex;
 use iced::border::Radius;
 use iced::font::{Family, Weight};
 use iced::widget::{
-    Button, Column, Container, Row, Text, TextInput, button, column, container, row, slider,
-    text, text_input,
+    Button, Column, Container, Row, Text, TextInput, button, column, container, row, slider, text,
+    text_input,
 };
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow, Size};
 

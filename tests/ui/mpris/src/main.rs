@@ -91,11 +91,7 @@ impl Player {
             md.insert(key.to_owned(), OwnedValue::try_from(v).unwrap());
         };
         put(&mut md, "xesam:title", s.title.clone().into());
-        put(
-            &mut md,
-            "xesam:artist",
-            Value::from(vec![s.artist.clone()]),
-        );
+        put(&mut md, "xesam:artist", Value::from(vec![s.artist.clone()]));
         put(&mut md, "xesam:album", "Test album".into());
         md
     }

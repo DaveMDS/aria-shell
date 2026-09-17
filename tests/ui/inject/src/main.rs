@@ -122,7 +122,12 @@ struct Windows {
     shm: wl_shm::WlShm,
     wm_base: xdg_wm_base::XdgWmBase,
     /// Open windows by app id, in opening order.
-    open: Vec<(String, xdg_toplevel::XdgToplevel, xdg_surface::XdgSurface, Window)>,
+    open: Vec<(
+        String,
+        xdg_toplevel::XdgToplevel,
+        xdg_surface::XdgSurface,
+        Window,
+    )>,
 }
 
 struct Injector {

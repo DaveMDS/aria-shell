@@ -305,11 +305,16 @@ async fn listen(tx: &mut mpsc::Sender<Event>) -> std::io::Result<()> {
     // Subscribe before the initial fetch so no event is missed in between.
     let path = socket_path().ok_or(std::io::ErrorKind::NotFound)?;
     let mut sock = UnixStream::connect(path).await?;
-    send(&mut sock, SUBSCRIBE, br#"["workspace", "window", "output"]"#).await?;
+    send(
+        &mut sock,
+        SUBSCRIBE,
+        br#"["workspace", "window", "output"]"#,
+    )
+    .await?;
     let mut sock = BufReader::new(sock);
     let (kind, reply) = recv(&mut sock).await?;
-    let ok = kind == SUBSCRIBE
-        && serde_json::from_slice::<Subscribed>(&reply).is_ok_and(|r| r.success);
+    let ok =
+        kind == SUBSCRIBE && serde_json::from_slice::<Subscribed>(&reply).is_ok_and(|r| r.success);
     if !ok {
         return Err(std::io::Error::other("subscribe refused"));
     }
@@ -355,7 +360,9 @@ async fn workspace_event(ev: WorkspaceEvent) -> Vec<Event> {
         // itself, in which case no `window` event will say so.
         "focus" => {
             let Some(ws) = ev.current else { return vec![] };
-            let Some(name) = ws.name.clone() else { return vec![] };
+            let Some(name) = ws.name.clone() else {
+                return vec![];
+            };
             let focused = ws.focused_view().map(|v| v.id.to_string());
             ws.output
                 .clone()
@@ -452,10 +459,7 @@ mod tests {
         .unwrap();
         let mut views = Vec::new();
         walk(&tree, None, &mut views);
-        let got: Vec<_> = views
-            .iter()
-            .map(|(n, ws)| (n.id, n.class(), *ws))
-            .collect();
+        let got: Vec<_> = views.iter().map(|(n, ws)| (n.id, n.class(), *ws)).collect();
         assert_eq!(
             got,
             [
@@ -475,7 +479,9 @@ mod tests {
         message.extend_from_slice(&2u32.to_ne_bytes());
         message.extend_from_slice(&EVENT_WINDOW.to_ne_bytes());
         message.extend_from_slice(b"{}");
-        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
         let (kind, payload) = rt
             .block_on(recv(&mut std::io::Cursor::new(message)))
             .unwrap();

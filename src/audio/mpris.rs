@@ -221,7 +221,10 @@ mod tests {
     #[test]
     fn metadata_and_status() {
         let mut p = Player::new("org.mpris.MediaPlayer2.test".into());
-        p.set("Identity", OwnedValue::try_from(Value::from("Test")).unwrap());
+        p.set(
+            "Identity",
+            OwnedValue::try_from(Value::from("Test")).unwrap(),
+        );
         p.set(
             "PlaybackStatus",
             OwnedValue::try_from(Value::from("Playing")).unwrap(),
@@ -240,7 +243,10 @@ mod tests {
         )
         .unwrap();
         p.set("Metadata", OwnedValue::try_from(Value::from(dict)).unwrap());
-        p.set("CanGoNext", OwnedValue::try_from(Value::from(true)).unwrap());
+        p.set(
+            "CanGoNext",
+            OwnedValue::try_from(Value::from(true)).unwrap(),
+        );
         assert_eq!(p.identity, "Test");
         assert_eq!(p.status, PlaybackStatus::Playing);
         assert_eq!(p.title, "Song");

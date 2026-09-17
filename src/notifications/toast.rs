@@ -1,0 +1,218 @@
+//! One notification on screen: the content of its layer surface, and
+//! its size, which the surface must be given before anything is laid
+//! out (measured the way the view lays it out).
+//!
+//! ```text
+//! notification            the root container (the daemon applies it)
+//! ├─ icon                 image-data, image-path or app_icon
+//! ├─ summary
+//! ├─ body
+//! ╰─ actions              a row of buttons, one per action but `default`
+//!    ╰─ button
+//!       ╰─ text
+//! ```
+
+use iced::widget::text::Wrapping;
+use iced::widget::{column, mouse_area, row};
+use iced::{Alignment, Element, Length, Size};
+
+use super::{IconSource, Notification, Notifications};
+use crate::icons::{Icon, Icons};
+use crate::theme::{self, Node, Theme};
+
+/// Width when the theme doesn't set one on `notification`.
+const DEFAULT_WIDTH: f32 = 360.0;
+/// Icon size when the theme doesn't set `height` on `notification icon`.
+const DEFAULT_ICON: f32 = 32.0;
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    /// A left click on the notification itself.
+    Activate(u32),
+    /// A right click: close without invoking anything.
+    Dismiss(u32),
+    /// A click on an action button.
+    Invoke(u32, String),
+}
+
+/// The root node of notification `n`: its urgency as a class, its id,
+/// the app as an attribute.
+pub fn node(n: &Notification, output: &str) -> Node {
+    Node::root("notification")
+        .class(n.urgency.name())
+        .id(n.id.to_string())
+        .attr("app", n.app_name.clone())
+        .attr("output", output.to_owned())
+}
+
+/// The surface width the theme asks for, and the layout inside it.
+struct Layout {
+    width: f32,
+    /// The root's padding, around everything (iced draws borders over
+    /// the padding, they take no room).
+    frame: (f32, f32, f32, f32),
+    icon: Option<f32>,
+    /// Space between the icon and the texts, and between the texts row
+    /// and the actions.
+    gap: f32,
+    text_width: f32,
+}
+
+fn px(l: Option<theme::Length>) -> Option<f32> {
+    match l {
+        Some(theme::Length::Px(px)) => Some(px),
+        _ => None,
+    }
+}
+
+fn layout(theme: &Theme, node: &Node, has_icon: bool) -> Layout {
+    let root = theme.resolve(node);
+    let width = px(root.width).unwrap_or(DEFAULT_WIDTH).max(1.0);
+    let pad = root.padding;
+    let frame = (pad.top, pad.right, pad.bottom, pad.left);
+    let icon = has_icon.then(|| {
+        let s = theme.resolve(&node.child("icon"));
+        px(s.height).or(px(s.width)).unwrap_or(DEFAULT_ICON)
+    });
+    let gap = root.gap;
+    let text_width = width - frame.1 - frame.3 - icon.map_or(0.0, |i| i + gap);
+    Layout {
+        width,
+        frame,
+        icon,
+        gap,
+        text_width: text_width.max(1.0),
+    }
+}
+
+/// The icon to draw for `n`, if any: the image the app sent, else a
+/// file it named, else the theme icon it named.
+fn icon<'a>(
+    n: &'a Notification,
+    notifications: &'a Notifications,
+    icons: &'a Icons,
+) -> Option<&'a Icon> {
+    n.image.as_ref().or_else(|| match &n.icon {
+        Some(IconSource::Path(p)) => notifications.file_icon(p),
+        Some(IconSource::Name(name)) => icons.get_name(name, None),
+        None => None,
+    })
+}
+
+/// The size of notification `n`'s surface: the theme's `width`, and
+/// the height its content takes at that width.
+pub fn size(
+    theme: &Theme,
+    node: &Node,
+    n: &Notification,
+    notifications: &Notifications,
+    icons: &Icons,
+) -> (u32, u32) {
+    let l = layout(theme, node, icon(n, notifications, icons).is_some());
+    let text_height = |kind: &'static str, content: &str| {
+        let node = node.child(kind);
+        let s = theme.resolve(&node);
+        let pad = s.padding;
+        let inner = (l.text_width - pad.left - pad.right).max(1.0);
+        theme
+            .measure_in(&node, content, inner)
+            .height
+            .max(theme.line_height(&node))
+            + pad.top
+            + pad.bottom
+    };
+    let mut texts = text_height("summary", &n.summary);
+    if !n.body.is_empty() {
+        texts += text_height("body", &n.body);
+    }
+    let mut height = texts.max(l.icon.unwrap_or(0.0));
+    if n.buttons().next().is_some() {
+        let actions = node.child("actions");
+        let count = n.buttons().count();
+        let buttons = n
+            .buttons()
+            .enumerate()
+            .map(|(i, (_, label))| {
+                let b = actions.child("button").nth(i, count);
+                let s = theme.resolve(&b);
+                let text = theme.measure(&b.child("text"), label);
+                text.height.max(theme.line_height(&b.child("text")))
+                    + s.padding.top
+                    + s.padding.bottom
+            })
+            .fold(0.0_f32, f32::max);
+        let s = theme.resolve(&actions);
+        height += l.gap + buttons + s.padding.top + s.padding.bottom;
+    }
+    let size = Size::new(l.width, height + l.frame.0 + l.frame.2);
+    (size.width.ceil() as u32, size.height.ceil() as u32)
+}
+
+/// The content of `n`'s surface, inside the root the daemon applies. A
+/// left click anywhere but on a button activates it, a right click
+/// dismisses it.
+pub fn view<'a>(
+    theme: &'a Theme,
+    node: &Node,
+    n: &'a Notification,
+    notifications: &'a Notifications,
+    icons: &'a Icons,
+) -> Element<'a, Message> {
+    let icon = icon(n, notifications, icons);
+    let l = layout(theme, node, icon.is_some());
+    let mut texts = column![
+        theme
+            .container(
+                &node.child("summary"),
+                theme
+                    .text(&node.child("summary"), &n.summary)
+                    .wrapping(Wrapping::Word)
+            )
+            .width(Length::Fill)
+    ];
+    if !n.body.is_empty() {
+        texts = texts.push(
+            theme
+                .container(
+                    &node.child("body"),
+                    theme
+                        .text(&node.child("body"), &n.body)
+                        .wrapping(Wrapping::Word),
+                )
+                .width(Length::Fill),
+        );
+    }
+    let mut top = row![].spacing(l.gap).align_y(Alignment::Start);
+    if let (Some(icon), Some(size)) = (icon, l.icon) {
+        let icon_node = node.child("icon");
+        let color = theme.resolve(&icon_node).color;
+        top = top.push(theme.container(&icon_node, icon.view(size, color)));
+    }
+    top = top.push(texts.width(Length::Fill));
+    let mut content = column![top.width(Length::Fill)].spacing(l.gap);
+    if n.buttons().next().is_some() {
+        let actions = node.child("actions");
+        let count = n.buttons().count();
+        let buttons = n.buttons().enumerate().map(|(i, (key, label))| {
+            let b = actions.child("button").nth(i, count);
+            theme
+                .button(&b, theme.text(&b.child("text"), label))
+                .on_press(Message::Invoke(n.id, key.clone()))
+                .into()
+        });
+        let gap = theme.resolve(&actions).gap;
+        content = content.push(
+            theme
+                .container(
+                    &actions,
+                    row(buttons).spacing(gap).align_y(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .align_x(Alignment::End),
+        );
+    }
+    mouse_area(content.width(Length::Fill))
+        .on_press(Message::Activate(n.id))
+        .on_right_press(Message::Dismiss(n.id))
+        .into()
+}

@@ -51,7 +51,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    fn from_path(path: PathBuf) -> Self {
+    pub fn from_path(path: PathBuf) -> Self {
         if path.extension().is_some_and(|e| e == "svg") {
             let symbolic = path
                 .file_stem()

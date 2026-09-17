@@ -431,6 +431,28 @@ impl Theme {
         paragraph.min_bounds()
     }
 
+    /// The size `content` takes as a [`Theme::text`] of `node` wrapped
+    /// at words within `width` (as `.wrapping(Wrapping::Word)` in a
+    /// `width`-wide container lays it out).
+    pub fn measure_in(&self, node: &Node, content: &str, width: f32) -> Size {
+        use iced::advanced::text::Paragraph as _;
+        let s = self.resolve(node);
+        let size = s.font_size.unwrap_or(DEFAULT_FONT_SIZE);
+        let paragraph =
+            iced::advanced::graphics::text::Paragraph::with_text(iced::advanced::Text {
+                content,
+                bounds: Size::new(width, f32::INFINITY),
+                size: size.into(),
+                line_height: text::LineHeight::default(),
+                font: s.font().unwrap_or_default(),
+                align_x: text::Alignment::Left,
+                align_y: iced::alignment::Vertical::Top,
+                shaping: text::Shaping::Advanced,
+                wrapping: text::Wrapping::Word,
+            });
+        paragraph.min_bounds()
+    }
+
     /// The height of one line of text of `node`, as [`Theme::measure`]
     /// sees it.
     pub fn line_height(&self, node: &Node) -> f32 {

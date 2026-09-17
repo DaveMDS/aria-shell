@@ -66,6 +66,8 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Panel(window::Id, panel::Message)
   Message::Compositor(compositor::Event)   workspaces/windows changes, applied to `Compositor`
   Message::Tray(tray::Event)               status notifier items and their menus, applied to `Tray`
+  Message::Notifications(notifications::Event)   notifications coming and going, applied to `Notifications`
+  Message::Toast(toast::Message)           a click on a notification's surface -> notifications::Command
   + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
@@ -103,6 +105,16 @@ Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>
   apply(Event) -> Task      patches the state; a `MenuChanged` for a loaded menu re-fetches it
   run(Command, cursor)      Activate/SecondaryActivate/ContextMenu/Scroll on an item, LoadMenu/ExpandMenu/MenuClick
                             over `com.canonical.dbusmenu` (tray/menu.rs)
+
+Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<Notification>` (newest first)
+  subscription()            one session-bus connection (notifications/dbus.rs) serving
+                            `org.freedesktop.Notifications` (the name re-requested when another daemon drops it);
+                            yields `Event`s (Connected, Notify, Close, Expired)
+  apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
+  run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
+                            `ActionInvoked` / `NotificationClosed`
+  toast.rs                  node(n, output) / view(..) / size(..): one layer surface per notification, the
+                            daemon stacks them (`AriaShell::sync_toasts`) from the configured corner by margin
 
 Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
                             return_type) -> last `Output` (text, icon, classes); one run per distinct spec
@@ -404,6 +416,21 @@ Two things flow between the daemon and the gadgets besides messages:
 - Theme selectors are global: `gadget.tray item` matched the menu
   rows under `popup > gadget.tray > menu > item` too and won on
   specificity, so base.css uses `gadget.tray > item` for the bar.
+- A layer surface's `margin: Some((top, right, bottom, left))` and
+  `Message::MarginChange { id, margin }` place it from its anchored
+  edges; `exclusive_zone: None` keeps it out of the bars' zones (Sway
+  and wlroots arrange exclusive surfaces of every layer first, so an
+  overlay toast still sits under a `top`-layer bar). That's how the
+  notifications stack: one surface each, the daemon recomputes the
+  margins on every change.
+- iced's `container` and `button` lay their content out inside the
+  padding only: the border is drawn over it and takes no room, so a
+  surface measured for its content adds padding, not `border-width`.
+  Wrapped text is measured with `Paragraph::with_text` bounded on the
+  width (`Theme::measure_in`); it matches `text(..).wrapping(Word)` in
+  a container of that width to the pixel.
+- `gdbus call` infers `[255, 0]` as `ai`: an `image-data` hint from
+  the shell needs `@ay [..]` in the tuple.
 - `iced::time::every` needs the `tokio` feature on `iced`. We use
   `tokio::time::sleep` directly for the wall-clock-aligned clock tick.
 - `LayerSize::FILL` with only `Anchor::Top` fills the whole output height;
@@ -595,7 +622,7 @@ Two things flow between the daemon and the gadgets besides messages:
 - `hyprctl dispatch 'hl.dsp.focus({ monitor = "HDMI-A-2" })'` moves
   focus to a monitor, handy to test per-output behaviour.
 
-## Status (2026-09-16)
+## Status (2026-09-17)
 
 Verified on the real Hyprland session with two outputs:
 
@@ -692,8 +719,21 @@ Verified on the real Hyprland session with two outputs:
   with the current ones checked, picking manjaro restyles live with
   its 28px bars, Base goes back) passes; on the desktop a click flips
   both bars' palette (`debug theme`).
+- Notifications: `tests/ui/run.sh notifications` (`notify-send` on the
+  scenario's bus: one surface per notification on the focused output,
+  360px wide, 8px from the right edge and under the bar, the newest at
+  the corner and the older ones pushed down with the gap; a theme icon,
+  a body wrapping on two lines; critical gets the `.critical` border
+  and no timeout; `-r` replaces in place and the surface shrinks;
+  `CloseNotification` removes one and the survivor moves up; a right
+  click dismisses; the `default` action has no button and a click on
+  the body sends it, a button click sends its key (notify-send `-A`
+  prints it) and closes; `-t 500` and the configured `duration = 2`
+  expire; markup shown as text; an image file and an `image-data`
+  hint draw) passes, screenshots in `target/ui/notifications/`. Not
+  yet run on the real desktop.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (74 tests: config, theme incl. scheme variables and root class,
+  (81 tests: notifications config/timeouts/replacement/markup/image-data, config, theme incl. scheme variables and root class,
   selectors, desktop entries, commands, launcher search, tray
   key/pixmap/props/menu parsing, wheel clicks, menu widget, command
   line splitting, script outputs, custom gadget): clean.
@@ -712,7 +752,15 @@ popups with inline submenus, popups sized from state and resized live),
 light/dark schemes and the `[Themes]` gadget (toggle, theme picker),
 `[Custom]` gadgets (label/icon, a program per button and wheel
 direction, `exec` with `interval`/`format`/`return_type`/`hide_empty`,
-run once by the daemon for every panel).
+run once by the daemon for every panel), the notification daemon
+(`[notifications]` `enabled`/`duration`/`position`; one overlay layer
+surface per notification, sized from the theme's `notification { width }`
+and the measured content, stacked by margin from the corner with the
+`notifications { padding, gap }` of the theme; summary, body with the
+markup stripped, icon from `image-data` / `image-path` / `app_icon`,
+action buttons, `default` on click, right click dismisses, expiry with
+critical ones staying; `NotificationClosed` / `ActionInvoked`; another
+daemon owning the name is waited out).
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -720,8 +768,10 @@ Not yet: Sway backend, `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (notifications,
-lock, wallpaper, terminal, idle), launcher `DBusActivatable` entries,
+wrapper), every other gadget and component (lock, wallpaper,
+terminal, idle), notification niceties (a "do not disturb" / history
+gadget, `resident`/`transient` hints, sound, a per-app `image-data`
+downscale, `x`/`y` hints, animation), launcher `DBusActivatable` entries,
 a themed scrollbar (iced's default for now), persisting the theme
 picked at runtime and following/setting the desktop's colour scheme
 (portal / gsettings, per DE), tray tooltips / overlay
@@ -730,10 +780,10 @@ icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
 
 ## Next steps, in order
 
-1. Notifications: the `org.freedesktop.Notifications` daemon on the
-   tray's bus pattern (a served `#[interface]`, events into a
-   daemon-owned `Notifications`), with its own layer surfaces per
-   notification; COSMIC's `cosmic-notifications` as reference.
+1. Try the notifications on the real desktop (nothing owns the name
+   there): `notify-send` from a terminal, a Firefox download, an
+   `image-data` app (a chat client); a Notifications gadget on the bar
+   (count, do-not-disturb, the recent ones in a popup) if wanted.
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`, scrollbars); the `shader` widget
    for `background: shader("x.wgsl")` when a theme asks for more than

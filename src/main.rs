@@ -5,6 +5,7 @@ mod gadget;
 mod gadgets;
 mod icons;
 mod launcher;
+mod notifications;
 mod panel;
 mod process;
 mod scripts;
@@ -34,6 +35,7 @@ use config::{Config, GeneralConfig};
 use gadget::Shared;
 use icons::Icons;
 use launcher::Launcher;
+use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
 use theme::{Node, Theme};
 use tray::Tray;
@@ -56,6 +58,10 @@ enum Message {
     Icons(icons::Event),
     /// Tray items coming, going and changing, over DBus.
     Tray(tray::Event),
+    /// Notifications coming and going, over DBus.
+    Notifications(notifications::Event),
+    /// A click on a notification's surface.
+    Toast(toast::Message),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -95,6 +101,7 @@ struct AriaShell {
     theme: Theme,
     icons: Icons,
     tray: Tray,
+    notifications: Notifications,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -110,6 +117,20 @@ struct AriaShell {
     grabs: Vec<(Id, OutputId)>,
     /// Last pointer position reported by one of our surfaces.
     cursor: Option<(Id, Point)>,
+    /// One layer surface per notification shown.
+    toasts: Vec<Toast>,
+}
+
+/// A notification's surface: stacked from the configured corner of its
+/// output with the ones before it, by margin.
+struct Toast {
+    window: Id,
+    /// The notification's id.
+    id: u32,
+    output: OutputId,
+    size: (u32, u32),
+    /// (top, right, bottom, left)
+    margin: (i32, i32, i32, i32),
 }
 
 struct OpenLauncher {
@@ -145,6 +166,7 @@ impl AriaShell {
         let theme = Theme::load(&config, style.as_deref(), scheme);
         let icons = Icons::new(&config);
         let load_icons = icons.load().map(Message::Icons);
+        let notifications = Notifications::new(config.section(None));
         let shell = Self {
             config,
             general,
@@ -155,6 +177,7 @@ impl AriaShell {
             theme,
             icons,
             tray: Tray::default(),
+            notifications,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -162,6 +185,7 @@ impl AriaShell {
             launcher: None,
             grabs: Vec::new(),
             cursor: None,
+            toasts: Vec::new(),
         };
         (shell, load_icons)
     }
@@ -200,6 +224,7 @@ impl AriaShell {
             .values()
             .flat_map(Panel::icon_names)
             .chain(self.scripts.icon_names().map(str::to_owned))
+            .chain(self.notifications.icon_names().map(str::to_owned))
             .collect();
         for name in names {
             self.icons.resolve_name(&name, None);
@@ -301,6 +326,20 @@ impl AriaShell {
                 // The output may name an icon.
                 self.resolve_icons();
                 Task::none()
+            }
+            Message::Notifications(event) => {
+                let follow_up = self.notifications.apply(event).map(Message::Notifications);
+                self.resolve_icons();
+                Task::batch([follow_up, self.sync_toasts()])
+            }
+            Message::Toast(m) => {
+                let command = match m {
+                    toast::Message::Activate(id) => notifications::Command::Activate(id),
+                    toast::Message::Invoke(id, key) => notifications::Command::Invoke(id, key),
+                    toast::Message::Dismiss(id) => notifications::Command::Dismiss(id),
+                };
+                let signals = self.notifications.run(command).map(Message::Notifications);
+                Task::batch([signals, self.sync_toasts()])
             }
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
                 (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
@@ -463,6 +502,11 @@ impl AriaShell {
                 list.push((id, "grab", output, out));
             }
         }
+        for toast in &self.toasts {
+            if let Some(rect) = self.toast_rect(toast) {
+                list.push((toast.window, "notification", toast.output, rect));
+            }
+        }
         if let Some(open) = &self.launcher
             && let Some(out) = self.output_rect(open.output)
         {
@@ -529,10 +573,19 @@ impl AriaShell {
                 .and_then(|(_, rest)| rest.split_once('"'))
                 .map(|(name, _)| name);
             let kind = root.split(['.', '#', '[', ':']).next()?;
+            // Several notifications may show on one output: their
+            // root carries the notification id.
+            let window = root
+                .split_once('#')
+                .and_then(|(_, rest)| rest.split(['.', '[', ':']).next()?.parse::<u32>().ok())
+                .and_then(|id| self.toasts.iter().find(|t| t.id == id))
+                .map(|t| t.window);
             surfaces
                 .iter()
-                .find(|(_, k, out, _)| {
-                    *k == kind && output.is_none_or(|o| self.output_name(*out) == o)
+                .find(|(w, k, out, _)| {
+                    *k == kind
+                        && output.is_none_or(|o| self.output_name(*out) == o)
+                        && window.is_none_or(|id| *w == id)
                 })
                 .map(|(_, _, _, r)| r.position())
         };
@@ -589,6 +642,7 @@ impl AriaShell {
         self.config = Config::load();
         self.general = self.config.section(None);
         self.theme = Theme::load(&self.config, self.style.as_deref(), self.scheme);
+        self.notifications.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config);
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -605,6 +659,13 @@ impl AriaShell {
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
         tasks.push(self.icons.load().map(Message::Icons));
+        // The corner or the theme may have changed: reopen the toasts.
+        tasks.extend(
+            self.toasts
+                .drain(..)
+                .map(|t| Task::done(Message::RemoveWindow(t.window))),
+        );
+        tasks.push(self.sync_toasts());
         Task::batch(tasks)
     }
 
@@ -627,6 +688,7 @@ impl AriaShell {
             }
         }
         tasks.push(self.sync_popups());
+        tasks.push(self.sync_toasts());
         Task::batch(tasks)
     }
 
@@ -680,17 +742,163 @@ impl AriaShell {
         }
     }
 
+    /// The output new toasts go to: the focused one, else the first.
+    fn focused_output(&self) -> Option<&OutputInfo> {
+        self.outputs
+            .values()
+            .find(|o| o.name.is_some() && o.name == self.compositor.focused_output)
+            .or_else(|| self.outputs.values().next())
+    }
+
+    /// Make the toasts match the notifications: one surface each, on
+    /// the focused output when it appears, sized to its content and
+    /// stacked from the configured corner (newest nearest to it) with
+    /// the `notifications` root's `padding` from the edges and `gap`
+    /// between them; sizes and margins are updated in place.
+    fn sync_toasts(&mut self) -> Task<Message> {
+        let mut tasks = Vec::new();
+        // Notifications gone: their surfaces go.
+        let (gone, kept): (Vec<Toast>, Vec<Toast>) = std::mem::take(&mut self.toasts)
+            .into_iter()
+            .partition(|t| self.notifications.get(t.id).is_none());
+        self.toasts = kept;
+        tasks.extend(
+            gone.into_iter()
+                .map(|t| Task::done(Message::RemoveWindow(t.window))),
+        );
+        // New notifications: a surface each, on the focused output.
+        let mut new = Vec::new();
+        for n in &self.notifications.items {
+            if self.toasts.iter().any(|t| t.id == n.id) {
+                continue;
+            }
+            let Some(output) = self.focused_output() else {
+                log::warn!("no output to show notification {} on", n.id);
+                continue;
+            };
+            let window = Id::unique();
+            new.push(window);
+            self.toasts.push(Toast {
+                window,
+                id: n.id,
+                output: OutputId::from(output),
+                size: (0, 0),
+                margin: (0, 0, 0, 0),
+            });
+        }
+        // Sizes and places, per output, in notification order.
+        let position = self.notifications.config().position;
+        let stack = self.theme.resolve(&Node::root("notifications"));
+        let (edge, gap) = (stack.padding, stack.gap as i32);
+        let mut offsets: BTreeMap<OutputId, i32> = BTreeMap::new();
+        for n in &self.notifications.items {
+            let Some(i) = self.toasts.iter().position(|t| t.id == n.id) else {
+                continue;
+            };
+            let output_name = self.output_name(self.toasts[i].output).to_owned();
+            let node = toast::node(n, &output_name);
+            let size = toast::size(&self.theme, &node, n, &self.notifications, &self.icons);
+            let offset = offsets.entry(self.toasts[i].output).or_insert(0);
+            let along = *offset;
+            *offset += size.1 as i32 + gap;
+            let margin = match position {
+                p if p.is_top() => (
+                    edge.top as i32 + along,
+                    edge.right as i32,
+                    0,
+                    edge.left as i32,
+                ),
+                _ => (
+                    0,
+                    edge.right as i32,
+                    edge.bottom as i32 + along,
+                    edge.left as i32,
+                ),
+            };
+            let toast = &mut self.toasts[i];
+            if new.contains(&toast.window) {
+                let global = self
+                    .outputs
+                    .get(&toast.output)
+                    .map(|o| o.id)
+                    .unwrap_or_default();
+                toast.size = size;
+                toast.margin = margin;
+                log::debug!(
+                    "notification {}: surface {:?} on {output_name}, {}x{} at margin {margin:?}",
+                    n.id,
+                    toast.window,
+                    size.0,
+                    size.1
+                );
+                tasks.push(Task::done(Message::NewLayerShell {
+                    settings: NewLayerShellSettings {
+                        anchor: toast_anchor(position),
+                        size: LayerSize::px(size.0, size.1),
+                        layer: Layer::Overlay,
+                        exclusive_zone: None,
+                        margin: Some(margin),
+                        keyboard_interactivity: KeyboardInteractivity::None,
+                        output_option: OutputOption::GlobalName(global),
+                        namespace: Some("aria-notification".to_owned()),
+                        ..Default::default()
+                    },
+                    id: toast.window,
+                }));
+                continue;
+            }
+            if toast.size != size {
+                toast.size = size;
+                tasks.push(Task::done(Message::LayoutChange {
+                    id: toast.window,
+                    anchor: toast_anchor(position),
+                    size: LayerSize::px(size.0, size.1),
+                }));
+            }
+            if toast.margin != margin {
+                toast.margin = margin;
+                tasks.push(Task::done(Message::MarginChange {
+                    id: toast.window,
+                    margin,
+                }));
+            }
+        }
+        Task::batch(tasks)
+    }
+
+    /// Where a toast is, as asked: from the corner of its output, past
+    /// a bar's exclusive zone on that edge, by its margin.
+    fn toast_rect(&self, toast: &Toast) -> Option<Rectangle> {
+        let out = self.output_rect(toast.output)?;
+        let position = self.notifications.config().position;
+        let (w, h) = (toast.size.0 as f32, toast.size.1 as f32);
+        let (top, right, bottom, left) = toast.margin;
+        let reserved = |wanted: panel::Position| -> f32 {
+            self.panels
+                .values()
+                .filter(|p| p.output == toast.output && p.position() == wanted)
+                .map(|p| p.height() as f32)
+                .fold(0.0, f32::max)
+        };
+        use notifications::Position::*;
+        let x = match position {
+            TopLeft | BottomLeft => out.x + left as f32,
+            TopRight | BottomRight => out.x + out.width - right as f32 - w,
+            TopCenter | BottomCenter => out.x + (out.width - w) / 2.0,
+        };
+        let y = if position.is_top() {
+            out.y + reserved(panel::Position::Top) + top as f32
+        } else {
+            out.y + out.height - reserved(panel::Position::Bottom) - bottom as f32 - h
+        };
+        Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
+    }
+
     /// Show the launcher on the focused output (the first one if the
     /// compositor didn't say), sized by the theme's `launcher` rule,
     /// over a click-catching surface on every output.
     fn open_launcher(&mut self) -> Task<Message> {
-        let output = self
-            .outputs
-            .values()
-            .find(|o| o.name.is_some() && o.name == self.compositor.focused_output)
-            .or_else(|| self.outputs.values().next())
-            .cloned();
-        let Some(output) = output else {
+        let Some(output) = self.focused_output().cloned() else {
             log::warn!("no output to show the launcher on");
             return Task::none();
         };
@@ -802,10 +1010,24 @@ impl AriaShell {
                     output.name,
                     ids.len()
                 );
-                Task::batch(ids.into_iter().map(|id| {
-                    self.panels.remove(&id);
-                    Task::done(Message::RemoveWindow(id))
-                }))
+                let mut tasks: Vec<Task<Message>> = ids
+                    .into_iter()
+                    .map(|id| {
+                        self.panels.remove(&id);
+                        Task::done(Message::RemoveWindow(id))
+                    })
+                    .collect();
+                // Its toasts move to another output.
+                let (gone, kept): (Vec<Toast>, Vec<Toast>) = std::mem::take(&mut self.toasts)
+                    .into_iter()
+                    .partition(|t| t.output == gone);
+                self.toasts = kept;
+                tasks.extend(
+                    gone.into_iter()
+                        .map(|t| Task::done(Message::RemoveWindow(t.window))),
+                );
+                tasks.push(self.sync_toasts());
+                Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
                 let is_launcher = self.launcher.as_ref().is_some_and(|l| l.window == id);
@@ -817,6 +1039,12 @@ impl AriaShell {
                         self.launcher = None;
                     }
                     return self.close_launcher();
+                }
+                if let Some(i) = self.toasts.iter().position(|t| t.window == id) {
+                    // Gone with its output, or on our request: if the
+                    // notification is still there it gets a new one.
+                    self.toasts.remove(i);
+                    return self.sync_toasts();
                 }
                 if self.panels.remove(&id).is_some() {
                     self.popups.retain(|_, open| open.panel != id);
@@ -875,6 +1103,19 @@ impl AriaShell {
         if self.grabs.iter().any(|(g, _)| *g == window) {
             return launcher::grab_view().map(Message::Launcher);
         }
+        if let Some(t) = self.toasts.iter().find(|t| t.window == window)
+            && let Some(n) = self.notifications.get(t.id)
+        {
+            let node = toast::node(n, self.output_name(t.output));
+            let content = toast::view(&self.theme, &node, n, &self.notifications, &self.icons);
+            let root: Element<'_, toast::Message> = self
+                .theme
+                .container(&node, content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+            return root.map(Message::Toast);
+        }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
@@ -916,6 +1157,9 @@ impl AriaShell {
                 self.shell_events.listen().map(Message::Shell),
                 self.compositor.subscription().map(Message::Compositor),
                 self.tray.subscription().map(Message::Tray),
+                self.notifications
+                    .subscription()
+                    .map(Message::Notifications),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),
@@ -932,6 +1176,19 @@ impl AriaShell {
             .chain(panels)
             .chain(launcher),
         )
+    }
+}
+
+/// The layer-shell anchor of a notification corner.
+fn toast_anchor(position: notifications::Position) -> Anchor {
+    use notifications::Position::*;
+    match position {
+        TopLeft => Anchor::Top | Anchor::Left,
+        TopRight => Anchor::Top | Anchor::Right,
+        TopCenter => Anchor::Top,
+        BottomLeft => Anchor::Bottom | Anchor::Left,
+        BottomRight => Anchor::Bottom | Anchor::Right,
+        BottomCenter => Anchor::Bottom,
     }
 }
 

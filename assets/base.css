@@ -53,6 +53,19 @@
  *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
  *      ╰─ ...the gadget's popup content
  *
+ *   notifications                                             not a surface: the stack of notifications on an
+ *                                                             output; `padding` is its distance from the screen
+ *                                                             edges, `gap` the space between notifications
+ *   notification[.low|.normal|.critical][#<id>][app="<name>"]  one notification surface (`width` sizes it;
+ *                                                             the height follows the content); the id is the
+ *                                                             notification's, the app what it called itself
+ *   ├─ icon                                                   the app's image or icon, drawn at the node's `height`
+ *   ├─ summary                                                the title
+ *   ├─ body                                                   the text, wrapped at the width
+ *   ╰─ actions                                                a row, right-aligned
+ *      ╰─ button                                              one per action the app offers
+ *         ╰─ text
+ *
  *   launcher                                                  the launcher surface (width/height size it)
  *   ├─ input                                                  the search field (:focus when typing)
  *   ╰─ list                                                   the results (a column; gap between items)
@@ -203,6 +216,48 @@ launcher subtitle {
 }
 launcher item.selected subtitle {
   color: var(--aria-on-accent);
+}
+
+notifications {
+  padding: 8px;
+  gap: 8px;
+}
+notification {
+  width: 360px;
+  padding: 10px 12px;
+  gap: 10px;
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  font-size: 14px;
+  border: 1px solid var(--aria-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px var(--aria-shadow);
+}
+notification.critical {
+  border-color: var(--aria-urgent);
+}
+notification.low {
+  color: var(--aria-muted);
+}
+notification icon {
+  height: 32px;
+}
+notification summary {
+  font-weight: bold;
+}
+notification body {
+  padding: 2px 0 0 0;
+}
+notification actions {
+  gap: 6px;
+}
+notification actions button {
+  padding: 3px 10px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+notification actions button:hover {
+  border-color: var(--aria-accent);
 }
 
 /* Gadgets */

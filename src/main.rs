@@ -9,6 +9,7 @@ mod notifications;
 mod panel;
 mod process;
 mod scripts;
+mod sysmon;
 mod theme;
 mod tray;
 mod watch;
@@ -37,6 +38,7 @@ use icons::Icons;
 use launcher::Launcher;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
+use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
 
@@ -62,6 +64,8 @@ enum Message {
     Notifications(notifications::Event),
     /// A click on a notification's surface.
     Toast(toast::Message),
+    /// A system reading, or the process table.
+    SysMon(sysmon::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -102,6 +106,7 @@ struct AriaShell {
     icons: Icons,
     tray: Tray,
     notifications: Notifications,
+    sysmon: SysMon,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -167,6 +172,7 @@ impl AriaShell {
         let icons = Icons::new(&config);
         let load_icons = icons.load().map(Message::Icons);
         let notifications = Notifications::new(config.section(None));
+        let sysmon = SysMon::new(config.section(None));
         let shell = Self {
             config,
             general,
@@ -178,6 +184,7 @@ impl AriaShell {
             icons,
             tray: Tray::default(),
             notifications,
+            sysmon,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -197,6 +204,7 @@ impl AriaShell {
             icons: &self.icons,
             tray: &self.tray,
             notifications: &self.notifications,
+            sysmon: &self.sysmon,
             scripts: &self.scripts,
         }
     }
@@ -333,6 +341,10 @@ impl AriaShell {
                 self.resolve_icons();
                 Task::batch([follow_up, self.sync_toasts()])
             }
+            Message::SysMon(event) => {
+                self.sysmon.apply(event);
+                Task::none()
+            }
             Message::Toast(m) => {
                 let signals = self
                     .notifications
@@ -352,6 +364,10 @@ impl AriaShell {
                 }
                 DebugCommand::Cursor => {
                     reply.send(self.describe_cursor());
+                    Task::none()
+                }
+                DebugCommand::SysMon => {
+                    reply.send(self.sysmon.describe());
                     Task::none()
                 }
                 DebugCommand::Theme => {
@@ -642,6 +658,7 @@ impl AriaShell {
         self.general = self.config.section(None);
         self.theme = Theme::load(&self.config, self.style.as_deref(), self.scheme);
         self.notifications.set_config(self.config.section(None));
+        self.sysmon.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config);
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -706,6 +723,7 @@ impl AriaShell {
                 let signals = self.notifications.run(cmd).map(Message::Notifications);
                 Task::batch([signals, self.sync_toasts(), self.sync_popups()])
             }
+            Action::SysMon(cmd) => self.sysmon.run(cmd).map(Message::SysMon),
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1177,6 +1195,7 @@ impl AriaShell {
                 self.notifications
                     .subscription()
                     .map(Message::Notifications),
+                self.sysmon.subscription().map(Message::SysMon),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

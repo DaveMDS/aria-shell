@@ -197,6 +197,7 @@ pub enum Action {
     Theme(theme::Command),
     Script(scripts::Command),
     Notifications(crate::notifications::Command),
+    SysMon(crate::sysmon::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -335,6 +336,7 @@ impl Panel {
             gadget::Action::Theme(cmd) => Action::Theme(cmd),
             gadget::Action::Script(cmd) => Action::Script(cmd),
             gadget::Action::Notifications(cmd) => Action::Notifications(cmd),
+            gadget::Action::SysMon(cmd) => Action::SysMon(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);

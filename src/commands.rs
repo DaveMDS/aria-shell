@@ -45,6 +45,8 @@ pub enum DebugCommand {
     Cursor,
     /// The theme in use: `style=<name|-> scheme=<light|dark>`.
     Theme,
+    /// The system monitor's last reading, in numbers.
+    SysMon,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -110,6 +112,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
             ["theme"] => Ok(Parsed::Debug(DebugCommand::Theme)),
+            ["sysmon"] => Ok(Parsed::Debug(DebugCommand::SysMon)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))

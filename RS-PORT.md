@@ -68,6 +68,7 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Tray(tray::Event)               status notifier items and their menus, applied to `Tray`
   Message::Notifications(notifications::Event)   notifications coming and going, applied to `Notifications`
   Message::Toast(toast::Message)           a click on a notification's surface -> notifications::Command
+  Message::SysMon(sysmon::Event)           a system reading / the process table, applied to `SysMon`
   + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
@@ -125,6 +126,31 @@ NotificationsGadget (gadgets/notifications.rs)  impl Gadget: the bell with the u
                             right click do-not-disturb, middle click closes the toasts
   Message::TogglePopup(unseen ids) | ToggleDnd | DismissAll | Clear | Toast(toast::Message) | Tick
                             -> Action::Notifications(notifications::Command)
+
+SysMon     (sysmon/)        daemon-owned system readings: `sample()` (cpu total and per core, freq, temp, load,
+                            uptime, memory/swap, disks with usage and throughput, interfaces with rates, GPUs),
+                            `history()` (ring buffers per series, `[SystemMonitor] history` long), `processes()`
+  subscription()            one sampler stream keyed on `MonitorConfig`: every `interval` seconds a
+                            `spawn_blocking` reads /proc (proc.rs: stat, meminfo, loadavg, uptime, diskstats,
+                            net/dev, mounts + statvfs) and /sys (sensors.rs: cpufreq, hwmon, amdgpu; nvidia-smi
+                            as a process, once probed), rates against the previous counters
+  apply(Event)              stores the sample and pushes the series; the process table gets its cpu% from
+                            the previous reading's ticks
+  run(Command)              Processes (a `spawn_blocking` over /proc/[pid]) | Signal(pid, Terminate|Kill) (libc::kill)
+  format.rs                 bytes / rate / duration / freq, and `expand("{cpu}% {rx}", sample)` for the bar text
+
+SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[SystemMonitor:mem]`; the base section
+                            is the sampler's), one value each (`show =`, required) as text, a sparkline or a gauge (`mode =`);
+                            the popup: tabs cpu (graph, per-core meters, details), mem, disk, net, gpu,
+                            processes (sortable columns, Terminate/Kill from a row's right click), opened
+                            on the value's tab;
+                            right click on the bar: `command`, else btop/htop/top in the launcher's terminal
+  Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | RowMenu(pid) | Menu(..)
+
+graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
+                            filled to a fraction, label over it), `Graph` (up to two series, grid lines);
+                            `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
+                            containers (`meter > fill` with `FillPortion`), so the theme styles it
 
 Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
                             return_type) -> last `Output` (text, icon, classes); one run per distinct spec
@@ -442,8 +468,23 @@ Two things flow between the daemon and the gadgets besides messages:
 - `gdbus call` infers `[255, 0]` as `ai`: an `image-data` hint from
   the shell needs `@ay [..]` in the tuple.
 - `debug widgets` only reports what the theme helpers tag (containers
-  and buttons): a bare `Theme::text` isn't found, wrap it in a
-  `Theme::container` of its node when a scenario needs it. A popup
+  and buttons): a bare `Theme::text` or `canvas` isn't found, wrap it
+  in a `Theme::container` of its node when a scenario needs it. Its
+  rectangles are layout coordinates: inside a `scrollable`, what's
+  below the fold is reported where it would be unscrolled, so a
+  scenario can only click what fits in the popup (one tab at a time
+  does).
+- iced `canvas` (feature `canvas`): a `Program` with `draw(&self,
+  state, renderer, theme, bounds, cursor) -> Vec<Geometry>`, a
+  `Frame::new(renderer, size)`, `Path::new(|b| ..)` with
+  `move_to`/`line_to`/`close`, `frame.fill(&path, Color)` and
+  `frame.stroke(&path, Stroke::default().with_color(..).with_width(..))`.
+  The canvas has no id of its own; a themed container around it gives
+  it background, border and a `debug widgets` entry.
+- `libc::statvfs` for a filesystem's size and `libc::kill` for a
+  signal, no `nix`/`sysinfo`; `/proc/mounts` on btrfs lists one entry
+  per subvolume of the same device, so the default disk list keeps one
+  mount per device (`/` first).
   wider than the room left at the edge of the output is slid back by
   the compositor but not by the `debug surfaces` estimate, so the
   test config keeps gadgets with wide popups (Notifications: 380px)
@@ -763,9 +804,29 @@ Verified on the real Hyprland session with two outputs:
   five; a row click sends the `default` action to the client and drops
   the row and its toast) passes, screenshots in
   `target/ui/notifications-gadget/`.
+- System monitor: `tests/ui/run.sh system-monitor` (four instances
+  per bar — cpu, `#mem`, `#net`, `#disk` — and `debug sysmon` with
+  every core, memory, `/` first among the disks, an interface;
+  the 40x14 sparkline with the `format` text over it, the mem
+  instance as a gauge, the net one as text alone; the popup with
+  the cpu/mem/disk/net/processes tabs (gpu only when there is one),
+  opened on the cpu tab from the cpu instance and on the mem tab from
+  the mem one, one section at a time, one meter per core, the root
+  mount, `processes = 5` rows sorted by cpu; sorting by memory
+  puts one of `ps --sort=-rss`'s top two first, by pid descends
+  then flips on a second click; a `sleep 1000` started by the
+  scenario shows as `row[pid=..][name="sleep"]`, its right click
+  offers Terminate/Kill and Terminate ends it (`kill -0` fails);
+  a click outside closes; a right click on the cpu instance runs its
+  `command`, on the mem instance the terminal monitor through
+  `[launcher] terminal`, logged as `["true", "-e", "btop"]`) passes,
+  screenshots in `target/ui/system-monitor/`. Not yet run on the real
+  desktop.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (83 tests: notifications config/timeouts/replacement/history/dnd/
-  markup/image-data/ages, config, theme incl. scheme variables and root class,
+  (103 tests: /proc parsers on captured text, sensors, formats and
+  placeholders, history cap, process cpu%, graph geometry, the
+  gadget's config, thresholds and sorting; notifications config/timeouts/
+  replacement/history/dnd/markup/image-data/ages, config, theme incl. scheme variables and root class,
   selectors, desktop entries, commands, launcher search, tray
   key/pixmap/props/menu parsing, wheel clicks, menu widget, command
   line splitting, script outputs, custom gadget): clean.
@@ -797,7 +858,23 @@ daemon owning the name is waited out), the `Notifications` gadget
 view as the desktop plus age and ✕, do-not-disturb, clear; all in
 memory). One `[Notifications]` section for both, as `[Tray]` is for the
 tray: `history` and the gadget's `icon`/`dnd_icon` sit next to the
-daemon's keys.
+daemon's keys. The `[SystemMonitor]` gadget: one instance per value
+(`show = cpu|mem|swap|disk|net|gpu|temp|load`, `format` with
+placeholders, `icon`, `command`), a sparkline of its history, and the
+btop-like popup, one tab per section, opened on the tab of the value
+shown (cpu graph and per-core meters, memory/swap, disks, network,
+amdgpu/nvidia, the process table with sort and Terminate/Kill).
+`[SystemMonitor]` is the sampler's and the popup's section (`interval`,
+`history`, `disks`, `interfaces`, `temperature`, `processes`, `sort`);
+the gadgets are its instances (`show`, required; `mode = text |
+sparkline | gauge`, the `format` text alone or over the value's
+history / a bar filled to it, wider than the theme's `width` when the
+text needs it; `max` to override the sparkline's top / the full gauge,
+else 100 for a percentage or the highest value seen; `warning` /
+`critical` thresholds in the value's unit, the button carrying the
+class — 70 / 90 by default for a percentage, none for the rest;
+`icon`, `command`); a bare `SystemMonitor` in `items_*` or an instance
+without `show` is refused with a warning.
 
 Not yet: Sway backend, `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -806,7 +883,10 @@ properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
 wrapper), every other gadget and component (lock, wallpaper,
-terminal, idle), notification niceties (`resident`/`transient` hints,
+terminal, idle), system monitor niceties (per-process graphs and
+command lines, a tree view, filtering, battery, sensors beyond the
+cpu, Intel GPU, `:hover` on the table rows, scrolling the popup to a
+section), notification niceties (`resident`/`transient` hints,
 sound, a per-app `image-data` downscale, `x`/`y` hints, animation,
 persisting the history and do-not-disturb, `:hover` on the popup rows
 — they're containers), launcher `DBusActivatable` entries,
@@ -818,9 +898,9 @@ icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
 
 ## Next steps, in order
 
-1. Try the notifications on the real desktop (nothing owns the name
-   there): `notify-send` from a terminal, a Firefox download, an
-   `image-data` app (a chat client), the bell and its popup.
+1. Try the system monitor on the real desktop: the bar values against
+   btop's, the popup on Hyprland, a right click (btop in the
+   terminal), amdgpu/nvidia on a machine that has one.
 2. More theme surface as gadgets need it (`margin` via a wrapping
    container, `opacity`, `@font-face`, scrollbars); the `shader` widget
    for `background: shader("x.wgsl")` when a theme asks for more than

@@ -90,6 +90,38 @@ pub fn command(line: &str) -> Option<Command> {
     Some(cmd)
 }
 
+/// `argv` run inside a terminal emulator: `terminal` is a command line
+/// (`[launcher] terminal`), given `-e` and the program, as the desktop
+/// entry spec has terminals take.
+pub fn in_terminal(terminal: &str, argv: Vec<String>) -> Vec<String> {
+    let mut term: Vec<String> = terminal.split_whitespace().map(str::to_owned).collect();
+    term.push("-e".to_owned());
+    term.extend(argv);
+    term
+}
+
+/// The first of `programs` found on the PATH.
+pub fn first_on_path<'a>(programs: &[&'a str]) -> Option<&'a str> {
+    let paths = std::env::var_os("PATH")?;
+    programs
+        .iter()
+        .copied()
+        .find(|p| std::env::split_paths(&paths).any(|dir| dir.join(p).is_file()))
+}
+
+/// [`spawn_detached`] for an argument vector, logging what happens.
+pub fn run_argv(argv: &[String]) {
+    let Some((program, args)) = argv.split_first() else {
+        return;
+    };
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    match spawn_detached(cmd) {
+        Ok(()) => log::info!("ran {argv:?}"),
+        Err(e) => log::warn!("can't run {argv:?}: {e}"),
+    }
+}
+
 /// Start `cmd` detached from the shell: its own process group and no
 /// stdio, so it outlives us and doesn't write on our log; a thread
 /// reaps it.
@@ -140,6 +172,16 @@ mod tests {
             "unclosed quote runs to the end"
         );
         assert!(split_words("   ").is_empty());
+    }
+
+    #[test]
+    fn terminal_wrapping() {
+        assert_eq!(
+            in_terminal("kitty --single", vec!["btop".into()]),
+            ["kitty", "--single", "-e", "btop"]
+        );
+        assert_eq!(first_on_path(&["no-such-program-xyz", "sh"]), Some("sh"));
+        assert_eq!(first_on_path(&["no-such-program-xyz"]), None);
     }
 
     #[test]

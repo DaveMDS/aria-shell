@@ -7,7 +7,7 @@ edition = "2024"
 members = [".", "tests/ui/inject", "tests/ui/sni"]
 
 [dependencies]
-iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs"] }
+iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs", "canvas"] }
 iced_exwlshell = "0.20.1"
 iced_wayland_subscriber = "0.20.1"
 configparser = { version = "3", features = ["indexmap"] }
@@ -21,3 +21,4 @@ csscolorparser = "0.8.4"
 notify = "8.2.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
+libc = "0.2"

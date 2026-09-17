@@ -61,7 +61,7 @@ workspace.urgent {
 gadget.clock {
   background: var(--color-gray);
 }
-gadget.cpu {
+gadget.system-monitor {
   background: var(--color-green);
   color: black;
 }

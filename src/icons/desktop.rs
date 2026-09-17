@@ -211,10 +211,7 @@ pub fn launch(entry: &DesktopEntry, terminal: &str) -> io::Result<()> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no Exec"))?;
     let mut argv = exec_argv(line, entry);
     if entry.terminal {
-        let mut term: Vec<String> = terminal.split_whitespace().map(str::to_owned).collect();
-        term.push("-e".to_owned());
-        term.append(&mut argv);
-        argv = term;
+        argv = process::in_terminal(terminal, argv);
     }
     let (program, args) = argv
         .split_first()

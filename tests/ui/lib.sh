@@ -143,8 +143,11 @@ click() {
     settle
 }
 
+# Fails (cleanly: an arithmetic error would end the scenario's shell)
+# when nothing matches.
 click_widget() {
-    set -- $(widget "$1")
+    geo=$(widget "$1") || { echo "$geo"; return 1; }
+    set -- $geo
     click $(($1 + $3 / 2)) $(($2 + $4 / 2))
 }
 
@@ -213,7 +216,8 @@ scroll() {
 }
 
 click_widget_with() {
-    set -- "$1" $(widget "$2")
+    geo=$(widget "$2") || { echo "$geo"; return 1; }
+    set -- "$1" $geo
     pointer $(($2 + $4 / 2)) $(($3 + $5 / 2))
     inject "click $1"
     settle

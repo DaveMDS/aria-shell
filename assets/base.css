@@ -116,6 +116,46 @@
  *      ├─ empty                                               "No notifications"
  *      ╰─ notification[.unseen]...                            one per notification kept, as on the desktop
  *
+ *   gadget.system-monitor[#<instance>]
+ *   ╰─ button.cpu|.mem|.swap|.disk|.net|.gpu|.temp|.load[.warning|.critical]   the value shown (`show =`);
+ *      ├─ icon                                                left click: the popup, right click: `command`;
+ *      ├─ text                                                the icon at the node's `height`; the classes
+ *      │                                                      from the instance's `warning` / `critical`.
+ *      ├─ graph                                               One of text / graph / gauge (`mode =`), the
+ *      │  ╰─ label                                            `format` text as the label of the last two:
+ *      ╰─ gauge                                               `width` (wider if the label needs it) x
+ *         ├─ fill                                             `height`; the graph's `color` is the series,
+ *         ╰─ label                                            the gauge's `background`/`border`/`border-radius`
+ *                                                             the bar and `fill { background }` the filled
+ *                                                             part; `label { color; font-size; padding }`
+ *   popup > gadget.system-monitor
+ *   ╰─ monitor                                                `width` / `height` size the popup
+ *      ├─ tabs                                                a row of buttons, `gap`
+ *      │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]  (gpu only with one)
+ *      │     ╰─ text
+ *      ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes         the active tab: a column, `gap` between
+ *                                                             its parts; it scrolls
+ *         ├─ header ├─ title ╰─ value
+ *         ├─ graph                                            `height`; `color` the first series, `background`,
+ *         │  ├─ second                                        `border-color` the grid; the second series' `color`
+ *         │  ╰─ scale                                         the scale's top, written top left: `color`, `font-size`
+ *         ├─ cores                                            rows of per-core meters, `gap`
+ *         │  ╰─ core[.warning|.critical] ├─ meter ╰─ text     (70% / 90%)
+ *         ├─ meter[.used|.swap][.warning|.critical]           `height`, `background`, `border-radius`
+ *         │  ╰─ fill                                          the filled part: `background`
+ *         ├─ details ╰─ text                                  load, uptime, frequency, temperature
+ *         ├─ text                                             memory figures
+ *         ├─ disk[mount="/"] ├─ name ├─ text ╰─ meter        one per mount
+ *         ├─ iface[name="eth0"] ├─ name ╰─ text               one per interface
+ *         ├─ gpu ├─ name ├─ text ╰─ meter                     one per GPU
+ *         ╰─ table
+ *            ├─ header
+ *            │  ╰─ column.name|.pid|.user|.cpu|.mem[.sorted][.reverse]   buttons: click sorts; `width` sizes
+ *            │     ╰─ text                                                the column (the name takes the rest)
+ *            ╰─ row[pid="1234"][name="comm"][state="S"][.selected]      one per process; right click: the menu
+ *               ├─ name | pid | user | cpu | mem              texts
+ *               ╰─ menu                                       Terminate / Kill (see `menu`)
+ *
  *   gadget.custom
  *   ╰─ button[.<class>...]                                    the classes come from the exec's JSON output;
  *      ├─ icon                                                `gap` between icon and text; the icon is drawn
@@ -150,6 +190,7 @@
   --aria-accent: #1e66f5;
   --aria-on-accent: #eff1f5;
   --aria-urgent: #d20f39;
+  --aria-warning: #df8e1d;
   --aria-border: #ccd0da;
   --aria-separator: #ccd0da;
   --aria-popup-bg: #eff1f5;
@@ -161,6 +202,7 @@
   --aria-accent: #89b4fa;
   --aria-on-accent: #1e1e2e;
   --aria-urgent: #f38ba8;
+  --aria-warning: #f9e2af;
   --aria-border: #45475a;
   --aria-separator: #45475a;
   --aria-popup-bg: #1e1e2e;
@@ -415,6 +457,159 @@ gadget.notifications list notification {
 }
 gadget.notifications list notification.unseen summary {
   color: var(--aria-accent);
+}
+
+gadget.system-monitor > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.system-monitor > button:hover {
+  background: var(--aria-border);
+}
+gadget.system-monitor > button icon {
+  height: 16px;
+}
+/* The sparkline and the gauge share the frame. */
+gadget.system-monitor > button graph,
+gadget.system-monitor > button gauge {
+  width: 40px;
+  height: 14px;
+  color: var(--aria-accent);
+  border: 1px solid var(--aria-border);
+  border-radius: 3px;
+}
+gadget.system-monitor > button gauge fill {
+  background: var(--aria-accent);
+}
+gadget.system-monitor > button graph label,
+gadget.system-monitor > button gauge label {
+  font-size: 10px;
+  color: var(--aria-fg);
+  padding: 0 4px;
+}
+gadget.system-monitor > button.warning graph {
+  color: var(--aria-warning);
+}
+gadget.system-monitor > button.warning gauge fill {
+  background: var(--aria-warning);
+}
+gadget.system-monitor > button.critical graph {
+  color: var(--aria-urgent);
+}
+gadget.system-monitor > button.critical gauge fill {
+  background: var(--aria-urgent);
+}
+gadget.system-monitor > button.warning text {
+  color: var(--aria-warning);
+}
+gadget.system-monitor > button.critical text {
+  color: var(--aria-urgent);
+}
+gadget.system-monitor monitor {
+  width: 560px;
+  height: 460px;
+  padding: 12px;
+  gap: 16px;
+}
+gadget.system-monitor tabs {
+  gap: 4px;
+}
+gadget.system-monitor tab {
+  padding: 3px 10px;
+  border-radius: 4px;
+  color: var(--aria-muted);
+}
+gadget.system-monitor tab:hover {
+  background: var(--aria-border);
+  color: var(--aria-fg);
+}
+gadget.system-monitor tab.active {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+}
+gadget.system-monitor section {
+  gap: 6px;
+}
+gadget.system-monitor header title {
+  font-weight: bold;
+}
+gadget.system-monitor header value {
+  color: var(--aria-muted);
+}
+gadget.system-monitor graph {
+  height: 160px;
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+  color: var(--aria-accent);
+}
+gadget.system-monitor graph second {
+  color: var(--aria-urgent);
+}
+gadget.system-monitor graph scale {
+  font-size: 10px;
+  color: var(--aria-muted);
+}
+gadget.system-monitor cores {
+  gap: 4px;
+}
+gadget.system-monitor core text {
+  font-size: 10px;
+  color: var(--aria-muted);
+}
+gadget.system-monitor meter {
+  height: 8px;
+  background: var(--aria-border);
+  border-radius: 4px;
+}
+gadget.system-monitor meter fill {
+  background: var(--aria-accent);
+  border-radius: 4px;
+}
+gadget.system-monitor meter.warning fill {
+  background: var(--aria-warning);
+}
+gadget.system-monitor meter.critical fill {
+  background: var(--aria-urgent);
+}
+gadget.system-monitor meter.swap fill {
+  background: var(--aria-muted);
+}
+gadget.system-monitor details text,
+gadget.system-monitor section > text,
+gadget.system-monitor disk text,
+gadget.system-monitor iface text,
+gadget.system-monitor gpu text {
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+gadget.system-monitor table header column {
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+gadget.system-monitor table header column:hover {
+  color: var(--aria-fg);
+}
+gadget.system-monitor table header column.sorted {
+  color: var(--aria-accent);
+}
+gadget.system-monitor table row {
+  padding: 1px 4px;
+  font-size: 13px;
+  border-radius: 3px;
+}
+gadget.system-monitor table row.selected {
+  background: var(--aria-border);
+}
+gadget.system-monitor table row pid,
+gadget.system-monitor table row cpu,
+gadget.system-monitor table row mem {
+  color: var(--aria-muted);
+}
+gadget.system-monitor table row menu {
+  padding: 2px 16px;
 }
 
 gadget.custom > button {

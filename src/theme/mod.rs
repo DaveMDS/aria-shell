@@ -42,8 +42,8 @@ use std::sync::Mutex;
 use iced::border::Radius;
 use iced::font::{Family, Weight};
 use iced::widget::{
-    Button, Column, Container, Row, Text, TextInput, button, column, container, row, text,
-    text_input,
+    Button, Column, Container, Row, Text, TextInput, button, column, container, row, slider,
+    text, text_input,
 };
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow, Size};
 
@@ -55,6 +55,11 @@ pub use selector::{Selector, node_from_path};
 pub use value::Length;
 
 use iced::Length as IcedLength;
+
+/// A slider's rail thickness and handle diameter when the theme doesn't
+/// say.
+const DEFAULT_RAIL: f32 = 4.0;
+const DEFAULT_HANDLE: f32 = 12.0;
 
 /// Always loaded first; the neutral defaults every theme builds on.
 const BASE: &str = include_str!("../../assets/base.css");
@@ -407,6 +412,64 @@ impl Theme {
             self.resolve(&node.input_status(status))
                 .text_input(theme.palette().text)
         })
+    }
+
+    /// A `slider` styled as `node`: the rail is `height` thick, its
+    /// filled part `color`, the rest `background`, with the node's
+    /// border; the handle is the `handle` child: a circle of its
+    /// `width`, its `background` (the rail's `color` when unset) and
+    /// border. Re-resolved with `:hover` / `:active` (dragged). Comes
+    /// in a container tagged with the node path (iced sliders take no
+    /// id), filling the width.
+    pub fn slider<'a, M: Clone + 'a>(
+        &'a self,
+        node: &Node,
+        range: std::ops::RangeInclusive<f32>,
+        value: f32,
+        step: f32,
+        on_change: impl Fn(f32) -> M + 'a,
+    ) -> Container<'a, M> {
+        let s = self.resolve(node);
+        let handle_node = node.child("handle");
+        let rail = match s.height {
+            Some(Length::Px(px)) => px,
+            _ => DEFAULT_RAIL,
+        };
+        let diameter = match self.resolve(&handle_node).width {
+            Some(Length::Px(px)) => px,
+            _ => DEFAULT_HANDLE,
+        };
+        let id = widget_id(node);
+        let node = node.clone();
+        let slider = slider(range, value, on_change)
+            .step(step)
+            .width(IcedLength::Fill)
+            .height(rail.max(diameter))
+            .style(move |theme: &iced::Theme, status| {
+                let n = node.slider_status(status);
+                let s = self.resolve(&n);
+                let h = self.resolve(&n.child("handle"));
+                let filled = s.color.unwrap_or(theme.palette().primary);
+                slider::Style {
+                    rail: slider::Rail {
+                        backgrounds: (
+                            filled.into(),
+                            s.background.unwrap_or(Color { a: 0.2, ..filled }).into(),
+                        ),
+                        width: rail,
+                        border: s.border(),
+                    },
+                    handle: slider::Handle {
+                        shape: slider::HandleShape::Circle {
+                            radius: diameter / 2.0,
+                        },
+                        background: h.background.unwrap_or(filled).into(),
+                        border_width: h.border_width,
+                        border_color: h.border_color.unwrap_or(Color::TRANSPARENT),
+                    },
+                }
+            });
+        container(slider).id(id).width(IcedLength::Fill)
     }
 
     /// The size `text` takes as a [`Theme::text`] of `node` (font and

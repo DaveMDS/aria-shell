@@ -231,6 +231,46 @@ sni_quiet() {
     fi
 }
 
+# --- media players -----------------------------------------------------------
+# `aria-mpris` (tests/ui/mpris) is a media player on the scenario's
+# private session bus: two fifos, commands in (`status`, `title`,
+# `artist`, `volume`, answered `ok`), what the shell asked of it out
+# (`play-pause`, `next`, `previous`, `volume <v>`).
+
+mpris_start() {
+    mpris_dir=$(mktemp -d)
+    mkfifo "$mpris_dir/in" "$mpris_dir/out"
+    "$ARIA_UI_ROOT/target/debug/aria-mpris" < "$mpris_dir/in" > "$mpris_dir/out" 2> "$ARIA_UI_OUT/mpris.log" &
+    mpris_pid=$!
+    exec 3> "$mpris_dir/in" 4< "$mpris_dir/out"
+    line=$(mpris_event)
+    [ "$line" = ready ] || { echo "the player didn't start: $line"; return 1; }
+}
+
+mpris_stop() {
+    exec 3>&- 4<&-
+    kill "$mpris_pid" 2> /dev/null
+    rm -rf "$mpris_dir"
+}
+
+# One command to the player; fails unless answered `ok`.
+mpris_send() {
+    echo "$1" >&3
+    read -r reply <&4
+    [ "$reply" = ok ] || { echo "mpris '$1': $reply"; return 1; }
+    settle
+}
+
+# The next line the player reported (within 5s), else fails.
+mpris_event() {
+    if read -r -t 5 line <&4; then
+        echo "$line"
+    else
+        echo "no event from the player"
+        return 1
+    fi
+}
+
 scroll() {
     inject "scroll $1"
     settle

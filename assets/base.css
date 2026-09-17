@@ -156,6 +156,31 @@
  *               ├─ name | pid | user | cpu | mem              texts
  *               ╰─ menu                                       Terminate / Kill (see `menu`)
  *
+ *   gadget.audio                                              `gap` between its buttons
+ *   ├─ button.output[.muted][.none]                           the default output's level (.none: no output);
+ *   │  ├─ icon                                                left: the popup, wheel: volume, middle: mute,
+ *   │  ╰─ text                                                right: `mixer_command`; the icon at the node's
+ *   │                                                         `height`, `gap` before the percent (show_percent)
+ *   ╰─ button.input[.muted][.none]                            the default input, the same way (show_microphone)
+ *   popup > gadget.audio
+ *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
+ *      ├─ section.output|.input|.stream ╰─ title              "Output" / "Input" / "Playing"
+ *      ├─ channel.output|.input|.stream[.muted][.default][name="..."]   a row per device / stream
+ *      │  ├─ button.mute[.on] ╰─ icon                         the device's / app's icon; toggles mute
+ *      │  ├─ name ╰─ text                                     a button on a device that isn't the default
+ *      │  ├─ value                                            the percent
+ *      │  ╰─ slider ╰─ handle                                 (see `slider`)
+ *      ├─ player.playing|.paused|.stopped[name="..."]         one per media player
+ *      │  ├─ cover                                            the cover art (the app's icon without): `height`
+ *      │  ├─ title | artist | album                           texts
+ *      │  ╰─ controls ╰─ button.previous|.play|.next[.disabled] ╰─ icon   (.disabled: the player can't)
+ *      ├─ empty                                               "No audio devices"
+ *      ╰─ button.mixer ╰─ text                                runs `mixer_command`
+ *
+ *   slider                                                    a slider: the rail is `height` thick, `color` its
+ *   ╰─ handle                                                 filled part, `background` the rest, with the border;
+ *                                                             the handle a circle of `width`, `background`, border
+ *
  *   gadget.custom
  *   ╰─ button[.<class>...]                                    the classes come from the exec's JSON output;
  *      ├─ icon                                                `gap` between icon and text; the icon is drawn
@@ -620,6 +645,130 @@ gadget.system-monitor table row mem {
 }
 gadget.system-monitor table row menu {
   padding: 2px 16px;
+}
+
+gadget.audio {
+  gap: 2px;
+}
+gadget.audio > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.audio > button:hover {
+  background: var(--aria-border);
+}
+gadget.audio > button icon {
+  height: 16px;
+}
+gadget.audio > button.muted icon,
+gadget.audio > button.muted text {
+  color: var(--aria-muted);
+}
+gadget.audio list {
+  width: 380px;
+  height: 600px;
+  padding: 8px;
+  gap: 6px;
+}
+gadget.audio section {
+  padding: 6px 0 0 0;
+}
+gadget.audio section title {
+  font-weight: bold;
+  color: var(--aria-muted);
+}
+gadget.audio channel {
+  padding: 2px 0;
+  gap: 8px;
+}
+gadget.audio channel button.mute {
+  padding: 4px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.audio channel button.mute:hover {
+  border-color: var(--aria-accent);
+}
+gadget.audio channel button.mute.on {
+  background: var(--aria-border);
+}
+gadget.audio channel button.mute icon {
+  height: 20px;
+}
+gadget.audio channel.muted icon {
+  color: var(--aria-muted);
+}
+gadget.audio channel name {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+gadget.audio channel name:hover {
+  background: var(--aria-border);
+}
+gadget.audio channel.default name text {
+  font-weight: bold;
+}
+gadget.audio channel value {
+  color: var(--aria-muted);
+}
+gadget.audio channel.muted slider {
+  color: var(--aria-muted);
+}
+gadget.audio player {
+  padding: 8px;
+  gap: 6px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.audio player cover {
+  height: 64px;
+}
+gadget.audio player title {
+  font-weight: bold;
+}
+gadget.audio player artist,
+gadget.audio player album {
+  color: var(--aria-muted);
+}
+gadget.audio player controls {
+  gap: 12px;
+}
+gadget.audio player controls button {
+  padding: 4px;
+  border-radius: 4px;
+}
+gadget.audio player controls button:hover {
+  background: var(--aria-border);
+}
+gadget.audio player controls button.disabled icon {
+  color: var(--aria-muted);
+}
+gadget.audio player controls button icon {
+  height: 20px;
+}
+gadget.audio empty {
+  padding: 12px;
+  color: var(--aria-muted);
+}
+gadget.audio button.mixer {
+  padding: 4px 8px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.audio button.mixer:hover {
+  border-color: var(--aria-accent);
+}
+
+slider {
+  height: 4px;
+  color: var(--aria-accent);
+  background: var(--aria-border);
+  border-radius: 2px;
+}
+slider handle {
+  width: 12px;
+  background: var(--aria-accent);
 }
 
 gadget.custom > button {

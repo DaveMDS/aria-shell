@@ -38,6 +38,7 @@ aria-shell launcher toggle          # what a compositor keybind runs
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
+aria-shell debug audio              # the mixer channels and the media players as the daemon sees them
 ```
 
 ## Architecture
@@ -50,12 +51,13 @@ level owns its state and `Message`, routes to children by key, and
 passed by reference. External event sources are `Subscription`s.
 
 Shared state (the compositor's workspaces/windows, the app icons, the
-tray items, the outputs of gadget scripts; later audio, ...) is owned by
-the daemon (`Compositor` in `compositor/`, `Icons` in `icons/`, `Tray`
-in `tray/`, `Scripts` in `scripts.rs`), reaches gadgets read-only
-through `gadget::Context` in `view`, and is changed by returning
+tray items, the outputs of gadget scripts, the mixer and the media
+players, ...) is owned by the daemon (`Compositor` in `compositor/`,
+`Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
+`Audio` in `audio/`), reaches gadgets read-only through
+`gadget::Context` in `view`, and is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
-`Action::Script(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Script(cmd)` / `Action::Audio(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
@@ -97,8 +99,9 @@ the vocabulary of `tests/ui/lib.sh`: `click_widget '<selector>'`,
 Input goes through `tests/ui/inject` (a persistent virtual keyboard +
 pointer), positions through the shell's `debug` commands, tray items
 through `tests/ui/sni` (a fake status notifier item with a menu, on a
-private session bus from `dbus-run-session`), so nothing depends on the
-desktop's compositor or bus. Results land in `target/ui/<scenario>/`
+private session bus from `dbus-run-session`), media players through
+`tests/ui/mpris` (a fake MPRIS player on the same bus), so nothing
+depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`
 (status, logs, screenshots). Needs `sway`, `grim` and `dbus-run-session`
 installed; no root. Add a scenario for every new interactive
 piece; run them before reporting a UI change as done.

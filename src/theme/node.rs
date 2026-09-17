@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
 
-use iced::widget::{button, text_input};
+use iced::widget::{button, slider, text_input};
 
 #[derive(Clone)]
 pub struct Node(Arc<Inner>);
@@ -102,6 +102,15 @@ impl Node {
             n.hover = matches!(status, button::Status::Hovered | button::Status::Pressed);
             n.pressed = status == button::Status::Pressed;
             n.disabled = status == button::Status::Disabled;
+        })
+    }
+
+    /// The interaction state iced reports for a slider: dragged is
+    /// `:active`.
+    pub fn slider_status(&self, status: slider::Status) -> Self {
+        self.with(|n| {
+            n.hover = matches!(status, slider::Status::Hovered | slider::Status::Dragged);
+            n.pressed = status == slider::Status::Dragged;
         })
     }
 

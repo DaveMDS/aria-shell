@@ -147,6 +147,33 @@ SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[System
                             right click on the bar: `command`, else btop/htop/top in the launcher's terminal
   Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | RowMenu(pid) | Menu(..)
 
+Audio      (audio/)          daemon-owned mixer and players: `channels_of(kind)` (outputs, inputs, the streams
+                            playing: label, icon hints, volume as a fraction of 100%, mute, `default`),
+                            `default_output()`, `players()` (identity, status, title/artist/album, cover
+                            URL, what it can do), `cover(bus)` (a `file://` cover as an `Icon`)
+  subscription()            pulse.rs: libpulse (`pipewire-pulse` / PulseAudio) on a thread of ours owning the
+                            threaded mainloop and the context; its callbacks only post `Request`s the thread
+                            serves under the lock (state, subscribe changes, the daemon's commands via the
+                            `Handle` carried by `Event::Connected`); introspection answers go out as
+                            `Event::Channel` / `ChannelGone` / `Defaults`. mpris.rs: the session bus,
+                            `NameOwnerChanged` + one task per `org.mpris.MediaPlayer2.*` name
+                            (`PropertiesProxy` get_all, then `PropertiesChanged`) -> `Event::Player` / `PlayerGone`
+  apply(Event)              patches the lists (channels grouped by kind, the defaults flagged), loads covers
+  run(Command)              SetVolume/SetMuted/SetDefault(kind, index, ..), StepDefault/ToggleDefaultMute (the
+                            default device of a kind), PlayPause/Next/Previous(bus) over a `#[proxy]`
+
+AudioGadget (gadgets/audio.rs)  impl Gadget: the default output's level icon (+ the percent with
+                            `show_percent`; the default input's beside it with `show_microphone`, the popup
+                            hanging off whichever was clicked); left click the popup (sections
+                            Output / Input / Playing with a mute button + name (a button making a device the
+                            default) + percent + slider per channel; a block per player: cover or app icon,
+                            title/artist/album, previous / play-pause / next; no volume, its stream is
+                            in the mixer already; a Mixer button);
+                            wheel: `step` on the button's device up to `max_volume`, middle: mute, right:
+                            `mixer_command`
+  Message::TogglePopup(kind) | ToggleMute(kind) | Scroll(kind, ..) | RunMixer | Volume(kind, index, %) | Mute | SetDefault
+           | PlayPause(bus) | Previous | Next    -> Action::Audio(audio::Command)
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
@@ -514,6 +541,23 @@ Two things flow between the daemon and the gadgets besides messages:
 - `configparser` stores sections in a `HashMap` unless its `indexmap`
   feature is on; we need it, `Config::instances` (and so the order of
   `[panel:*]` bars and of gadgets' sections) is file order.
+- libpulse (`libpulse-binding` 2.30): the threaded mainloop runs
+  libpulse's loop on its own thread and hands out `lock()`/`unlock()`;
+  `Context`/`Mainloop` are `!Send`, so a thread of ours owns them and
+  everything else reaches them as messages. `connect()` reports its
+  first state change synchronously: a state callback that borrows the
+  context (`Rc<RefCell<Context>>`, the crate's docs' pattern) panics
+  right there, hence callbacks that only post to a channel. Sink
+  inputs' `application.icon_name` / sinks' `device.icon_name` are
+  rarely in an icon theme; a stream's icon comes from its
+  `application.name` matched against the desktop entries. Volumes are
+  cubic-mapped `u32`s, `Volume::NORMAL` = 100%, settable above (up to
+  `Volume::MAX`); one `ChannelVolumes` per object, so setting keeps the
+  channel count and loses the balance (as the Python did).
+- MPRIS over zbus: `Metadata` is `a{sv}` and comes as a `Dict` of
+  `Value::Value` boxes (nested once more when built by hand). The
+  player's `Volume` isn't shown: its stream is in the mixer already,
+  and Firefox ignores writes to it.
 - Hyprland 0.56 (Lua config) changed the IPC dispatch syntax: the command
   socket takes `dispatch hl.dsp.focus({ workspace = 3 })` /
   `dispatch hl.dsp.focus({ window = "address:0x..." })`; the old
@@ -616,6 +660,12 @@ Two things flow between the daemon and the gadgets besides messages:
   - The shell renders under the pixman compositor with wgpu on the real
     GPU (Vulkan, Intel here); a GPU-less CI would need iced's
     `tiny-skia` fallback, untested.
+  - A popup that would overflow the output is slid back by the
+    compositor (Sway and Hyprland alike), and `debug surfaces` /
+    `widgets` report the requested placement: a scenario clicking in a
+    popup keeps its gadget away from the bar's ends (the audio gadget
+    sits in `items_center` for that); on the desktop `debug cursor`
+    over the popup gives the real origin (local vs global).
   - `aria-inject` also opens plain xdg-shell windows (`window`, `title`,
     `close`) so the workspaces scenario needs no real application
     (`tests/ui/scenarios/workspaces.sh` exercises the Sway backend).
@@ -906,9 +956,17 @@ else 100 for a percentage or the highest value seen; `warning` /
 `critical` thresholds in the value's unit, the button carrying the
 class — 70 / 90 by default for a percentage, none for the rest;
 `icon`, `command`); a bare `SystemMonitor` in `items_*` or an instance
-without `show` is refused with a warning.
+without `show` is refused with a warning. The Sway backend
+(`compositor/sway.rs`). The `[Audio]` gadget (`mixer_command`, `step`,
+`max_volume`, `show_percent`, `show_microphone`, `show_inputs` /
+`show_streams` / `show_players`): the
+mixer over libpulse, the players over MPRIS, verified on the desktop
+(pipewire-pulse: sinks, the source, a Firefox stream; a fake player)
+and by `tests/ui/scenarios/audio.sh` with `tests/ui/mpris` (a fake
+MPRIS player on the scenario's bus; the mixer part shows whatever the
+machine has and isn't asserted).
 
-Not yet: Sway backend, `[panel]`
+Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
 `tooltip_format`, theme
 properties beyond the current set (`margin`, `opacity`, gradients,

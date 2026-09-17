@@ -47,6 +47,7 @@ pub enum DebugCommand {
     Theme,
     /// The system monitor's last reading, in numbers.
     SysMon,
+    Audio,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -113,12 +114,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
             ["theme"] => Ok(Parsed::Debug(DebugCommand::Theme)),
             ["sysmon"] => Ok(Parsed::Debug(DebugCommand::SysMon)),
+            ["audio"] => Ok(Parsed::Debug(DebugCommand::Audio)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | sysmon | audio | widgets [filter])",
                 args.join(" ")
             )),
         },

@@ -21,6 +21,7 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
+use crate::gadgets::audio::{self, AudioGadget};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
 use crate::gadgets::notifications::{self, NotificationsGadget};
@@ -40,6 +41,7 @@ pub struct Shared<'a> {
     pub tray: &'a crate::tray::Tray,
     pub notifications: &'a crate::notifications::Notifications,
     pub sysmon: &'a crate::sysmon::SysMon,
+    pub audio: &'a crate::audio::Audio,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -72,6 +74,7 @@ pub enum Action<M> {
     Script(crate::scripts::Command),
     Notifications(crate::notifications::Command),
     SysMon(crate::sysmon::Command),
+    Audio(crate::audio::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -179,6 +182,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Script(cmd) => Action::Script(cmd),
             Self::Notifications(cmd) => Action::Notifications(cmd),
             Self::SysMon(cmd) => Action::SysMon(cmd),
+            Self::Audio(cmd) => Action::Audio(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -250,6 +254,7 @@ pub enum AnyGadget {
     Themes(Themes),
     Notifications(NotificationsGadget),
     SystemMonitor(Box<SystemMonitor>),
+    Audio(AudioGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +266,7 @@ pub enum Message {
     Themes(themes::Message),
     Notifications(notifications::Message),
     SystemMonitor(system_monitor::Message),
+    Audio(audio::Message),
 }
 
 impl AnyGadget {
@@ -315,6 +321,10 @@ impl AnyGadget {
                 gadget.set_monitor(&config.section(None));
                 Some(Self::SystemMonitor(Box::new(gadget)))
             }
+            audio::AudioConfig::NAME => Some(Self::Audio(AudioGadget::new(
+                config.section(Some(name)),
+                output,
+            ))),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -332,6 +342,7 @@ impl AnyGadget {
             Self::Themes(_) => "themes",
             Self::Notifications(_) => "notifications",
             Self::SystemMonitor(_) => "system-monitor",
+            Self::Audio(_) => "audio",
         }
     }
 
@@ -348,6 +359,7 @@ impl AnyGadget {
             (Self::SystemMonitor(g), Message::SystemMonitor(m)) => {
                 g.update(m).map(Message::SystemMonitor)
             }
+            (Self::Audio(g), Message::Audio(m)) => g.update(m).map(Message::Audio),
             _ => Action::None,
         }
     }
@@ -361,6 +373,7 @@ impl AnyGadget {
             Self::Themes(g) => g.view(ctx).map(Message::Themes),
             Self::Notifications(g) => g.view(ctx).map(Message::Notifications),
             Self::SystemMonitor(g) => g.view(ctx).map(Message::SystemMonitor),
+            Self::Audio(g) => g.view(ctx).map(Message::Audio),
         }
     }
 
@@ -373,6 +386,7 @@ impl AnyGadget {
             Self::Themes(g) => g.popup_view(ctx).map(Message::Themes),
             Self::Notifications(g) => g.popup_view(ctx).map(Message::Notifications),
             Self::SystemMonitor(g) => g.popup_view(ctx).map(Message::SystemMonitor),
+            Self::Audio(g) => g.popup_view(ctx).map(Message::Audio),
         }
     }
 
@@ -385,6 +399,7 @@ impl AnyGadget {
             Self::Themes(g) => g.popup_size(ctx),
             Self::Notifications(g) => g.popup_size(ctx),
             Self::SystemMonitor(g) => g.popup_size(ctx),
+            Self::Audio(g) => g.popup_size(ctx),
         }
     }
 
@@ -397,6 +412,7 @@ impl AnyGadget {
             Self::Themes(g) => g.popup(),
             Self::Notifications(g) => g.popup(),
             Self::SystemMonitor(g) => g.popup(),
+            Self::Audio(g) => g.popup(),
         }
     }
 
@@ -418,6 +434,7 @@ impl AnyGadget {
             Self::Themes(g) => <Themes as Gadget>::popup_closed(g),
             Self::Notifications(g) => <NotificationsGadget as Gadget>::popup_closed(g),
             Self::SystemMonitor(g) => <SystemMonitor as Gadget>::popup_closed(g),
+            Self::Audio(g) => <AudioGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -430,6 +447,7 @@ impl AnyGadget {
             Self::Themes(g) => g.icon_names(),
             Self::Notifications(g) => g.icon_names(),
             Self::SystemMonitor(g) => g.icon_names(),
+            Self::Audio(g) => g.icon_names(),
         }
     }
 
@@ -442,6 +460,7 @@ impl AnyGadget {
             Self::Themes(g) => g.script(),
             Self::Notifications(g) => g.script(),
             Self::SystemMonitor(g) => g.script(),
+            Self::Audio(g) => g.script(),
         }
     }
 
@@ -454,6 +473,7 @@ impl AnyGadget {
             Self::Themes(g) => g.subscription().map(Message::Themes),
             Self::Notifications(g) => g.subscription().map(Message::Notifications),
             Self::SystemMonitor(g) => g.subscription().map(Message::SystemMonitor),
+            Self::Audio(g) => g.subscription().map(Message::Audio),
         }
     }
 }

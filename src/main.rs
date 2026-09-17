@@ -10,6 +10,7 @@ mod panel;
 mod process;
 mod scripts;
 mod sysmon;
+mod audio;
 mod theme;
 mod tray;
 mod watch;
@@ -39,6 +40,7 @@ use launcher::Launcher;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
 use sysmon::SysMon;
+use audio::Audio;
 use theme::{Node, Theme};
 use tray::Tray;
 
@@ -66,6 +68,7 @@ enum Message {
     Toast(toast::Message),
     /// A system reading, or the process table.
     SysMon(sysmon::Event),
+    Audio(audio::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -110,6 +113,7 @@ struct AriaShell {
     tray: Tray,
     notifications: Notifications,
     sysmon: SysMon,
+    audio: Audio,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -188,6 +192,7 @@ impl AriaShell {
             tray: Tray::default(),
             notifications,
             sysmon,
+            audio: Audio::default(),
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -208,6 +213,7 @@ impl AriaShell {
             tray: &self.tray,
             notifications: &self.notifications,
             sysmon: &self.sysmon,
+            audio: &self.audio,
             scripts: &self.scripts,
         }
     }
@@ -231,12 +237,17 @@ impl AriaShell {
                 self.icons.resolve_name(name, item.icon_theme_path());
             }
         }
+        let classes: Vec<String> = self.audio.app_classes().map(str::to_owned).collect();
+        for class in classes {
+            self.icons.resolve(&class);
+        }
         let names: Vec<String> = self
             .panels
             .values()
             .flat_map(Panel::icon_names)
             .chain(self.scripts.icon_names().map(str::to_owned))
             .chain(self.notifications.icon_names().map(str::to_owned))
+            .chain(self.audio.icon_names().map(str::to_owned))
             .collect();
         for name in names {
             self.icons.resolve_name(&name, None);
@@ -348,6 +359,11 @@ impl AriaShell {
                 self.sysmon.apply(event);
                 Task::none()
             }
+            Message::Audio(event) => {
+                self.audio.apply(event);
+                self.resolve_icons();
+                self.sync_popups()
+            }
             Message::Toast(m) => {
                 let signals = self
                     .notifications
@@ -371,6 +387,10 @@ impl AriaShell {
                 }
                 DebugCommand::SysMon => {
                     reply.send(self.sysmon.describe());
+                    Task::none()
+                }
+                DebugCommand::Audio => {
+                    reply.send(self.audio.describe());
                     Task::none()
                 }
                 DebugCommand::Theme => {
@@ -745,6 +765,7 @@ impl AriaShell {
                 Task::batch([signals, self.sync_toasts(), self.sync_popups()])
             }
             Action::SysMon(cmd) => self.sysmon.run(cmd).map(Message::SysMon),
+            Action::Audio(cmd) => self.audio.run(cmd).map(Message::Audio),
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1240,6 +1261,7 @@ impl AriaShell {
                     .subscription()
                     .map(Message::Notifications),
                 self.sysmon.subscription().map(Message::SysMon),
+                self.audio.subscription().map(Message::Audio),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

@@ -114,6 +114,8 @@ pub enum Event {
 
 pub struct Icons {
     theme: String,
+    /// `[lang]` suffixes for the desktop entries' texts, best first.
+    languages: Vec<String>,
     /// `[apps_class_map]`: window class -> desktop id or icon name, for
     /// apps whose class matches nothing.
     overrides: HashMap<String, String>,
@@ -126,7 +128,9 @@ pub struct Icons {
 }
 
 impl Icons {
-    pub fn new(config: &Config) -> Self {
+    /// `languages` are the `[lang]` suffixes the desktop entries are
+    /// read in, best first (`Locale::languages`).
+    pub fn new(config: &Config, languages: Vec<String>) -> Self {
         let general: GeneralConfig = config.section(None);
         let overrides = config
             .raw_section("apps_class_map")
@@ -135,6 +139,7 @@ impl Icons {
             .collect();
         Self {
             theme: general.icon_theme.unwrap_or_else(detect_theme),
+            languages,
             overrides,
             index: None,
             cache: HashMap::new(),
@@ -146,10 +151,11 @@ impl Icons {
     /// thread; the result comes back as [`Event::Loaded`].
     pub fn load(&self) -> Task<Event> {
         let theme = self.theme.clone();
+        let languages = self.languages.clone();
         Task::perform(
             async move {
                 let started = Instant::now();
-                let index = tokio::task::spawn_blocking(move || build(&theme))
+                let index = tokio::task::spawn_blocking(move || build(&theme, &languages))
                     .await
                     .expect("icon index build doesn't panic");
                 log::info!("icons: {index:?} in {:?}", started.elapsed());
@@ -251,7 +257,7 @@ impl Icons {
     }
 }
 
-fn build(theme: &str) -> Index {
+fn build(theme: &str, languages: &[String]) -> Index {
     let data = config::xdg_data_dirs();
     let icons: Vec<PathBuf> = std::env::var_os("HOME")
         .map(|h| PathBuf::from(h).join(".icons"))
@@ -263,7 +269,7 @@ fn build(theme: &str) -> Index {
     let icons = IconIndex::load(theme, &icons, &pixmaps);
     log::debug!("icons: theme index in {:?}", t.elapsed());
     let t = Instant::now();
-    let apps = DesktopDb::load(&application_dirs());
+    let apps = DesktopDb::load(&application_dirs(), languages);
     log::debug!("icons: desktop entries in {:?}", t.elapsed());
     Index { icons, apps }
 }

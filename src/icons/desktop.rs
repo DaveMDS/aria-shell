@@ -47,7 +47,8 @@ pub struct DesktopDb {
 impl DesktopDb {
     /// Scan `dirs` in precedence order: the first file with a given id
     /// wins, as the spec says. `Hidden=true` entries are dropped.
-    pub fn load(dirs: &[PathBuf]) -> Self {
+    /// `languages` picks the `Name[..]`/`Comment[..]` shown, best first.
+    pub fn load(dirs: &[PathBuf], languages: &[String]) -> Self {
         let mut db = Self::default();
         for dir in dirs {
             let Ok(read) = fs::read_dir(dir) else {
@@ -70,7 +71,7 @@ impl DesktopDb {
                 let Ok(text) = fs::read_to_string(&path) else {
                     continue;
                 };
-                if let Some(entry) = parse(&text, id, path) {
+                if let Some(entry) = parse(&text, id, path, languages) {
                     db.insert(entry);
                 }
             }
@@ -121,12 +122,23 @@ impl DesktopDb {
     }
 }
 
-/// `[Desktop Entry]` group only; localized keys (`Name[it]`) are
-/// ignored, we want the untranslated `Name`.
-pub fn parse(text: &str, id: String, path: PathBuf) -> Option<DesktopEntry> {
+/// `[Desktop Entry]` group only. `Name` and `Comment` come in the first
+/// of `languages` the file has (`Name[it_IT]`, then `Name[it]`), else
+/// the plain key; the other keys are never localized.
+pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Option<DesktopEntry> {
     let mut in_entry = false;
-    let mut name = None;
-    let mut comment = None;
+    // (value, rank): the plain key ranks after every language.
+    let mut name: Option<(String, usize)> = None;
+    let mut comment: Option<(String, usize)> = None;
+    let rank = |suffix: Option<&str>| match suffix {
+        None => Some(languages.len()),
+        Some(lang) => languages.iter().position(|l| l == lang),
+    };
+    let better = |slot: &mut Option<(String, usize)>, value: &str, rank: usize| {
+        if slot.as_ref().is_none_or(|(_, r)| rank < *r) {
+            *slot = Some((value.to_owned(), rank));
+        }
+    };
     let mut icon = None;
     let mut exec = None;
     let mut exec_line = None;
@@ -151,10 +163,26 @@ pub fn parse(text: &str, id: String, path: PathBuf) -> Option<DesktopEntry> {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
+        // `Name[it]` -> ("Name", Some("it"))
+        let (key, suffix) = match key.split_once('[') {
+            Some((k, rest)) => (k, rest.strip_suffix(']')),
+            None => (key, None),
+        };
+        if suffix.is_some() && !matches!(key, "Name" | "Comment") {
+            continue;
+        }
         match key {
             "Type" => is_app = value == "Application",
-            "Name" => name = Some(value.to_owned()),
-            "Comment" if !value.is_empty() => comment = Some(value.to_owned()),
+            "Name" => {
+                if let Some(rank) = rank(suffix) {
+                    better(&mut name, value, rank);
+                }
+            }
+            "Comment" if !value.is_empty() => {
+                if let Some(rank) = rank(suffix) {
+                    better(&mut comment, value, rank);
+                }
+            }
             "Icon" if !value.is_empty() => icon = Some(value.to_owned()),
             "Exec" => {
                 exec = exec_basename(value);
@@ -172,9 +200,9 @@ pub fn parse(text: &str, id: String, path: PathBuf) -> Option<DesktopEntry> {
         return None;
     }
     Some(DesktopEntry {
-        name: name.unwrap_or_else(|| id.clone()),
+        name: name.map(|(n, _)| n).unwrap_or_else(|| id.clone()),
         id,
-        comment,
+        comment: comment.map(|(c, _)| c),
         icon,
         exec,
         exec_line,
@@ -306,11 +334,35 @@ mod tests {
     use super::*;
 
     fn entry(text: &str, id: &str) -> Option<DesktopEntry> {
+        entry_in(text, id, &[])
+    }
+
+    fn entry_in(text: &str, id: &str, languages: &[&str]) -> Option<DesktopEntry> {
+        let languages: Vec<String> = languages.iter().map(|l| l.to_string()).collect();
         parse(
             text,
             id.to_owned(),
             PathBuf::from(format!("/x/{id}.desktop")),
+            &languages,
         )
+    }
+
+    #[test]
+    fn localized_name_and_comment() {
+        let text = "[Desktop Entry]\nType=Application\nName=Terminal\nName[it]=Terminale\n\
+                    Name[it_IT]=Terminale (IT)\nComment=Use the command line\nComment[de]=Befehle\n\
+                    Icon[it]=other\nExec=x\n";
+        let it = entry_in(text, "term", &["it_IT", "it"]).unwrap();
+        assert_eq!(it.name, "Terminale (IT)");
+        // No Italian comment: the plain one.
+        assert_eq!(it.comment.as_deref(), Some("Use the command line"));
+        // Only `Name` and `Comment` are localized.
+        assert_eq!(it.icon.as_deref(), None);
+        let plain = entry_in(text, "term", &["fr"]).unwrap();
+        assert_eq!(plain.name, "Terminal");
+        // The plain key first in the file still loses to a language.
+        let text = "[Desktop Entry]\nType=Application\nName=Terminal\nName[it]=Terminale\nExec=x\n";
+        assert_eq!(entry_in(text, "t", &["it"]).unwrap().name, "Terminale");
     }
 
     #[test]

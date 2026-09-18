@@ -36,6 +36,8 @@ pub struct Locale {
     /// English under the chosen language's texts.
     texts: HashMap<&'static str, &'static str>,
     dates: chrono::Locale,
+    /// `lang_COUNTRY` as the environment or the catalogue gave it.
+    region: String,
 }
 
 impl Locale {
@@ -59,16 +61,31 @@ impl Locale {
                 log::warn!("no translation for language {wanted:?}, using {DEFAULT}");
                 fallback
             });
-        let dates = region
-            .as_deref()
-            .and_then(|r| chrono::Locale::try_from(r).ok())
-            .or_else(|| chrono::Locale::try_from(default_region).ok())
+        let region = region.unwrap_or_else(|| default_region.to_owned());
+        let dates = chrono::Locale::try_from(region.as_str())
+            .or_else(|_| chrono::Locale::try_from(default_region))
             .unwrap_or(chrono::Locale::POSIX);
         let mut texts: HashMap<&'static str, &'static str> =
             en::CATALOGUE.iter().copied().collect();
         texts.extend(catalogue.iter().copied());
         log::info!("language {lang}, dates as {dates:?}");
-        Self { lang, texts, dates }
+        Self {
+            lang,
+            texts,
+            dates,
+            region,
+        }
+    }
+
+    /// The `[lang]` suffixes a desktop entry's localized keys are
+    /// wanted in, best first: `it_IT`, then `it` (the spec's order,
+    /// modifiers aside); the plain key is the fallback.
+    pub fn languages(&self) -> Vec<String> {
+        let mut out = vec![self.region.clone()];
+        if self.region != self.lang {
+            out.push(self.lang.to_owned());
+        }
+        out
     }
 
     /// The text for `key`; the key itself when no catalogue has it
@@ -153,6 +170,7 @@ mod tests {
         assert_eq!(it.tr("locker.unlock"), "Sblocca");
         assert_eq!(it.fmt("notifications.age.minutes", &[("n", &5)]), "5 min");
         assert_eq!(it.describe(), "lang=it dates=it_IT");
+        assert_eq!(it.languages(), ["it_IT", "it"]);
         let en = Locale::new("en");
         assert_eq!(en.tr("locker.unlock"), "Unlock");
         // An unknown language is English.

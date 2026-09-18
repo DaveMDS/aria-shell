@@ -2,5 +2,7 @@
 Type=Application
 Name=Aria Test App
 Comment=A harmless entry the UI scenarios launch
+Name[it]=App di prova Aria
+Comment[it]=Una voce innocua che gli scenari lanciano
 Exec=true
 Icon=application-x-executable

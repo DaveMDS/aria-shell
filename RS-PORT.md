@@ -492,7 +492,13 @@ Two things flow between the daemon and the gadgets besides messages:
   `unstable-locales` (`format_localized`; the `Locale` enum knows
   `xx_YY` names only, so a bare `language = it` maps to `it_IT` via the
   catalogue's default region). Messages from libpam come translated by
-  gettext already. Untranslated on purpose: config keys, theme
+  gettext already. Desktop entries carry their own translations:
+  `Locale::languages()` (`it_IT`, `it`, the spec's order without
+  modifiers) goes into `Icons::new`, and `desktop::parse` keeps the
+  best-ranked `Name[..]`/`Comment[..]` over the plain key (only those
+  two: `Icon[it]` is skipped), so the launcher lists and searches the
+  localized texts; the index is rebuilt on a config reload, which
+  covers a language change. Untranslated on purpose: config keys, theme
   selectors, the log, the socket replies, units. The completeness test
   is the translator's tool: `cargo test` names the missing keys.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
@@ -1049,10 +1055,12 @@ Verified on the real Hyprland session with two outputs:
   the shared config; a second shell on `tests/ui/config-locale` says
   `it`/`it_IT`, and its screenshots show the calendar ("settembre
   2026", "lun … dom"), the notifications popup ("Notifiche", "Non
-  disturbare"), the system monitor ("Memoria", "Carico:") and the lock
-  screen ("venerdì 18 settembre", "Sblocca") in Italian) passes.
+  disturbare"), the system monitor ("Memoria", "Carico:"), the launcher
+  (the test entry as "App di prova Aria", found by its Italian name)
+  and the lock screen ("venerdì 18 settembre", "Sblocca") in Italian)
+  passes.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (117 tests: the locale detection, lookup and fallback, the catalogue
+  (118 tests: the locale detection, the localized desktop keys, lookup and fallback, the catalogue
   completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/

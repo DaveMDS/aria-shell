@@ -187,7 +187,7 @@ impl AriaShell {
         let scheme = general.color_scheme;
         let theme = Theme::load(&config, style.as_deref(), scheme);
         let locale = Locale::new(&general.language);
-        let icons = Icons::new(&config);
+        let icons = Icons::new(&config, locale.languages());
         let load_icons = icons.load().map(Message::Icons);
         let notifications = Notifications::new(config.section(None));
         let sysmon = SysMon::new(config.section(None));
@@ -747,7 +747,7 @@ impl AriaShell {
         self.locale = Locale::new(&self.general.language);
         self.notifications.set_config(self.config.section(None));
         self.sysmon.set_config(self.config.section(None));
-        let mut icons = Icons::new(&self.config);
+        let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
         self.icons = icons;
         let mut tasks: Vec<Task<Message>> = self

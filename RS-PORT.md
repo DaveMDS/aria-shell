@@ -892,7 +892,9 @@ Two things flow between the daemon and the gadgets besides messages:
   (`Theme::tag`), both in layout coordinates (unscrolled), so `row.y -
   list.y` is the row's offset in the content; with the current offset
   from `scrollable::on_scroll` it scrolls (`scroll_to`, absolute) only
-  when the row is above or below the viewport, by the least amount.
+  when the row is above or below the viewport, by the least amount;
+  the row located is the one *past* the selection in the direction of
+  travel, so the next candidate is already visible before it's picked.
   `Task<Option<T>>::and_then` short-circuits on `None`.
 - `tokio::spawn` inside a `stream::channel` subscription works (iced's
   tokio executor runs it on the runtime) but needs the `rt` feature.

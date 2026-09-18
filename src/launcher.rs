@@ -155,13 +155,16 @@ impl Launcher {
             .nth(i, self.results.len())
     }
 
-    /// Ask the widget tree where the selected row and the list are;
+    /// Ask the widget tree where row `i` and the list are;
     /// [`Message::Located`] then scrolls only if the row is out of view.
-    fn locate_selected(&self) -> Task<Message> {
+    /// Called with the row *past* the selection in the direction of
+    /// travel, so the next one is already visible before it's selected.
+    fn locate(&self, i: usize) -> Task<Message> {
         if self.results.is_empty() {
             return Task::none();
         }
-        let item = theme::widget_id(&self.item_node(self.selected));
+        let i = i.min(self.results.len() - 1);
+        let item = theme::widget_id(&self.item_node(i));
         let list = theme::widget_id(&self.node.child("list"));
         widgets::bounds(item).and_then(move |item| {
             widgets::bounds(list.clone()).map(move |list| Message::Located {
@@ -224,13 +227,13 @@ impl Launcher {
             }
             Message::Up => {
                 self.selected = self.selected.saturating_sub(1);
-                Action::Run(self.locate_selected())
+                Action::Run(self.locate(self.selected.saturating_sub(1)))
             }
             Message::Down => {
                 if self.selected + 1 < self.results.len() {
                     self.selected += 1;
                 }
-                Action::Run(self.locate_selected())
+                Action::Run(self.locate(self.selected + 1))
             }
             Message::Scrolled(viewport) => {
                 self.offset = viewport.absolute_offset().y;

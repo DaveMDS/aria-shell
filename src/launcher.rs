@@ -22,14 +22,14 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Space, column, operation, scrollable};
-use iced::{Element, Event, Length, Rectangle, Subscription, Task, widget, window};
+use iced::{Element, Event, Length, Padding, Rectangle, Subscription, Task, widget, window};
 
 use crate::config::{self, RawSection, Section};
 use crate::exiter::{self, ExiterConfig};
 use crate::gadget::Shared;
 use crate::icons::Index;
 use crate::icons::desktop::{self, DesktopAction, DesktopEntry};
-use crate::theme::{self, Node};
+use crate::theme::{self, Node, Theme};
 use crate::widgets;
 
 /// `[launcher]` section.
@@ -227,10 +227,13 @@ pub enum Message {
     Exit(String),
     /// The list was scrolled (by the wheel, or by us).
     Scrolled(scrollable::Viewport),
-    /// Where the selected row and the list are, to keep the row in view.
+    /// Where a row and the list are, to keep the row in view. The
+    /// row's id is on the button's content, so its bounds leave out
+    /// the button's `padding`, given here.
     Located {
         item: Option<Rectangle>,
         list: Option<Rectangle>,
+        padding: Padding,
     },
     /// A press the dialog's content took (see `dialog::content`).
     Nothing,
@@ -335,29 +338,38 @@ impl Launcher {
     /// [`Message::Located`] then scrolls only if the row is out of view.
     /// Called with the row *past* the selection in the direction of
     /// travel, so the next one is already visible before it's selected.
-    fn locate(&self, i: usize) -> Task<Message> {
+    fn locate(&self, i: usize, theme: &Theme) -> Task<Message> {
         let rows = self.rows();
         if rows.is_empty() {
             return Task::none();
         }
         let i = i.min(rows.len() - 1);
-        let item = theme::widget_id(&self.item_node(i, rows[i], rows.len()));
+        let node = self.item_node(i, rows[i], rows.len());
+        let padding = theme.resolve(&node).padding;
+        let item = theme::widget_id(&node);
         let list = theme::widget_id(&self.node.child("list"));
         widgets::bounds(item).and_then(move |item| {
             widgets::bounds(list.clone()).map(move |list| Message::Located {
                 item: Some(item),
                 list,
+                padding,
             })
         })
     }
 
-    /// Scroll the least that brings the row into the list's viewport:
-    /// the bounds are layout coordinates (the row where it would be
-    /// unscrolled), so the row's place in the content is its offset
-    /// from the list's top.
-    fn keep_in_view(&mut self, item: Rectangle, list: Rectangle) -> Task<Message> {
-        let top = item.y - list.y;
-        let bottom = top + item.height;
+    /// Scroll the least that brings the row (its content plus the
+    /// button's `padding`) into the list's viewport: the bounds are
+    /// layout coordinates (the row where it would be unscrolled), so
+    /// the row's place in the content is its offset from the list's
+    /// top.
+    fn keep_in_view(
+        &mut self,
+        item: Rectangle,
+        list: Rectangle,
+        padding: Padding,
+    ) -> Task<Message> {
+        let top = item.y - list.y - padding.top;
+        let bottom = top + item.height + padding.top + padding.bottom;
         let y = if top < self.offset {
             top
         } else if bottom > self.offset + list.height {
@@ -410,7 +422,7 @@ impl Launcher {
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Action {
+    pub fn update(&mut self, message: Message, theme: &Theme) -> Action {
         match message {
             Message::Query(q) => {
                 self.query = q;
@@ -426,25 +438,25 @@ impl Launcher {
             }
             Message::Up => {
                 self.selected = self.selected.saturating_sub(1);
-                Action::Run(self.locate(self.selected.saturating_sub(1)))
+                Action::Run(self.locate(self.selected.saturating_sub(1), theme))
             }
             Message::Down => {
                 if self.selected + 1 < self.rows().len() {
                     self.selected += 1;
                 }
-                Action::Run(self.locate(self.selected + 1))
+                Action::Run(self.locate(self.selected + 1, theme))
             }
             Message::Right => match self.selected_row() {
                 Some(Row::App(i)) if self.expanded != Some(i) => {
                     self.toggle(i);
-                    Action::Run(self.locate(self.selected + 1))
+                    Action::Run(self.locate(self.selected + 1, theme))
                 }
                 _ => Action::Run(Task::none()),
             },
             Message::Left => match self.selected_row() {
                 Some(Row::Action(i, _)) => {
                     self.toggle(i);
-                    Action::Run(self.locate(self.selected))
+                    Action::Run(self.locate(self.selected, theme))
                 }
                 Some(Row::App(i)) if self.expanded == Some(i) => {
                     self.toggle(i);
@@ -454,7 +466,7 @@ impl Launcher {
             },
             Message::Toggle(i) => {
                 self.toggle(i);
-                Action::Run(self.locate(self.selected + 1))
+                Action::Run(self.locate(self.selected + 1, theme))
             }
             Message::Scrolled(viewport) => {
                 self.offset = viewport.absolute_offset().y;
@@ -463,7 +475,8 @@ impl Launcher {
             Message::Located {
                 item: Some(item),
                 list: Some(list),
-            } => Action::Run(self.keep_in_view(item, list)),
+                padding,
+            } => Action::Run(self.keep_in_view(item, list, padding)),
             Message::Located { .. } => Action::Run(Task::none()),
             Message::Submit => {
                 if let Some(row) = self.selected_row() {
@@ -825,37 +838,38 @@ mod tests {
     fn actions_open_and_close_as_child_rows() {
         use Row::{Action, App};
         let mut l = tree_launcher();
+        let theme = Theme::default();
         assert_eq!(l.rows(), [App(0), App(1)], "Ant, Zed");
         assert_eq!(l.selected_row(), Some(App(0)));
         // Right on an entry without actions: nothing.
-        l.update(Message::Right);
+        l.update(Message::Right, &theme);
         assert_eq!((l.rows(), l.selected), ([App(0), App(1)].to_vec(), 0));
         // Right on Zed opens its actions and selects the first.
-        l.update(Message::Down);
-        l.update(Message::Right);
+        l.update(Message::Down, &theme);
+        l.update(Message::Right, &theme);
         assert_eq!(l.rows(), [App(0), App(1), Action(1, 0), Action(1, 1)]);
         assert_eq!(l.selected_row(), Some(Action(1, 0)));
         assert_eq!(l.expanded, Some(1));
-        l.update(Message::Down);
+        l.update(Message::Down, &theme);
         assert_eq!(l.selected_row(), Some(Action(1, 1)));
-        l.update(Message::Down);
+        l.update(Message::Down, &theme);
         assert_eq!(l.selected_row(), Some(Action(1, 1)), "last row stays");
         // Left from an action: back on Zed, closed.
-        l.update(Message::Left);
+        l.update(Message::Left, &theme);
         assert_eq!(
             (l.rows(), l.selected_row()),
             ([App(0), App(1)].to_vec(), Some(App(1)))
         );
         // The chevron toggles; Left on the open entry closes it too.
-        l.update(Message::Toggle(1));
+        l.update(Message::Toggle(1), &theme);
         assert_eq!(l.selected_row(), Some(Action(1, 0)));
-        l.update(Message::Up);
+        l.update(Message::Up, &theme);
         assert_eq!(l.selected_row(), Some(App(1)));
-        l.update(Message::Left);
+        l.update(Message::Left, &theme);
         assert_eq!(l.rows().len(), 2);
         // Typing closes and selects the first row.
-        l.update(Message::Toggle(1));
-        l.update(Message::Query("z".into()));
+        l.update(Message::Toggle(1), &theme);
+        l.update(Message::Query("z".into()), &theme);
         assert_eq!((l.rows(), l.selected), ([App(0)].to_vec(), 0));
         assert_eq!(l.expanded, None);
     }

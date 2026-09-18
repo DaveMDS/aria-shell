@@ -537,7 +537,7 @@ impl AriaShell {
                 let Some((_, launcher)) = &mut self.launcher else {
                     return Task::none();
                 };
-                match launcher.update(m) {
+                match launcher.update(m, &self.theme) {
                     launcher::Action::Run(task) => {
                         self.resolve_icons();
                         task.map(Message::Launcher)

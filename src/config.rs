@@ -261,6 +261,15 @@ pub fn data_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
+/// `$XDG_STATE_HOME/aria-shell` (else `~/.local/state/aria-shell`):
+/// what the shell remembers between runs, like the launcher's usage.
+pub fn state_dir() -> Option<PathBuf> {
+    env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
+        .map(|dir| dir.join("aria-shell"))
+}
+
 /// The source tree's `assets/`, for running out of a checkout.
 pub fn dev_assets_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("assets")

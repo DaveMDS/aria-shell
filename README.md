@@ -63,8 +63,7 @@ An application launcher with support for `.desktop` files.
 - ✅ Search and run `.desktop` applications (names and descriptions in your language)
 - ✅ App list auto-update on install/uninstall
 - ✅ The exit menu's actions as a row of buttons above the search field
-- 🔲 Multiple search provider architecture
-- 🔲 Usage-based ranking
+- ✅ Usage-based ranking (what you launch most comes first; counts in `~/.local/state/aria-shell/launcher-usage`)
 - 🔲 Secondary commands (e.g. "Firefox — New Private Window")
 
 

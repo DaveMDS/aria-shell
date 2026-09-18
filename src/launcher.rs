@@ -7,7 +7,13 @@
 //! window icons (`icons::Index`), taken as a snapshot when it opens and
 //! swapped when the index is rebuilt. Icons are resolved by the daemon
 //! ([`Launcher::visible_ids`]) and read here in `view`, as gadgets do.
+//! How often each entry was launched ([`Usage`]) ranks ties, so the
+//! apps you use come first.
 
+use std::collections::HashMap;
+use std::fs;
+use std::io::{self, Write};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::keyboard::key::Named;
@@ -16,7 +22,7 @@ use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Space, column, operation, scrollable};
 use iced::{Element, Event, Length, Rectangle, Subscription, Task, widget, window};
 
-use crate::config::{RawSection, Section};
+use crate::config::{self, RawSection, Section};
 use crate::exiter::{self, ExiterConfig};
 use crate::gadget::Shared;
 use crate::icons::Index;
@@ -88,11 +94,86 @@ impl Section for LauncherConfig {
     }
 }
 
+/// How many times each desktop entry was launched, by id, kept in
+/// `$XDG_STATE_HOME/aria-shell/launcher-usage` as `<id> <count>` lines
+/// (edit or delete it to reset). Never in the way: a missing or broken
+/// file is an empty one, a failed write is logged.
+#[derive(Debug, Default)]
+pub struct Usage {
+    counts: HashMap<String, u32>,
+    path: Option<PathBuf>,
+}
+
+impl Usage {
+    pub fn load() -> Self {
+        Self::load_from(config::state_dir().map(|d| d.join("launcher-usage")))
+    }
+
+    fn load_from(path: Option<PathBuf>) -> Self {
+        let mut usage = Self {
+            counts: HashMap::new(),
+            path,
+        };
+        let Some(path) = &usage.path else {
+            return usage;
+        };
+        match fs::read_to_string(path) {
+            Ok(text) => usage.counts = parse_usage(&text),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => log::warn!("cannot read {}: {e}", path.display()),
+        }
+        usage
+    }
+
+    fn count(&self, id: &str) -> u32 {
+        self.counts.get(id).copied().unwrap_or(0)
+    }
+
+    /// One more launch of `id`, saved right away.
+    fn bump(&mut self, id: &str) {
+        *self.counts.entry(id.to_owned()).or_insert(0) += 1;
+        if let Some(path) = &self.path
+            && let Err(e) = self.save(path)
+        {
+            log::warn!("cannot write {}: {e}", path.display());
+        }
+    }
+
+    /// The whole file, most launched first, through a temporary so a
+    /// crash midway leaves the old one.
+    fn save(&self, path: &PathBuf) -> io::Result<()> {
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        let mut lines: Vec<(&str, u32)> =
+            self.counts.iter().map(|(k, &v)| (k.as_str(), v)).collect();
+        lines.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        let tmp = path.with_extension("tmp");
+        let mut file = fs::File::create(&tmp)?;
+        for (id, count) in lines {
+            writeln!(file, "{id} {count}")?;
+        }
+        file.flush()?;
+        fs::rename(&tmp, path)
+    }
+}
+
+/// `<id> <count>` per line; anything else is skipped.
+fn parse_usage(text: &str) -> HashMap<String, u32> {
+    text.lines()
+        .filter_map(|line| {
+            let (id, count) = line.trim().split_once(' ')?;
+            Some((id.to_owned(), count.trim().parse().ok()?))
+        })
+        .collect()
+}
+
 pub struct Launcher {
     config: LauncherConfig,
     /// The exit menu's buttons, for the row of actions.
     exiter: ExiterConfig,
     apps: Option<Arc<Index>>,
+    usage: Usage,
     query: String,
     /// Indices into the desktop db, best match first.
     results: Vec<usize>,
@@ -141,6 +222,7 @@ impl Launcher {
             config,
             exiter,
             apps,
+            usage: Usage::load(),
             query: String::new(),
             results: Vec::new(),
             selected: 0,
@@ -176,7 +258,7 @@ impl Launcher {
 
     fn search(&mut self) {
         let all = self.apps.as_deref().map_or(&[][..], |i| i.apps().entries());
-        self.results = search(all, &self.query);
+        self.results = search(all, &self.query, &self.usage);
         self.selected = 0;
     }
 
@@ -233,7 +315,7 @@ impl Launcher {
         )
     }
 
-    fn launch(&self, index: usize) {
+    fn launch(&mut self, index: usize) {
         let Some(entry) = self
             .results
             .get(index)
@@ -241,8 +323,9 @@ impl Launcher {
         else {
             return;
         };
-        if let Err(e) = desktop::launch(entry, &self.config.terminal) {
-            log::error!("cannot launch {:?}: {e}", entry.id);
+        match desktop::launch(entry, &self.config.terminal) {
+            Ok(()) => self.usage.bump(&entry.id),
+            Err(e) => log::error!("cannot launch {:?}: {e}", entry.id),
         }
     }
 
@@ -438,8 +521,9 @@ impl Launcher {
 /// Indices of the entries matching `query`, best first: an empty query
 /// lists every entry; otherwise the id, name and comment are tried for
 /// an exact match (10), a prefix (8), a substring (6), case-insensitive,
-/// as the Python implementation scored. Ties keep name order.
-fn search(entries: &[DesktopEntry], query: &str) -> Vec<usize> {
+/// as the Python implementation scored. Ties go to the entry launched
+/// more often, then to name order.
+fn search(entries: &[DesktopEntry], query: &str, usage: &Usage) -> Vec<usize> {
     let query = query.trim().to_lowercase();
     let mut scored: Vec<(u8, usize)> = entries
         .iter()
@@ -471,12 +555,18 @@ fn search(entries: &[DesktopEntry], query: &str) -> Vec<usize> {
         })
         .collect();
     scored.sort_by(|(sa, a), (sb, b)| {
-        sb.cmp(sa).then_with(|| {
-            entries[*a]
-                .name
-                .to_lowercase()
-                .cmp(&entries[*b].name.to_lowercase())
-        })
+        sb.cmp(sa)
+            .then_with(|| {
+                usage
+                    .count(&entries[*b].id)
+                    .cmp(&usage.count(&entries[*a].id))
+            })
+            .then_with(|| {
+                entries[*a]
+                    .name
+                    .to_lowercase()
+                    .cmp(&entries[*b].name.to_lowercase())
+            })
     });
     scored.into_iter().map(|(_, i)| i).collect()
 }
@@ -503,7 +593,19 @@ mod tests {
     }
 
     fn names<'a>(entries: &'a [DesktopEntry], query: &str) -> Vec<&'a str> {
-        search(entries, query)
+        names_used(entries, query, &[])
+    }
+
+    fn names_used<'a>(
+        entries: &'a [DesktopEntry],
+        query: &str,
+        used: &[(&str, u32)],
+    ) -> Vec<&'a str> {
+        let usage = Usage {
+            counts: used.iter().map(|(id, n)| (id.to_string(), *n)).collect(),
+            path: None,
+        };
+        search(entries, query, &usage)
             .into_iter()
             .map(|i| entries[i].name.as_str())
             .collect()
@@ -527,5 +629,55 @@ mod tests {
         assert_eq!(names(&all, "  FIRE "), ["Firefox"]);
         assert_eq!(names(&all, ""), ["Firefox", "kitty", "Terminal", "Zeta"]);
         assert!(names(&all, "nothing").is_empty());
+    }
+
+    #[test]
+    fn usage_breaks_ties_only() {
+        let all = [
+            entry("org.gnome.terminal", "Terminal", None, false),
+            entry("termite", "Termite", None, false),
+            entry("kitty", "kitty", Some("A fast terminal emulator"), false),
+            entry("term", "Zeta", None, false),
+        ];
+        // Exact, prefix, prefix, substring: usage doesn't reorder classes.
+        assert_eq!(
+            names_used(&all, "term", &[("kitty", 99)]),
+            ["Zeta", "Terminal", "Termite", "kitty"]
+        );
+        // Within one, the launched entry comes first.
+        assert_eq!(
+            names_used(&all, "term", &[("termite", 1)]),
+            ["Zeta", "Termite", "Terminal", "kitty"]
+        );
+        assert_eq!(
+            names_used(&all, "", &[("kitty", 2), ("term", 5)]),
+            ["Zeta", "kitty", "Terminal", "Termite"]
+        );
+    }
+
+    #[test]
+    fn usage_round_trips() {
+        let dir = std::env::temp_dir().join(format!("aria-usage-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join("state").join("launcher-usage");
+        // No file (nor directory) yet: empty, and `bump` creates them.
+        let mut usage = Usage::load_from(Some(path.clone()));
+        assert_eq!(usage.count("firefox"), 0);
+        usage.bump("firefox");
+        usage.bump("firefox");
+        usage.bump("kitty");
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "firefox 2\nkitty 1\n",
+            "most launched first"
+        );
+        let again = Usage::load_from(Some(path.clone()));
+        assert_eq!((again.count("firefox"), again.count("kitty")), (2, 1));
+        // Junk lines are skipped, the rest read.
+        fs::write(&path, "garbage\nfirefox x\n\n  kitty 4 \n").unwrap();
+        let junk = Usage::load_from(Some(path.clone()));
+        assert_eq!((junk.count("firefox"), junk.count("kitty")), (0, 4));
+        assert_eq!(Usage::load_from(None).count("kitty"), 0);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

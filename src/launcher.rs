@@ -17,6 +17,7 @@ use iced::widget::{Space, column, operation, scrollable};
 use iced::{Element, Event, Length, Rectangle, Subscription, Task, widget, window};
 
 use crate::config::{RawSection, Section};
+use crate::exiter::{self, ExiterConfig};
 use crate::gadget::Shared;
 use crate::icons::Index;
 use crate::icons::desktop::{self, DesktopEntry};
@@ -30,6 +31,26 @@ pub struct LauncherConfig {
     /// `<terminal> -e <command>`. Empty: `$TERMINAL`, else the first
     /// of [`TERMINALS`] on the PATH, else `xterm`.
     pub terminal: String,
+    /// The exit menu's buttons shown as a row of icons above the
+    /// search field: `all`, `none`, or their names.
+    pub actions: Actions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Actions {
+    All,
+    None,
+    Some(Vec<String>),
+}
+
+impl Actions {
+    fn shows(&self, name: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::None => false,
+            Self::Some(names) => names.iter().any(|n| n == name),
+        }
+    }
 }
 
 /// Terminals tried when neither the config nor `$TERMINAL` says.
@@ -58,12 +79,19 @@ impl Section for LauncherConfig {
                     .unwrap_or("xterm")
                     .to_owned()
             });
-        Self { terminal }
+        let actions = match raw.list_or("actions", &["all"]).as_slice() {
+            [one] if one == "all" => Actions::All,
+            [one] if one == "none" => Actions::None,
+            names => Actions::Some(names.to_vec()),
+        };
+        Self { terminal, actions }
     }
 }
 
 pub struct Launcher {
     config: LauncherConfig,
+    /// The exit menu's buttons, for the row of actions.
+    exiter: ExiterConfig,
     apps: Option<Arc<Index>>,
     query: String,
     /// Indices into the desktop db, best match first.
@@ -87,6 +115,8 @@ pub enum Message {
     Activate(usize),
     /// Esc, or a click outside.
     Close,
+    /// One of the exit menu's buttons, by name.
+    Exit(String),
     /// The list was scrolled (by the wheel, or by us).
     Scrolled(scrollable::Viewport),
     /// Where the selected row and the list are, to keep the row in view.
@@ -94,17 +124,22 @@ pub enum Message {
         item: Option<Rectangle>,
         list: Option<Rectangle>,
     },
+    /// A press the dialog's content took (see `dialog::content`).
+    Nothing,
 }
 
 pub enum Action {
     Run(Task<Message>),
     Close,
+    /// Close, and do what the exit menu's button `name` does.
+    Exit(String),
 }
 
 impl Launcher {
-    pub fn new(config: LauncherConfig, apps: Option<Arc<Index>>) -> Self {
+    pub fn new(config: LauncherConfig, exiter: ExiterConfig, apps: Option<Arc<Index>>) -> Self {
         let mut launcher = Self {
             config,
+            exiter,
             apps,
             query: String::new(),
             results: Vec::new(),
@@ -253,7 +288,23 @@ impl Launcher {
                 Action::Close
             }
             Message::Close => Action::Close,
+            Message::Exit(name) => Action::Exit(name),
+            Message::Nothing => Action::Run(Task::none()),
         }
+    }
+
+    /// The exit menu's buttons the row shows.
+    fn actions(&self) -> impl Iterator<Item = &exiter::Button> {
+        self.exiter
+            .buttons
+            .iter()
+            .filter(|b| self.config.actions.shows(&b.name))
+    }
+
+    /// Icon names the view may draw, for the daemon to resolve.
+    pub fn icon_names(&self) -> impl Iterator<Item = &str> {
+        self.actions()
+            .flat_map(|b| b.icons.iter().map(String::as_str))
     }
 
     pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
@@ -306,9 +357,48 @@ impl Launcher {
                     .height(Length::Fill),
             )
             .height(Length::Fill);
+        // The exit menu's buttons as a row of icons, when there are any.
+        let actions_node = self.node.child("actions");
+        let mut actions: Vec<Element<'a, Message>> = Vec::new();
+        for button in self.actions() {
+            let b = actions_node.child("button").class(button.name.clone());
+            let icon_node = b.child("icon");
+            let style = theme.resolve(&icon_node);
+            let size = style.height.or(style.width).and_then(|l| match l {
+                theme::Length::Px(px) => Some(px),
+                _ => None,
+            });
+            let name = button
+                .icons
+                .iter()
+                .find(|n| shared.icons.has_name(n))
+                .or(button.icons.first());
+            let icon: Element<'a, Message> =
+                match (name.and_then(|n| shared.icons.get_name(n, None)), size) {
+                    (Some(icon), Some(size)) => icon.view(size, style.color),
+                    (_, Some(size)) => Space::new().width(size).height(size).into(),
+                    _ => Space::new().into(),
+                };
+            actions.push(
+                theme
+                    .button(&b, icon)
+                    .on_press(Message::Exit(button.name.clone()))
+                    .into(),
+            );
+        }
+        let mut content = column![];
+        if !actions.is_empty() {
+            content = content.push(
+                theme
+                    .row(&actions_node, actions)
+                    .align_y(iced::Alignment::Center),
+            );
+        }
         // The daemon's root container already applies the `launcher`
         // padding; only its `gap` is ours.
-        column![input, list]
+        content
+            .push(input)
+            .push(list)
             .spacing(theme.resolve(&self.node).gap)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -343,28 +433,6 @@ impl Launcher {
             Some((window, message))
         })
     }
-}
-
-/// The surface behind the launcher on every output: transparent, and a
-/// click on it closes the launcher (the click is swallowed, as a
-/// compositor does for a popup's). The click is caught by
-/// [`grab_clicks`], not a `mouse_area`: the surface appears under a
-/// pointer that may not move before clicking (the bar button that
-/// opened the launcher, clicked again), and iced places the cursor
-/// only on motion.
-pub fn grab_view<'a>() -> Element<'a, Message> {
-    Space::new().width(Length::Fill).height(Length::Fill).into()
-}
-
-/// Mouse buttons released on any of our windows; the daemon closes the
-/// launcher when the click wasn't on it. On the release, not the press:
-/// closing on the press destroys the surface before the release
-/// reaches it, and Hyprland then swallows the next click.
-pub fn grab_clicks() -> Subscription<window::Id> {
-    iced::event::listen_with(|event, _status, window| match event {
-        Event::Mouse(iced::mouse::Event::ButtonReleased(_)) => Some(window),
-        _ => None,
-    })
 }
 
 /// Indices of the entries matching `query`, best first: an empty query

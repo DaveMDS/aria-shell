@@ -2,6 +2,8 @@ mod audio;
 mod commands;
 mod compositor;
 mod config;
+mod dialog;
+mod exiter;
 mod gadget;
 mod gadgets;
 mod icons;
@@ -36,9 +38,11 @@ use iced_exwlshell::to_exwlshell_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use audio::Audio;
-use commands::{Command, DebugCommand, LauncherCommand, Reply};
+use commands::{Command, DebugCommand, Reply, ToggleCommand};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
+use dialog::Dialog;
+use exiter::{Exiter, ExiterConfig};
 use gadget::Shared;
 use icons::Icons;
 use launcher::Launcher;
@@ -87,11 +91,16 @@ enum Message {
     LauncherEvent(Id, launcher::Message),
     /// Routed to the lock screen.
     Locker(locker::Message),
+    /// Routed to the open exit menu.
+    Exiter(exiter::Message),
+    /// From the exit menu's subscription: for it when the window is
+    /// its own (`None`: not from a window, the countdown).
+    ExiterEvent(Option<Id>, exiter::Message),
     /// A wallpaper image finished decoding.
     Wallpaper(wallpaper::Event),
-    /// A mouse button was released on window `Id` while the launcher is
-    /// open: closes it when the click wasn't on the launcher.
-    GrabClicked(Id),
+    /// A press or release on window `Id` while a dialog is open: a
+    /// click outside closes it.
+    DialogPointer(Id, dialog::PointerEvent),
     /// A mouse button was pressed on window `Id` and no widget took it:
     /// closes the popups, when the window isn't one of them.
     PressedOutside(Id),
@@ -138,11 +147,10 @@ struct AriaShell {
     images: Wallpapers,
     /// Open popup surfaces.
     popups: BTreeMap<Id, OpenPopup>,
-    /// The launcher, while shown.
-    launcher: Option<OpenLauncher>,
-    /// While the launcher is shown, one transparent surface per output
-    /// under it, so a click anywhere else closes it.
-    grabs: Vec<(Id, OutputId)>,
+    /// The launcher, while shown, on its dialog surface.
+    launcher: Option<(Dialog, Launcher)>,
+    /// The exit menu, while shown.
+    exiter: Option<(Dialog, Exiter)>,
     /// The lock screen, from the `lock` command to the unlock.
     locker: Option<Locker>,
     /// Last pointer position reported by one of our surfaces.
@@ -167,13 +175,6 @@ struct Toast {
 struct Wallpaper {
     output: OutputId,
     config: WallpaperConfig,
-}
-
-struct OpenLauncher {
-    window: Id,
-    output: OutputId,
-    size: (u32, u32),
-    launcher: Launcher,
 }
 
 /// A popup surface: the panel it hangs off, the anchor widget's bounds
@@ -226,7 +227,7 @@ impl AriaShell {
             images: Wallpapers::default(),
             popups: BTreeMap::new(),
             launcher: None,
-            grabs: Vec::new(),
+            exiter: None,
             locker: None,
             cursor: None,
             toasts: Vec::new(),
@@ -257,8 +258,8 @@ impl AriaShell {
         for w in &self.compositor.windows {
             self.icons.resolve(&w.class);
         }
-        if let Some(open) = &self.launcher {
-            for id in open.launcher.visible_ids() {
+        if let Some((_, launcher)) = &self.launcher {
+            for id in launcher.visible_ids() {
                 self.icons.resolve(id);
             }
         }
@@ -282,6 +283,18 @@ impl AriaShell {
                 self.locker
                     .iter()
                     .flat_map(Locker::icon_names)
+                    .map(str::to_owned),
+            )
+            .chain(
+                self.exiter
+                    .iter()
+                    .flat_map(|(_, e)| e.icon_names())
+                    .map(str::to_owned),
+            )
+            .chain(
+                self.launcher
+                    .iter()
+                    .flat_map(|(_, l)| l.icon_names())
                     .map(str::to_owned),
             )
             .collect();
@@ -367,10 +380,10 @@ impl AriaShell {
             }
             Message::Icons(event) => {
                 self.icons.apply(event);
-                if let Some(open) = &mut self.launcher
+                if let Some((_, launcher)) = &mut self.launcher
                     && let Some(index) = self.icons.index()
                 {
-                    open.launcher.set_apps(index);
+                    launcher.set_apps(index);
                 }
                 self.resolve_icons();
                 Task::none()
@@ -410,10 +423,38 @@ impl AriaShell {
                 Task::batch([signals, self.sync_toasts(), self.sync_popups()])
             }
             Message::Command(Command::Launcher(cmd)) => match (cmd, self.launcher.is_some()) {
-                (LauncherCommand::Show | LauncherCommand::Toggle, false) => self.open_launcher(),
-                (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
+                (ToggleCommand::Show | ToggleCommand::Toggle, false) => self.open_launcher(),
+                (ToggleCommand::Hide | ToggleCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
+            Message::Command(Command::Exiter(cmd)) => match (cmd, self.exiter.is_some()) {
+                (ToggleCommand::Show | ToggleCommand::Toggle, false) => {
+                    self.open_exiter(Exiter::new(self.config.section(None)))
+                }
+                (ToggleCommand::Hide | ToggleCommand::Toggle, true) => self.close_exiter(),
+                _ => Task::none(),
+            },
+            Message::ExiterEvent(window, m) => match (&self.exiter, window) {
+                (Some(_), None) => self.update(Message::Exiter(m)),
+                (Some((dialog, _)), Some(w)) if dialog.is_window(w) => {
+                    self.update(Message::Exiter(m))
+                }
+                _ => Task::none(),
+            },
+            Message::Exiter(m) => {
+                let Some((_, exiter)) = &mut self.exiter else {
+                    return Task::none();
+                };
+                match exiter.update(m) {
+                    exiter::Action::Run(task) => {
+                        Task::batch([task.map(Message::Exiter), self.sync_exiter()])
+                    }
+                    exiter::Action::Close => self.close_exiter(),
+                    exiter::Action::Perform(command) => {
+                        Task::batch([self.close_exiter(), self.perform_exit(command)])
+                    }
+                }
+            }
             Message::Wallpaper(event) => {
                 self.images.apply(event);
                 Task::none()
@@ -469,39 +510,21 @@ impl AriaShell {
                 Task::none()
             }
             Message::LauncherEvent(window, m) => match &self.launcher {
-                Some(open) if open.window == window => self.update(Message::Launcher(m)),
+                Some((dialog, _)) if dialog.is_window(window) => self.update(Message::Launcher(m)),
                 _ => Task::none(),
             },
-            Message::GrabClicked(window) => {
-                let Some(open) = &self.launcher else {
-                    return Task::none();
-                };
-                // On a grab, or reported on the launcher's window while
-                // the pointer was last seen elsewhere: on another window
-                // (Hyprland keeps pointer focus where it was until the
-                // pointer moves, so a press on the bar button that
-                // opened the launcher comes tagged with the launcher's
-                // window), or on the launcher's window but outside its
-                // bounds (Hyprland routes every pointer event to an
-                // exclusive-keyboard layer, surface-local).
-                let on_grab = self.grabs.iter().any(|(g, _)| *g == window);
-                let outside = |p: Point| {
-                    p.x < 0.0 || p.y < 0.0 || p.x >= open.size.0 as f32 || p.y >= open.size.1 as f32
-                };
-                let elsewhere = window == open.window
-                    && self
-                        .cursor
-                        .is_some_and(|(w, p)| w != open.window || outside(p));
-                log::debug!(
-                    "click on window {window:?} (launcher {:?}, pointer last on {:?}): grab {on_grab}, elsewhere {elsewhere}",
-                    open.window,
-                    self.cursor
-                );
-                if on_grab || elsewhere {
-                    self.close_launcher()
-                } else {
-                    Task::none()
+            Message::DialogPointer(window, event) => {
+                if let Some((dialog, _)) = &mut self.launcher
+                    && dialog.pointer(window, event)
+                {
+                    return self.close_launcher();
                 }
+                if let Some((dialog, _)) = &mut self.exiter
+                    && dialog.pointer(window, event)
+                {
+                    return self.close_exiter();
+                }
+                Task::none()
             }
             Message::PressedOutside(window) => {
                 if self.popups.contains_key(&window) {
@@ -511,15 +534,33 @@ impl AriaShell {
                 }
             }
             Message::Launcher(m) => {
-                let Some(open) = &mut self.launcher else {
+                let Some((_, launcher)) = &mut self.launcher else {
                     return Task::none();
                 };
-                match open.launcher.update(m) {
+                match launcher.update(m) {
                     launcher::Action::Run(task) => {
                         self.resolve_icons();
                         task.map(Message::Launcher)
                     }
                     launcher::Action::Close => self.close_launcher(),
+                    launcher::Action::Exit(name) => {
+                        let config: ExiterConfig = self.config.section(None);
+                        let close = self.close_launcher();
+                        let Some(button) = config.button(&name) else {
+                            return close;
+                        };
+                        // The exit menu's own flow: its confirmation
+                        // when the button wants one, else the command.
+                        let next = if button.confirm && config.ask_confirm {
+                            match Exiter::confirming(config.clone(), &name) {
+                                Some(exiter) => self.open_exiter(exiter),
+                                None => Task::none(),
+                            }
+                        } else {
+                            self.perform_exit(button.command.clone())
+                        };
+                        Task::batch([close, next])
+                    }
                 }
             }
             Message::Files(watch::Changed(paths)) => {
@@ -627,9 +668,19 @@ impl AriaShell {
                 list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
             }
         }
-        for &(id, output) in &self.grabs {
-            if let Some(out) = self.output_rect(output) {
-                list.push((id, "grab", output, out));
+        let dialogs = self
+            .launcher
+            .iter()
+            .map(|(d, _)| ("launcher", d))
+            .chain(self.exiter.iter().map(|(d, _)| ("exiter", d)));
+        for (kind, dialog) in dialogs {
+            for &(id, output) in &dialog.grabs {
+                if let Some(out) = self.output_rect(output) {
+                    list.push((id, "grab", output, out));
+                }
+            }
+            if let Some(out) = self.output_rect(dialog.output) {
+                list.push((dialog.window, kind, dialog.output, dialog.rect(out)));
             }
         }
         for toast in &self.toasts {
@@ -646,23 +697,6 @@ impl AriaShell {
             if let Some(out) = self.output_rect(w.output) {
                 list.push((id, "wallpaper", w.output, out));
             }
-        }
-        if let Some(open) = &self.launcher
-            && let Some(out) = self.output_rect(open.output)
-        {
-            let (w, h) = (open.size.0 as f32, open.size.1 as f32);
-            list.push((
-                open.window,
-                "launcher",
-                open.output,
-                Rectangle::new(
-                    Point::new(
-                        out.x + (out.width - w) / 2.0,
-                        out.y + (out.height - h) / 2.0,
-                    ),
-                    Size::new(w, h),
-                ),
-            ));
         }
         list
     }
@@ -799,6 +833,7 @@ impl AriaShell {
         self.panels.clear();
         self.wallpapers.clear();
         tasks.push(self.close_launcher());
+        tasks.push(self.close_exiter());
         self.cursor = None;
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
@@ -1058,8 +1093,8 @@ impl AriaShell {
     }
 
     /// Show the launcher on the focused output (the first one if the
-    /// compositor didn't say), sized by the theme's `launcher` rule,
-    /// over a click-catching surface on every output.
+    /// compositor didn't say), sized by the theme's `launcher` rule, on
+    /// a dialog surface.
     fn open_launcher(&mut self) -> Task<Message> {
         let Some(output) = self.focused_output().cloned() else {
             log::warn!("no output to show the launcher on");
@@ -1070,55 +1105,78 @@ impl AriaShell {
             Some(theme::Length::Px(px)) => px.max(1.0) as u32,
             _ => default as u32,
         };
-        let size = LayerSize::px(px(style.width, 500.0), px(style.height, 400.0));
-        let launcher = Launcher::new(self.config.section(None), self.icons.index());
-        let mut tasks = Vec::new();
-        for o in self.outputs.values() {
-            let id = Id::unique();
-            self.grabs.push((id, OutputId::from(o)));
-            tasks.push(Task::done(Message::NewLayerShell {
-                settings: NewLayerShellSettings {
-                    anchor: Anchor::all(),
-                    size: LayerSize::FILL,
-                    layer: Layer::Top,
-                    exclusive_zone: Some(-1),
-                    margin: None,
-                    keyboard_interactivity: KeyboardInteractivity::None,
-                    output_option: OutputOption::GlobalName(o.id),
-                    namespace: Some("aria-launcher-grab".to_owned()),
-                    ..Default::default()
-                },
-                id,
-            }));
-        }
-        let id = Id::unique();
-        log::info!(
-            "opening the launcher on output {:?} as window {id:?}, grabs {:?}",
-            output.name,
-            self.grabs
+        let size = (px(style.width, 500.0), px(style.height, 400.0));
+        let launcher = Launcher::new(
+            self.config.section(None),
+            self.config.section(None),
+            self.icons.index(),
         );
-        tasks.push(Task::done(Message::NewLayerShell {
-            settings: NewLayerShellSettings {
-                anchor: Anchor::empty(),
-                size,
-                layer: Layer::Overlay,
-                exclusive_zone: Some(-1),
-                margin: None,
-                keyboard_interactivity: KeyboardInteractivity::Exclusive,
-                output_option: OutputOption::GlobalName(output.id),
-                namespace: Some("aria-launcher".to_owned()),
-                ..Default::default()
-            },
-            id,
-        }));
-        self.launcher = Some(OpenLauncher {
-            window: id,
-            output: OutputId::from(&output),
-            size: (size.width.to_set(), size.height.to_set()),
-            launcher,
-        });
+        let (dialog, surfaces) = Dialog::open(
+            "aria-launcher",
+            &output,
+            size,
+            self.outputs.values().cloned(),
+        );
+        self.launcher = Some((dialog, launcher));
         self.resolve_icons();
-        Task::batch(tasks)
+        Task::batch([self.close_exiter(), open_surfaces(surfaces)])
+    }
+
+    /// Show the exit menu on the focused output, sized from its
+    /// content, on a dialog surface; the launcher (if open) goes.
+    fn open_exiter(&mut self, exiter: Exiter) -> Task<Message> {
+        let Some(output) = self.focused_output().cloned() else {
+            log::warn!("no output to show the exiter on");
+            return Task::none();
+        };
+        let size = exiter.size(&self.theme, &self.locale);
+        let (dialog, surfaces) =
+            Dialog::open("aria-exiter", &output, size, self.outputs.values().cloned());
+        self.exiter = Some((dialog, exiter));
+        self.resolve_icons();
+        Task::batch([self.close_launcher(), open_surfaces(surfaces)])
+    }
+
+    fn close_exiter(&mut self) -> Task<Message> {
+        match self.exiter.take() {
+            Some((dialog, _)) => close_surfaces(&dialog),
+            None => Task::none(),
+        }
+    }
+
+    /// The exit menu's content changed (the grid, the confirmation, a
+    /// countdown tick): resize its surface when it wants another size.
+    fn sync_exiter(&mut self) -> Task<Message> {
+        let Some((dialog, exiter)) = &mut self.exiter else {
+            return Task::none();
+        };
+        let size = exiter.size(&self.theme, &self.locale);
+        if size == dialog.size {
+            return Task::none();
+        }
+        let (anchor, size) = dialog.resize(size);
+        Task::done(Message::LayoutChange {
+            id: dialog.window,
+            anchor,
+            size,
+        })
+    }
+
+    /// Carry out an exit menu action: a program, or the compositor's
+    /// own exit.
+    fn perform_exit(&mut self, command: exiter::Command) -> Task<Message> {
+        match command {
+            exiter::Command::Program(line) => {
+                process::run(&line);
+                Task::none()
+            }
+            exiter::Command::Logout => {
+                log::info!("asking the compositor to end the session");
+                self.compositor
+                    .run(compositor::Command::Exit)
+                    .map(Message::Compositor)
+            }
+        }
     }
 
     /// `aria-shell lock`: ask the compositor for the session lock; the
@@ -1133,27 +1191,17 @@ impl AriaShell {
         self.resolve_icons();
         Task::batch([
             self.close_launcher(),
+            self.close_exiter(),
             self.close_popups(),
             Task::done(Message::Lock),
         ])
     }
 
     fn close_launcher(&mut self) -> Task<Message> {
-        let ids: Vec<Id> = self
-            .launcher
-            .take()
-            .map(|open| open.window)
-            .into_iter()
-            .chain(
-                std::mem::take(&mut self.grabs)
-                    .into_iter()
-                    .map(|(id, _)| id),
-            )
-            .collect();
-        Task::batch(
-            ids.into_iter()
-                .map(|id| Task::done(Message::RemoveWindow(id))),
-        )
+        match self.launcher.take() {
+            Some((dialog, _)) => close_surfaces(&dialog),
+            None => Task::none(),
+        }
     }
 
     /// Close every open popup, telling its panel (the runtime's
@@ -1193,8 +1241,8 @@ impl AriaShell {
             ShellEvent::NewShell(info) => match &self.launcher {
                 // The search field can only take focus once its surface
                 // exists.
-                Some(open) if open.window == info.window => {
-                    open.launcher.focus().map(Message::Launcher)
+                Some((dialog, launcher)) if dialog.is_window(info.window) => {
+                    launcher.focus().map(Message::Launcher)
                 }
                 _ => Task::none(),
             },
@@ -1283,15 +1331,25 @@ impl AriaShell {
                 {
                     return Task::none();
                 }
-                let is_launcher = self.launcher.as_ref().is_some_and(|l| l.window == id);
-                if is_launcher || self.grabs.iter().any(|(g, _)| *g == id) {
+                if let Some((dialog, _)) = &mut self.launcher
+                    && dialog.owns(id)
+                {
                     // One of the launcher's surfaces went away (on our
                     // request, or not): the rest follows.
-                    self.grabs.retain(|(g, _)| *g != id);
-                    if is_launcher {
+                    dialog.grabs.retain(|(g, _)| *g != id);
+                    if dialog.is_window(id) {
                         self.launcher = None;
                     }
                     return self.close_launcher();
+                }
+                if let Some((dialog, _)) = &mut self.exiter
+                    && dialog.owns(id)
+                {
+                    dialog.grabs.retain(|(g, _)| *g != id);
+                    if dialog.is_window(id) {
+                        self.exiter = None;
+                    }
+                    return self.close_exiter();
                 }
                 if let Some(i) = self.toasts.iter().position(|t| t.window == id) {
                     // Gone with its output, or on our request: if the
@@ -1408,19 +1466,34 @@ impl AriaShell {
                 .into();
             return content.map(Message::Locker);
         }
-        if let Some(open) = &self.launcher
-            && open.window == window
+        if let Some((dialog, launcher)) = &self.launcher
+            && dialog.is_window(window)
         {
-            let root: Element<'_, launcher::Message> = self
+            let root = self
                 .theme
-                .container(&Node::root("launcher"), open.launcher.view(shared))
+                .container(&Node::root("launcher"), launcher.view(shared))
                 .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
-            return root.map(Message::Launcher);
+                .height(Length::Fill);
+            return dialog::content(root, launcher::Message::Nothing).map(Message::Launcher);
         }
-        if self.grabs.iter().any(|(g, _)| *g == window) {
-            return launcher::grab_view().map(Message::Launcher);
+        if let Some((dialog, exiter)) = &self.exiter
+            && dialog.is_window(window)
+        {
+            let root = self
+                .theme
+                .container(&Node::root("exiter"), exiter.view(shared))
+                .width(Length::Fill)
+                .height(Length::Fill);
+            return dialog::content(root, exiter::Message::Nothing).map(Message::Exiter);
+        }
+        if self
+            .launcher
+            .iter()
+            .map(|(d, _)| d)
+            .chain(self.exiter.iter().map(|(d, _)| d))
+            .any(|d| d.is_grab(window))
+        {
+            return dialog::grab_view();
         }
         if let Some(w) = self.wallpapers.get(&window) {
             let root = Node::root("wallpaper").attr("output", self.output_name(w.output));
@@ -1491,12 +1564,20 @@ impl AriaShell {
         files.extend(self.images.files().cloned());
         let popups = (!self.popups.is_empty())
             .then(|| panel::presses_outside().map(Message::PressedOutside));
-        let launcher = self.launcher.iter().flat_map(|open| {
+        let launcher = self.launcher.iter().flat_map(|(_, launcher)| {
             [
-                open.launcher
+                launcher
                     .subscription()
                     .map(|(w, m)| Message::LauncherEvent(w, m)),
-                launcher::grab_clicks().map(Message::GrabClicked),
+                dialog::pointer_events().map(|(w, e)| Message::DialogPointer(w, e)),
+            ]
+        });
+        let exiter = self.exiter.iter().flat_map(|(_, exiter)| {
+            [
+                exiter
+                    .subscription()
+                    .map(|(w, m)| Message::ExiterEvent(w, m)),
+                dialog::pointer_events().map(|(w, e)| Message::DialogPointer(w, e)),
             ]
         });
         let locker = self
@@ -1529,6 +1610,7 @@ impl AriaShell {
             .chain(panels)
             .chain(popups)
             .chain(launcher)
+            .chain(exiter)
             .chain(locker),
         )
     }
@@ -1573,6 +1655,24 @@ fn widget_rects() -> Task<Vec<(String, Rectangle)>> {
     }
 
     iced::advanced::widget::operate(Collect(Vec::new()))
+}
+
+/// Open the layer surfaces a [`Dialog`] asked for.
+fn open_surfaces(surfaces: Vec<(Id, NewLayerShellSettings)>) -> Task<Message> {
+    Task::batch(
+        surfaces
+            .into_iter()
+            .map(|(id, settings)| Task::done(Message::NewLayerShell { settings, id })),
+    )
+}
+
+/// Remove every surface of a [`Dialog`].
+fn close_surfaces(dialog: &Dialog) -> Task<Message> {
+    Task::batch(
+        dialog
+            .windows()
+            .map(|id| Task::done(Message::RemoveWindow(id))),
+    )
 }
 
 fn main() -> iced_exwlshell::Result {

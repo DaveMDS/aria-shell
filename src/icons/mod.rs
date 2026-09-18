@@ -238,6 +238,14 @@ impl Icons {
         self.named.insert(key, Icon::from_path(path));
     }
 
+    /// Whether the theme has an icon called `name` (a hash probe; the
+    /// generic fallback doesn't count), for a caller with alternatives.
+    pub fn has_name(&self, name: &str) -> bool {
+        self.index
+            .as_ref()
+            .is_some_and(|i| i.icons.lookup(name, LOOKUP_SIZE).is_some())
+    }
+
     /// The icon called `name`, once resolved.
     pub fn get_name(&self, name: &str, dir: Option<&str>) -> Option<&Icon> {
         self.named.get(&(name.to_owned(), dir.map(PathBuf::from)))

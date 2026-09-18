@@ -416,6 +416,7 @@ pub async fn run(command: Command) {
             format!("workspace --no-auto-back-and-forth \"{name}\"")
         }
         Command::ActivateWindow(id) => format!("[con_id={id}] focus"),
+        Command::Exit => "exit".to_owned(),
     };
     let Some(results): Option<Vec<CommandResult>> =
         request_json(RUN_COMMAND, line.as_bytes()).await

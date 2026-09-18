@@ -236,6 +236,7 @@ pub async fn run(command: Command) {
         Command::ActivateWindow(id) => {
             format!("dispatch hl.dsp.focus({{ window = \"address:0x{id}\" }})")
         }
+        Command::Exit => "dispatch hl.dsp.exit()".to_owned(),
     };
     match request(&dispatch).await {
         Ok(reply) if reply == b"ok" => {}

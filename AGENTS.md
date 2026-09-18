@@ -36,6 +36,7 @@ With arguments the binary is a client of the running shell:
 ```bash
 aria-shell launcher toggle          # what a compositor keybind runs
 aria-shell lock                     # the lock screen (PAM checks the password)
+aria-shell exiter toggle            # the exit menu (lock, suspend, ..., shutdown)
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us

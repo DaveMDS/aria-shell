@@ -54,6 +54,8 @@ pub enum Event {
 pub enum Command {
     ActivateWorkspace(String),
     ActivateWindow(String),
+    /// End the session: the compositor exits.
+    Exit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

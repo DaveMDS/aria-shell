@@ -71,12 +71,24 @@
  *         ╰─ text
  *
  *   launcher                                                  the launcher surface (width/height size it)
+ *   ├─ actions                                                the exit menu's buttons as icons ([launcher] actions)
+ *   │  ╰─ button[.lock|.reboot|...] > icon                    drawn at the node's `height`
  *   ├─ input                                                  the search field (:focus when typing)
  *   ╰─ list                                                   the results (a column; gap between items)
  *      ╰─ item[.selected]                                     one result, a button
  *         ├─ icon                                             the app icon, drawn at the node's `height`
  *         ├─ title                                            the app name
  *         ╰─ subtitle                                         its description, when it has one
+ *
+ *   exiter                                                    the exit menu surface (sized from its content)
+ *   ├─ button[.lock|.suspend|.hibernate|.logout|.reboot|.shutdown|.<name>][.selected]
+ *   │  ├─ icon                                                 drawn at the node's `height` (symbolic: `color`)
+ *   │  ╰─ text                                                 the label
+ *   ╰─ confirm                                                 in place of the grid while an action waits
+ *      ├─ text                                                 "Reboot?"
+ *      ├─ countdown                                            "Automatically in 27 s" (with confirm_timeout)
+ *      ├─ button.cancel > text
+ *      ╰─ button.ok[.<name>] > text                            the action's label
  *
  *   wallpaper[output="<connector>"]                           the desktop background, one surface per output; its
  *                                                             `background` shows without an image or around a
@@ -292,6 +304,21 @@ launcher {
   border: 1px solid var(--aria-border);
   border-radius: 8px;
 }
+launcher actions {
+  gap: 4px;
+}
+launcher actions button {
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--aria-muted);
+}
+launcher actions button:hover {
+  background: var(--aria-border);
+  color: var(--aria-fg);
+}
+launcher actions icon {
+  height: 20px;
+}
 launcher input {
   padding: 8px 10px;
   background: var(--aria-bg);
@@ -324,6 +351,49 @@ launcher subtitle {
   color: var(--aria-muted);
 }
 launcher item.selected subtitle {
+  color: var(--aria-on-accent);
+}
+
+exiter {
+  padding: 16px;
+  gap: 8px;
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  font-size: 14px;
+  border: 1px solid var(--aria-border);
+  border-radius: 12px;
+}
+exiter button {
+  padding: 12px 16px;
+  gap: 8px;
+  border-radius: 8px;
+}
+exiter button:hover, exiter button.selected {
+  background: var(--aria-border);
+}
+exiter button icon {
+  height: 40px;
+}
+exiter confirm {
+  gap: 12px;
+  font-size: 16px;
+}
+exiter confirm countdown {
+  font-size: 13px;
+  color: var(--aria-muted);
+}
+exiter confirm button {
+  padding: 6px 16px;
+  gap: 0;
+  border-radius: 6px;
+  background: var(--aria-border);
+}
+exiter confirm button.ok {
+  background: var(--aria-urgent);
+  color: var(--aria-on-accent);
+}
+exiter confirm button:hover {
+  background: var(--aria-accent);
   color: var(--aria-on-accent);
 }
 

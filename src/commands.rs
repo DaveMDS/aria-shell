@@ -32,7 +32,9 @@ use tokio::net::{UnixListener, UnixStream};
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    Launcher(LauncherCommand),
+    Launcher(ToggleCommand),
+    /// The exit menu (`aria-shell exiter toggle`).
+    Exiter(ToggleCommand),
     /// Lock the session (`aria-shell lock`).
     Lock,
     /// Answered through the channel.
@@ -68,17 +70,33 @@ impl Reply {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LauncherCommand {
+pub enum ToggleCommand {
     Toggle,
     Show,
     Hide,
+}
+
+impl ToggleCommand {
+    /// `<name> [toggle|show|hide]`.
+    fn parse(name: &str, args: &[&str]) -> Result<Self, String> {
+        match args {
+            [] | ["toggle"] => Ok(Self::Toggle),
+            ["show"] => Ok(Self::Show),
+            ["hide"] => Ok(Self::Hide),
+            _ => Err(format!(
+                "invalid arguments for <{name}>: {} (toggle | show | hide)",
+                args.join(" ")
+            )),
+        }
+    }
 }
 
 /// What a received line turns into.
 #[derive(Debug, PartialEq, Eq)]
 enum Parsed {
     /// Deliver to the daemon (and reply `OK`).
-    Launcher(LauncherCommand),
+    Launcher(ToggleCommand),
+    Exiter(ToggleCommand),
     Lock,
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
@@ -100,20 +118,8 @@ fn parse(line: &str) -> Result<Parsed, String> {
         "ping" => Ok(Parsed::Reply(
             format!("pong {}", args.join(" ")).trim().to_owned(),
         )),
-        "launcher" => {
-            let cmd = match args.as_slice() {
-                [] | ["toggle"] => LauncherCommand::Toggle,
-                ["show"] => LauncherCommand::Show,
-                ["hide"] => LauncherCommand::Hide,
-                _ => {
-                    return Err(format!(
-                        "invalid arguments for <launcher>: {}",
-                        args.join(" ")
-                    ));
-                }
-            };
-            Ok(Parsed::Launcher(cmd))
-        }
+        "launcher" => Ok(Parsed::Launcher(ToggleCommand::parse(name, &args)?)),
+        "exiter" => Ok(Parsed::Exiter(ToggleCommand::parse(name, &args)?)),
         "lock" => match args.as_slice() {
             [] => Ok(Parsed::Lock),
             _ => Err(format!("invalid arguments for <lock>: {}", args.join(" "))),
@@ -200,6 +206,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Launcher(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Exiter(cmd)) => {
+                let _ = tx.send(Command::Exiter(cmd)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Lock) => {
                 let _ = tx.send(Command::Lock).await;
                 "OK".to_owned()
@@ -257,21 +267,27 @@ mod tests {
     fn parses_launcher_commands() {
         assert_eq!(
             parse("launcher"),
-            Ok(Parsed::Launcher(LauncherCommand::Toggle))
+            Ok(Parsed::Launcher(ToggleCommand::Toggle))
         );
         assert_eq!(
             parse("  aria launcher toggle \n"),
-            Ok(Parsed::Launcher(LauncherCommand::Toggle))
+            Ok(Parsed::Launcher(ToggleCommand::Toggle))
         );
         assert_eq!(
             parse("launcher show"),
-            Ok(Parsed::Launcher(LauncherCommand::Show))
+            Ok(Parsed::Launcher(ToggleCommand::Show))
         );
         assert_eq!(
             parse("launcher hide"),
-            Ok(Parsed::Launcher(LauncherCommand::Hide))
+            Ok(Parsed::Launcher(ToggleCommand::Hide))
         );
         assert!(parse("launcher what").is_err());
+        assert_eq!(parse("exiter"), Ok(Parsed::Exiter(ToggleCommand::Toggle)));
+        assert_eq!(
+            parse("exiter hide"),
+            Ok(Parsed::Exiter(ToggleCommand::Hide))
+        );
+        assert!(parse("exiter now").is_err());
     }
 
     #[test]

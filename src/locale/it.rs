@@ -57,6 +57,16 @@ pub const CATALOGUE: Catalogue = &[
     ),
     ("sysmon.mem.swap", "Swap {used} di {total}"),
     ("sysmon.gpu.vram", "VRAM {used} / {total}"),
+    // exiter
+    ("exiter.lock", "Blocca"),
+    ("exiter.suspend", "Sospendi"),
+    ("exiter.hibernate", "Iberna"),
+    ("exiter.logout", "Esci"),
+    ("exiter.reboot", "Riavvia"),
+    ("exiter.shutdown", "Spegni"),
+    ("exiter.confirm", "{action}?"),
+    ("exiter.countdown", "Automaticamente tra {n} s"),
+    ("exiter.cancel", "Annulla"),
     // themes
     ("themes.light", "Chiaro"),
     ("themes.dark", "Scuro"),

@@ -101,7 +101,8 @@ Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Mess
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
   subscription()            the single IPC stream (compositor/hyprland.rs or sway.rs), yields `Event`s
   apply(Event)              patches the state
-  run(Command) -> Task      sends a command (activate workspace/window) to the backend
+  run(Command) -> Task      sends a command (activate workspace/window, `Exit` = end the session:
+                            Sway `exit`, Hyprland `dispatch hl.dsp.exit()`) to the backend
 
 Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>` (props + pixmap icons), loaded menus
   subscription()            one session-bus connection (tray/dbus.rs): the watcher we serve or defer to, the
@@ -218,9 +219,29 @@ Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced
   apply(Event::Loaded)      installs it; resolve(class) fills the per-class cache; get(class) in `view`
   index() -> Arc<Index>     the desktop db is also what the launcher searches; desktop::launch runs an entry
 
-Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: Option<(window::Id, Launcher)>`
-  Message / update -> Action { Run(Task) | Close }, view(Shared), subscription() for Up/Down/Esc
-  + `grabs: Vec<window::Id>` in the daemon, one transparent surface per output behind it
+Dialog     (dialog.rs)      the modal surface the launcher and the exit menu share: one Overlay layer surface
+                            centred on the focused output with the keyboard, a transparent grab surface per
+                            output under it; `open(namespace, output, size, outputs)` -> the surfaces to
+                            create, `resize`, `windows()`, `rect(output)`; `pointer(window, event)` says when
+                            a click outside happened (a press *ignored* by the widget tree on any of its
+                            windows, then its release: `dialog::content` wraps the content in a `mouse_area`
+                            so every press inside is captured); `pointer_events()` the subscription
+
+Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: Option<(Dialog, Launcher)>`
+  Message / update -> Action { Run(Task) | Close | Exit(name) }, view(Shared), subscription() for Up/Down/Esc
+  actions                   `[launcher] actions = all | none | names`: the exit menu's buttons as a row of icons
+                            above the search field; a click goes through the exit menu's flow (Exit(name))
+
+Exiter     (exiter.rs)      the exit menu, `aria-shell exiter toggle`: `exiter: Option<(Dialog, Exiter)>`
+  ExiterConfig              `[exiter]`: columns, ask_confirm, confirm_timeout, `buttons = ...` in order, each
+                            `<name> = [!]<command line>` (`!` = confirm; `auto` = the compositor's own exit),
+                            `<name>_icon`, `<name>_label`; the six standard ones have defaults, icons with
+                            fallbacks (Adwaita lacks suspend/hibernate) and labels from the catalogue
+  Message / update -> Action { Run(Task) | Perform(Command) | Close }; the grid (`columns` per row, arrows
+                            + Enter), or the confirmation in place (Cancel / the action, a countdown that
+                            runs it by itself); `size(theme, locale)` measured from the content, the daemon
+                            resizes the dialog after every update (`sync_exiter`); `confirming(config, name)`
+                            opens straight on a confirmation (the launcher's row)
 
 Locker     (locker/)        a component the daemon owns from `aria-shell lock` to the unlock: `locker: Option<Locker>`
   Message / update -> Action { Run(Task) | Unlock }, view(shared, root), subscription() (the clock tick;
@@ -240,7 +261,8 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
                             container (the theme's background shows around a `contain`ed image)
 
-commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(Toggle|Show|Hide)`, `Command::Lock`
+commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(ToggleCommand)`,
+                            `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 
 watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, theme files and the
@@ -413,6 +435,38 @@ Two things flow between the daemon and the gadgets besides messages:
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
   theme matters here (`launcher`, `launcher icon { height }`), not
   config.
+- **The exit menu** (`exiter.rs`) is the third component on a `Dialog`
+  (`dialog.rs`, the launcher's surface-plus-grabs mechanics pulled out
+  of `main.rs`). Its buttons are explicit config (`buttons = ...`, one
+  `<name> = [!]command` each, `_icon`/`_label`), not free-form keys as
+  the Python had; the confirmation replaces the grid on the same
+  surface (no second window) with a countdown from `confirm_timeout`
+  that runs the action by itself; `logout = auto` goes through the
+  compositor IPC we already hold (`compositor::Command::Exit`) instead
+  of a program; `grab_display` and `opacity` are gone (the grabs are
+  always there, opacity is the theme's `exiter { background }`). The
+  surface is sized from the content (`Exiter::size`, the popups'
+  measuring) and resized on every change (`LayoutChange`), which is
+  what forced the click-outside rework below. The launcher shows the
+  same buttons as a row of icons (`[launcher] actions`) and hands a
+  click to the same flow: run, or open the exit menu on that button's
+  confirmation.
+- **A click outside a dialog is an *ignored press***, not a position
+  check. The launcher first compared the last `CursorMoved` with the
+  surface size (Hyprland routes every pointer event to the exclusive
+  layer, with surface-local coordinates past the edges). That broke
+  once a dialog could resize: a button press shrinks the exit menu
+  (its confirmation) before the release is reported, and in the same
+  event batch iced delivers the button's message (from the UI update)
+  before the subscriptions' `CursorMoved`, so the position was judged
+  against the wrong size; on Sway the resize is applied late and a
+  pointer heading for a button crosses the grab surface meanwhile.
+  Now `dialog::content` wraps the content in a `mouse_area` that
+  captures presses, and `dialog::pointer_events` reports presses with
+  `Status::Ignored` (nothing under the cursor: a grab, the dialog past
+  its edges, or a cursor that never entered it, which is the bar button
+  clicked twice) and releases; a press outside marks the dialog, the
+  release closes it. Same on both compositors, no size bookkeeping.
 - **The lock screen is a component too** (`locker/`), the launcher's
   shape: the daemon holds `Option<Locker>` from the `lock` command to
   the unlock. The Wayland side is entirely the runtime's
@@ -1073,6 +1127,16 @@ Verified on the real Hyprland session with two outputs:
   desktop had to be restarted to get out; then the right password
   unlocked, three wrong ones showed faillock's own message, and a
   monitor unplugged and plugged back while locked got its surface.
+- Exiter: `tests/ui/run.sh exiter` (the six buttons on a centred
+  `exiter` surface with a grab per output; suspend runs at once by
+  click, hibernate by Right Right Enter; reboot asks: `exiter >
+  confirm` with its countdown replaces the grid, Escape brings the
+  grid back, Enter confirms; Cancel by click; shutdown runs by itself
+  after `confirm_timeout = 3`; a click outside closes, toggle twice;
+  lock from the menu locks and Enter unlocks; the launcher's row of
+  six icons: suspend runs and closes the launcher, reboot opens the
+  exit menu on its confirmation) passes, screenshots in
+  `target/ui/exiter/`. Not yet tried on the real desktop.
 - Wallpaper: `tests/ui/run.sh wallpaper` (a `wallpaper` surface per
   output, `[wallpaper]` on HEADLESS-1 and `[wallpaper:HEADLESS-2]` on
   the other, two 16x16 gradients stretched with `fit = fill`; the
@@ -1089,7 +1153,7 @@ Verified on the real Hyprland session with two outputs:
   and the lock screen ("venerdì 18 settembre", "Sblocca") in Italian)
   passes.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (121 tests: the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
+  (124 tests: the exiter config, buttons and confirm flow, the exiter command, the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
   completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/
@@ -1162,6 +1226,7 @@ name / time / date / password checked by PAM, or Enter alone with
 every UI text and date through `Locale`, English and Italian catalogues.
 The wallpaper (`[wallpaper]`, `[wallpaper:<output>]`: `source`, `fit`):
 still images on a background surface per output, reloaded on change.
+The exit menu (`[exiter]`, `aria-shell exiter`; `[launcher] actions`).
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -1169,7 +1234,8 @@ Not yet: `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (terminal, idle, exiter),
+wrapper), every other gadget and component (terminal, idle), exiter
+niceties (per-button hotkeys, `columns` from the theme),
 wallpaper niceties (gif/video/shadertoy as the Python had, a slideshow,
 `tile`, the locker reusing it), locker niceties (a wallpaper / blurred desktop behind it, the
 shake, a spinner, `Caps Lock` warning, a second PAM prompt such as a

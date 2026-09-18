@@ -19,12 +19,12 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
-use crate::gadgets::clock::aligned_ticks;
 use crate::process;
 use crate::sysmon::{
     Column, Command, MonitorConfig, Process, Sample, Signal, SysMon, Value, format,
 };
 use crate::theme::{self, Node, Theme};
+use crate::time::aligned_ticks;
 use crate::widgets::graph;
 
 /// `[SystemMonitor:<id>]`: a gadget's keys (the sampler's and the

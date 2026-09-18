@@ -78,6 +78,22 @@
  *         ├─ title                                            the app name
  *         ╰─ subtitle                                         its description, when it has one
  *
+ *   locker[output="<connector>"]                              the lock screen, one surface per output (fills it)
+ *   ╰─ box                                                    the centred column (gap between its blocks)
+ *      ├─ avatar                                              the user's picture, a `height` square;
+ *                                                             `border-radius` rounds it
+ *      ├─ username
+ *      ├─ time
+ *      ├─ date
+ *      ╰─ auth[.error][.busy]                                 the password block (gap between its rows);
+ *         │                                                   .error after a refused password, .busy while checking
+ *         ├─ field                                            a row (gap between the two)
+ *         │  ├─ input                                         the password field (:focus)
+ *         │  ╰─ peek[.on] > icon                              the eye button, .on while the password shows;
+ *         │                                                   the icon drawn at the node's `height`, `color`
+ *         ├─ message                                          what PAM said, "Authentication failed", "Unlocking…"
+ *         ╰─ button > text                                    Unlock
+ *
  *   gadget.clock
  *   ╰─ button                                                 the time; click opens the calendar
  *      ╰─ text
@@ -305,6 +321,78 @@ launcher subtitle {
 }
 launcher item.selected subtitle {
   color: var(--aria-on-accent);
+}
+
+locker {
+  background: var(--aria-bg);
+  color: var(--aria-fg);
+  font-size: 14px;
+}
+locker box {
+  gap: 16px;
+}
+locker avatar {
+  height: 128px;
+  border-radius: 64px;
+}
+locker username {
+  font-size: 24px;
+  color: var(--aria-accent);
+}
+locker time {
+  font-size: 64px;
+  font-weight: 500;
+}
+locker date {
+  font-size: 26px;
+}
+locker auth {
+  gap: 10px;
+}
+locker auth field {
+  gap: 6px;
+}
+locker auth input {
+  width: 280px;
+  padding: 8px 10px;
+  background: var(--aria-popup-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 6px;
+}
+locker auth input:focus {
+  border-color: var(--aria-accent);
+}
+locker auth.error input {
+  border-color: var(--aria-urgent);
+}
+locker auth peek {
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--aria-muted);
+}
+locker auth peek:hover, locker auth peek.on {
+  color: var(--aria-fg);
+}
+locker auth peek icon {
+  height: 20px;
+}
+locker auth message {
+  color: var(--aria-urgent);
+}
+locker auth.busy message {
+  color: var(--aria-muted);
+}
+locker auth button {
+  padding: 6px 20px;
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+  border-radius: 6px;
+}
+locker auth button:hover {
+  background: var(--aria-fg);
+}
+locker auth.busy button {
+  background: var(--aria-muted);
 }
 
 notifications {

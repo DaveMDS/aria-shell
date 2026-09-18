@@ -1,0 +1,4 @@
+# PAM service for the aria-shell lock screen: install as
+# /etc/pam.d/aria-shell. Without it the locker uses the `login` service.
+auth     include login
+account  include login

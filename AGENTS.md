@@ -35,6 +35,7 @@ runs the shell inside a nested `sway` with no GPU output (see
 With arguments the binary is a client of the running shell:
 ```bash
 aria-shell launcher toggle          # what a compositor keybind runs
+aria-shell lock                     # the lock screen (PAM checks the password)
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
@@ -125,9 +126,11 @@ line.
 - `iced_exwlshell` is a small, fast-moving crate (recently renamed from
   `iced_layershell`/`iced_sessionlock`) -- expect API churn, verify against
   its actual source rather than assuming an API shape from memory.
-- PAM (needed for the lock screen) has a rough Rust story -- even COSMIC's
-  own official greeter has open production auth bugs. Treat this as the
-  highest-risk unimplemented piece.
+- PAM (the lock screen's password check) has a rough Rust story -- even
+  COSMIC's own official greeter has open production auth bugs. Ours is a
+  direct `libpam` binding (`locker/pam.rs`), the `login` service unless
+  `/etc/pam.d/aria-shell` is installed; treat changes there with care and
+  try them (`cargo test -- --ignored pam`, `tests/ui/run.sh locker`).
 - `libcosmic`/COSMIC's source (`cosmic-panel`, `cosmic-applets`,
   `cosmic-notifications`, `cosmic-greeter`) is a useful pattern reference
   for layer-shell/tray/notifications/lock-screen -- read it for ideas, do

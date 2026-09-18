@@ -337,6 +337,17 @@ impl Theme {
         c.style(move |_| s.container())
     }
 
+    /// A plain `container` tagged with `node`'s path and nothing else,
+    /// for a widget that takes no id of its own (a `text_input`, a
+    /// `canvas`) to be found by `debug widgets`.
+    pub fn tag<'a, M: 'a>(
+        &self,
+        node: &Node,
+        content: impl Into<Element<'a, M>>,
+    ) -> Container<'a, M> {
+        container(content).id(widget_id(node))
+    }
+
     /// A `button` styled as `node`, re-resolved with `:hover`/`:active`
     /// as iced reports them. As for [`Theme::container`], content is
     /// centred on a themed axis (iced's button lays it out top-left).

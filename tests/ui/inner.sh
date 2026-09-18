@@ -13,7 +13,7 @@ inject_start
 # Let the second output appear before the shell looks around.
 sleep 0.5
 RUST_LOG=aria_shell=debug "$ARIA_UI_ROOT/target/debug/aria-shell" > "$out/shell.log" 2>&1 &
-shell_pid=$!
+echo $! > "$out/shell.pid"
 
 if wait_for_shell; then
     # Not as an `if` condition: `set -e` would be ignored in there.
@@ -27,6 +27,6 @@ else
     echo "the shell didn't answer on its socket" > "$out/status"
 fi
 
-kill "$shell_pid" 2> /dev/null
+kill "$(cat "$out/shell.pid")" 2> /dev/null
 inject_stop
 swaymsg exit

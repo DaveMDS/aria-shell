@@ -33,6 +33,8 @@ use tokio::net::{UnixListener, UnixStream};
 #[derive(Debug, Clone)]
 pub enum Command {
     Launcher(LauncherCommand),
+    /// Lock the session (`aria-shell lock`).
+    Lock,
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -75,6 +77,7 @@ pub enum LauncherCommand {
 enum Parsed {
     /// Deliver to the daemon (and reply `OK`).
     Launcher(LauncherCommand),
+    Lock,
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -109,6 +112,10 @@ fn parse(line: &str) -> Result<Parsed, String> {
             };
             Ok(Parsed::Launcher(cmd))
         }
+        "lock" => match args.as_slice() {
+            [] => Ok(Parsed::Lock),
+            _ => Err(format!("invalid arguments for <lock>: {}", args.join(" "))),
+        },
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -190,6 +197,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Launcher(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Lock) => {
+                let _ = tx.send(Command::Lock).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Debug(cmd)) => {
                 let (reply_tx, mut reply_rx) = mpsc::channel(1);
                 let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
@@ -258,6 +269,13 @@ mod tests {
             Ok(Parsed::Launcher(LauncherCommand::Hide))
         );
         assert!(parse("launcher what").is_err());
+    }
+
+    #[test]
+    fn parses_lock() {
+        assert_eq!(parse("lock"), Ok(Parsed::Lock));
+        assert_eq!(parse("aria lock"), Ok(Parsed::Lock));
+        assert!(parse("lock now").is_err());
     }
 
     #[test]

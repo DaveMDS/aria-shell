@@ -30,6 +30,17 @@ settle() {
     sleep "${1:-0.3}"
 }
 
+# Start the shell over with another config directory (as XDG_CONFIG_HOME:
+# `$1/aria-shell/aria.conf`), for what the shared config can't carry;
+# inner.sh ends whichever shell is running from shell.pid.
+restart_shell() {
+    kill "$(cat "$ARIA_UI_OUT/shell.pid")" 2> /dev/null
+    sleep 0.5
+    XDG_CONFIG_HOME=$1 RUST_LOG=aria_shell=debug "$ARIA_UI_ROOT/target/debug/aria-shell" >> "$ARIA_UI_OUT/shell.log" 2>&1 &
+    echo $! > "$ARIA_UI_OUT/shell.pid"
+    wait_for_shell
+}
+
 # --- looking -------------------------------------------------------------
 
 surfaces() {

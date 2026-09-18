@@ -6,12 +6,14 @@ mod gadget;
 mod gadgets;
 mod icons;
 mod launcher;
+mod locker;
 mod notifications;
 mod panel;
 mod process;
 mod scripts;
 mod sysmon;
 mod theme;
+mod time;
 mod tray;
 mod watch;
 mod widgets;
@@ -27,8 +29,8 @@ use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
-use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
-use iced_exwlshell::to_layer_message;
+use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver, ShellType};
+use iced_exwlshell::to_exwlshell_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use audio::Audio;
@@ -38,16 +40,17 @@ use config::{Config, GeneralConfig};
 use gadget::Shared;
 use icons::Icons;
 use launcher::Launcher;
+use locker::Locker;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
 
-/// Top-level message. `#[to_layer_message(multi)]` adds the variants the
+/// Top-level message. `#[to_exwlshell_message]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
-/// `RemoveWindow`, ...).
-#[to_layer_message(multi)]
+/// `RemoveWindow`, `Lock`/`UnLock`, ...).
+#[to_exwlshell_message]
 #[derive(Debug, Clone)]
 enum Message {
     /// Surface and monitor lifecycle from the runtime.
@@ -78,6 +81,8 @@ enum Message {
     /// From the launcher's event subscription: only meant for it when
     /// the window is its own.
     LauncherEvent(Id, launcher::Message),
+    /// Routed to the lock screen.
+    Locker(locker::Message),
     /// A mouse button was released on window `Id` while the launcher is
     /// open: closes it when the click wasn't on the launcher.
     GrabClicked(Id),
@@ -127,6 +132,8 @@ struct AriaShell {
     /// While the launcher is shown, one transparent surface per output
     /// under it, so a click anywhere else closes it.
     grabs: Vec<(Id, OutputId)>,
+    /// The lock screen, from the `lock` command to the unlock.
+    locker: Option<Locker>,
     /// Last pointer position reported by one of our surfaces.
     cursor: Option<(Id, Point)>,
     /// One layer surface per notification shown.
@@ -199,6 +206,7 @@ impl AriaShell {
             popups: BTreeMap::new(),
             launcher: None,
             grabs: Vec::new(),
+            locker: None,
             cursor: None,
             toasts: Vec::new(),
         };
@@ -248,6 +256,12 @@ impl AriaShell {
             .chain(self.scripts.icon_names().map(str::to_owned))
             .chain(self.notifications.icon_names().map(str::to_owned))
             .chain(self.audio.icon_names().map(str::to_owned))
+            .chain(
+                self.locker
+                    .iter()
+                    .flat_map(Locker::icon_names)
+                    .map(str::to_owned),
+            )
             .collect();
         for name in names {
             self.icons.resolve_name(&name, None);
@@ -378,6 +392,20 @@ impl AriaShell {
                 (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
+            Message::Command(Command::Lock) => self.lock(),
+            Message::Locker(m) => {
+                let Some(locker) = &mut self.locker else {
+                    return Task::none();
+                };
+                match locker.update(m) {
+                    locker::Action::Run(task) => task.map(Message::Locker),
+                    locker::Action::Unlock => {
+                        log::info!("unlocking the session");
+                        self.locker = None;
+                        Task::done(Message::UnLock)
+                    }
+                }
+            }
             Message::Command(Command::Debug(cmd, reply)) => match cmd {
                 DebugCommand::Surfaces => {
                     reply.send(self.describe_surfaces());
@@ -564,6 +592,11 @@ impl AriaShell {
         for toast in &self.toasts {
             if let Some(rect) = self.toast_rect(toast) {
                 list.push((toast.window, "notification", toast.output, rect));
+            }
+        }
+        for (id, output) in self.locker.iter().flat_map(Locker::windows) {
+            if let Some(out) = self.output_rect(output) {
+                list.push((id, "locker", output, out));
             }
         }
         if let Some(open) = &self.launcher
@@ -1036,6 +1069,23 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
+    /// `aria-shell lock`: ask the compositor for the session lock; the
+    /// surfaces come back as `NewShell` events. Whatever is open goes.
+    fn lock(&mut self) -> Task<Message> {
+        if self.locker.is_some() {
+            log::info!("lock requested while locked, ignored");
+            return Task::none();
+        }
+        log::info!("locking the session");
+        self.locker = Some(Locker::new(self.config.section(None)));
+        self.resolve_icons();
+        Task::batch([
+            self.close_launcher(),
+            self.close_popups(),
+            Task::done(Message::Lock),
+        ])
+    }
+
     fn close_launcher(&mut self) -> Task<Message> {
         let ids: Vec<Id> = self
             .launcher
@@ -1072,6 +1122,22 @@ impl AriaShell {
 
     fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
         match event {
+            ShellEvent::NewShell(info) if info.shell == ShellType::SessionLock => {
+                // The runtime made a lock surface for an output: ours to
+                // draw. The password field can only take focus once the
+                // surface exists.
+                match &mut self.locker {
+                    Some(locker) => {
+                        log::debug!("lock surface {:?}", info.window);
+                        locker.add_window(info.window);
+                        locker.focus().map(Message::Locker)
+                    }
+                    None => {
+                        log::warn!("a lock surface without a locker, closing it");
+                        Task::done(Message::UnLock)
+                    }
+                }
+            }
             ShellEvent::NewShell(info) => match &self.launcher {
                 // The search field can only take focus once its surface
                 // exists.
@@ -1080,6 +1146,32 @@ impl AriaShell {
                 }
                 _ => Task::none(),
             },
+            ShellEvent::WindowOutputChanged {
+                window,
+                output: Some(output),
+            } => {
+                if let Some(locker) = &mut self.locker {
+                    locker.set_output(window, OutputId::from(&output));
+                }
+                Task::none()
+            }
+            ShellEvent::Locked => {
+                log::info!("session locked");
+                if let Some(locker) = &mut self.locker {
+                    locker.locked = true;
+                }
+                Task::none()
+            }
+            ShellEvent::LockDenied => {
+                log::error!("the compositor denied the session lock");
+                self.locker = None;
+                Task::none()
+            }
+            ShellEvent::LockedFinished => {
+                log::info!("the compositor ended the session lock");
+                self.locker = None;
+                Task::none()
+            }
             ShellEvent::OutputAdded(output) => {
                 log::debug!(
                     "output {:?}: logical position {:?}, size {:?}",
@@ -1124,6 +1216,11 @@ impl AriaShell {
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
+                if let Some(locker) = &mut self.locker
+                    && locker.remove_window(id)
+                {
+                    return Task::none();
+                }
                 let is_launcher = self.launcher.as_ref().is_some_and(|l| l.window == id);
                 if is_launcher || self.grabs.iter().any(|(g, _)| *g == id) {
                     // One of the launcher's surfaces went away (on our
@@ -1183,6 +1280,25 @@ impl AriaShell {
 
     fn view(&self, window: Id) -> Element<'_, Message> {
         let shared = self.shared();
+        if let Some(locker) = &self.locker
+            && locker.has_window(window)
+        {
+            let output = locker
+                .windows()
+                .find(|(id, _)| *id == window)
+                .map(|(_, o)| self.output_name(o).to_owned())
+                .unwrap_or_default();
+            let root = Node::root("locker").attr("output", output);
+            let content: Element<'_, locker::Message> = self
+                .theme
+                .container(&root, locker.view(shared, &root))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::Alignment::Center)
+                .align_y(iced::Alignment::Center)
+                .into();
+            return content.map(Message::Locker);
+        }
         if let Some(open) = &self.launcher
             && open.window == window
         {
@@ -1255,6 +1371,10 @@ impl AriaShell {
                 launcher::grab_clicks().map(Message::GrabClicked),
             ]
         });
+        let locker = self
+            .locker
+            .iter()
+            .map(|l| l.subscription().map(Message::Locker));
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
@@ -1280,7 +1400,8 @@ impl AriaShell {
             .into_iter()
             .chain(panels)
             .chain(popups)
-            .chain(launcher),
+            .chain(launcher)
+            .chain(locker),
         )
     }
 }

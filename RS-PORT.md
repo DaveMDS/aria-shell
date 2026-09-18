@@ -31,7 +31,9 @@ the level of visual customization we actually want.
 ### Known risks (from real research, not memory)
 
 - PAM in Rust is the weakest link: even COSMIC's official greeter has open
-  production auth bugs. Highest-risk unimplemented piece.
+  production auth bugs. Ours is a hand-written `libpam` binding
+  (`locker/pam.rs`), small enough to read whole; refused-password path
+  exercised by a UI scenario, the accepted one only by hand.
 - The idle-notifier protocol, raw PipeWire volume control and a
   GStreamer→wgpu bridge for video all lack mature crates; expect to
   hand-roll them.
@@ -69,7 +71,8 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Notifications(notifications::Event)   notifications coming and going, applied to `Notifications`
   Message::Toast(toast::Message)           a click on a notification's surface -> notifications::Command
   Message::SysMon(sysmon::Event)           a system reading / the process table, applied to `SysMon`
-  + variants injected by #[to_layer_message(multi)] (NewLayerShell, RemoveWindow, ...)
+  Message::Locker(locker::Message)         routed to the lock screen while the session is locked
+  + variants injected by #[to_exwlshell_message] (NewLayerShell, RemoveWindow, Lock, UnLock, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
   Message::Gadget(index, gadget::Message)
@@ -187,6 +190,10 @@ Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exe
                             (the generation is part of its identity); yields `Event::Ran(spec, output)`
   apply(Event) / run(Command::Refresh)
 
+time       (time.rs)        `aligned_ticks(step)` (a wall-clock-aligned tick stream) and `shows_seconds(format)`,
+                            for the Clock, the locker, the notifications' ages, the sysmon sampler; nothing
+                            is imported from `gadgets/` by anything but `gadget.rs`
+
 process    (process.rs)     split_words (shell-like quoting, no shell), command(line), spawn_detached, run(line):
                             the config's command lines and the launcher's desktop entries; `aria-shell` as
                             the program is this very binary
@@ -207,7 +214,14 @@ Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: O
   Message / update -> Action { Run(Task) | Close }, view(Shared), subscription() for Up/Down/Esc
   + `grabs: Vec<window::Id>` in the daemon, one transparent surface per output behind it
 
-commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(Toggle|Show|Hide)`
+Locker     (locker/)        a component the daemon owns from `aria-shell lock` to the unlock: `locker: Option<Locker>`
+  Message / update -> Action { Run(Task) | Unlock }, view(shared, root), subscription() (the clock tick;
+                            Enter when there is no password field)
+  windows                   the lock surfaces the runtime made (one per output, `ShellEvent::NewShell` of type
+                            `SessionLock`), all drawing the one state; `Message::Lock` / `UnLock` to the runtime
+  pam.rs                    `authenticate(user, password)`: a direct libpam binding, blocking (spawn_blocking)
+
+commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(Toggle|Show|Hide)`, `Command::Lock`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 
 watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, theme files and the
@@ -380,6 +394,55 @@ Two things flow between the daemon and the gadgets besides messages:
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
   theme matters here (`launcher`, `launcher icon { height }`), not
   config.
+- **The lock screen is a component too** (`locker/`), the launcher's
+  shape: the daemon holds `Option<Locker>` from the `lock` command to
+  the unlock. The Wayland side is entirely the runtime's
+  (`ext-session-lock-v1` in `exwlshellev`): `Message::Lock` asks the
+  compositor for the lock and makes one lock surface per output (and
+  one for any output plugged in meanwhile), announced as
+  `ShellEvent::NewShell` with `ShellType::SessionLock` then
+  `WindowOutputChanged`; `Locked` confirms, `LockDenied` (no protocol,
+  or refused: the locker is dropped), `LockedFinished` (the compositor
+  ended it). `Message::UnLock` tears the surfaces down (`Closed` each).
+  The daemon's `view(id)` draws the one `Locker` state on every lock
+  window inside `locker[output=..]`: the password typed on whichever
+  surface has the keyboard (the compositor's choice) is the password;
+  the field's `widget::Id` is shared so one `operation::focus` on
+  `NewShell` focuses it everywhere. Behaviour as the Python: `[locker]`
+  keys, avatar (`~/.face`, `~/.face.icon`, AccountsService; decoded by
+  content since `image::open` trusts only the extension and `.face` has
+  none) → name (gecos, else login, `getpwuid_r`) → time → date →
+  password field (+ an eye button showing it in clear, `secure(!peek)`;
+  the click takes the keyboard from the field, so the toggle refocuses
+  it) + message + Unlock; `password_prompt = no` unlocks on Enter/click
+  without PAM. PAM is `locker/pam.rs`: `pam_start` /
+  `pam_authenticate` / `pam_acct_mgmt` / `pam_end` declared by hand
+  (`#[link(name = "pam")]`, as `libc::kill` rather than a crate), a
+  conversation answering the password to `PAM_PROMPT_ECHO_OFF` (responses
+  `calloc`/`strdup`ed, PAM frees them), run in
+  `spawn_blocking` (a refusal sleeps ~2 s in `pam_faildelay`). Service:
+  `[locker] pam_service`, else `aria-shell` when `/etc/pam.d/aria-shell`
+  exists (`assets/pam.d/` has it: `include login`), else `login`, which
+  every distro has and `swaylock`'s own file includes; `other` is
+  `pam_deny` on Arch, so an unknown name refuses everything. `pam_unix`
+  goes through the setuid `unix_chkpwd`, so no privilege is needed. The
+  conversation keeps PAM's `TEXT_INFO`/`ERROR_MSG` texts and the locker
+  shows them in place of "Authentication failed" when a refusal came
+  with some; `pam_faillock` sends its "account is locked" as a
+  `TEXT_INFO` (`pam_info`) and only without `PAM_SILENT`, so the flags
+  are 0. **Learned the
+  hard way**: `system-auth` has `pam_faillock` (`deny = 3`, `unlock_time
+  = 600` by default): three refusals on a real service lock the account
+  for ten minutes, the right password included, with only "Authentication
+  failure" from `pam_strerror` (the reason comes as an `ERROR_MSG`). One
+  `cargo test` plus two scenario runs did that to the developer's
+  account on the first desktop try; so the scenario's config names a
+  service with no file (`pam_service = aria-shell-ui-test`: `other`
+  refuses at once, no tally) and the ignored unit test does the same.
+  `faillock --user <name>` shows the tally, `--reset` clears it (root).
+  Not ported: the shake
+  (no animations in the theme), the spinner (a "Unlocking…" text), a
+  wallpaper behind (the theme's `locker { background }` for now).
 - **The tray** (`tray/`) is the first DBus source, the shape notifications
   and MPRIS will copy: one `zbus::Connection` (tokio feature) opened in
   the subscription's stream, handed to the daemon as
@@ -517,6 +580,18 @@ Two things flow between the daemon and the gadgets besides messages:
   `frame.stroke(&path, Stroke::default().with_color(..).with_width(..))`.
   The canvas has no id of its own; a themed container around it gives
   it background, border and a `debug widgets` entry.
+- `#[to_layer_message(multi)]` doesn't add `Lock`/`UnLock`;
+  `#[to_exwlshell_message]` is the same set plus those two. In daemon
+  mode `Message::Lock` is refused with a log line while a lock is
+  pending or held (`RequestLock` checks `LockLifecycle`), so the daemon
+  keeps its own `locker.is_some()` guard to answer `lock` twice.
+- `image::open(path)` (0.25, what `image::Handle::from_path` uses)
+  picks the decoder from the extension only: a file without one
+  (`~/.face`) fails with "format could not be determined"; decode by
+  content (`ImageReader::new(..).with_guessed_format()`) and
+  `Handle::from_rgba`.
+- `text_input` takes no `widget::Id` for `debug widgets`:
+  `Theme::tag(node, input)` wraps it in a bare container with the path.
 - `libc::statvfs` for a filesystem's size and `libc::kill` for a
   signal, no `nix`/`sysinfo`; `/proc/mounts` on btrfs lists one entry
   per subvolume of the same device, so the default disk list keeps one
@@ -706,6 +781,13 @@ Two things flow between the daemon and the gadgets besides messages:
   - `set -e` is ignored inside a subshell used as an `if` condition
     (bash): the scenario runs as a plain command and its status is read
     after.
+  - `restart_shell <config dir>` (lib.sh) ends the shell and starts one
+    with that `XDG_CONFIG_HOME` (the pid in `shell.pid`, which inner.sh
+    kills at the end), for a scenario needing a config the shared one
+    can't carry (`tests/ui/config-locker`: a password prompt). The
+    nested Sway 1.12 (headless) serves `ext-session-lock-v1`; `grim`
+    captures the lock surfaces; the virtual keyboard types into the
+    focused one.
 - COSMIC as reference (checked in `cosmic-launcher`, `cosmic-panel`,
   `cosmic-applets`, `cosmic-comp`, `libcosmic`, `cosmic-settings-daemon`
   at 2026-09): **no automated UI tests anywhere**, only unit tests in
@@ -779,7 +861,7 @@ Two things flow between the daemon and the gadgets besides messages:
 - `hyprctl dispatch 'hl.dsp.focus({ monitor = "HDMI-A-2" })'` moves
   focus to a monitor, handy to test per-output behaviour.
 
-## Status (2026-09-17)
+## Status (2026-09-18)
 
 Verified on the real Hyprland session with two outputs:
 
@@ -921,8 +1003,25 @@ Verified on the real Hyprland session with two outputs:
   `[launcher] terminal`, logged as `["true", "-e", "btop"]`) passes,
   screenshots in `target/ui/system-monitor/`. Not yet run on the real
   desktop.
+- Locker: `tests/ui/run.sh locker` (`aria lock` → a `locker` surface
+  per output, 1920x1080 at 0,0 and 1920,0; avatar, username, time,
+  date, Unlock on both, the column centred; a second `lock` ignored;
+  with `password_prompt = no` Enter unlocks, so does the button; a
+  second shell on `tests/ui/config-locker` asks the password: two
+  fields, no avatar/date, the eye shows the typed text on both surfaces
+  and hides it again, a wrong password goes to PAM (a service
+  without a file, see above) and comes back refused, `auth.error` +
+  "Authentication failed" on both surfaces, the lock stays) passes,
+  screenshots in `target/ui/locker/`. `cargo test -- --ignored pam`
+  runs the binding against the system's PAM on that same service. On
+  the Hyprland desktop (2026-09-18): both monitors covered, the look as
+  in the scenario; the first try refused the right password because of
+  the `pam_faillock` tally the tests had built up (fixed above), the
+  desktop had to be restarted to get out; then the right password
+  unlocked, three wrong ones showed faillock's own message, and a
+  monitor unplugged and plugged back while locked got its surface.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (103 tests: /proc parsers on captured text, sensors, formats and
+  (113 tests: the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/
   replacement/history/dnd/markup/image-data/ages, config, theme incl. scheme variables and root class,
@@ -987,7 +1086,10 @@ mixer over libpulse, the players over MPRIS, verified on the desktop
 (pipewire-pulse: sinks, the source, a Firefox stream; a fake player)
 and by `tests/ui/scenarios/audio.sh` with `tests/ui/mpris` (a fake
 MPRIS player on the scenario's bus; the mixer part shows whatever the
-machine has and isn't asserted).
+machine has and isn't asserted). The lock screen (`[locker]`, `aria-shell
+lock`): the runtime's session lock, one surface per output, avatar /
+name / time / date / password checked by PAM, or Enter alone with
+`password_prompt = no`.
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -995,8 +1097,10 @@ Not yet: `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (lock, wallpaper,
-terminal, idle), system monitor niceties (per-process graphs and
+wrapper), every other gadget and component (wallpaper, terminal,
+idle), locker niceties (a wallpaper / blurred desktop behind it, the
+shake, a spinner, `Caps Lock` warning, a second PAM prompt such as a
+one-time code: the conversation refuses visible prompts), system monitor niceties (per-process graphs and
 command lines, a tree view, filtering, battery, sensors beyond the
 cpu, Intel GPU, `:hover` on the table rows, scrolling the popup to a
 section), notification niceties (`resident`/`transient` hints,

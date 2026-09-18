@@ -19,6 +19,7 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::locale::Locale;
 use crate::process;
 use crate::sysmon::{
     Column, Command, MonitorConfig, Process, Sample, Signal, SysMon, Value, format,
@@ -161,14 +162,15 @@ impl SectionKind {
         }
     }
 
+    /// The catalogue key of the tab's title.
     fn title(self) -> &'static str {
         match self {
-            Self::Cpu => "CPU",
-            Self::Mem => "Memory",
-            Self::Disk => "Disks",
-            Self::Net => "Network",
-            Self::Gpu => "GPU",
-            Self::Processes => "Processes",
+            Self::Cpu => "sysmon.tab.cpu",
+            Self::Mem => "sysmon.tab.memory",
+            Self::Disk => "sysmon.tab.disks",
+            Self::Net => "sysmon.tab.network",
+            Self::Gpu => "sysmon.tab.gpu",
+            Self::Processes => "sysmon.tab.processes",
         }
     }
 }
@@ -206,10 +208,6 @@ const DEFAULT_HEIGHT: f32 = 460.0;
 const CORES_PER_ROW: usize = 8;
 /// The terminal monitors tried for the default `command`.
 const MONITORS: [&str; 3] = ["btop", "htop", "top"];
-
-const TERMINATE_LABEL: &str = "Terminate";
-const KILL_LABEL: &str = "Kill";
-const SELECT_HELP: &str = "Select a process to signal it";
 
 pub struct SystemMonitor {
     config: InstanceConfig,
@@ -368,6 +366,7 @@ impl Gadget for SystemMonitor {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let theme = ctx.theme;
+        let locale = ctx.locale;
         let monitor = ctx.node.child("monitor");
         let sysmon = ctx.sysmon;
         let sample = sysmon.sample();
@@ -389,7 +388,7 @@ impl Gadget for SystemMonitor {
                     .class(k.name())
                     .class_if("active", k == tab);
                 theme
-                    .button(&n, theme.text(&n.child("text"), k.title()))
+                    .button(&n, theme.text(&n.child("text"), locale.tr(k.title())))
                     .on_press(Message::Tab(k))
                     .into()
             });
@@ -400,16 +399,16 @@ impl Gadget for SystemMonitor {
             .into();
         let node = monitor.child("section").class(tab.name());
         let body: Vec<Element<'a, Message>> = match (tab, sample) {
-            (SectionKind::Processes, _) => self.processes(theme, &node, sysmon),
+            (SectionKind::Processes, _) => self.processes(theme, locale, &node, sysmon),
             (_, None) => Vec::new(),
-            (SectionKind::Cpu, Some(s)) => cpu_section(theme, &node, s, sysmon),
-            (SectionKind::Mem, Some(s)) => mem_section(theme, &node, s, sysmon),
+            (SectionKind::Cpu, Some(s)) => cpu_section(theme, locale, &node, s, sysmon),
+            (SectionKind::Mem, Some(s)) => mem_section(theme, locale, &node, s, sysmon),
             (SectionKind::Disk, Some(s)) => disk_section(theme, &node, s, sysmon),
             (SectionKind::Net, Some(s)) => net_section(theme, &node, s, sysmon),
-            (SectionKind::Gpu, Some(s)) => gpu_section(theme, &node, s, sysmon),
+            (SectionKind::Gpu, Some(s)) => gpu_section(theme, locale, &node, s, sysmon),
         };
         let value = section_value(tab, sample);
-        let header = header(theme, &node, tab.title(), &value);
+        let header = header(theme, &node, locale.tr(tab.title()), &value);
         let section: Element<'a, Message> = theme
             .container(
                 &node,
@@ -420,7 +419,8 @@ impl Gadget for SystemMonitor {
             .width(Length::Fill)
             .into();
         // The action bar stays under the scrolling table.
-        let footer = (tab == SectionKind::Processes).then(|| self.actions(theme, &node, sysmon));
+        let footer =
+            (tab == SectionKind::Processes).then(|| self.actions(theme, locale, &node, sysmon));
         // The process list always overflows: its scrollbar is embedded
         // (taking its own column) so it doesn't cover the last column;
         // the other tabs' floats, shown only when needed.
@@ -517,6 +517,7 @@ impl SystemMonitor {
     fn processes<'a>(
         &'a self,
         theme: &'a Theme,
+        locale: &Locale,
         node: &Node,
         sysmon: &'a SysMon,
     ) -> Vec<Element<'a, Message>> {
@@ -529,7 +530,7 @@ impl SystemMonitor {
                 .class(c.name())
                 .class_if("sorted", c == sort_by)
                 .class_if("reverse", c == sort_by && desc != c.descending_by_default());
-            let label = container(theme.text(&n.child("text"), c.label()))
+            let label = container(theme.text(&n.child("text"), locale.tr(c.label())))
                 .width(Length::Fill)
                 .align_x(column_alignment(c));
             let mut b = theme.button(&n, label).on_press(Message::Sort(c));
@@ -601,6 +602,7 @@ impl SystemMonitor {
     fn actions<'a>(
         &'a self,
         theme: &'a Theme,
+        locale: &Locale,
         node: &Node,
         sysmon: &'a SysMon,
     ) -> Element<'a, Message> {
@@ -611,7 +613,7 @@ impl SystemMonitor {
         let text = actions.child("text");
         let label = match p {
             Some(p) => format!("{} ({})", p.name, p.pid),
-            None => SELECT_HELP.to_owned(),
+            None => locale.tr("sysmon.select_help").to_owned(),
         };
         let button = |class: &'static str, label: &'static str, signal: Signal| {
             let b = actions.child("button").class(class);
@@ -629,8 +631,13 @@ impl SystemMonitor {
                         .container(&text, theme.text(&text, label))
                         .width(Length::Fill)
                         .into(),
-                    button("terminate", TERMINATE_LABEL, Signal::Terminate).into(),
-                    button("kill", KILL_LABEL, Signal::Kill).into(),
+                    button(
+                        "terminate",
+                        locale.tr("sysmon.terminate"),
+                        Signal::Terminate,
+                    )
+                    .into(),
+                    button("kill", locale.tr("sysmon.kill"), Signal::Kill).into(),
                 ],
             )
             .align_y(Alignment::Center)
@@ -712,6 +719,7 @@ fn text_line<'a, M: 'a>(theme: &Theme, node: &Node, text: String) -> Element<'a,
 
 fn cpu_section<'a, M: 'a>(
     theme: &Theme,
+    locale: &Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -762,19 +770,24 @@ fn cpu_section<'a, M: 'a>(
     );
     let d = node.child("details");
     let t = d.child("text");
-    let mut lines = vec![format!(
-        "Load: {:.2}  {:.2}  {:.2}   Up: {}",
-        s.load.0,
-        s.load.1,
-        s.load.2,
-        format::duration(s.uptime)
+    let mut lines = vec![locale.fmt(
+        "sysmon.cpu.load",
+        &[
+            ("load1", &format_args!("{:.2}", s.load.0)),
+            ("load5", &format_args!("{:.2}", s.load.1)),
+            ("load15", &format_args!("{:.2}", s.load.2)),
+            ("uptime", &format::duration(s.uptime)),
+        ],
     )];
     let mut hw = Vec::new();
     if let Some(f) = s.cpu.freq_mhz {
-        hw.push(format!("Frequency: {}", format::freq(f)));
+        hw.push(locale.fmt("sysmon.cpu.frequency", &[("freq", &format::freq(f))]));
     }
     if let Some(t) = s.cpu.temp_c {
-        hw.push(format!("Temperature: {t:.0}°C"));
+        hw.push(locale.fmt(
+            "sysmon.cpu.temperature",
+            &[("temp", &format_args!("{t:.0}"))],
+        ));
     }
     if !hw.is_empty() {
         lines.push(hw.join("   "));
@@ -805,6 +818,7 @@ impl Sample {
 
 fn mem_section<'a, M: 'a>(
     theme: &Theme,
+    locale: &Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -816,12 +830,14 @@ fn mem_section<'a, M: 'a>(
         text_line(
             theme,
             &node.child("text"),
-            format!(
-                "Used {} of {}  ·  cached {}  ·  available {}",
-                format::bytes(s.mem.used),
-                format::bytes(s.mem.total),
-                format::bytes(s.mem.cached),
-                format::bytes(s.mem.available)
+            locale.fmt(
+                "sysmon.mem.used",
+                &[
+                    ("used", &format::bytes(s.mem.used)),
+                    ("total", &format::bytes(s.mem.total)),
+                    ("cached", &format::bytes(s.mem.cached)),
+                    ("available", &format::bytes(s.mem.available)),
+                ],
             ),
         ),
         graph::meter(
@@ -839,10 +855,12 @@ fn mem_section<'a, M: 'a>(
         out.push(text_line(
             theme,
             &node.child("text"),
-            format!(
-                "Swap {} of {}",
-                format::bytes(s.mem.swap_used),
-                format::bytes(s.mem.swap_total)
+            locale.fmt(
+                "sysmon.mem.swap",
+                &[
+                    ("used", &format::bytes(s.mem.swap_used)),
+                    ("total", &format::bytes(s.mem.swap_total)),
+                ],
             ),
         ));
         out.push(graph::meter(
@@ -989,6 +1007,7 @@ fn net_section<'a, M: 'a>(
 
 fn gpu_section<'a, M: 'a>(
     theme: &Theme,
+    locale: &Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -1005,7 +1024,10 @@ fn gpu_section<'a, M: 'a>(
             let busy = g.busy.unwrap_or(0.0);
             let mut info = Vec::new();
             if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
-                info.push(format!("VRAM {} / {}", format::bytes(u), format::bytes(t)));
+                info.push(locale.fmt(
+                    "sysmon.gpu.vram",
+                    &[("used", &format::bytes(u)), ("total", &format::bytes(t))],
+                ));
             }
             if let Some(t) = g.temp_c {
                 info.push(format!("{t:.0}°C"));

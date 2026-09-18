@@ -47,6 +47,8 @@ pub enum DebugCommand {
     Cursor,
     /// The theme in use: `style=<name|-> scheme=<light|dark>`.
     Theme,
+    /// The language in use: `lang=<code> dates=<locale>`.
+    Locale,
     /// The system monitor's last reading, in numbers.
     SysMon,
     Audio,
@@ -120,6 +122,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
             ["theme"] => Ok(Parsed::Debug(DebugCommand::Theme)),
+            ["locale"] => Ok(Parsed::Debug(DebugCommand::Locale)),
             ["sysmon"] => Ok(Parsed::Debug(DebugCommand::SysMon)),
             ["audio"] => Ok(Parsed::Debug(DebugCommand::Audio)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
@@ -127,7 +130,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | sysmon | audio | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | widgets [filter])",
                 args.join(" ")
             )),
         },

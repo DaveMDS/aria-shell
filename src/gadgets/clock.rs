@@ -74,7 +74,7 @@ impl Gadget for Clock {
         let button = ctx.node.child("button");
         let label = ctx.theme.text(
             &button.child("text"),
-            self.now.format(&self.config.format).to_string(),
+            ctx.locale.date(&self.now, &self.config.format),
         );
         self.popup
             .anchor(ctx.theme.button(&button, label).on_press(Message::Toggle))
@@ -93,6 +93,7 @@ impl Gadget for Clock {
             .view(
                 self.now.date_naive(),
                 ctx.theme,
+                ctx.locale,
                 &ctx.node.child("calendar"),
             )
             .map(Message::Calendar)

@@ -24,6 +24,7 @@ use iced::{Alignment, Element, Length, Size};
 
 use super::{IconSource, Notification, Notifications};
 use crate::icons::{Icon, Icons};
+use crate::locale::Locale;
 use crate::theme::{self, Node, Theme};
 
 /// Width when the theme doesn't set one on `notification`.
@@ -72,20 +73,17 @@ pub struct Extras {
 const CLOSE_GLYPH: &str = "✕";
 
 /// "now", "5 min", "2 h", "yesterday", or the date, for the popup.
-pub fn age(received: SystemTime, now: SystemTime) -> String {
+pub fn age(received: SystemTime, now: SystemTime, locale: &Locale) -> String {
     let elapsed = now
         .duration_since(received)
         .unwrap_or(Duration::ZERO)
         .as_secs();
     match elapsed {
-        0..60 => "now".to_owned(),
-        60..3600 => format!("{} min", elapsed / 60),
-        3600..86400 => format!("{} h", elapsed / 3600),
-        86400..172800 => "yesterday".to_owned(),
-        _ => {
-            let date = chrono::DateTime::<chrono::Local>::from(received);
-            date.format("%d %b").to_string()
-        }
+        0..60 => locale.tr("notifications.age.now").to_owned(),
+        60..3600 => locale.fmt("notifications.age.minutes", &[("n", &(elapsed / 60))]),
+        3600..86400 => locale.fmt("notifications.age.hours", &[("n", &(elapsed / 3600))]),
+        86400..172800 => locale.tr("notifications.age.yesterday").to_owned(),
+        _ => locale.date(&chrono::DateTime::<chrono::Local>::from(received), "%d %b"),
     }
 }
 
@@ -314,7 +312,8 @@ mod tests {
     #[test]
     fn ages() {
         let t0 = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-        let at = |secs: u64| age(t0, t0 + Duration::from_secs(secs));
+        let en = Locale::new("en");
+        let at = |secs: u64| age(t0, t0 + Duration::from_secs(secs), &en);
         assert_eq!(at(0), "now");
         assert_eq!(at(59), "now");
         assert_eq!(at(60), "1 min");
@@ -324,6 +323,6 @@ mod tests {
         assert_eq!(at(86400), "yesterday");
         assert!(at(200_000).contains(' '), "a date: {}", at(200_000));
         // A clock that went back: still "now".
-        assert_eq!(age(t0 + Duration::from_secs(10), t0), "now");
+        assert_eq!(age(t0 + Duration::from_secs(10), t0, &en), "now");
     }
 }

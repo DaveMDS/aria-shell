@@ -121,6 +121,16 @@ trailing period, optional `Component: description` prefix, optional
 free-form body when it helps. Do not add a `Co-Authored-By` attribution
 line.
 
+## Translations
+
+UI texts never appear as literals in a view: `ctx.locale.tr("audio.output")`
+(`src/locale.rs`), dates with `ctx.locale.date(&dt, fmt)`. Keys are
+stable dotted ids; the texts live in `src/locale/en.rs` and `it.rs`,
+compiled in. Adding a text: a key in both files, then `cargo test`
+(`locale::tests::catalogues_are_complete` names anything missing or
+unused). Adding a language: a file with English's keys, one line in
+`CATALOGUES`.
+
 ## Known risks (see RS-PORT.md for detail)
 
 - `iced_exwlshell` is a small, fast-moving crate (recently renamed from

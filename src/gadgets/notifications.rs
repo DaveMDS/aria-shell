@@ -26,11 +26,6 @@ const DEFAULT_ICON_SIZE: f32 = 16.0;
 const DEFAULT_LIST_WIDTH: f32 = 380.0;
 const DEFAULT_LIST_HEIGHT: f32 = 480.0;
 
-const TITLE: &str = "Notifications";
-const DND_LABEL: &str = "Do not disturb";
-const CLEAR_LABEL: &str = "Clear";
-const EMPTY: &str = "No notifications";
-
 pub struct NotificationsGadget {
     /// The `[Notifications]` section, shared with the daemon: only the
     /// icons are the gadget's.
@@ -151,7 +146,10 @@ impl Gadget for NotificationsGadget {
             let empty = list.child("empty");
             rows.push(
                 theme
-                    .container(&empty, theme.text(&empty, EMPTY))
+                    .container(
+                        &empty,
+                        theme.text(&empty, ctx.locale.tr("notifications.empty")),
+                    )
                     .width(Length::Fill)
                     .align_x(Alignment::Center)
                     .into(),
@@ -162,7 +160,7 @@ impl Gadget for NotificationsGadget {
             let node = toast::node_under(&list, n).class_if("unseen", self.unseen.contains(&n.id));
             let extras = toast::Extras {
                 width: Some(width - list_style.padding.left - list_style.padding.right),
-                age: Some(toast::age(entry.received, self.now)),
+                age: Some(toast::age(entry.received, self.now, ctx.locale)),
                 close: true,
             };
             let content = toast::view(theme, &node, n, ctx.notifications, ctx.icons, extras)
@@ -232,24 +230,33 @@ impl NotificationsGadget {
                 + bs.padding.bottom
         };
         let height = theme
-            .measure(&title, TITLE)
+            .measure(&title, ctx.locale.tr("notifications.title"))
             .height
             .max(theme.line_height(&title))
-            .max(button_height(&dnd, DND_LABEL))
-            .max(button_height(&clear, CLEAR_LABEL))
+            .max(button_height(&dnd, ctx.locale.tr("notifications.dnd")))
+            .max(button_height(&clear, ctx.locale.tr("notifications.clear")))
             + s.padding.top
             + s.padding.bottom;
         let row = theme
             .row(
                 &header,
                 [
-                    theme.text(&title, TITLE).width(Length::Fill).into(),
                     theme
-                        .button(&dnd, theme.text(&dnd.child("text"), DND_LABEL))
+                        .text(&title, ctx.locale.tr("notifications.title"))
+                        .width(Length::Fill)
+                        .into(),
+                    theme
+                        .button(
+                            &dnd,
+                            theme.text(&dnd.child("text"), ctx.locale.tr("notifications.dnd")),
+                        )
                         .on_press(Message::ToggleDnd)
                         .into(),
                     theme
-                        .button(&clear, theme.text(&clear.child("text"), CLEAR_LABEL))
+                        .button(
+                            &clear,
+                            theme.text(&clear.child("text"), ctx.locale.tr("notifications.clear")),
+                        )
                         .on_press(Message::Clear)
                         .into(),
                 ],
@@ -275,7 +282,7 @@ impl NotificationsGadget {
             let es = theme.resolve(&empty);
             height += s.gap
                 + theme
-                    .measure(&empty, EMPTY)
+                    .measure(&empty, ctx.locale.tr("notifications.empty"))
                     .height
                     .max(theme.line_height(&empty))
                 + es.padding.top
@@ -286,7 +293,7 @@ impl NotificationsGadget {
             let node = toast::node_under(&list, n).class_if("unseen", self.unseen.contains(&n.id));
             let extras = toast::Extras {
                 width: Some(width),
-                age: Some(toast::age(entry.received, self.now)),
+                age: Some(toast::age(entry.received, self.now, ctx.locale)),
                 close: true,
             };
             // `toast::size` includes the node's padding.

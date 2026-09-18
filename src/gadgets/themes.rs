@@ -14,6 +14,7 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::locale::Locale;
 use crate::theme::{self, Command, Scheme};
 use crate::widgets::menu::{self, Item, Menu};
 
@@ -143,13 +144,15 @@ impl Gadget for Themes {
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let node = ctx.node.child("menu");
         self.menu
-            .view(ctx.theme, &node, self.items(ctx.theme))
+            .view(ctx.theme, &node, self.items(ctx.theme, ctx.locale))
             .map(Message::Menu)
     }
 
     fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
         let node = ctx.node.child("menu");
-        let size = self.menu.size(ctx.theme, &node, &self.items(ctx.theme));
+        let size = self
+            .menu
+            .size(ctx.theme, &node, &self.items(ctx.theme, ctx.locale));
         (
             size.width.ceil().max(1.0) as u32,
             size.height.ceil().max(1.0) as u32,
@@ -163,14 +166,14 @@ impl Themes {
     }
 
     /// The menu rows for the current state.
-    fn items(&self, theme: &theme::Theme) -> Vec<Item> {
+    fn items(&self, theme: &theme::Theme, locale: &Locale) -> Vec<Item> {
         let scheme = theme.scheme();
         let current = theme.name();
         let mut items = vec![
-            Item::new(ID_LIGHT, "Light").radio(scheme == Scheme::Light),
-            Item::new(ID_DARK, "Dark").radio(scheme == Scheme::Dark),
+            Item::new(ID_LIGHT, locale.tr("themes.light")).radio(scheme == Scheme::Light),
+            Item::new(ID_DARK, locale.tr("themes.dark")).radio(scheme == Scheme::Dark),
             Item::separator(ID_SEPARATOR),
-            Item::new(ID_BASE, "Base").radio(current.is_none()),
+            Item::new(ID_BASE, locale.tr("themes.base")).radio(current.is_none()),
         ];
         items.extend(self.available.iter().enumerate().map(|(i, name)| {
             Item::new(i as i32 + 1, name.as_str()).radio(current == Some(name.as_str()))

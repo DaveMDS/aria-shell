@@ -6,6 +6,7 @@ mod gadget;
 mod gadgets;
 mod icons;
 mod launcher;
+mod locale;
 mod locker;
 mod notifications;
 mod panel;
@@ -40,6 +41,7 @@ use config::{Config, GeneralConfig};
 use gadget::Shared;
 use icons::Icons;
 use launcher::Launcher;
+use locale::Locale;
 use locker::Locker;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
@@ -114,6 +116,7 @@ struct AriaShell {
     shell_events: ShellReceiver,
     compositor: Compositor,
     theme: Theme,
+    locale: Locale,
     icons: Icons,
     tray: Tray,
     notifications: Notifications,
@@ -183,6 +186,7 @@ impl AriaShell {
         let style = general.style.clone();
         let scheme = general.color_scheme;
         let theme = Theme::load(&config, style.as_deref(), scheme);
+        let locale = Locale::new(&general.language);
         let icons = Icons::new(&config);
         let load_icons = icons.load().map(Message::Icons);
         let notifications = Notifications::new(config.section(None));
@@ -195,6 +199,7 @@ impl AriaShell {
             shell_events,
             compositor: Compositor::detect(),
             theme,
+            locale,
             icons,
             tray: Tray::default(),
             notifications,
@@ -217,6 +222,7 @@ impl AriaShell {
         Shared {
             compositor: &self.compositor,
             theme: &self.theme,
+            locale: &self.locale,
             icons: &self.icons,
             tray: &self.tray,
             notifications: &self.notifications,
@@ -421,6 +427,10 @@ impl AriaShell {
                 }
                 DebugCommand::Audio => {
                     reply.send(self.audio.describe());
+                    Task::none()
+                }
+                DebugCommand::Locale => {
+                    reply.send(self.locale.describe());
                     Task::none()
                 }
                 DebugCommand::Theme => {
@@ -734,6 +744,7 @@ impl AriaShell {
         self.config = Config::load();
         self.general = self.config.section(None);
         self.theme = Theme::load(&self.config, self.style.as_deref(), self.scheme);
+        self.locale = Locale::new(&self.general.language);
         self.notifications.set_config(self.config.section(None));
         self.sysmon.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config);

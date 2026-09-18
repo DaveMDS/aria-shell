@@ -61,9 +61,6 @@ impl Section for LauncherConfig {
     }
 }
 
-/// Placeholder shown in the empty search field.
-const PLACEHOLDER: &str = "Search applications…";
-
 pub struct Launcher {
     config: LauncherConfig,
     apps: Option<Arc<Index>>,
@@ -195,7 +192,11 @@ impl Launcher {
     pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
         let theme = shared.theme;
         let input = theme
-            .text_input(&self.node.child("input"), PLACEHOLDER, &self.query)
+            .text_input(
+                &self.node.child("input"),
+                shared.locale.tr("launcher.search"),
+                &self.query,
+            )
             .id(self.input.clone())
             .on_input(Message::Query)
             .on_submit(Message::Submit)

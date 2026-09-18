@@ -20,6 +20,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::audio::{Channel, Command, Kind, PlaybackStatus, Player};
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Axis, Context, Gadget, Popup, Wheel};
+use crate::locale::Locale;
 use crate::process;
 use crate::theme::{self, Node};
 
@@ -30,12 +31,6 @@ const DEFAULT_COVER_SIZE: f32 = 64.0;
 /// Popup width and height cap when the theme doesn't size `list`.
 const DEFAULT_LIST_WIDTH: f32 = 380.0;
 const DEFAULT_LIST_HEIGHT: f32 = 600.0;
-
-const OUTPUT_TITLE: &str = "Output";
-const INPUT_TITLE: &str = "Input";
-const STREAMS_TITLE: &str = "Playing";
-const MIXER_LABEL: &str = "Mixer";
-const EMPTY: &str = "No audio devices";
 
 const ICON_MUTED: &str = "audio-volume-muted-symbolic";
 const ICON_LOW: &str = "audio-volume-low-symbolic";
@@ -187,7 +182,7 @@ impl Gadget for AudioGadget {
         let theme = ctx.theme;
         let list = ctx.node.child("list");
         let mut rows: Vec<Element<'a, Message>> = Vec::new();
-        for (kind, title) in self.groups() {
+        for (kind, title) in self.groups(ctx.locale) {
             let channels: Vec<&Channel> = ctx.audio.channels_of(kind).collect();
             if channels.is_empty() {
                 continue;
@@ -213,7 +208,7 @@ impl Gadget for AudioGadget {
             let empty = list.child("empty");
             rows.push(
                 theme
-                    .container(&empty, theme.text(&empty, EMPTY))
+                    .container(&empty, theme.text(&empty, ctx.locale.tr("audio.empty")))
                     .width(Length::Fill)
                     .align_x(Alignment::Center)
                     .into(),
@@ -221,9 +216,11 @@ impl Gadget for AudioGadget {
         }
         if !self.config.mixer_command.is_empty() {
             let mixer = list.child("button").class("mixer");
-            let label = iced::widget::container(theme.text(&mixer.child("text"), MIXER_LABEL))
-                .width(Length::Fill)
-                .align_x(Alignment::Center);
+            let label = iced::widget::container(
+                theme.text(&mixer.child("text"), ctx.locale.tr("audio.mixer")),
+            )
+            .width(Length::Fill)
+            .align_x(Alignment::Center);
             rows.push(
                 theme
                     .button(&mixer, label)
@@ -325,14 +322,14 @@ impl AudioGadget {
             .into()
     }
 
-    /// The channel groups shown, in order.
-    fn groups(&self) -> Vec<(Kind, &'static str)> {
-        let mut groups = vec![(Kind::Output, OUTPUT_TITLE)];
+    /// The channel groups shown, in order, with their titles.
+    fn groups(&self, locale: &Locale) -> Vec<(Kind, &'static str)> {
+        let mut groups = vec![(Kind::Output, locale.tr("audio.output"))];
         if self.config.show_inputs {
-            groups.push((Kind::Input, INPUT_TITLE));
+            groups.push((Kind::Input, locale.tr("audio.input")));
         }
         if self.config.show_streams {
-            groups.push((Kind::Stream, STREAMS_TITLE));
+            groups.push((Kind::Stream, locale.tr("audio.playing")));
         }
         groups
     }
@@ -633,7 +630,7 @@ impl AudioGadget {
         let list = ctx.node.child("list");
         let s = theme.resolve(&list);
         let mut heights: Vec<f32> = Vec::new();
-        for (kind, title) in self.groups() {
+        for (kind, title) in self.groups(ctx.locale) {
             let channels: Vec<&Channel> = ctx.audio.channels_of(kind).collect();
             if channels.is_empty() {
                 continue;
@@ -660,7 +657,7 @@ impl AudioGadget {
             let es = theme.resolve(&empty);
             heights.push(
                 theme
-                    .measure(&empty, EMPTY)
+                    .measure(&empty, ctx.locale.tr("audio.empty"))
                     .height
                     .max(theme.line_height(&empty))
                     + es.padding.top
@@ -673,7 +670,7 @@ impl AudioGadget {
             let t = mixer.child("text");
             heights.push(
                 theme
-                    .measure(&t, MIXER_LABEL)
+                    .measure(&t, ctx.locale.tr("audio.mixer"))
                     .height
                     .max(theme.line_height(&t))
                     + ms.padding.top

@@ -6,10 +6,11 @@
 //! day`). The cell grid and outer padding are fixed so [`Calendar::SIZE`]
 //! can be known before layout, which a popup surface needs.
 
-use chrono::{Datelike, Months, NaiveDate};
+use chrono::{Datelike, Days, Months, NaiveDate};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length};
 
+use crate::locale::Locale;
 use crate::theme::{Node, Theme};
 
 const CELL: u32 = 32;
@@ -54,6 +55,7 @@ impl Calendar {
         &'a self,
         today: NaiveDate,
         theme: &'a Theme,
+        locale: &Locale,
         node: &Node,
     ) -> Element<'a, Message> {
         // Cells go through the theme so they carry their node (for
@@ -75,7 +77,7 @@ impl Calendar {
                 .on_press(Message::PrevMonth),
             container(theme.text(
                 &header_node.child("text"),
-                self.month.format("%B %Y").to_string()
+                locale.naive_date(&self.month, "%B %Y")
             ))
             .width(Length::Fill)
             .align_x(Alignment::Center),
@@ -86,9 +88,12 @@ impl Calendar {
         .height(CELL)
         .align_y(Alignment::Center);
         let weekday = node.child("weekday");
-        let weekdays = row(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
-            .into_iter()
-            .map(|d| cell(&weekday, theme.text(&weekday, d).into()).into()));
+        // Monday to Sunday, abbreviated in the language (any week does).
+        let monday = self.month - Days::new(u64::from(self.month.weekday().num_days_from_monday()));
+        let weekdays = row((0..7).map(|i| {
+            let name = locale.naive_date(&(monday + Days::new(i)), "%a");
+            cell(&weekday, theme.text(&weekday, name).into()).into()
+        }));
         let day_node = node.child("day");
         let days = month_grid(self.month)
             .chunks(7)

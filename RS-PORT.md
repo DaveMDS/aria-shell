@@ -190,6 +190,14 @@ Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exe
                             (the generation is part of its identity); yields `Event::Ran(spec, output)`
   apply(Event) / run(Command::Refresh)
 
+Locale     (locale.rs)      daemon-owned UI language, in `Shared` as `ctx.locale`: `tr("locker.unlock")`,
+                            `fmt("notifications.age.minutes", &[("n", &5)])`, `date(&dt, "%A %d %B")` (chrono
+                            `format_localized`); `[general] language`, else LC_ALL / LC_MESSAGES / LANG
+  locale/en.rs, it.rs       one `CATALOGUE: &[(key, text)]` per language, compiled in, stable dotted keys;
+                            `en` is the fallback under every other; a unit test scans `src/` and fails on a
+                            key without an English text, an English text nobody uses, or a language whose
+                            keys differ from English's
+
 time       (time.rs)        `aligned_ticks(step)` (a wall-clock-aligned tick stream) and `shows_seconds(format)`,
                             for the Clock, the locker, the notifications' ages, the sysmon sampler; nothing
                             is imported from `gadgets/` by anything but `gadget.rs`
@@ -475,6 +483,18 @@ Two things flow between the daemon and the gadgets besides messages:
   up as KDE sends it. The click methods get the pointer's global
   position as the daemon estimates it. No tooltips (a 32px surface
   would clip them), no overlay icons, no menu icons or shortcuts.
+- **Texts and dates go through `Locale`** (`locale.rs`), never a
+  literal in a view: `ctx.locale.tr("audio.output")` with stable dotted
+  keys (a changed English wording touches `en.rs` only), catalogues
+  compiled in as static slices (`locale/<lang>.rs`, poured into one
+  `HashMap` at startup with English underneath), no files to install,
+  no globals, no macros. Dates: `locale.date(&dt, fmt)` over chrono's
+  `unstable-locales` (`format_localized`; the `Locale` enum knows
+  `xx_YY` names only, so a bare `language = it` maps to `it_IT` via the
+  catalogue's default region). Messages from libpam come translated by
+  gettext already. Untranslated on purpose: config keys, theme
+  selectors, the log, the socket replies, units. The completeness test
+  is the translator's tool: `cargo test` names the missing keys.
 - **No global state.** `Config` is loaded in `AriaShell::new` and passed
   by `&` down to gadget construction. This is what makes hot-reload
   possible later (replace the value, rebuild panels) and what makes the
@@ -590,6 +610,11 @@ Two things flow between the daemon and the gadgets besides messages:
   (`~/.face`) fails with "format could not be determined"; decode by
   content (`ImageReader::new(..).with_guessed_format()`) and
   `Handle::from_rgba`.
+- chrono `unstable-locales` (pure-rust-locales 0.8): `Locale::try_from`
+  accepts `xx_YY` / `xx_YY@variant` and `POSIX`, not a bare language;
+  `%a`/`%A`/`%b`/`%B` follow it, numbers don't. The calendar's weekday
+  header is `%a` of a Monday..Sunday (three letters in most languages,
+  the fixed cell still fits).
 - `text_input` takes no `widget::Id` for `debug widgets`:
   `Theme::tag(node, input)` wraps it in a bare container with the path.
 - `libc::statvfs` for a filesystem's size and `libc::kill` for a
@@ -1020,8 +1045,15 @@ Verified on the real Hyprland session with two outputs:
   desktop had to be restarted to get out; then the right password
   unlocked, three wrong ones showed faillock's own message, and a
   monitor unplugged and plugged back while locked got its surface.
+- Locale: `tests/ui/run.sh locale` (`debug locale` is `en`/`en_US` on
+  the shared config; a second shell on `tests/ui/config-locale` says
+  `it`/`it_IT`, and its screenshots show the calendar ("settembre
+  2026", "lun … dom"), the notifications popup ("Notifiche", "Non
+  disturbare"), the system monitor ("Memoria", "Carico:") and the lock
+  screen ("venerdì 18 settembre", "Sblocca") in Italian) passes.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (113 tests: the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
+  (117 tests: the locale detection, lookup and fallback, the catalogue
+  completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/
   replacement/history/dnd/markup/image-data/ages, config, theme incl. scheme variables and root class,
@@ -1089,7 +1121,8 @@ MPRIS player on the scenario's bus; the mixer part shows whatever the
 machine has and isn't asserted). The lock screen (`[locker]`, `aria-shell
 lock`): the runtime's session lock, one surface per output, avatar /
 name / time / date / password checked by PAM, or Enter alone with
-`password_prompt = no`.
+`password_prompt = no`. Translations (`[general] language`, `locale/`):
+every UI text and date through `Locale`, English and Italian catalogues.
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock

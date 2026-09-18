@@ -67,9 +67,6 @@ impl Section for LockerConfig {
     }
 }
 
-const PLACEHOLDER: &str = "Enter password";
-const FAILED: &str = "Authentication failed";
-const CHECKING: &str = "Unlocking…";
 /// The eye button's icons: show the password, hide it again.
 const PEEK_ICON: &str = "view-reveal-symbolic";
 const CONCEAL_ICON: &str = "view-conceal-symbolic";
@@ -102,8 +99,8 @@ enum State {
     Idle,
     /// PAM is checking the password.
     Busy,
-    /// The last attempt failed, with the message shown.
-    Failed(String),
+    /// The last attempt failed, with PAM's message when it gave one.
+    Failed(Option<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -242,13 +239,10 @@ impl Locker {
             }
             Message::AuthDone(Err(e)) => {
                 // PAM's own words when it had some (an account locked
-                // by `pam_faillock` says so), else ours.
+                // by `pam_faillock` says so; libpam translates them
+                // itself), else ours, at view time.
                 log::warn!("password refused: {e}");
-                let text = if e == "Authentication failure" || e.is_empty() {
-                    FAILED.to_owned()
-                } else {
-                    e
-                };
+                let text = (e != "Authentication failure" && !e.is_empty()).then_some(e);
                 self.state = State::Failed(text);
                 Action::Run(self.focus())
             }
@@ -297,12 +291,12 @@ impl Locker {
         }
         if self.config.show_time {
             let n = node.child("time");
-            let text = self.now.format(&self.config.time_format).to_string();
+            let text = shared.locale.date(&self.now, &self.config.time_format);
             items.push(theme.container(&n, theme.text(&n, text)).into());
         }
         if self.config.show_date {
             let n = node.child("date");
-            let text = self.now.format(&self.config.date_format).to_string();
+            let text = shared.locale.date(&self.now, &self.config.date_format);
             items.push(theme.container(&n, theme.text(&n, text)).into());
         }
         let busy = self.state == State::Busy;
@@ -315,7 +309,11 @@ impl Locker {
             let field = auth.child("field");
             let n = field.child("input");
             let mut input = theme
-                .text_input(&n, PLACEHOLDER, &self.password)
+                .text_input(
+                    &n,
+                    shared.locale.tr("locker.enter_password"),
+                    &self.password,
+                )
                 .id(self.input.clone())
                 .secure(!self.peek)
                 .on_submit(Message::Submit);
@@ -333,7 +331,14 @@ impl Locker {
                         .container(&icon_node, icon.view(size, icon_style.color))
                         .into(),
                     _ => theme
-                        .text(&icon_node, if self.peek { "hide" } else { "show" })
+                        .text(
+                            &icon_node,
+                            shared.locale.tr(if self.peek {
+                                "locker.hide_password"
+                            } else {
+                                "locker.show_password"
+                            }),
+                        )
                         .into(),
                 };
             let eye = theme
@@ -347,8 +352,9 @@ impl Locker {
             );
         }
         let message = match &self.state {
-            State::Failed(text) => Some(text.as_str()),
-            State::Busy => Some(CHECKING),
+            State::Failed(Some(text)) => Some(text.as_str()),
+            State::Failed(None) => Some(shared.locale.tr("locker.auth_failed")),
+            State::Busy => Some(shared.locale.tr("locker.unlocking")),
             State::Idle => None,
         };
         if let Some(text) = message {
@@ -358,7 +364,10 @@ impl Locker {
         let button = auth.child("button");
         fields.push(
             theme
-                .button(&button, theme.text(&button.child("text"), "Unlock"))
+                .button(
+                    &button,
+                    theme.text(&button.child("text"), shared.locale.tr("locker.unlock")),
+                )
                 .on_press_maybe((!busy).then_some(Message::Submit))
                 .into(),
         );

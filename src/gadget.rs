@@ -37,6 +37,7 @@ use crate::theme::{Node, Theme};
 pub struct Shared<'a> {
     pub compositor: &'a Compositor,
     pub theme: &'a Theme,
+    pub locale: &'a crate::locale::Locale,
     pub icons: &'a Icons,
     pub tray: &'a crate::tray::Tray,
     pub notifications: &'a crate::notifications::Notifications,

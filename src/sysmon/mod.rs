@@ -103,13 +103,14 @@ impl Column {
         }
     }
 
+    /// The catalogue key of the column's header.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Name => "Name",
-            Self::Pid => "PID",
-            Self::User => "User",
-            Self::Cpu => "CPU%",
-            Self::Mem => "Memory",
+            Self::Name => "sysmon.column.name",
+            Self::Pid => "sysmon.column.pid",
+            Self::User => "sysmon.column.user",
+            Self::Cpu => "sysmon.column.cpu",
+            Self::Mem => "sysmon.column.memory",
         }
     }
 

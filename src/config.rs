@@ -189,6 +189,8 @@ pub struct GeneralConfig {
     pub reload_config: bool,
     /// Icon theme name; `None` to detect it from the GTK settings.
     pub icon_theme: Option<String>,
+    /// The UI language (`en`, `it`, ...); empty for the environment's.
+    pub language: String,
 }
 
 impl Section for GeneralConfig {
@@ -207,6 +209,7 @@ impl Section for GeneralConfig {
         };
         Self {
             style: raw.get("style").map(str::to_owned),
+            language: raw.str_or("language", ""),
             color_scheme,
             reload_style: raw.bool_or("reload_style", true),
             reload_config: raw.bool_or("reload_config", true),

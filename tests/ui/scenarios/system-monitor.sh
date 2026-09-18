@@ -125,8 +125,15 @@ assert_eq "$(count_widgets 'section.processes > actions > button.terminate')" 1
 assert_eq "$(count_widgets 'section.processes > actions > button.kill')" 1
 shot_surface popup-actions popup
 # A click on the selected row deselects it; selected again for Terminate.
-click_widget 'table row.selected[pid="'"$victim"'"]'
-assert_eq "$(count_widgets 'section.processes > actions.none')" 1 "a second click deselects"
+# The table shifts under the pointer as our own clients come and go
+# (newest pids first), so a click may select another row instead:
+# click whichever row is selected until none is.
+i=0
+while [ "$(count_widgets 'section.processes > actions.none')" != 1 ]; do
+    i=$((i + 1))
+    [ $i -le 5 ] || { echo "a second click didn't deselect"; exit 1; }
+    click_widget 'table row.selected' || settle 1
+done
 select_victim
 kill -0 "$victim" 2> /dev/null || { echo "the sleep died on its own"; exit 1; }
 i=0

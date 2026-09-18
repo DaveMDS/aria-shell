@@ -36,7 +36,7 @@ mod value;
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use iced::border::Radius;
@@ -190,7 +190,7 @@ impl Theme {
         let Some(style) = style else {
             return Ok(Self::base(scheme));
         };
-        let Some(path) = locate(style, config.dir()) else {
+        let Some(path) = locate(style, config) else {
             return Err(LoadError {
                 message: format!("theme {style:?} not found"),
                 files: Vec::new(),
@@ -786,14 +786,9 @@ fn available_in(dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
     found
 }
 
-fn locate(style: &str, config_dir: Option<&Path>) -> Option<PathBuf> {
+fn locate(style: &str, config: &Config) -> Option<PathBuf> {
     if style.contains('/') || style.ends_with(".css") {
-        let path = Path::new(style);
-        let path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            config_dir.unwrap_or(Path::new(".")).join(path)
-        };
+        let path = config.resolve_path(style);
         return path.is_file().then_some(path);
     }
     theme_dirs()

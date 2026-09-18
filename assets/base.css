@@ -78,6 +78,10 @@
  *         ├─ title                                            the app name
  *         ╰─ subtitle                                         its description, when it has one
  *
+ *   wallpaper[output="<connector>"]                           the desktop background, one surface per output; its
+ *                                                             `background` shows without an image or around a
+ *                                                             `contain`ed one
+ *
  *   locker[output="<connector>"]                              the lock screen, one surface per output (fills it)
  *   ╰─ box                                                    the centred column (gap between its blocks)
  *      ├─ avatar                                              the user's picture, a `height` square;
@@ -321,6 +325,10 @@ launcher subtitle {
 }
 launcher item.selected subtitle {
   color: var(--aria-on-accent);
+}
+
+wallpaper {
+  background: var(--aria-bg);
 }
 
 locker {

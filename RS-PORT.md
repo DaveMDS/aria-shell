@@ -229,6 +229,17 @@ Locker     (locker/)        a component the daemon owns from `aria-shell lock` t
                             `SessionLock`), all drawing the one state; `Message::Lock` / `UnLock` to the runtime
   pam.rs                    `authenticate(user, password)`: a direct libpam binding, blocking (spawn_blocking)
 
+Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output(config, connector)` picks
+                            `[wallpaper:<connector>]` (with a source) over `[wallpaper]`; `source` through
+                            `Config::resolve_path` (`~`, absolute, else relative to aria.conf's dir), `fit` =
+                            CSS object-fit (cover default, contain, fill, none, scale-down -> iced ContentFit);
+                            the daemon opens one `Layer::Background` surface per output (`wallpapers:
+                            BTreeMap<Id, Wallpaper>`, with the panels, closed with the output); `images:
+                            Wallpapers` decodes each file once off-thread (`load` -> `Event::Loaded`, by
+                            content like the avatar), shared by path, reloaded when the watcher sees the
+                            file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
+                            container (the theme's background shows around a `contain`ed image)
+
 commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(Toggle|Show|Hide)`, `Command::Lock`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 
@@ -1062,6 +1073,13 @@ Verified on the real Hyprland session with two outputs:
   desktop had to be restarted to get out; then the right password
   unlocked, three wrong ones showed faillock's own message, and a
   monitor unplugged and plugged back while locked got its surface.
+- Wallpaper: `tests/ui/run.sh wallpaper` (a `wallpaper` surface per
+  output, `[wallpaper]` on HEADLESS-1 and `[wallpaper:HEADLESS-2]` on
+  the other, two 16x16 gradients stretched with `fit = fill`; the
+  screenshot's corner pixels (`grim -g "x,y 1x1" -t ppm`) tell a
+  horizontal gradient from a vertical one; the bar, the launcher and
+  the lock screen sit above; overwriting b.png reloads it and the
+  gradient turns) passes. Not yet tried on the real desktop.
 - Locale: `tests/ui/run.sh locale` (`debug locale` is `en`/`en_US` on
   the shared config; a second shell on `tests/ui/config-locale` says
   `it`/`it_IT`, and its screenshots show the calendar ("settembre
@@ -1071,7 +1089,7 @@ Verified on the real Hyprland session with two outputs:
   and the lock screen ("venerdì 18 settembre", "Sblocca") in Italian)
   passes.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (118 tests: the locale detection, the localized desktop keys, lookup and fallback, the catalogue
+  (121 tests: the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
   completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/
@@ -1142,6 +1160,8 @@ lock`): the runtime's session lock, one surface per output, avatar /
 name / time / date / password checked by PAM, or Enter alone with
 `password_prompt = no`. Translations (`[general] language`, `locale/`):
 every UI text and date through `Locale`, English and Italian catalogues.
+The wallpaper (`[wallpaper]`, `[wallpaper:<output>]`: `source`, `fit`):
+still images on a background surface per output, reloaded on change.
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -1149,8 +1169,9 @@ Not yet: `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (wallpaper, terminal,
-idle), locker niceties (a wallpaper / blurred desktop behind it, the
+wrapper), every other gadget and component (terminal, idle, exiter),
+wallpaper niceties (gif/video/shadertoy as the Python had, a slideshow,
+`tile`, the locker reusing it), locker niceties (a wallpaper / blurred desktop behind it, the
 shake, a spinner, `Caps Lock` warning, a second PAM prompt such as a
 one-time code: the conversation refuses visible prompts), system monitor niceties (per-process graphs and
 command lines, a tree view, filtering, battery, sensors beyond the

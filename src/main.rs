@@ -16,11 +16,12 @@ mod sysmon;
 mod theme;
 mod time;
 mod tray;
+mod wallpaper;
 mod watch;
 mod widgets;
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
@@ -48,6 +49,7 @@ use panel::{Action, Panel, PanelConfig};
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
+use wallpaper::{WallpaperConfig, Wallpapers};
 
 /// Top-level message. `#[to_exwlshell_message]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
@@ -85,6 +87,8 @@ enum Message {
     LauncherEvent(Id, launcher::Message),
     /// Routed to the lock screen.
     Locker(locker::Message),
+    /// A wallpaper image finished decoding.
+    Wallpaper(wallpaper::Event),
     /// A mouse button was released on window `Id` while the launcher is
     /// open: closes it when the click wasn't on the launcher.
     GrabClicked(Id),
@@ -128,6 +132,10 @@ struct AriaShell {
     outputs: BTreeMap<OutputId, OutputInfo>,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
+    /// One background surface per output with a wallpaper configured.
+    wallpapers: BTreeMap<Id, Wallpaper>,
+    /// The decoded wallpaper images, shared by path.
+    images: Wallpapers,
     /// Open popup surfaces.
     popups: BTreeMap<Id, OpenPopup>,
     /// The launcher, while shown.
@@ -153,6 +161,12 @@ struct Toast {
     size: (u32, u32),
     /// (top, right, bottom, left)
     margin: (i32, i32, i32, i32),
+}
+
+/// A wallpaper surface: its output and what it shows.
+struct Wallpaper {
+    output: OutputId,
+    config: WallpaperConfig,
 }
 
 struct OpenLauncher {
@@ -208,6 +222,8 @@ impl AriaShell {
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
+            wallpapers: BTreeMap::new(),
+            images: Wallpapers::default(),
             popups: BTreeMap::new(),
             launcher: None,
             grabs: Vec::new(),
@@ -398,6 +414,10 @@ impl AriaShell {
                 (LauncherCommand::Hide | LauncherCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
+            Message::Wallpaper(event) => {
+                self.images.apply(event);
+                Task::none()
+            }
             Message::Command(Command::Lock) => self.lock(),
             Message::Locker(m) => {
                 let Some(locker) = &mut self.locker else {
@@ -508,11 +528,24 @@ impl AriaShell {
                     .path()
                     .is_some_and(|p| paths.contains(&p.to_path_buf()));
                 let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
+                let wallpapers: Vec<PathBuf> = self
+                    .images
+                    .files()
+                    .filter(|f| paths.contains(f))
+                    .cloned()
+                    .collect();
                 if config_changed && self.general.reload_config {
                     self.reload_config()
                 } else if theme_changed && self.general.reload_style {
                     log::info!("theme file changed, reloading");
                     self.reload_theme()
+                } else if !wallpapers.is_empty() {
+                    log::info!("wallpaper file(s) changed, reloading");
+                    Task::batch(
+                        wallpapers
+                            .into_iter()
+                            .map(|p| self.images.load(p).map(Message::Wallpaper)),
+                    )
                 } else {
                     // An icon or applications directory: something was
                     // installed or removed.
@@ -607,6 +640,11 @@ impl AriaShell {
         for (id, output) in self.locker.iter().flat_map(Locker::windows) {
             if let Some(out) = self.output_rect(output) {
                 list.push((id, "locker", output, out));
+            }
+        }
+        for (&id, w) in &self.wallpapers {
+            if let Some(out) = self.output_rect(w.output) {
+                list.push((id, "wallpaper", w.output, out));
             }
         }
         if let Some(open) = &self.launcher
@@ -754,14 +792,17 @@ impl AriaShell {
             .popups
             .keys()
             .chain(self.panels.keys())
+            .chain(self.wallpapers.keys())
             .map(|&id| Task::done(Message::RemoveWindow(id)))
             .collect();
         self.popups.clear();
         self.panels.clear();
+        self.wallpapers.clear();
         tasks.push(self.close_launcher());
         self.cursor = None;
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
+        tasks.extend(outputs.iter().map(|o| self.open_wallpaper(o)));
         tasks.push(self.icons.load().map(Message::Icons));
         // The corner or the theme may have changed: reopen the toasts.
         tasks.extend(
@@ -1191,7 +1232,7 @@ impl AriaShell {
                     output.logical_size
                 );
                 self.outputs.insert(OutputId::from(&output), output.clone());
-                self.open_panels(&output)
+                Task::batch([self.open_panels(&output), self.open_wallpaper(&output)])
             }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
@@ -1214,6 +1255,16 @@ impl AriaShell {
                         Task::done(Message::RemoveWindow(id))
                     })
                     .collect();
+                let walls: Vec<Id> = self
+                    .wallpapers
+                    .iter()
+                    .filter(|(_, w)| w.output == gone)
+                    .map(|(id, _)| *id)
+                    .collect();
+                for id in walls {
+                    self.wallpapers.remove(&id);
+                    tasks.push(Task::done(Message::RemoveWindow(id)));
+                }
                 // Its toasts move to another output.
                 let (gone, kept): (Vec<Toast>, Vec<Toast>) = std::mem::take(&mut self.toasts)
                     .into_iter()
@@ -1247,6 +1298,9 @@ impl AriaShell {
                     // notification is still there it gets a new one.
                     self.toasts.remove(i);
                     return self.sync_toasts();
+                }
+                if self.wallpapers.remove(&id).is_some() {
+                    return Task::none();
                 }
                 if self.panels.remove(&id).is_some() {
                     self.popups.retain(|_, open| open.panel != id);
@@ -1289,6 +1343,50 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
+    /// The wallpaper this output is configured for, unless it has one
+    /// already (outputs get announced more than once).
+    fn open_wallpaper(&mut self, output: &OutputInfo) -> Task<Message> {
+        let output_id = OutputId::from(output);
+        if self.wallpapers.values().any(|w| w.output == output_id) {
+            return Task::none();
+        }
+        let name = output.name.clone().unwrap_or_default();
+        let Some(config) = WallpaperConfig::for_output(&self.config, &name) else {
+            return Task::none();
+        };
+        let Some(path) = config.source.clone() else {
+            return Task::none();
+        };
+        log::info!("wallpaper {} on output {name:?}", path.display());
+        let mut tasks = Vec::new();
+        if !self.images.has(&path) {
+            tasks.push(self.images.load(path).map(Message::Wallpaper));
+        }
+        let id = Id::unique();
+        tasks.push(Task::done(Message::NewLayerShell {
+            settings: NewLayerShellSettings {
+                anchor: Anchor::all(),
+                size: LayerSize::FILL,
+                layer: Layer::Background,
+                exclusive_zone: Some(-1),
+                margin: None,
+                keyboard_interactivity: KeyboardInteractivity::None,
+                output_option: OutputOption::GlobalName(output.id),
+                namespace: Some("aria-wallpaper".to_owned()),
+                ..Default::default()
+            },
+            id,
+        }));
+        self.wallpapers.insert(
+            id,
+            Wallpaper {
+                output: output_id,
+                config,
+            },
+        );
+        Task::batch(tasks)
+    }
+
     fn view(&self, window: Id) -> Element<'_, Message> {
         let shared = self.shared();
         if let Some(locker) = &self.locker
@@ -1323,6 +1421,24 @@ impl AriaShell {
         }
         if self.grabs.iter().any(|(g, _)| *g == window) {
             return launcher::grab_view().map(Message::Launcher);
+        }
+        if let Some(w) = self.wallpapers.get(&window) {
+            let root = Node::root("wallpaper").attr("output", self.output_name(w.output));
+            let picture: Element<'_, Message> =
+                match w.config.source.as_deref().and_then(|p| self.images.get(p)) {
+                    Some(handle) => widget::image(handle.clone())
+                        .content_fit(w.config.fit.content_fit())
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .into(),
+                    None => widget::Space::new().into(),
+                };
+            return self
+                .theme
+                .container(&root, picture)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
         }
         if let Some(t) = self.toasts.iter().find(|t| t.window == window)
             && let Some(n) = self.notifications.get(t.id)
@@ -1372,6 +1488,7 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs());
+        files.extend(self.images.files().cloned());
         let popups = (!self.popups.is_empty())
             .then(|| panel::presses_outside().map(Message::PressedOutside));
         let launcher = self.launcher.iter().flat_map(|open| {

@@ -59,6 +59,13 @@ impl Config {
         self.path().and_then(Path::parent)
     }
 
+    /// A file named in a value: `~` and `~/..` are the home, an
+    /// absolute path is itself, a relative one is under the config
+    /// file's directory (the working directory without a file).
+    pub fn resolve_path(&self, value: &str) -> PathBuf {
+        resolve_path(value, self.dir(), env::var_os("HOME").map(PathBuf::from))
+    }
+
     /// Typed section `name` (default: `T::NAME`). Missing sections and
     /// keys fall back to the type's defaults.
     pub fn section<T: Section>(&self, name: Option<&str>) -> T {
@@ -271,9 +278,38 @@ fn dev_fallback_config_file() -> Option<PathBuf> {
     candidate.exists().then_some(candidate)
 }
 
+fn resolve_path(value: &str, dir: Option<&Path>, home: Option<PathBuf>) -> PathBuf {
+    if let Some(rest) = value.strip_prefix('~')
+        && (rest.is_empty() || rest.starts_with('/'))
+    {
+        let home = home.unwrap_or_else(|| PathBuf::from("/"));
+        return home.join(rest.trim_start_matches('/'));
+    }
+    let path = Path::new(value);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        dir.unwrap_or(Path::new(".")).join(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paths_in_values() {
+        let dir = Some(Path::new("/etc/aria"));
+        let home = Some(PathBuf::from("/home/me"));
+        let r = |v: &str| resolve_path(v, dir, home.clone());
+        assert_eq!(r("~"), PathBuf::from("/home/me"));
+        assert_eq!(r("~/pics/a.png"), PathBuf::from("/home/me/pics/a.png"));
+        assert_eq!(r("/abs/a.png"), PathBuf::from("/abs/a.png"));
+        assert_eq!(r("walls/a.png"), PathBuf::from("/etc/aria/walls/a.png"));
+        // `~user` isn't expanded.
+        assert_eq!(r("~bob/a"), PathBuf::from("/etc/aria/~bob/a"));
+        assert_eq!(resolve_path("a.png", None, None), PathBuf::from("./a.png"));
+    }
 
     struct Demo {
         name: String,

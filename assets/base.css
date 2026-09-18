@@ -75,10 +75,12 @@
  *   │  ╰─ button[.lock|.reboot|...] > icon                    drawn at the node's `height`
  *   ├─ input                                                  the search field (:focus when typing)
  *   ╰─ list                                                   the results (a column; gap between items)
- *      ╰─ item[.selected]                                     one result, a button
+ *      ╰─ item[.selected][.action]                            one result, a button; .action: a desktop action of
+ *         │                                                   the result above it (opened with Right or the chevron)
  *         ├─ icon                                             the app icon, drawn at the node's `height`
- *         ├─ title                                            the app name
- *         ╰─ subtitle                                         its description, when it has one
+ *         ├─ title                                            the app name (the action's, on .action)
+ *         ├─ subtitle                                         its description, when it has one
+ *         ╰─ chevron[.open] > text                            on results with actions: a button, › or ⌄
  *
  *   exiter                                                    the exit menu surface (sized from its content)
  *   ├─ button[.lock|.suspend|.hibernate|.logout|.reboot|.shutdown|.<name>][.selected]
@@ -332,7 +334,7 @@ launcher list {
   gap: 2px;
 }
 launcher item {
-  padding: 4px 8px;
+  padding: 6px 10px;
   gap: 10px;
   border-radius: 6px;
 }
@@ -352,6 +354,21 @@ launcher subtitle {
 }
 launcher item.selected subtitle {
   color: var(--aria-on-accent);
+}
+launcher chevron {
+  padding: 0 8px;
+  font-size: 18px;
+  color: var(--aria-muted);
+}
+launcher item.selected chevron {
+  color: var(--aria-on-accent);
+}
+/* indented by the parent's icon and gap: under its text */
+launcher item.action {
+  padding: 6px 10px 6px 52px;
+}
+launcher item.action icon {
+  height: 20px;
 }
 
 exiter {

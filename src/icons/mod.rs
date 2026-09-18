@@ -93,6 +93,15 @@ impl Index {
     pub fn apps(&self) -> &DesktopDb {
         &self.apps
     }
+
+    /// Desktop entries with no icon theme, for the launcher's tests.
+    #[cfg(test)]
+    pub fn from_apps(apps: DesktopDb) -> Self {
+        Self {
+            icons: IconIndex::load("", &[], &[]),
+            apps,
+        }
+    }
 }
 
 impl fmt::Debug for Index {

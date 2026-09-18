@@ -64,7 +64,7 @@ An application launcher with support for `.desktop` files.
 - ✅ App list auto-update on install/uninstall
 - ✅ The exit menu's actions as a row of buttons above the search field
 - ✅ Usage-based ranking (what you launch most comes first; counts in `~/.local/state/aria-shell/launcher-usage`)
-- 🔲 Secondary commands (e.g. "Firefox — New Private Window")
+- ✅ Secondary commands: an entry's desktop actions (e.g. Firefox's "New Private Window") open as child rows with → or the chevron, ← closes them
 
 
 ---

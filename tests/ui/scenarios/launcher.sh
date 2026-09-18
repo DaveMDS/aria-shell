@@ -1,6 +1,7 @@
 # The launcher: open, search, keyboard selection, close by every route,
 # launch by click and by Enter (two test desktop entries whose Exec is
-# `true`, see tests/ui/data), and the launched one ranking first.
+# `true`, see tests/ui/data), the launched one ranking first, and the
+# desktop actions of Zzz opened as child rows.
 
 assert_no_surface launcher
 
@@ -69,6 +70,41 @@ key Return
 assert_eq "$(grep -c 'launched "aria-test-zzz":' "$ARIA_UI_OUT/shell.log")" 4 "Zzz is first once it's used more"
 assert_eq "$(cat "$XDG_STATE_HOME/aria-shell/launcher-usage")" "aria-test-zzz 4
 aria-test 2" "usage file"
+
+# Desktop actions: Zzz (first now) has two. Right opens them as rows
+# below it and selects the first; Down, Enter runs the second.
+aria launcher show; settle 0.8
+type_text "aria test"
+assert_eq "$(count_widgets 'item.action')" 0 "closed at first"
+assert_eq "$(count_widgets 'launcher chevron')" 1 "only Zzz has a chevron"
+key Right
+assert_eq "$(count_widgets 'item.action')" 2 "two action rows"
+assert_eq "$(count_widgets 'item.action.selected:nth-child(2)')" 1 "the first action selected"
+key Down
+assert_eq "$(count_widgets 'item.action.selected:nth-child(3)')" 1 "the second after Down"
+shot_surface launcher-actions launcher
+key Return
+assert_logged 'launched "aria-test-zzz" action "two"'
+assert_no_surface launcher
+
+# Left goes back to the entry and closes them.
+aria launcher show; settle 0.8
+type_text "aria test"
+key Right
+key Left
+assert_eq "$(count_widgets 'item.action')" 0 "closed by Left"
+assert_eq "$(count_widgets 'item.selected:nth-child(1)')" 1 "Zzz selected again"
+assert_eq "$(count_widgets 'launcher item')" 2 "the two results"
+
+# The chevron opens them with a click, a click on an action runs it.
+click_widget 'launcher chevron'
+assert_surface launcher
+assert_eq "$(count_widgets 'item.action')" 2 "opened by the chevron"
+click_widget 'item.action'
+assert_logged 'launched "aria-test-zzz" action "one"'
+assert_no_surface launcher
+assert_eq "$(grep -c 'launched "aria-test-zzz":' "$ARIA_UI_OUT/shell.log")" 4 "actions don't count as plain launches in the log"
+assert_eq "$(head -n 1 "$XDG_STATE_HOME/aria-shell/launcher-usage")" "aria-test-zzz 6" "but they do for usage"
 
 # toggle / hide through the socket.
 aria launcher toggle; settle 0.8

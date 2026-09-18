@@ -8,7 +8,9 @@
 //! swapped when the index is rebuilt. Icons are resolved by the daemon
 //! ([`Launcher::visible_ids`]) and read here in `view`, as gadgets do.
 //! How often each entry was launched ([`Usage`]) ranks ties, so the
-//! apps you use come first.
+//! apps you use come first. An entry with desktop actions ends in a
+//! chevron: Right (or a click on it) opens them as child rows below,
+//! Left closes them.
 
 use std::collections::HashMap;
 use std::fs;
@@ -26,7 +28,7 @@ use crate::config::{self, RawSection, Section};
 use crate::exiter::{self, ExiterConfig};
 use crate::gadget::Shared;
 use crate::icons::Index;
-use crate::icons::desktop::{self, DesktopEntry};
+use crate::icons::desktop::{self, DesktopAction, DesktopEntry};
 use crate::theme::{self, Node};
 use crate::widgets;
 
@@ -177,6 +179,9 @@ pub struct Launcher {
     query: String,
     /// Indices into the desktop db, best match first.
     results: Vec<usize>,
+    /// The one result whose actions are open as child rows.
+    expanded: Option<usize>,
+    /// Index into [`Launcher::rows`].
     selected: usize,
     input: widget::Id,
     list: widget::Id,
@@ -185,15 +190,37 @@ pub struct Launcher {
     node: Node,
 }
 
+/// A row of the list: a result, or one of the expanded result's
+/// actions (result index, action index).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Row {
+    App(usize),
+    Action(usize, usize),
+}
+
+impl Row {
+    fn result(self) -> usize {
+        match self {
+            Self::App(i) | Self::Action(i, _) => i,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     Query(String),
-    /// Enter: run the selected entry.
+    /// Enter: run the selected row.
     Submit,
     Up,
     Down,
-    /// A click on that result.
-    Activate(usize),
+    /// Open the selected result's actions.
+    Right,
+    /// Close them, back to the result.
+    Left,
+    /// The chevron of that result: open or close its actions.
+    Toggle(usize),
+    /// A click on that row.
+    Activate(Row),
     /// Esc, or a click outside.
     Close,
     /// One of the exit menu's buttons, by name.
@@ -225,6 +252,7 @@ impl Launcher {
             usage: Usage::load(),
             query: String::new(),
             results: Vec::new(),
+            expanded: None,
             selected: 0,
             input: widget::Id::unique(),
             list: widget::Id::unique(),
@@ -256,20 +284,51 @@ impl Launcher {
         self.results.iter().filter_map(move |&i| all?.get(i))
     }
 
+    /// The entry of result `i`.
+    fn entry(&self, i: usize) -> Option<&DesktopEntry> {
+        let index = *self.results.get(i)?;
+        self.apps.as_deref()?.apps().entries().get(index)
+    }
+
+    /// The list as laid out: every result, and the expanded one's
+    /// actions right below it.
+    fn rows(&self) -> Vec<Row> {
+        let mut rows = Vec::with_capacity(self.results.len());
+        for i in 0..self.results.len() {
+            rows.push(Row::App(i));
+            if self.expanded == Some(i) {
+                let n = self.entry(i).map_or(0, |e| e.actions.len());
+                rows.extend((0..n).map(|a| Row::Action(i, a)));
+            }
+        }
+        rows
+    }
+
+    fn selected_row(&self) -> Option<Row> {
+        self.rows().get(self.selected).copied()
+    }
+
+    /// Select `row` wherever it is once the rows are rebuilt.
+    fn select(&mut self, row: Row) {
+        self.selected = self.rows().iter().position(|r| *r == row).unwrap_or(0);
+    }
+
     fn search(&mut self) {
         let all = self.apps.as_deref().map_or(&[][..], |i| i.apps().entries());
         self.results = search(all, &self.query, &self.usage);
+        self.expanded = None;
         self.selected = 0;
     }
 
-    /// The node of result `i` as `view` builds it: its path is the
-    /// widget id the theme helpers tag it with.
-    fn item_node(&self, i: usize) -> Node {
+    /// The node of row `i` as `view` builds it: its path is the widget
+    /// id the theme helpers tag it with.
+    fn item_node(&self, i: usize, row: Row, count: usize) -> Node {
         self.node
             .child("list")
             .child("item")
+            .class_if("action", matches!(row, Row::Action(..)))
             .class_if("selected", i == self.selected)
-            .nth(i, self.results.len())
+            .nth(i, count)
     }
 
     /// Ask the widget tree where row `i` and the list are;
@@ -277,11 +336,12 @@ impl Launcher {
     /// Called with the row *past* the selection in the direction of
     /// travel, so the next one is already visible before it's selected.
     fn locate(&self, i: usize) -> Task<Message> {
-        if self.results.is_empty() {
+        let rows = self.rows();
+        if rows.is_empty() {
             return Task::none();
         }
-        let i = i.min(self.results.len() - 1);
-        let item = theme::widget_id(&self.item_node(i));
+        let i = i.min(rows.len() - 1);
+        let item = theme::widget_id(&self.item_node(i, rows[i], rows.len()));
         let list = theme::widget_id(&self.node.child("list"));
         widgets::bounds(item).and_then(move |item| {
             widgets::bounds(list.clone()).map(move |list| Message::Located {
@@ -315,17 +375,38 @@ impl Launcher {
         )
     }
 
-    fn launch(&mut self, index: usize) {
-        let Some(entry) = self
-            .results
-            .get(index)
-            .and_then(|&i| self.apps.as_deref().and_then(|a| a.apps().entries().get(i)))
-        else {
+    /// Run the row's entry or action; either counts as a launch of
+    /// the entry.
+    fn launch(&mut self, row: Row) {
+        let Some(entry) = self.entry(row.result()) else {
             return;
         };
-        match desktop::launch(entry, &self.config.terminal) {
-            Ok(()) => self.usage.bump(&entry.id),
+        let action: Option<&DesktopAction> = match row {
+            Row::App(_) => None,
+            Row::Action(_, a) => match entry.actions.get(a) {
+                Some(action) => Some(action),
+                None => return,
+            },
+        };
+        match desktop::launch(entry, action, &self.config.terminal) {
+            Ok(()) => {
+                let id = entry.id.clone();
+                self.usage.bump(&id);
+            }
             Err(e) => log::error!("cannot launch {:?}: {e}", entry.id),
+        }
+    }
+
+    /// Open the actions of result `i` (closing any other's) and
+    /// select its first one, or close them and select the result.
+    fn toggle(&mut self, i: usize) {
+        let has_actions = self.entry(i).is_some_and(|e| !e.actions.is_empty());
+        if self.expanded == Some(i) || !has_actions {
+            self.expanded = None;
+            self.select(Row::App(i));
+        } else {
+            self.expanded = Some(i);
+            self.select(Row::Action(i, 0));
         }
     }
 
@@ -348,9 +429,31 @@ impl Launcher {
                 Action::Run(self.locate(self.selected.saturating_sub(1)))
             }
             Message::Down => {
-                if self.selected + 1 < self.results.len() {
+                if self.selected + 1 < self.rows().len() {
                     self.selected += 1;
                 }
+                Action::Run(self.locate(self.selected + 1))
+            }
+            Message::Right => match self.selected_row() {
+                Some(Row::App(i)) if self.expanded != Some(i) => {
+                    self.toggle(i);
+                    Action::Run(self.locate(self.selected + 1))
+                }
+                _ => Action::Run(Task::none()),
+            },
+            Message::Left => match self.selected_row() {
+                Some(Row::Action(i, _)) => {
+                    self.toggle(i);
+                    Action::Run(self.locate(self.selected))
+                }
+                Some(Row::App(i)) if self.expanded == Some(i) => {
+                    self.toggle(i);
+                    Action::Run(Task::none())
+                }
+                _ => Action::Run(Task::none()),
+            },
+            Message::Toggle(i) => {
+                self.toggle(i);
                 Action::Run(self.locate(self.selected + 1))
             }
             Message::Scrolled(viewport) => {
@@ -363,11 +466,13 @@ impl Launcher {
             } => Action::Run(self.keep_in_view(item, list)),
             Message::Located { .. } => Action::Run(Task::none()),
             Message::Submit => {
-                self.launch(self.selected);
+                if let Some(row) = self.selected_row() {
+                    self.launch(row);
+                }
                 Action::Close
             }
-            Message::Activate(i) => {
-                self.launch(i);
+            Message::Activate(row) => {
+                self.launch(row);
                 Action::Close
             }
             Message::Close => Action::Close,
@@ -403,8 +508,11 @@ impl Launcher {
             .on_submit(Message::Submit)
             .width(Length::Fill);
         let list_node = self.node.child("list");
-        let items = self.entries().enumerate().map(|(i, entry)| {
-            let node = self.item_node(i);
+        let rows = self.rows();
+        let count = rows.len();
+        let items = rows.iter().enumerate().filter_map(|(i, &row)| {
+            let entry = self.entry(row.result())?;
+            let node = self.item_node(i, row, count);
             let icon_node = node.child("icon");
             let style = theme.resolve(&icon_node);
             let size = style.height.or(style.width).and_then(|l| match l {
@@ -416,19 +524,44 @@ impl Launcher {
                 (_, Some(size)) => Space::new().width(size).height(size).into(),
                 _ => Space::new().into(),
             };
-            let mut text = column![theme.text(&node.child("title"), &entry.name)];
-            if let Some(comment) = &entry.comment {
-                text = text.push(theme.text(&node.child("subtitle"), comment));
+            // An action row: its name under the entry's icon. An entry
+            // with actions: a chevron at the end, a button of its own
+            // (it takes the press before the row does).
+            let mut text = column![];
+            let mut chevron: Option<Element<'a, Message>> = None;
+            match row {
+                Row::Action(_, a) => {
+                    let action = entry.actions.get(a)?;
+                    text = text.push(theme.text(&node.child("title"), &action.name));
+                }
+                Row::App(r) => {
+                    text = text.push(theme.text(&node.child("title"), &entry.name));
+                    if let Some(comment) = &entry.comment {
+                        text = text.push(theme.text(&node.child("subtitle"), comment));
+                    }
+                    if !entry.actions.is_empty() {
+                        let open = self.expanded == Some(r);
+                        let c = node.child("chevron").class_if("open", open);
+                        let glyph = theme.text(&c, if open { "⌄" } else { "›" });
+                        chevron = Some(theme.button(&c, glyph).on_press(Message::Toggle(r)).into());
+                    }
+                }
             }
-            let content = theme
-                .row(&node, [icon, text.into()])
+            let mut parts: Vec<Element<'a, Message>> = vec![icon, text.width(Length::Fill).into()];
+            parts.extend(chevron);
+            // The button already pads with the node's `padding`; the
+            // row inside only spaces its parts.
+            let content = widget::row(parts)
+                .spacing(theme.resolve(&node).gap)
                 .align_y(iced::Alignment::Center)
                 .width(Length::Fill);
-            theme
-                .button(&node, content)
-                .width(Length::Fill)
-                .on_press(Message::Activate(i))
-                .into()
+            Some(
+                theme
+                    .button(&node, content)
+                    .width(Length::Fill)
+                    .on_press(Message::Activate(row))
+                    .into(),
+            )
         });
         // The list is tagged so `locate_selected` finds its viewport.
         let list = theme
@@ -500,6 +633,8 @@ impl Launcher {
                 Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => match key.as_ref() {
                     Key::Named(Named::ArrowUp) => Message::Up,
                     Key::Named(Named::ArrowDown) => Message::Down,
+                    Key::Named(Named::ArrowRight) => Message::Right,
+                    Key::Named(Named::ArrowLeft) => Message::Left,
                     Key::Named(Named::Escape) => Message::Close,
                     _ => return None,
                 },
@@ -589,6 +724,7 @@ mod tests {
             wm_class: None,
             no_display,
             path: PathBuf::from(format!("/x/{id}.desktop")),
+            actions: Vec::new(),
         }
     }
 
@@ -653,6 +789,75 @@ mod tests {
             names_used(&all, "", &[("kitty", 2), ("term", 5)]),
             ["Zeta", "kitty", "Terminal", "Termite"]
         );
+    }
+
+    /// A launcher over two entries in a temp dir, Zed with two
+    /// actions and Ant without, no usage and an empty query.
+    fn tree_launcher() -> Launcher {
+        use crate::icons::desktop::DesktopDb;
+        let dir = std::env::temp_dir().join(format!("aria-launcher-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("zed.desktop"),
+            "[Desktop Entry]\nType=Application\nName=Zed\nExec=zed\nActions=a;b\n\
+             [Desktop Action a]\nName=A\nExec=zed a\n[Desktop Action b]\nName=B\nExec=zed b\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("ant.desktop"),
+            "[Desktop Entry]\nType=Application\nName=Ant\nExec=ant\n",
+        )
+        .unwrap();
+        let db = DesktopDb::load(&[dir.clone()], &[]);
+        fs::remove_dir_all(&dir).unwrap();
+        let mut launcher = Launcher::new(
+            LauncherConfig::from_raw(&RawSection::default()),
+            ExiterConfig::from_raw(&RawSection::default()),
+            Some(Arc::new(Index::from_apps(db))),
+        );
+        launcher.usage = Usage::default();
+        launcher.search();
+        launcher
+    }
+
+    #[test]
+    fn actions_open_and_close_as_child_rows() {
+        use Row::{Action, App};
+        let mut l = tree_launcher();
+        assert_eq!(l.rows(), [App(0), App(1)], "Ant, Zed");
+        assert_eq!(l.selected_row(), Some(App(0)));
+        // Right on an entry without actions: nothing.
+        l.update(Message::Right);
+        assert_eq!((l.rows(), l.selected), ([App(0), App(1)].to_vec(), 0));
+        // Right on Zed opens its actions and selects the first.
+        l.update(Message::Down);
+        l.update(Message::Right);
+        assert_eq!(l.rows(), [App(0), App(1), Action(1, 0), Action(1, 1)]);
+        assert_eq!(l.selected_row(), Some(Action(1, 0)));
+        assert_eq!(l.expanded, Some(1));
+        l.update(Message::Down);
+        assert_eq!(l.selected_row(), Some(Action(1, 1)));
+        l.update(Message::Down);
+        assert_eq!(l.selected_row(), Some(Action(1, 1)), "last row stays");
+        // Left from an action: back on Zed, closed.
+        l.update(Message::Left);
+        assert_eq!(
+            (l.rows(), l.selected_row()),
+            ([App(0), App(1)].to_vec(), Some(App(1)))
+        );
+        // The chevron toggles; Left on the open entry closes it too.
+        l.update(Message::Toggle(1));
+        assert_eq!(l.selected_row(), Some(Action(1, 0)));
+        l.update(Message::Up);
+        assert_eq!(l.selected_row(), Some(App(1)));
+        l.update(Message::Left);
+        assert_eq!(l.rows().len(), 2);
+        // Typing closes and selects the first row.
+        l.update(Message::Toggle(1));
+        l.update(Message::Query("z".into()));
+        assert_eq!((l.rows(), l.selected), ([App(0)].to_vec(), 0));
+        assert_eq!(l.expanded, None);
     }
 
     #[test]

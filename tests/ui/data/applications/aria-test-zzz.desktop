@@ -1,6 +1,15 @@
 [Desktop Entry]
 Type=Application
 Name=Aria Test Zzz
-Comment=A second harmless entry, after the first by name
+Comment=A second harmless entry, after the first by name, with actions
 Exec=true
 Icon=application-x-executable
+Actions=one;two
+
+[Desktop Action one]
+Name=Action One
+Exec=true one
+
+[Desktop Action two]
+Name=Action Two
+Exec=true two

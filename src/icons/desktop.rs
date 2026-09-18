@@ -1,6 +1,7 @@
 //! The `.desktop` entries installed on the system, indexed for the
 //! lookups the shell does: by id, by `StartupWMClass`, by executable.
-//! Only the keys we use are parsed. [`launch`] runs one.
+//! Only the keys we use are parsed, the `[Desktop Action]` groups
+//! among them. [`launch`] runs an entry or one of its actions.
 
 use std::collections::HashMap;
 use std::fs;
@@ -31,6 +32,18 @@ pub struct DesktopEntry {
     pub wm_class: Option<String>,
     pub no_display: bool,
     pub path: PathBuf,
+    /// The `[Desktop Action]` groups `Actions=` lists, in its order.
+    pub actions: Vec<DesktopAction>,
+}
+
+/// A secondary command of an entry: `[Desktop Action new-window]`,
+/// "Firefox — New Window". Run like the entry, with its own `Exec`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DesktopAction {
+    /// The group's name after `Desktop Action`.
+    pub id: String,
+    pub name: String,
+    pub exec_line: String,
 }
 
 #[derive(Debug, Default)]
@@ -122,11 +135,11 @@ impl DesktopDb {
     }
 }
 
-/// `[Desktop Entry]` group only. `Name` and `Comment` come in the first
-/// of `languages` the file has (`Name[it_IT]`, then `Name[it]`), else
-/// the plain key; the other keys are never localized.
+/// The `[Desktop Entry]` group and the `[Desktop Action ..]` groups
+/// `Actions=` lists. `Name` and `Comment` come in the first of
+/// `languages` the file has (`Name[it_IT]`, then `Name[it]`), else the
+/// plain key; the other keys are never localized.
 pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Option<DesktopEntry> {
-    let mut in_entry = false;
     // (value, rank): the plain key ranks after every language.
     let mut name: Option<(String, usize)> = None;
     let mut comment: Option<(String, usize)> = None;
@@ -139,6 +152,23 @@ pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Opt
             *slot = Some((value.to_owned(), rank));
         }
     };
+    // The group the line is in: the entry, an action (by id), or one
+    // we don't read.
+    enum Group {
+        Entry,
+        Action(usize),
+        Other,
+    }
+    // An action group as met, in file order.
+    #[derive(Default)]
+    struct ActionGroup {
+        id: String,
+        name: Option<(String, usize)>,
+        exec: Option<String>,
+    }
+    let mut group = Group::Other;
+    let mut actions_key: Vec<String> = Vec::new();
+    let mut groups: Vec<ActionGroup> = Vec::new();
     let mut icon = None;
     let mut exec = None;
     let mut exec_line = None;
@@ -152,11 +182,19 @@ pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Opt
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        if let Some(group) = line.strip_prefix('[') {
-            in_entry = group.strip_suffix(']') == Some("Desktop Entry");
-            continue;
-        }
-        if !in_entry {
+        if let Some(header) = line.strip_prefix('[') {
+            group = match header.strip_suffix(']') {
+                Some("Desktop Entry") => Group::Entry,
+                Some(action) if action.starts_with("Desktop Action ") => {
+                    let action = action["Desktop Action ".len()..].trim();
+                    groups.push(ActionGroup {
+                        id: action.to_owned(),
+                        ..Default::default()
+                    });
+                    Group::Action(groups.len() - 1)
+                }
+                _ => Group::Other,
+            };
             continue;
         }
         let Some((key, value)) = line.split_once('=') else {
@@ -169,6 +207,24 @@ pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Opt
             None => (key, None),
         };
         if suffix.is_some() && !matches!(key, "Name" | "Comment") {
+            continue;
+        }
+        let i = match group {
+            Group::Entry => None,
+            Group::Action(i) => Some(i),
+            Group::Other => continue,
+        };
+        if let Some(i) = i {
+            let action = &mut groups[i];
+            match key {
+                "Name" => {
+                    if let Some(rank) = rank(suffix) {
+                        better(&mut action.name, value, rank);
+                    }
+                }
+                "Exec" if !value.is_empty() => action.exec = Some(value.to_owned()),
+                _ => {}
+            }
             continue;
         }
         match key {
@@ -193,12 +249,36 @@ pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Opt
             "StartupWMClass" if !value.is_empty() => wm_class = Some(value.to_ascii_lowercase()),
             "NoDisplay" => no_display = value == "true",
             "Hidden" if value == "true" => return None,
+            "Actions" => {
+                actions_key = value
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|a| !a.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+            }
             _ => {}
         }
     }
     if !is_app {
         return None;
     }
+    // `Actions=` says which groups count, and in what order; a group
+    // without `Exec` can't be run.
+    let actions = actions_key
+        .into_iter()
+        .filter_map(|wanted| {
+            let group = groups.iter().find(|g| g.id == wanted)?;
+            Some(DesktopAction {
+                exec_line: group.exec.clone()?,
+                name: group
+                    .name
+                    .as_ref()
+                    .map_or_else(|| group.id.clone(), |(n, _)| n.clone()),
+                id: group.id.clone(),
+            })
+        })
+        .collect();
     Some(DesktopEntry {
         name: name.map(|(n, _)| n).unwrap_or_else(|| id.clone()),
         id,
@@ -211,6 +291,7 @@ pub fn parse(text: &str, id: String, path: PathBuf, languages: &[String]) -> Opt
         wm_class,
         no_display,
         path,
+        actions,
     })
 }
 
@@ -226,17 +307,25 @@ fn exec_basename(exec: &str) -> Option<String> {
     Some(base.to_ascii_lowercase())
 }
 
-/// Run `entry` as the spec's `Exec` key says: quoting and escapes
-/// unwound, field codes expanded (no files or URLs to pass, so
-/// `%f %F %u %U` vanish; `%i` is the icon, `%c` the name, `%k` the
-/// file), in `Path=` if set, inside `terminal` (a command line, given
-/// `-e`) when `Terminal=true`, detached (see [`process::spawn_detached`]).
-/// `DBusActivatable` is not honoured.
-pub fn launch(entry: &DesktopEntry, terminal: &str) -> io::Result<()> {
-    let line = entry
-        .exec_line
-        .as_deref()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no Exec"))?;
+/// Run `entry`, or its `action`, as the spec's `Exec` key says:
+/// quoting and escapes unwound, field codes expanded (no files or URLs
+/// to pass, so `%f %F %u %U` vanish; `%i` is the icon, `%c` the name,
+/// `%k` the file), in `Path=` if set, inside `terminal` (a command
+/// line, given `-e`) when `Terminal=true`, detached (see
+/// [`process::spawn_detached`]). An action has its own `Exec`, the
+/// rest is the entry's. `DBusActivatable` is not honoured.
+pub fn launch(
+    entry: &DesktopEntry,
+    action: Option<&DesktopAction>,
+    terminal: &str,
+) -> io::Result<()> {
+    let line = match action {
+        Some(action) => action.exec_line.as_str(),
+        None => entry
+            .exec_line
+            .as_deref()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no Exec"))?,
+    };
     let mut argv = exec_argv(line, entry);
     if entry.terminal {
         argv = process::in_terminal(terminal, argv);
@@ -250,7 +339,10 @@ pub fn launch(entry: &DesktopEntry, terminal: &str) -> io::Result<()> {
         cmd.current_dir(dir);
     }
     process::spawn_detached(cmd)?;
-    log::info!("launched {:?}: {argv:?}", entry.id);
+    match action {
+        Some(action) => log::info!("launched {:?} action {:?}: {argv:?}", entry.id, action.id),
+        None => log::info!("launched {:?}: {argv:?}", entry.id),
+    }
     Ok(())
 }
 
@@ -382,6 +474,47 @@ mod tests {
         assert!(!e.no_display);
         assert!(!e.terminal);
         assert!(e.comment.is_none());
+        assert!(e.actions.is_empty(), "no Actions= key, no actions");
+    }
+
+    #[test]
+    fn parses_actions() {
+        let e = entry_in(
+            "[Desktop Entry]\nType=Application\nName=Firefox\nExec=firefox %u\n\
+             Actions=private; new-window ;missing;noexec;\n\
+             [Desktop Action new-window]\nName=New Window\nName[it]=Nuova finestra\nExec=firefox --new-window %u\n\
+             [Desktop Action private]\nName=New Private Window\nExec=firefox --private-window\n\
+             [Desktop Action noexec]\nName=Nothing\n\
+             [Desktop Action unlisted]\nName=Unlisted\nExec=x\n\
+             [Other Group]\nName=Ignored\nExec=y\n",
+            "firefox",
+            &["it"],
+        )
+        .unwrap();
+        // The entry's own keys are untouched by the groups after it.
+        assert_eq!(e.name, "Firefox");
+        assert_eq!(e.exec_line.as_deref(), Some("firefox %u"));
+        // `Actions=` order and filter; no Exec, no action.
+        assert_eq!(
+            e.actions,
+            [
+                DesktopAction {
+                    id: "private".into(),
+                    name: "New Private Window".into(),
+                    exec_line: "firefox --private-window".into(),
+                },
+                DesktopAction {
+                    id: "new-window".into(),
+                    name: "Nuova finestra".into(),
+                    exec_line: "firefox --new-window %u".into(),
+                },
+            ]
+        );
+        // An action's field codes expand with the entry's data.
+        assert_eq!(
+            exec_argv(&e.actions[1].exec_line, &e),
+            ["firefox", "--new-window"]
+        );
     }
 
     #[test]

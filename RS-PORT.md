@@ -883,8 +883,17 @@ Two things flow between the daemon and the gadgets besides messages:
   `text_input`.
 - The focus/scroll tasks live at `iced::widget::operation::{focus,
   snap_to, scroll_to}`; they run on every window, so the widget ids
-  must be `Id::unique()`. `snap_to(id, RelativeOffset { y: i / (n-1) })`
-  always keeps item `i` of `n` in view without knowing the row height.
+  must be `Id::unique()`. The launcher first used `snap_to(id,
+  RelativeOffset { y: i / (n-1) })` to keep item `i` of `n` in view:
+  it needs no row height but scrolls on every arrow, from the very
+  first. Now it keeps the row in view the way a list should: on
+  Up/Down it asks the widget tree (`widgets::bounds`, the popups'
+  anchor operation) for the selected row and the list container
+  (`Theme::tag`), both in layout coordinates (unscrolled), so `row.y -
+  list.y` is the row's offset in the content; with the current offset
+  from `scrollable::on_scroll` it scrolls (`scroll_to`, absolute) only
+  when the row is above or below the viewport, by the least amount.
+  `Task<Option<T>>::and_then` short-circuits on `None`.
 - `tokio::spawn` inside a `stream::channel` subscription works (iced's
   tokio executor runs it on the runtime) but needs the `rt` feature.
 - Hyprland `j/monitors[].focused` / `focusedmonv2>>NAME,WSID` give the

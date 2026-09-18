@@ -836,7 +836,7 @@ impl AriaShell {
                 let close = self.close_popups();
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
-                let open = widget_bounds(anchor).map(move |bounds| Message::PopupAnchor {
+                let open = widgets::bounds(anchor).map(move |bounds| Message::PopupAnchor {
                     popup: id,
                     panel,
                     anchor: bounds.unwrap_or_default(),
@@ -1428,36 +1428,6 @@ fn toast_anchor(position: notifications::Position) -> Anchor {
         BottomRight => Anchor::Bottom | Anchor::Right,
         BottomCenter => Anchor::Bottom,
     }
-}
-
-/// Bounds of the `container` tagged `id`, in the coordinates of the
-/// surface it's in. The runtime walks every window, so the id must be
-/// unique across them.
-fn widget_bounds(id: widget::Id) -> Task<Option<Rectangle>> {
-    struct Find {
-        id: widget::Id,
-        bounds: Option<Rectangle>,
-    }
-
-    impl Operation<Option<Rectangle>> for Find {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
-            if self.bounds.is_none() {
-                operate(self);
-            }
-        }
-
-        fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
-            if id == Some(&self.id) {
-                self.bounds = Some(bounds);
-            }
-        }
-
-        fn finish(&self) -> Outcome<Option<Rectangle>> {
-            Outcome::Some(self.bounds)
-        }
-    }
-
-    iced::advanced::widget::operate(Find { id, bounds: None })
 }
 
 /// Element path and bounds of every widget the theme helpers tagged, in

@@ -12,15 +12,16 @@ use std::sync::Arc;
 
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::scrollable::RelativeOffset;
+use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Space, column, operation, scrollable};
-use iced::{Element, Event, Length, Subscription, Task, widget, window};
+use iced::{Element, Event, Length, Rectangle, Subscription, Task, widget, window};
 
 use crate::config::{RawSection, Section};
 use crate::gadget::Shared;
 use crate::icons::Index;
 use crate::icons::desktop::{self, DesktopEntry};
 use crate::theme::{self, Node};
+use crate::widgets;
 
 /// `[launcher]` section.
 #[derive(Debug, Clone)]
@@ -70,6 +71,8 @@ pub struct Launcher {
     selected: usize,
     input: widget::Id,
     list: widget::Id,
+    /// How far the list is scrolled, from its `on_scroll`.
+    offset: f32,
     node: Node,
 }
 
@@ -84,6 +87,13 @@ pub enum Message {
     Activate(usize),
     /// Esc, or a click outside.
     Close,
+    /// The list was scrolled (by the wheel, or by us).
+    Scrolled(scrollable::Viewport),
+    /// Where the selected row and the list are, to keep the row in view.
+    Located {
+        item: Option<Rectangle>,
+        list: Option<Rectangle>,
+    },
 }
 
 pub enum Action {
@@ -101,6 +111,7 @@ impl Launcher {
             selected: 0,
             input: widget::Id::unique(),
             list: widget::Id::unique(),
+            offset: 0.0,
             node: Node::root("launcher"),
         };
         launcher.search();
@@ -134,17 +145,54 @@ impl Launcher {
         self.selected = 0;
     }
 
-    /// Keep `selected` in view. The scroll position is proportional to
-    /// the selection's place in the list, which always shows it and
-    /// needs no row height.
-    fn scroll_to_selected(&self) -> Task<Message> {
-        let last = self.results.len().saturating_sub(1);
-        let y = if last == 0 {
-            0.0
+    /// The node of result `i` as `view` builds it: its path is the
+    /// widget id the theme helpers tag it with.
+    fn item_node(&self, i: usize) -> Node {
+        self.node
+            .child("list")
+            .child("item")
+            .class_if("selected", i == self.selected)
+            .nth(i, self.results.len())
+    }
+
+    /// Ask the widget tree where the selected row and the list are;
+    /// [`Message::Located`] then scrolls only if the row is out of view.
+    fn locate_selected(&self) -> Task<Message> {
+        if self.results.is_empty() {
+            return Task::none();
+        }
+        let item = theme::widget_id(&self.item_node(self.selected));
+        let list = theme::widget_id(&self.node.child("list"));
+        widgets::bounds(item).and_then(move |item| {
+            widgets::bounds(list.clone()).map(move |list| Message::Located {
+                item: Some(item),
+                list,
+            })
+        })
+    }
+
+    /// Scroll the least that brings the row into the list's viewport:
+    /// the bounds are layout coordinates (the row where it would be
+    /// unscrolled), so the row's place in the content is its offset
+    /// from the list's top.
+    fn keep_in_view(&mut self, item: Rectangle, list: Rectangle) -> Task<Message> {
+        let top = item.y - list.y;
+        let bottom = top + item.height;
+        let y = if top < self.offset {
+            top
+        } else if bottom > self.offset + list.height {
+            bottom - list.height
         } else {
-            self.selected as f32 / last as f32
+            return Task::none();
         };
-        operation::snap_to(self.list.clone(), RelativeOffset { x: 0.0, y })
+        self.offset = y.max(0.0);
+        operation::scroll_to(
+            self.list.clone(),
+            AbsoluteOffset {
+                x: None,
+                y: Some(self.offset),
+            },
+        )
     }
 
     fn launch(&self, index: usize) {
@@ -165,18 +213,34 @@ impl Launcher {
             Message::Query(q) => {
                 self.query = q;
                 self.search();
-                Action::Run(self.scroll_to_selected())
+                self.offset = 0.0;
+                Action::Run(operation::scroll_to(
+                    self.list.clone(),
+                    AbsoluteOffset {
+                        x: None,
+                        y: Some(0.0),
+                    },
+                ))
             }
             Message::Up => {
                 self.selected = self.selected.saturating_sub(1);
-                Action::Run(self.scroll_to_selected())
+                Action::Run(self.locate_selected())
             }
             Message::Down => {
                 if self.selected + 1 < self.results.len() {
                     self.selected += 1;
                 }
-                Action::Run(self.scroll_to_selected())
+                Action::Run(self.locate_selected())
             }
+            Message::Scrolled(viewport) => {
+                self.offset = viewport.absolute_offset().y;
+                Action::Run(Task::none())
+            }
+            Message::Located {
+                item: Some(item),
+                list: Some(list),
+            } => Action::Run(self.keep_in_view(item, list)),
+            Message::Located { .. } => Action::Run(Task::none()),
             Message::Submit => {
                 self.launch(self.selected);
                 Action::Close
@@ -202,12 +266,8 @@ impl Launcher {
             .on_submit(Message::Submit)
             .width(Length::Fill);
         let list_node = self.node.child("list");
-        let count = self.results.len();
         let items = self.entries().enumerate().map(|(i, entry)| {
-            let node = list_node
-                .child("item")
-                .class_if("selected", i == self.selected)
-                .nth(i, count);
+            let node = self.item_node(i);
             let icon_node = node.child("icon");
             let style = theme.resolve(&icon_node);
             let size = style.height.or(style.width).and_then(|l| match l {
@@ -233,8 +293,15 @@ impl Launcher {
                 .on_press(Message::Activate(i))
                 .into()
         });
-        let list = scrollable(theme.column(&list_node, items).width(Length::Fill))
-            .id(self.list.clone())
+        // The list is tagged so `locate_selected` finds its viewport.
+        let list = theme
+            .tag(
+                &list_node,
+                scrollable(theme.column(&list_node, items).width(Length::Fill))
+                    .id(self.list.clone())
+                    .on_scroll(Message::Scrolled)
+                    .height(Length::Fill),
+            )
             .height(Length::Fill);
         // The daemon's root container already applies the `launcher`
         // padding; only its `gap` is ours.

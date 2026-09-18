@@ -556,7 +556,7 @@ impl Theme {
 }
 
 /// The `widget::Id` of the widget built for `node`: its element path.
-fn widget_id(node: &Node) -> iced::widget::Id {
+pub(crate) fn widget_id(node: &Node) -> iced::widget::Id {
     iced::widget::Id::from(format!("{node:?}"))
 }
 

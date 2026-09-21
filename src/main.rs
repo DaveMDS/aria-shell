@@ -10,6 +10,7 @@ mod icons;
 mod launcher;
 mod locale;
 mod locker;
+mod network;
 mod notifications;
 mod panel;
 mod process;
@@ -48,6 +49,7 @@ use icons::Icons;
 use launcher::Launcher;
 use locale::Locale;
 use locker::Locker;
+use network::Network;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
 use sysmon::SysMon;
@@ -80,10 +82,14 @@ enum Message {
     /// A system reading, or the process table.
     SysMon(sysmon::Event),
     Audio(audio::Event),
+    Network(network::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
     Command(Command),
+    /// A key on a window: a bar holding the keyboard for its popup
+    /// passes it on (`Panel::wants_keyboard`), the rest is dropped.
+    PanelKey(Id, iced::keyboard::Event),
     /// Routed to the open launcher.
     Launcher(launcher::Message),
     /// From the launcher's event subscription: only meant for it when
@@ -135,6 +141,7 @@ struct AriaShell {
     notifications: Notifications,
     sysmon: SysMon,
     audio: Audio,
+    network: Network,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -220,6 +227,7 @@ impl AriaShell {
             notifications,
             sysmon,
             audio: Audio::default(),
+            network: Network::default(),
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -245,6 +253,7 @@ impl AriaShell {
             notifications: &self.notifications,
             sysmon: &self.sysmon,
             audio: &self.audio,
+            network: &self.network,
             scripts: &self.scripts,
         }
     }
@@ -320,7 +329,7 @@ impl AriaShell {
     /// The popups' content may have changed with the shared state:
     /// resize the surfaces whose gadget now wants another size.
     fn sync_popups(&mut self) -> Task<Message> {
-        let mut tasks = Vec::new();
+        let mut tasks = vec![self.sync_keyboard()];
         let ids: Vec<Id> = self.popups.keys().copied().collect();
         for id in ids {
             let Some(size) = self
@@ -346,6 +355,29 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
+    /// A bar whose popup shows a text field becomes keyboard-interactive
+    /// (the compositor sends keys to the popup, which holds the grab),
+    /// and stops being so when it doesn't any more.
+    fn sync_keyboard(&mut self) -> Task<Message> {
+        let mut tasks = Vec::new();
+        for (id, panel) in &mut self.panels {
+            let wanted = panel.wants_keyboard();
+            if wanted == panel.keyboard {
+                continue;
+            }
+            panel.keyboard = wanted;
+            tasks.push(Task::done(Message::KeyboardInteractivityChange {
+                id: *id,
+                keyboard_interactivity: if wanted {
+                    KeyboardInteractivity::Exclusive
+                } else {
+                    KeyboardInteractivity::None
+                },
+            }));
+        }
+        Task::batch(tasks)
+    }
+
     /// Surface size for popup `id` of `panel`: what its gadget wants
     /// for the content, plus the `popup` root's padding and border.
     fn popup_surface_size(&self, panel: Id, id: Id) -> Option<(u32, u32)> {
@@ -362,6 +394,13 @@ impl AriaShell {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Shell(event) => self.on_shell_event(event),
+            Message::PanelKey(id, event) => {
+                if self.panels.get(&id).is_some_and(|p| p.keyboard) {
+                    self.update(Message::Panel(id, panel::Message::Key(event)))
+                } else {
+                    Task::none()
+                }
+            }
             Message::Panel(id, m) => match self.panels.get_mut(&id) {
                 Some(panel) => {
                     let action = panel.update(m);
@@ -369,7 +408,13 @@ impl AriaShell {
                     // shows (a submenu unfolded) or which icons it
                     // draws (a Custom's output named one).
                     self.resolve_icons();
-                    Task::batch([self.perform(id, action), self.sync_popups()])
+                    // The keyboard first: a popup wanting it must map
+                    // on a bar that already has it.
+                    Task::batch([
+                        self.sync_keyboard(),
+                        self.perform(id, action),
+                        self.sync_popups(),
+                    ])
                 }
                 None => Task::none(),
             },
@@ -414,6 +459,14 @@ impl AriaShell {
                 }
                 self.resolve_icons();
                 self.sync_popups()
+            }
+            Message::Network(event) => {
+                let (changed, follow_up) = self.network.apply(event);
+                let follow_up = follow_up.map(Message::Network);
+                if !changed {
+                    return follow_up;
+                }
+                Task::batch([follow_up, self.sync_popups()])
             }
             Message::Toast(m) => {
                 let signals = self
@@ -488,6 +541,10 @@ impl AriaShell {
                 }
                 DebugCommand::Audio => {
                     reply.send(self.audio.describe());
+                    Task::none()
+                }
+                DebugCommand::Network => {
+                    reply.send(self.network.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -889,6 +946,7 @@ impl AriaShell {
             }
             Action::SysMon(cmd) => self.sysmon.run(cmd).map(Message::SysMon),
             Action::Audio(cmd) => self.audio.run(cmd).map(Message::Audio),
+            Action::Network(cmd) => self.network.run(cmd).map(Message::Network),
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1366,6 +1424,7 @@ impl AriaShell {
                     && let Some(panel) = self.panels.get_mut(&open.panel)
                 {
                     panel.popup_closed(id);
+                    return self.sync_keyboard();
                 }
                 Task::none()
             }
@@ -1594,6 +1653,7 @@ impl AriaShell {
                     .map(Message::Notifications),
                 self.sysmon.subscription().map(Message::SysMon),
                 self.audio.subscription().map(Message::Audio),
+                self.network.subscription().map(Message::Network),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),
@@ -1603,6 +1663,7 @@ impl AriaShell {
                     Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                         Some(Message::Cursor(window, position))
                     }
+                    Event::Keyboard(k) => Some(Message::PanelKey(window, k)),
                     _ => None,
                 }),
             ]

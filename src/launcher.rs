@@ -822,7 +822,7 @@ mod tests {
             "[Desktop Entry]\nType=Application\nName=Ant\nExec=ant\n",
         )
         .unwrap();
-        let db = DesktopDb::load(&[dir.clone()], &[]);
+        let db = DesktopDb::load(std::slice::from_ref(&dir), &[]);
         fs::remove_dir_all(&dir).unwrap();
         let mut launcher = Launcher::new(
             LauncherConfig::from_raw(&RawSection::default()),

@@ -12,6 +12,9 @@ cd "$ARIA_UI_ROOT" || exit 1
 inject_start
 # Let the second output appear before the shell looks around.
 sleep 0.5
+# The shell's system bus is the scenario's private bus (zbus honours
+# this), where `aria-nm` plays NetworkManager.
+export DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS
 RUST_LOG=aria_shell=debug "$ARIA_UI_ROOT/target/debug/aria-shell" > "$out/shell.log" 2>&1 &
 echo $! > "$out/shell.pid"
 

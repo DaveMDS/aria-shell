@@ -185,6 +185,9 @@ pub struct Panel {
     /// each. The panel mints the ids so the daemon only has to map them
     /// back to the panel.
     popups: BTreeMap<window::Id, usize>,
+    /// Whether the surface was last made keyboard-interactive, for a
+    /// popup with a text field (see [`Panel::wants_keyboard`]).
+    pub keyboard: bool,
 }
 
 struct Entry {
@@ -200,6 +203,9 @@ struct Entry {
 pub enum Message {
     /// Index into `gadgets`, then the gadget's own message.
     Gadget(usize, gadget::Message),
+    /// A key the compositor sent to the bar's surface, for the open
+    /// popup that wants the keyboard (see [`Panel::wants_keyboard`]).
+    Key(iced::keyboard::Event),
 }
 
 /// What `update` asks the daemon to do; [`gadget::Action`] with the
@@ -214,6 +220,7 @@ pub enum Action {
     Notifications(crate::notifications::Command),
     SysMon(crate::sysmon::Command),
     Audio(crate::audio::Command),
+    Network(crate::network::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -276,7 +283,17 @@ impl Panel {
             height,
             gadgets,
             popups: BTreeMap::new(),
+            keyboard: false,
         }
+    }
+
+    /// Whether an open popup of this bar shows a text field.
+    pub fn wants_keyboard(&self) -> bool {
+        self.popups.values().any(|i| {
+            self.gadgets
+                .get(*i)
+                .is_some_and(|e| e.gadget.popup_keyboard())
+        })
     }
 
     fn themed_height(theme: &Theme, node: &Node) -> u32 {
@@ -338,6 +355,20 @@ impl Panel {
                 let action = g.update(m);
                 self.lift(i, action)
             }
+            Message::Key(event) => {
+                let Some(i) = self.popups.values().copied().find(|i| {
+                    self.gadgets
+                        .get(*i)
+                        .is_some_and(|e| e.gadget.popup_keyboard())
+                }) else {
+                    return Action::None;
+                };
+                let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) else {
+                    return Action::None;
+                };
+                let action = g.popup_key(event);
+                self.lift(i, action)
+            }
         }
     }
 
@@ -354,6 +385,7 @@ impl Panel {
             gadget::Action::Notifications(cmd) => Action::Notifications(cmd),
             gadget::Action::SysMon(cmd) => Action::SysMon(cmd),
             gadget::Action::Audio(cmd) => Action::Audio(cmd),
+            gadget::Action::Network(cmd) => Action::Network(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);

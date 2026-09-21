@@ -158,6 +158,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aria-nm"
+version = "0.0.1"
+dependencies = [
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "aria-shell"
 version = "0.0.1"
 dependencies = [

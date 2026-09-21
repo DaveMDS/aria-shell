@@ -16,7 +16,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
 
-use iced::widget::{button, slider, text_input};
+use iced::widget::{button, slider, text_input, toggler};
 
 #[derive(Clone)]
 pub struct Node(Arc<Inner>);
@@ -111,6 +111,15 @@ impl Node {
         self.with(|n| {
             n.hover = matches!(status, slider::Status::Hovered | slider::Status::Dragged);
             n.pressed = status == slider::Status::Dragged;
+        })
+    }
+
+    /// The interaction state iced reports for a toggler (its `.on` is
+    /// a class the caller sets, not a status).
+    pub fn toggler_status(&self, status: toggler::Status) -> Self {
+        self.with(|n| {
+            n.hover = matches!(status, toggler::Status::Hovered { .. });
+            n.disabled = matches!(status, toggler::Status::Disabled { .. });
         })
     }
 

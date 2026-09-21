@@ -213,6 +213,51 @@
  *      ├─ empty                                               "No audio devices"
  *      ╰─ button.mixer ╰─ text                                runs `mixer_command`
  *
+ *   gadget.network
+ *   ╰─ button.wifi|.wired|.none                               the primary connection: .connected|.connecting|
+ *      │                                                      .disconnected, .limited (no internet), .vpn (one is
+ *      │                                                      up), .off (Wi‑Fi disabled), .none (no NetworkManager)
+ *      ├─ icon                                                its state, drawn at the node's `height`; left: the
+ *      │                                                      popup, middle: Wi‑Fi on/off, right: `settings_command`
+ *      ├─ icon.vpn                                            the VPN badge (show_vpn)
+ *      ╰─ text                                                the connection's name (show_label); `gap` between
+ *   popup > gadget.network
+ *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
+ *      ├─ header.wifi[.off] | header.wired | header.vpn        a section title
+ *      │  ├─ title                                            "Wi‑Fi networks" / "Ethernet network" / "VPN connections"
+ *      │  ├─ button.scan > icon                               (wifi) asks for a scan
+ *      │  ╰─ toggle                                           (wifi) on/off (see `toggle`)
+ *      ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
+ *      │  │                                                   one per network around (:nth-child among them),
+ *      │  │                                                   strongest first after the active and the known ones
+ *      │  ├─ button                                           the row: click joins it, or unfolds it
+ *      │  │  ├─ icon                                          the strength
+ *      │  │  ├─ name > text
+ *      │  │  ├─ icon.badge                                    the lock (.secured)
+ *      │  │  ├─ status                                        "Connected" / "Connecting…"
+ *      │  │  ╰─ chevron[.open] > text                         ▾ / ▴: a button unfolding the active and the known ones
+ *      │  ├─ details ╰─ line                                  (unfolded, active) addresses, gateway, DNS, band...
+ *      │  ├─ actions ╰─ button.disconnect | .connect | .forget ╰─ text   (active: Disconnect; known, idle: Connect)
+ *      │  ├─ auth[.busy]                                      (unfolded, secured) the password
+ *      │  │  ├─ input                                         the field (:focus)
+ *      │  │  ├─ peek[.on] > icon                              the eye
+ *      │  │  ╰─ button.connect[.disabled] > text               (.disabled: nothing typed yet)
+ *      │  ╰─ message                                          "Wrong password", the enterprise hint
+ *      ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]   one per wired device
+ *      │  ├─ button ├─ icon ├─ name ├─ status ╰─ chevron       as above; click unfolds the active one, or
+ *      │  ├─ details ╰─ line                                  brings a plugged one up
+ *      │  ╰─ actions ╰─ button.disconnect > text
+ *      ├─ vpn[.active][.connecting][.failed][name="..."]       one per VPN profile
+ *      │  ├─ icon ├─ name ├─ status ├─ toggle                  the toggle activates / deactivates it
+ *      │  ╰─ message                                          "Needs a password: open the settings"
+ *      ├─ empty                                               "Wi‑Fi is off", "No networks found", "NetworkManager
+ *      │                                                      is not running"
+ *      ╰─ button.settings > text                              runs `settings_command`
+ *
+ *   toggle[.on]                                               an on/off switch: the track is `height` tall (twice
+ *   ╰─ handle                                                 as wide), `background` with the border; the knob's
+ *                                                             `background` (the track's `color` when unset) and border
+ *
  *   slider                                                    a slider: the rail is `height` thick, `color` its
  *   ╰─ handle                                                 filled part, `background` the rest, with the border;
  *                                                             the handle a circle of `width`, `background`, border
@@ -965,6 +1010,196 @@ gadget.audio button.mixer {
 }
 gadget.audio button.mixer:hover {
   border-color: var(--aria-accent);
+}
+
+gadget.network > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.network > button:hover {
+  background: var(--aria-border);
+}
+gadget.network > button icon {
+  height: 16px;
+}
+gadget.network > button.disconnected icon,
+gadget.network > button.none icon {
+  color: var(--aria-muted);
+}
+gadget.network > button.limited icon {
+  color: var(--aria-warning);
+}
+gadget.network list {
+  width: 380px;
+  height: 600px;
+  padding: 8px;
+  gap: 4px;
+}
+gadget.network header {
+  padding: 8px 4px 4px 4px;
+  gap: 8px;
+}
+gadget.network header title {
+  font-weight: bold;
+  color: var(--aria-muted);
+}
+gadget.network header button.scan {
+  padding: 2px;
+  border-radius: 4px;
+}
+gadget.network header button.scan:hover {
+  background: var(--aria-border);
+}
+gadget.network header button.scan icon {
+  height: 16px;
+}
+gadget.network ap,
+gadget.network device {
+  gap: 4px;
+}
+gadget.network ap > button,
+gadget.network device > button {
+  padding: 6px;
+  gap: 8px;
+  border-radius: 4px;
+}
+gadget.network ap > button:hover,
+gadget.network device > button:hover {
+  background: var(--aria-border);
+}
+gadget.network ap > button icon,
+gadget.network device > button icon {
+  height: 20px;
+}
+gadget.network ap > button icon.badge {
+  height: 12px;
+  color: var(--aria-muted);
+}
+gadget.network ap.active > button name text,
+gadget.network device.active > button name text {
+  font-weight: bold;
+  color: var(--aria-accent);
+}
+gadget.network ap.connecting > button icon,
+gadget.network device.connecting > button icon {
+  color: var(--aria-warning);
+}
+gadget.network device.unplugged > button icon,
+gadget.network device.unplugged > button name {
+  color: var(--aria-muted);
+}
+gadget.network status,
+gadget.network chevron {
+  color: var(--aria-muted);
+  font-size: 12px;
+}
+gadget.network chevron {
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+gadget.network chevron:hover {
+  color: var(--aria-accent);
+  background: var(--aria-popup-bg);
+}
+gadget.network details {
+  padding: 0 8px 4px 34px;
+  gap: 2px;
+}
+gadget.network details line {
+  color: var(--aria-muted);
+  font-size: 12px;
+}
+gadget.network actions {
+  padding: 0 8px 6px 8px;
+  gap: 8px;
+}
+gadget.network actions button,
+gadget.network auth button.connect {
+  padding: 4px 10px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.network actions button:hover,
+gadget.network auth button.connect:hover {
+  border-color: var(--aria-accent);
+}
+gadget.network actions button.forget:hover {
+  border-color: var(--aria-urgent);
+}
+gadget.network auth button.connect.disabled text {
+  color: var(--aria-muted);
+}
+gadget.network auth {
+  padding: 0 8px 6px 34px;
+  gap: 6px;
+}
+gadget.network auth input {
+  padding: 4px 6px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+gadget.network auth input:focus {
+  border-color: var(--aria-accent);
+}
+gadget.network auth peek {
+  padding: 4px;
+  border-radius: 4px;
+}
+gadget.network auth peek:hover {
+  background: var(--aria-border);
+}
+gadget.network auth peek icon {
+  height: 16px;
+}
+gadget.network message {
+  padding: 0 8px 6px 34px;
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+gadget.network ap.failed message,
+gadget.network vpn.failed message {
+  color: var(--aria-urgent);
+}
+gadget.network vpn {
+  padding: 6px;
+  gap: 8px;
+}
+gadget.network vpn icon {
+  height: 20px;
+}
+gadget.network vpn.active name text {
+  font-weight: bold;
+  color: var(--aria-accent);
+}
+gadget.network vpn message {
+  padding: 0 0 0 28px;
+}
+gadget.network empty {
+  padding: 12px;
+  color: var(--aria-muted);
+}
+gadget.network button.settings {
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border);
+}
+gadget.network button.settings:hover {
+  border-color: var(--aria-accent);
+}
+
+toggle {
+  height: 18px;
+  background: var(--aria-border);
+}
+toggle.on {
+  background: var(--aria-accent);
+}
+toggle handle {
+  background: var(--aria-popup-bg);
+}
+toggle:hover handle {
+  background: var(--aria-bg);
 }
 
 slider {

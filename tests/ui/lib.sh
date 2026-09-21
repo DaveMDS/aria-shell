@@ -282,6 +282,56 @@ mpris_event() {
     fi
 }
 
+# --- NetworkManager --------------------------------------------------------
+# `aria-nm` (tests/ui/nm) is a NetworkManager on the scenario's private
+# bus (the shell's system bus there, see inner.sh): two fifos, commands
+# in (`ap`, `known`, `vpn`, `carrier`, `finish`, `fail`, ..., answered
+# `ok`), what the shell asked of it out (`scan`, `activate <id>`,
+# `add-activate <ssid> psk=..`, `wireless <bool>`, `delete <id>`, ...).
+# On the media player's descriptors: no scenario runs both.
+
+nm_start() {
+    nm_dir=$(mktemp -d)
+    mkfifo "$nm_dir/in" "$nm_dir/out"
+    "$ARIA_UI_ROOT/target/debug/aria-nm" < "$nm_dir/in" > "$nm_dir/out" 2> "$ARIA_UI_OUT/nm.log" &
+    nm_pid=$!
+    exec 3> "$nm_dir/in" 4< "$nm_dir/out"
+    line=$(nm_event)
+    [ "$line" = ready ] || { echo "NetworkManager didn't start: $line"; return 1; }
+}
+
+nm_stop() {
+    exec 3>&- 4<&-
+    kill "$nm_pid" 2> /dev/null
+    rm -rf "$nm_dir"
+}
+
+# One command to NetworkManager; fails unless answered `ok`.
+nm_send() {
+    echo "$1" >&3
+    read -r reply <&4
+    [ "$reply" = ok ] || { echo "nm '$1': $reply"; return 1; }
+    settle
+}
+
+# The next line NetworkManager reported (within 5s), else fails.
+nm_event() {
+    if read -r -t 5 line <&4; then
+        echo "$line"
+    else
+        echo "no event from NetworkManager"
+        return 1
+    fi
+}
+
+# Nothing reported for a moment.
+nm_quiet() {
+    if read -r -t 1 line <&4; then
+        echo "unexpected event from NetworkManager: $line"
+        return 1
+    fi
+}
+
 scroll() {
     inject "scroll $1"
     settle

@@ -416,6 +416,11 @@ impl Locker {
     }
 }
 
+/// The current user's login name.
+pub fn login() -> String {
+    user_info().0
+}
+
 /// The current user's login, gecos (its first field) and home, from
 /// the passwd database (`$USER` / `$HOME` when it doesn't answer).
 fn user_info() -> (String, String, String) {

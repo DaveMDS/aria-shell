@@ -24,6 +24,7 @@ use crate::config::{Config, Section};
 use crate::gadgets::audio::{self, AudioGadget};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
+use crate::gadgets::network::{self, NetworkGadget};
 use crate::gadgets::notifications::{self, NotificationsGadget};
 use crate::gadgets::system_monitor::{self, SystemMonitor};
 use crate::gadgets::themes::{self, Themes};
@@ -43,6 +44,7 @@ pub struct Shared<'a> {
     pub notifications: &'a crate::notifications::Notifications,
     pub sysmon: &'a crate::sysmon::SysMon,
     pub audio: &'a crate::audio::Audio,
+    pub network: &'a crate::network::Network,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -76,6 +78,7 @@ pub enum Action<M> {
     Notifications(crate::notifications::Command),
     SysMon(crate::sysmon::Command),
     Audio(crate::audio::Command),
+    Network(crate::network::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -184,6 +187,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Notifications(cmd) => Action::Notifications(cmd),
             Self::SysMon(cmd) => Action::SysMon(cmd),
             Self::Audio(cmd) => Action::Audio(cmd),
+            Self::Network(cmd) => Action::Network(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -225,6 +229,22 @@ pub trait Gadget: Sized {
     /// The popup surface is gone, whoever closed it.
     fn popup_closed(&mut self) {}
 
+    /// Whether the popup shows a text field right now: the daemon then
+    /// makes the bar's layer surface keyboard-interactive, which is what
+    /// gets the compositor to send keys to the popup (a popup of a
+    /// non-interactive layer never has the keyboard).
+    fn popup_keyboard(&self) -> bool {
+        false
+    }
+
+    /// A key the compositor delivered to the bar while the popup wants
+    /// the keyboard ([`Gadget::popup_keyboard`]): the layer surface
+    /// keeps the focus, the popup never sees a key itself, so the
+    /// gadget edits its field from here.
+    fn popup_key(&mut self, _event: iced::keyboard::Event) -> Action<Self::Message> {
+        Action::None
+    }
+
     /// Icon names (from the icon theme) the gadget draws, for the
     /// daemon to resolve; read back with `ctx.icons.get_name`.
     fn icon_names(&self) -> Vec<String> {
@@ -256,6 +276,7 @@ pub enum AnyGadget {
     Notifications(NotificationsGadget),
     SystemMonitor(Box<SystemMonitor>),
     Audio(AudioGadget),
+    Network(NetworkGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -268,6 +289,7 @@ pub enum Message {
     Notifications(notifications::Message),
     SystemMonitor(system_monitor::Message),
     Audio(audio::Message),
+    Network(network::Message),
 }
 
 impl AnyGadget {
@@ -326,6 +348,10 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
+            network::NetworkConfig::NAME => Some(Self::Network(NetworkGadget::new(
+                config.section(Some(name)),
+                output,
+            ))),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -344,6 +370,7 @@ impl AnyGadget {
             Self::Notifications(_) => "notifications",
             Self::SystemMonitor(_) => "system-monitor",
             Self::Audio(_) => "audio",
+            Self::Network(_) => "network",
         }
     }
 
@@ -361,6 +388,7 @@ impl AnyGadget {
                 g.update(m).map(Message::SystemMonitor)
             }
             (Self::Audio(g), Message::Audio(m)) => g.update(m).map(Message::Audio),
+            (Self::Network(g), Message::Network(m)) => g.update(m).map(Message::Network),
             _ => Action::None,
         }
     }
@@ -375,6 +403,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.view(ctx).map(Message::Notifications),
             Self::SystemMonitor(g) => g.view(ctx).map(Message::SystemMonitor),
             Self::Audio(g) => g.view(ctx).map(Message::Audio),
+            Self::Network(g) => g.view(ctx).map(Message::Network),
         }
     }
 
@@ -388,6 +417,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.popup_view(ctx).map(Message::Notifications),
             Self::SystemMonitor(g) => g.popup_view(ctx).map(Message::SystemMonitor),
             Self::Audio(g) => g.popup_view(ctx).map(Message::Audio),
+            Self::Network(g) => g.popup_view(ctx).map(Message::Network),
         }
     }
 
@@ -401,6 +431,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.popup_size(ctx),
             Self::SystemMonitor(g) => g.popup_size(ctx),
             Self::Audio(g) => g.popup_size(ctx),
+            Self::Network(g) => g.popup_size(ctx),
         }
     }
 
@@ -414,6 +445,35 @@ impl AnyGadget {
             Self::Notifications(g) => g.popup(),
             Self::SystemMonitor(g) => g.popup(),
             Self::Audio(g) => g.popup(),
+            Self::Network(g) => g.popup(),
+        }
+    }
+
+    pub fn popup_keyboard(&self) -> bool {
+        match self {
+            Self::Clock(g) => g.popup_keyboard(),
+            Self::Custom(g) => g.popup_keyboard(),
+            Self::Workspaces(g) => g.popup_keyboard(),
+            Self::Tray(g) => g.popup_keyboard(),
+            Self::Themes(g) => g.popup_keyboard(),
+            Self::Notifications(g) => g.popup_keyboard(),
+            Self::SystemMonitor(g) => g.popup_keyboard(),
+            Self::Audio(g) => g.popup_keyboard(),
+            Self::Network(g) => g.popup_keyboard(),
+        }
+    }
+
+    pub fn popup_key(&mut self, event: iced::keyboard::Event) -> Action<Message> {
+        match self {
+            Self::Clock(g) => g.popup_key(event).map(Message::Clock),
+            Self::Custom(g) => g.popup_key(event).map(Message::Custom),
+            Self::Workspaces(g) => g.popup_key(event).map(Message::Workspaces),
+            Self::Tray(g) => g.popup_key(event).map(Message::Tray),
+            Self::Themes(g) => g.popup_key(event).map(Message::Themes),
+            Self::Notifications(g) => g.popup_key(event).map(Message::Notifications),
+            Self::SystemMonitor(g) => g.popup_key(event).map(Message::SystemMonitor),
+            Self::Audio(g) => g.popup_key(event).map(Message::Audio),
+            Self::Network(g) => g.popup_key(event).map(Message::Network),
         }
     }
 
@@ -436,6 +496,7 @@ impl AnyGadget {
             Self::Notifications(g) => <NotificationsGadget as Gadget>::popup_closed(g),
             Self::SystemMonitor(g) => <SystemMonitor as Gadget>::popup_closed(g),
             Self::Audio(g) => <AudioGadget as Gadget>::popup_closed(g),
+            Self::Network(g) => <NetworkGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -449,6 +510,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.icon_names(),
             Self::SystemMonitor(g) => g.icon_names(),
             Self::Audio(g) => g.icon_names(),
+            Self::Network(g) => g.icon_names(),
         }
     }
 
@@ -462,6 +524,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.script(),
             Self::SystemMonitor(g) => g.script(),
             Self::Audio(g) => g.script(),
+            Self::Network(g) => g.script(),
         }
     }
 
@@ -475,6 +538,7 @@ impl AnyGadget {
             Self::Notifications(g) => g.subscription().map(Message::Notifications),
             Self::SystemMonitor(g) => g.subscription().map(Message::SystemMonitor),
             Self::Audio(g) => g.subscription().map(Message::Audio),
+            Self::Network(g) => g.subscription().map(Message::Network),
         }
     }
 }

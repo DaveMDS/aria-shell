@@ -43,7 +43,7 @@ use iced::border::Radius;
 use iced::font::{Family, Weight};
 use iced::widget::{
     Button, Column, Container, Row, Text, TextInput, button, column, container, row, slider, text,
-    text_input,
+    text_input, toggler,
 };
 use iced::{Alignment, Border, Color, Element, Font, Padding, Shadow, Size};
 
@@ -60,6 +60,9 @@ use iced::Length as IcedLength;
 /// say.
 const DEFAULT_RAIL: f32 = 4.0;
 const DEFAULT_HANDLE: f32 = 12.0;
+
+/// A toggle's height when the theme doesn't say (its width is twice).
+const DEFAULT_TOGGLE: f32 = 16.0;
 
 /// Always loaded first; the neutral defaults every theme builds on.
 const BASE: &str = include_str!("../../assets/base.css");
@@ -481,6 +484,57 @@ impl Theme {
                 }
             });
         container(slider).id(id).width(IcedLength::Fill)
+    }
+
+    /// A `toggler` styled as `node`, which carries `.on` when it is:
+    /// the track is `height` tall (twice as wide), `background` with
+    /// the node's border; the knob is the `handle` child: `background`
+    /// (the track's `color` when unset) and border. Re-resolved with
+    /// `:hover`. Comes in a container tagged with the node path, so the
+    /// theme's `toggle.on` rules and `debug widgets` see it.
+    pub fn toggler<'a, M: Clone + 'a>(
+        &'a self,
+        node: &Node,
+        on: bool,
+        on_toggle: impl Fn(bool) -> M + 'a,
+    ) -> Container<'a, M> {
+        let node = node.class_if("on", on);
+        let s = self.resolve(&node);
+        let size = match s.height {
+            Some(Length::Px(px)) => px,
+            _ => DEFAULT_TOGGLE,
+        };
+        let id = widget_id(&node);
+        let styled = node.clone();
+        let toggle = toggler(on).on_toggle(on_toggle).size(size).style(
+            move |theme: &iced::Theme, status| {
+                let n = styled.toggler_status(status);
+                let s = self.resolve(&n);
+                let h = self.resolve(&n.child("handle"));
+                let track = s.background.unwrap_or(Color {
+                    a: 0.3,
+                    ..theme.palette().text
+                });
+                toggler::Style {
+                    background: track.into(),
+                    background_border_width: s.border_width,
+                    background_border_color: s.border_color.unwrap_or(Color::TRANSPARENT),
+                    foreground: h
+                        .background
+                        .or(s.color)
+                        .unwrap_or(theme.palette().background)
+                        .into(),
+                    foreground_border_width: h.border_width,
+                    foreground_border_color: h.border_color.unwrap_or(Color::TRANSPARENT),
+                    text_color: None,
+                    // Round unless the theme set a radius on the track.
+                    border_radius: (s.border_radius != Radius::default())
+                        .then_some(s.border_radius),
+                    padding_ratio: 0.1,
+                }
+            },
+        );
+        container(toggle).id(id)
     }
 
     /// The size `text` takes as a [`Theme::text`] of `node` (font and

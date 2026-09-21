@@ -40,7 +40,8 @@ bar per monitor (or per `[panel:*]` section):
 | `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |
 | `logout`        | ✅ | A `Custom` button to invoke Aria Exiter (`aria-shell exiter toggle`)            |
 | `power`         | 🔲 | Idle inhibitor, battery status, power profiles                                  |
-| `network`       | 🔲 | Full featured network manager                                                   |
+| `Network`       | ✅ | NetworkManager: Wi‑Fi networks, wired devices, VPN toggles, Wi‑Fi on/off        |
+| `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, iwd |
 | `bluetooth`     | 🔲 | bluetooth manager                                                               |
 | `screenshot`    | 🔲 | Screenshot and screen recorder                                                  |
 | `apps`          | 🔲 | fixed list of apps to run (like a dock)                                         |
@@ -192,7 +193,7 @@ aria-shell ping
 aria-shell lock
 aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
@@ -209,6 +210,7 @@ TODO: dmenu ...
 ```
 libpam            # lock screen authentication
 libpulse          # audio gadget (PipeWire's pipewire-pulse or PulseAudio at runtime)
+NetworkManager    # network gadget (over the system bus, at runtime)
 a Vulkan or OpenGL driver for wgpu
 an icon theme (Adwaita, breeze, ...) and the fonts your theme names
 ```

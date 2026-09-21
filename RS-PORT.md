@@ -71,11 +71,13 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Notifications(notifications::Event)   notifications coming and going, applied to `Notifications`
   Message::Toast(toast::Message)           a click on a notification's surface -> notifications::Command
   Message::SysMon(sysmon::Event)           a system reading / the process table, applied to `SysMon`
+  Message::Audio(audio::Event) | Network(network::Event)   the mixer / players, NetworkManager, applied to each
+  Message::PanelKey(window::Id, keyboard::Event)   a key on a bar holding the keyboard for its popup
   Message::Locker(locker::Message)         routed to the lock screen while the session is locked
   + variants injected by #[to_exwlshell_message] (NewLayerShell, RemoveWindow, Lock, UnLock, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
-  Message::Gadget(index, gadget::Message)
+  Message::Gadget(index, gadget::Message) | Key(keyboard::Event)   (the latter for the popup wanting the keyboard)
 
 AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
   Message::Clock(clock::Message) | Message::Workspaces(..) | ...
@@ -180,6 +182,44 @@ AudioGadget (gadgets/audio.rs)  impl Gadget: the default output's level icon (+ 
   Message::TogglePopup(kind) | ToggleMute(kind) | Scroll(kind, ..) | RunMixer | Volume(kind, index, %) | Mute | SetDefault
            | PlayPause(bus) | Previous | Next    -> Action::Audio(audio::Command)
 
+Network    (network/)        daemon-owned NetworkManager state: `devices()` (managed wired / Wi‑Fi: state, carrier,
+                            ip4/ip6, the AP a Wi‑Fi one is on), `access_points()` (the networks around merged by
+                            SSID — the strongest BSSID —, `known` (a profile's uuid), `active`, `connecting`; the
+                            active first, then the known, then by strength), `vpns()` (profiles of type vpn /
+                            wireguard), `active_by_uuid`, `summary()` (the bar's: the primary connection's kind,
+                            connected/connecting/limited, label, strength, a VPN up), `failure(key)` /
+                            `attempting(key)` (an attempt the gadget started: by SSID or profile uuid), `describe()`
+  subscription()            nm.rs: the system bus (`Connection::system`, `DBUS_SYSTEM_BUS_ADDRESS` honoured),
+                            `NameOwnerChanged` on org.freedesktop.NetworkManager (`Event::Running`), one match rule
+                            on every signal under its path; any signal marks a snapshot due, re-read 200 ms after
+                            the last one (`snapshot()`: `GetAll` per object, the lists concurrently) -> `Event::Snapshot`;
+                            `Device.StateChanged` to Failed / `Connection.Active.StateChanged` to Deactivated carry
+                            the reason -> `Event::DeviceFailed` / `ActiveFailed`
+  apply(Event) -> (changed, Task)   replaces the snapshot and rebuilds the merged list; a failure of the current
+                            attempt becomes a `Failure` (NO_SECRETS / supplicant reasons on a device = wrong
+                            password; reason 9 on a VPN = needs a password), and the profile the attempt added
+                            (`AddAndActivateConnection`) is deleted so a wrong key leaves nothing behind
+  run(Command) -> Task      SetWireless / ToggleWireless, Scan (every Wi‑Fi device), Connect { ssid } (a known
+                            network: `ActivateConnection(profile, device, ap)`; an open one: `AddAndActivate`;
+                            a secured unknown one is the gadget's to ask first), ConnectWithPassword (a new
+                            profile: `802-11-wireless-security` wpa-psk / sae / wep, `connection.permissions =
+                            user:<login>:` so `settings.modify.own` is enough; a known one's old profile deleted
+                            first), ConnectDevice (`ActivateConnection("/", device, "/")`), Disconnect (device),
+                            Forget (profile), Activate / Deactivate (a profile, VPN)
+
+NetworkGadget (gadgets/network.rs)  impl Gadget: the primary connection's icon (`show_label`: the name;
+                            `show_vpn`: a badge); left click the popup: header Wi‑Fi (scan button, on/off
+                            toggle), one row per network (click: join a known / open one, unfold the
+                            password field of a secured one — Enter / Connect; a chevron button on the active
+                            and the known ones: the active one's details with Disconnect / Forget, a known
+                            idle one's Connect / Forget; an 802.1x one's hint), the wired devices (details, Disconnect,
+                            a click brings a plugged one up), the VPN profiles with a toggle each, Settings
+                            (`settings_command`); middle click Wi‑Fi on/off, right click `settings_command`;
+                            a scan when it opens and every 10 s while open
+  Message::TogglePopup | SetWireless | FlipWireless | Scan | Tick | Expand(Row) | Collapse | Focus | Connect
+           | ConnectDevice | Password | Peek | Submit | Disconnect | Forget | Vpn(uuid, on)   -> Action::Network
+  popup_keyboard() / popup_key()   the popup takes typed text (see "Popups and the keyboard" below)
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
@@ -273,8 +313,8 @@ watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, 
 Two things flow between the daemon and the gadgets besides messages:
 
 - **`gadget::Context`** goes *down*, into `view`. It holds
-  `gadget::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`; later
-  `&Audio`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
+  `gadget::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`,
+  `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.
 - **`gadget::Action`** comes *up*, out of `update`, in place of a bare
@@ -313,6 +353,24 @@ Two things flow between the daemon and the gadgets besides messages:
   `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's
   `Popup` is marked closed and `Gadget::popup_closed` runs.
 
+- **Popups and the keyboard.** A popup of a bar never gets keyboard
+  focus by itself: on Sway (wlroots) an xdg popup's grab doesn't move
+  the keyboard, and the bar's layer surface has
+  `KeyboardInteractivity::None`. So a gadget whose popup shows a text
+  field says so (`Gadget::popup_keyboard`), and the daemon makes the
+  bar `Exclusive` *before* the popup maps (`sync_keyboard`, first in
+  the batch of `Message::Panel`: a change after the grab started does
+  nothing) and `None` again when the popup closes. The compositor then
+  sends the keys to the *bar's* window (verified: the popup's window
+  never sees them), and the daemon forwards every keyboard event
+  arriving on such a bar to the gadget (`Message::PanelKey` ->
+  `panel::Message::Key` -> `Gadget::popup_key`), which edits its own
+  field (the `text_input` is controlled state anyway): characters,
+  Backspace, Enter submits, Escape folds. No cursor blinks in the
+  field and there is no paste; a compositor that does focus the popup
+  would let the widget handle the keys itself. `operation::focus` is
+  still run, one message after the field appears (an operation runs
+  on the widget tree as it is, the field isn't in it yet).
 - **Light/dark**: a theme is loaded for a `theme::Scheme` (`[general]
   color_scheme`, default light; the `Themes` gadget switches it at
   runtime, in memory only — following or setting the desktop's scheme is
@@ -731,6 +789,30 @@ Two things flow between the daemon and the gadgets besides messages:
   `Value::Value` boxes (nested once more when built by hand). The
   player's `Volume` isn't shown: its stream is in the mixer already,
   and Firefox ignores writes to it.
+- NetworkManager over zbus: `Connection::system()` honours
+  `DBUS_SYSTEM_BUS_ADDRESS` (`address/mod.rs`), which is how the UI
+  scenarios put a fake NetworkManager on their session bus. One
+  `MatchRule` with `sender` = the well-known name and `path_namespace`
+  = `/org/freedesktop/NetworkManager` (`MessageStream::for_match_rule`)
+  catches every signal of every object; `PropertiesProxy::get_all`
+  per object and interface is one round trip each (a snapshot of a
+  laptop with ~30 access points is ~50 of them, concurrent per list,
+  well under the 200 ms debounce). `Device.StateChanged(new, old,
+  reason)` and `Connection.Active.StateChanged(state, reason)` are the
+  only signals whose bodies are read. AP `Ssid` is `ay`; `AddressData`
+  / `NameserverData` are `aa{sv}` with a `Value::Value` box per entry.
+  polkit on Arch: `settings.modify.system` is `auth_admin_keep`,
+  `modify.own` is `yes`, so profiles the shell creates carry
+  `connection.permissions = user:<login>:` (as nm-applet does); Forget
+  on a system-wide profile is refused (logged). A `#[interface]` with
+  a property `state` and a signal `StateChanged` clash on the generated
+  `state_changed`: name the signal fn differently with
+  `#[zbus(signal, name = "StateChanged")]`.
+- `iced::widget::toggler` styled through `toggler::Style` (track
+  background/border, `foreground` the knob, `border_radius: None` for
+  round); `Theme::toggler(node, on, f)` is a container-tagged one
+  with `.on` as a class the caller sets (its status only tells
+  hovered/disabled).
 - Hyprland 0.56 (Lua config) changed the IPC dispatch syntax: the command
   socket takes `dispatch hl.dsp.focus({ workspace = 3 })` /
   `dispatch hl.dsp.focus({ window = "address:0x..." })`; the old
@@ -1152,8 +1234,29 @@ Verified on the real Hyprland session with two outputs:
   (the test entry as "App di prova Aria", found by its Italian name)
   and the lock screen ("venerdì 18 settembre", "Sblocca") in Italian)
   passes.
+- Network: `tests/ui/run.sh network` (the bars offline before the fake
+  NetworkManager is up, "not running" in the popup; up: a Wi‑Fi device,
+  disconnected; four networks listed — the known one first, then by
+  strength —, a lock on the secured ones, the toggle on, the wired
+  device unplugged; a scan on every opening; a click on the known one
+  activates its profile, `.connecting` then `.active` with "Connected"
+  and the SSID on the bars; its details unfold (IPv4, gateway, DNS,
+  band line) with Disconnect / Forget; a secured unknown one unfolds
+  the password field: typed (through the bar, see above), the eye
+  shows it, Enter adds and activates a profile with the key; a
+  refused key deletes that profile and says "Wrong password" with the
+  field still there, the second try connects; the 802.1x one shows
+  the hint, the open one connects with no key; Disconnect; the chevron
+  of a known idle one unfolds Connect / Forget, Forget deletes the
+  profile; the toggle turns Wi‑Fi off ("Wi‑Fi is off", the bars `.off`), a middle
+  click on the bar back on; a wired profile up makes wired the
+  primary, its details and Disconnect, the cable unplugged; a VPN
+  profile with its toggle, NO_SECRETS says "Needs a password", the
+  next try connects with the badge on the bars, off again; the
+  Settings button runs `settings_command`; the fake leaving puts the
+  bars offline) passes, screenshots in `target/ui/network/`.
 - `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (124 tests: the exiter config, buttons and confirm flow, the exiter command, the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
+  (141 tests: the network merge, sorting, summary, failures and settings, the NetworkManager property readers, the gadget's icons; the exiter config, buttons and confirm flow, the exiter command, the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
   completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
   placeholders, history cap, process cpu%, graph geometry, the
   gadget's config, thresholds and sorting; notifications config/timeouts/
@@ -1227,6 +1330,11 @@ every UI text and date through `Locale`, English and Italian catalogues.
 The wallpaper (`[wallpaper]`, `[wallpaper:<output>]`: `source`, `fit`):
 still images on a background surface per output, reloaded on change.
 The exit menu (`[exiter]`, `aria-shell exiter`; `[launcher] actions`).
+The `[Network]` gadget (`settings_command`, `show_label`, `show_vpn`):
+NetworkManager over the system bus, the bar icon by state, the popup
+with the Wi‑Fi networks (join, the password in place, details,
+Disconnect / Forget, scan, on/off), the wired devices and the VPN
+profiles with toggles; `aria-shell debug network`.
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -1245,7 +1353,10 @@ cpu, Intel GPU, `:hover` on the table rows, scrolling the popup to a
 section), notification niceties (`resident`/`transient` hints,
 sound, a per-app `image-data` downscale, `x`/`y` hints, animation,
 persisting the history and do-not-disturb, `:hover` on the popup rows
-— they're containers), launcher `DBusActivatable` entries,
+— they're containers), network niceties (a secret agent so NetworkManager asks *us* for a
+VPN's or a known network's missing password, 802.1x identity + password
+in place, hidden networks, a hotspot, mobile broadband, a per-BSSID
+choice, editing profiles, an iwd backend), launcher `DBusActivatable` entries,
 a themed scrollbar (iced's default for now), persisting the theme
 picked at runtime and following/setting the desktop's colour scheme
 (portal / gsettings, per DE), tray tooltips / overlay

@@ -41,6 +41,7 @@ aria-shell debug cursor             # where the pointer was last seen on us
 aria-shell debug audio              # the mixer channels and the media players as the daemon sees them
 aria-shell debug network            # the devices, the Wi‑Fi networks around, the profiles and the active connections
 aria-shell debug idle               # the idle stages: power source, holds, screens, timers armed
+aria-shell debug power              # the battery, the peripherals, the power profiles as UPower sees them
 ```
 
 ## Architecture
@@ -56,11 +57,12 @@ Shared state (the compositor's workspaces/windows, the app icons, the
 tray items, the outputs of gadget scripts, the mixer and the media
 players, ...) is owned by the daemon (`Compositor` in `compositor/`,
 `Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
-`Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`), reaches gadgets read-only through
+`Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`,
+`Power` in `power/`), reaches gadgets read-only through
 `gadget::Context` in `view`, and is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
 `Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
-`Action::Idle(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Idle(cmd)` / `Action::Power(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
@@ -103,7 +105,8 @@ through `tests/ui/sni` (a fake status notifier item with a menu, on a
 private session bus from `dbus-run-session`), media players through
 `tests/ui/mpris` (a fake MPRIS player on the same bus), NetworkManager
 through `tests/ui/nm` (a fake one on the same bus, which the shell takes
-for the system bus: `DBUS_SYSTEM_BUS_ADDRESS`), so nothing
+for the system bus: `DBUS_SYSTEM_BUS_ADDRESS`), UPower and the power
+profiles through `tests/ui/upower` (the same way), so nothing
 depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`
 (status, logs, screenshots). Needs `sway`, `grim` and `dbus-run-session`
 installed; no root. Add a scenario for every new interactive

@@ -39,8 +39,7 @@ bar per monitor (or per `[panel:*]` section):
 | `Notifications` | ✅ | Notification bell with unseen count, history popup and do-not-disturb           |
 | `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |
 | `logout`        | ✅ | A `Custom` button to invoke Aria Exiter (`aria-shell exiter toggle`)            |
-| `Idle`          | ✅ | Idle inhibitor: holds lock, screens off and suspend (see Aria Idler)            |
-| `power`         | 🔲 | Battery status, power profiles                                                  |
+| `Power`         | ✅ | Battery (charge, time left, health), peripherals' charge, power profiles, idle inhibitor; low battery notifications |
 | `Network`       | ✅ | NetworkManager: Wi‑Fi networks, wired devices, VPN toggles, Wi‑Fi on/off        |
 | `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, per-BSSID choice, editing profiles, iwd |
 | `Clock`         | 🔲 | Tooltip (`tooltip_format`)                                                      |
@@ -166,7 +165,7 @@ stage has its own timeout from the last input, on AC and on battery.
 - ✅ Screens off (back on at the first input), lock, suspend (through logind)
 - ✅ Separate timeouts on battery (UPower)
 - ✅ Lock before any sleep (lid, `systemctl suspend`) and on `loginctl lock-session`
-- ✅ Held by the `Idle` gadget or `aria-shell idle inhibit`, by a media player playing,
+- ✅ Held by the `Power` gadget's eye or `aria-shell idle inhibit`, by a media player playing,
   and by apps inhibiting idle (a fullscreen video)
 - 🔲 A screensaver stage (which would also dim the screens)
 
@@ -207,7 +206,7 @@ aria-shell lock
 aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
 aria-shell idle     inhibit [toggle|on|off]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
@@ -226,7 +225,8 @@ libpam            # lock screen authentication
 libpulse          # audio gadget (PipeWire's pipewire-pulse or PulseAudio at runtime)
 NetworkManager    # network gadget (over the system bus, at runtime)
 systemd-logind    # idle: suspend, lock before sleep (at runtime)
-UPower            # idle: the timeouts on battery (at runtime, optional)
+UPower            # the Power gadget, idle's timeouts on battery (at runtime, optional)
+power-profiles-daemon or tuned-ppd   # the Power gadget's profiles (at runtime, optional)
 a Vulkan or OpenGL driver for wgpu
 an icon theme (Adwaita, breeze, ...) and the fonts your theme names
 ```

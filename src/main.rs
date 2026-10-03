@@ -14,6 +14,7 @@ mod locker;
 mod network;
 mod notifications;
 mod panel;
+mod power;
 mod process;
 mod scripts;
 mod sysmon;
@@ -54,6 +55,7 @@ use locker::Locker;
 use network::Network;
 use notifications::{Notifications, toast};
 use panel::{Action, Panel, PanelConfig};
+use power::Power;
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
@@ -85,8 +87,10 @@ enum Message {
     SysMon(sysmon::Event),
     Audio(audio::Event),
     Network(network::Event),
-    /// Idle stages, sleeps, the power source.
+    /// Idle stages, sleeps.
     Idle(idle::Event),
+    /// The battery, the peripherals, the power profiles.
+    Power(power::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -147,6 +151,7 @@ struct AriaShell {
     audio: Audio,
     network: Network,
     idle: Idle,
+    power: Power,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -220,6 +225,7 @@ impl AriaShell {
         let notifications = Notifications::new(config.section(None));
         let sysmon = SysMon::new(config.section(None));
         let idle = Idle::new(idle::IdleConfig::load(&config));
+        let power = Power::new(config.section(None));
         let shell = Self {
             config,
             general,
@@ -236,6 +242,7 @@ impl AriaShell {
             audio: Audio::default(),
             network: Network::default(),
             idle,
+            power,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -263,6 +270,7 @@ impl AriaShell {
             audio: &self.audio,
             network: &self.network,
             idle: &self.idle,
+            power: &self.power,
             scripts: &self.scripts,
         }
     }
@@ -297,6 +305,7 @@ impl AriaShell {
             .chain(self.scripts.icon_names().map(str::to_owned))
             .chain(self.notifications.icon_names().map(str::to_owned))
             .chain(self.audio.icon_names().map(str::to_owned))
+            .chain(self.power.icon_names().map(str::to_owned))
             .chain(
                 self.locker
                     .iter()
@@ -532,6 +541,19 @@ impl AriaShell {
                 self.idle.run(cmd);
                 Task::none()
             }
+            Message::Power(event) => {
+                let (changed, low, follow_up) = self.power.apply(event);
+                self.idle.set_on_battery(self.power.on_battery());
+                let mut tasks = vec![follow_up.map(Message::Power)];
+                if let Some(low) = low {
+                    tasks.push(self.notify_low(low));
+                }
+                if changed {
+                    self.resolve_icons();
+                    tasks.push(self.sync_popups());
+                }
+                Task::batch(tasks)
+            }
             Message::Idle(event) => {
                 let locker = match &self.locker {
                     None => idle::Locker::None,
@@ -582,6 +604,10 @@ impl AriaShell {
                 }
                 DebugCommand::Idle => {
                     reply.send(self.idle.describe());
+                    Task::none()
+                }
+                DebugCommand::Power => {
+                    reply.send(self.power.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -914,6 +940,7 @@ impl AriaShell {
         self.notifications.set_config(self.config.section(None));
         self.sysmon.set_config(self.config.section(None));
         self.idle.set_config(idle::IdleConfig::load(&self.config));
+        self.power.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -989,6 +1016,7 @@ impl AriaShell {
                 self.idle.run(cmd);
                 Task::none()
             }
+            Action::Power(cmd) => self.power.run(cmd).map(Message::Power),
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1277,6 +1305,31 @@ impl AriaShell {
                     .map(Message::Compositor)
             }
         }
+    }
+
+    /// The battery got low: say so, in the user's language.
+    fn notify_low(&self, low: power::Low) -> Task<Message> {
+        let critical = low.warning == power::Warning::Critical;
+        let summary = self.locale.tr(if critical {
+            "power.critical_title"
+        } else {
+            "power.low_title"
+        });
+        let percent = format!("{:.0}", low.percentage);
+        let body = if low.time_to_empty > 0 {
+            self.locale.fmt(
+                "power.low_body_time",
+                &[
+                    ("n", &percent),
+                    ("time", &gadgets::power::duration(&self.locale, low.time_to_empty)),
+                ],
+            )
+        } else {
+            self.locale.fmt("power.low_body", &[("n", &percent)])
+        };
+        self.power
+            .notify(summary.to_owned(), body, critical)
+            .map(Message::Power)
     }
 
     /// `aria-shell lock`: ask the compositor for the session lock; the
@@ -1700,6 +1753,7 @@ impl AriaShell {
                 self.audio.subscription().map(Message::Audio),
                 self.network.subscription().map(Message::Network),
                 self.idle.subscription().map(Message::Idle),
+                self.power.subscription().map(Message::Power),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

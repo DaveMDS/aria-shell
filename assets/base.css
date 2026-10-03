@@ -137,10 +137,28 @@
  *   popup > gadget.themes
  *   ╰─ menu                                                   Light / Dark, then Base and every theme found
  *
- *   gadget.idle
- *   ╰─ button[.inhibited][.playing]                           left click holds idle / lets it go; .inhibited: held by
- *      ╰─ icon                                                the user, .playing: held by a media player playing;
- *                                                             drawn at the node's `height`
+ *   gadget.power                                              a row (`gap` between the buttons); middle click holds
+ *   │                                                         idle / lets it go, right click runs `settings_command`
+ *   ├─ button.status[.charging|.discharging|.full|.not-charging|.empty][.low|.critical]
+ *   │  │          [.power-saver|.balanced|.performance]       the battery's state and warning, the active profile;
+ *   │  │                                                      left click opens the popup (absent without a battery
+ *   │  │                                                      and a profiles daemon)
+ *   │  ├─ icon.battery                                        UPower's icon, drawn at the node's `height`
+ *   │  ├─ text                                                the percent (show_percent)
+ *   │  ╰─ icon.profile                                        the active profile's icon
+ *   ╰─ button.idle[.inhibited][.playing] > icon               the eye: left click holds idle / lets it go;
+ *                                                             .inhibited: held by the user, .playing: by a player
+ *   popup > gadget.power
+ *   ╰─ list                                                   `width` sizes the popup (a column; `gap`)
+ *      ├─ battery[.<state>][.low|.critical]                   ├─ icon ├─ percent ├─ status ("2 h 10 min left")
+ *      ├─ details ╰─ line                                     power draw, battery health
+ *      ├─ header.devices | header.profile ╰─ title            section titles
+ *      ├─ device ├─ icon ├─ name ├─ percent                   one per peripheral with a battery (mouse, headset, ...)
+ *      ├─ profiles                                            a row (`gap`), one per profile the daemon offers:
+ *      │  ╰─ button.power-saver|.balanced|.performance[.active] ├─ icon ╰─ text
+ *      ├─ idle[.inhibited][.playing] ├─ icon ├─ title ╰─ toggle   "Keep awake" (see `toggle`)
+ *      ├─ message                                             why performance is limited; held by a player
+ *      ╰─ button.settings > text                              runs `settings_command`
  *
  *   gadget.notifications
  *   ╰─ button[.dnd][.new]                                     left: the history popup, right: do-not-disturb,
@@ -670,18 +688,123 @@ gadget.themes icon {
   height: 16px;
 }
 
-gadget.idle > button {
+gadget.power {
+  gap: 2px;
+}
+gadget.power > button {
   padding: 0 2px;
+  gap: 4px;
   border-radius: 2px;
 }
-gadget.idle > button:hover {
+gadget.power > button:hover {
   background: var(--aria-border);
 }
-gadget.idle icon {
+gadget.power > button icon {
   height: 16px;
 }
-gadget.idle > button.inhibited icon {
+gadget.power > button.low icon.battery,
+gadget.power > button.low text {
+  color: var(--aria-warning);
+}
+gadget.power > button.critical icon.battery,
+gadget.power > button.critical text {
+  color: var(--aria-urgent);
+}
+gadget.power > button.idle.inhibited icon {
   color: var(--aria-accent);
+}
+gadget.power list {
+  width: 320px;
+  padding: 8px;
+  gap: 4px;
+}
+gadget.power battery {
+  padding: 4px;
+  gap: 8px;
+}
+gadget.power battery icon {
+  height: 32px;
+}
+gadget.power battery percent {
+  font-size: 20px;
+  font-weight: bold;
+}
+gadget.power battery.low percent {
+  color: var(--aria-warning);
+}
+gadget.power battery.critical percent {
+  color: var(--aria-urgent);
+}
+gadget.power battery status {
+  color: var(--aria-muted);
+}
+gadget.power details {
+  padding: 0 4px 4px 44px;
+  gap: 2px;
+}
+gadget.power details line {
+  color: var(--aria-muted);
+  font-size: 12px;
+}
+gadget.power header {
+  padding: 8px 4px 4px 4px;
+}
+gadget.power header title {
+  font-weight: bold;
+  color: var(--aria-muted);
+}
+gadget.power device {
+  padding: 4px;
+  gap: 8px;
+}
+gadget.power device icon {
+  height: 16px;
+}
+gadget.power device percent {
+  color: var(--aria-muted);
+}
+gadget.power profiles {
+  gap: 4px;
+}
+gadget.power profiles button {
+  padding: 6px;
+  gap: 4px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border);
+}
+gadget.power profiles button:hover {
+  border-color: var(--aria-accent);
+}
+gadget.power profiles button icon {
+  height: 16px;
+}
+gadget.power profiles button.active {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+  border-color: var(--aria-accent);
+}
+gadget.power idle {
+  padding: 8px 4px;
+  gap: 8px;
+}
+gadget.power idle icon {
+  height: 16px;
+}
+gadget.power idle.inhibited icon {
+  color: var(--aria-accent);
+}
+gadget.power message {
+  padding: 0 4px 4px 4px;
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+gadget.power button.settings {
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border);
+}
+gadget.power button.settings:hover {
+  border-color: var(--aria-accent);
 }
 
 gadget.notifications > button {

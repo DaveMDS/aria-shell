@@ -200,6 +200,35 @@ NetworkGadget (gadgets/network.rs)  impl Gadget: the primary connection's icon (
            | ConnectDevice | Password | Peek | Submit | Disconnect | Forget | Vpn(uuid, on)   -> Action::Network
   popup_keyboard() / popup_key()   the popup takes typed text (see "Popups and the keyboard" below)
 
+Idle       (idle/)          daemon-owned idle stages: `IdleConfig::load` (`[Idle]`, `[Idle:battery]` over its
+                            timeouts), `inhibited()` / `held_by_player()` for the gadget, `describe()`
+  subscription()            wayland.rs: a Wayland connection of our own (its fd polled by tokio next to the
+                            daemon's requests; libwayland takes an empty socket as success, so a `poll` says
+                            `WouldBlock` once drained): `ext-idle-notify-v1` timers -> `Event::Idled/Resumed(Stage)`,
+                            `wlr-output-power-management-v1` for the screens; logind.rs: `PrepareForSleep` with a
+                            delay inhibitor (`Event::Sleeping(SleepLock)`, released on `ShellEvent::Locked`),
+                            the session's `Lock` -> `Event::LockRequested`
+  apply(Event, Locker) -> (lock?, Task)   the daemon locks when told; `set_on_battery` (from `Power`),
+                            `set_playing` (from `Audio`), `run(Command)` (the user's hold) re-arm the timers
+                            (all of them, from now; none while held)
+
+Power      (power/)         daemon-owned UPower and power profiles: `battery()` (the display device: percent,
+                            state, times, rate, `WarningLevel`, UPower's icon; health from the laptop battery),
+                            `devices()` (peripherals), `profiles()`, `on_battery()`, `describe()`
+  subscription()            upower.rs: the system bus, `NameOwnerChanged` for both names and one match rule on
+                            every signal under /org/freedesktop/UPower (the profiles' path is under it), re-read
+                            200 ms after the last one -> `Event::UPower` / `Event::Profiles` (`None`: not running)
+  apply(Event) -> (changed, Option<Low>, Task)   a battery newly at UPower's low / critical warning is a `Low`
+                            the daemon words (`notify_low`) and sends over the session bus as any app would
+                            (`replaces_id`: one notification, closed once the warning is gone)
+  run(Command) -> Task      SetProfile -> the `ActiveProfile` property
+
+PowerGadget (gadgets/power.rs)  impl Gadget: `button.status` (UPower's battery icon, the percent, the profile's
+                            icon; each optional, absent where there is none) opens the popup, `button.idle` (the
+                            eye) holds idle; middle click holds idle, right click `settings_command`. Popup: the
+                            battery, details, the peripherals, the profile picker, "Keep awake", Settings
+  Message::TogglePopup | ToggleIdle | SetIdle(bool) | SetProfile | RunSettings   -> Action::Power / Action::Idle
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
@@ -1052,5 +1081,6 @@ monitor, audio, the lock screen (PAM accepting the right password; the
 monitor hot-plugged while locked), idle (`loginctl lock-session`,
 the lock before a suspend, the battery timeouts).
 Only in the nested Sway so far: the notifications and their gadget,
-the exit menu, the wallpaper. Never exercised by a scenario: the
+the exit menu, the wallpaper, the Power gadget (with `tests/ui/upower`,
+a fake UPower and power-profiles-daemon). Never exercised by a scenario: the
 logind and UPower side of idle (the nested Sway's bus has neither).

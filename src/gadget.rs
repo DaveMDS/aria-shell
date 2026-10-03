@@ -24,8 +24,8 @@ use crate::config::{Config, Section};
 use crate::gadgets::audio::{self, AudioGadget};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
-use crate::gadgets::idle::{self, IdleGadget};
 use crate::gadgets::network::{self, NetworkGadget};
+use crate::gadgets::power::{self, PowerGadget};
 use crate::gadgets::notifications::{self, NotificationsGadget};
 use crate::gadgets::system_monitor::{self, SystemMonitor};
 use crate::gadgets::themes::{self, Themes};
@@ -47,6 +47,7 @@ pub struct Shared<'a> {
     pub audio: &'a crate::audio::Audio,
     pub network: &'a crate::network::Network,
     pub idle: &'a crate::idle::Idle,
+    pub power: &'a crate::power::Power,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -82,6 +83,7 @@ pub enum Action<M> {
     Audio(crate::audio::Command),
     Network(crate::network::Command),
     Idle(crate::idle::Command),
+    Power(crate::power::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -192,6 +194,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Audio(cmd) => Action::Audio(cmd),
             Self::Network(cmd) => Action::Network(cmd),
             Self::Idle(cmd) => Action::Idle(cmd),
+            Self::Power(cmd) => Action::Power(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -281,7 +284,7 @@ pub enum AnyGadget {
     SystemMonitor(Box<SystemMonitor>),
     Audio(AudioGadget),
     Network(NetworkGadget),
-    Idle(IdleGadget),
+    Power(PowerGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -295,7 +298,7 @@ pub enum Message {
     SystemMonitor(system_monitor::Message),
     Audio(audio::Message),
     Network(network::Message),
-    Idle(idle::Message),
+    Power(power::Message),
 }
 
 impl AnyGadget {
@@ -358,7 +361,7 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
-            crate::idle::IdleConfig::NAME => Some(Self::Idle(IdleGadget::new(
+            crate::power::PowerConfig::NAME => Some(Self::Power(PowerGadget::new(
                 config.section(Some(name)),
                 output,
             ))),
@@ -381,7 +384,7 @@ impl AnyGadget {
             Self::SystemMonitor(_) => "system-monitor",
             Self::Audio(_) => "audio",
             Self::Network(_) => "network",
-            Self::Idle(_) => "idle",
+            Self::Power(_) => "power",
         }
     }
 
@@ -400,7 +403,7 @@ impl AnyGadget {
             }
             (Self::Audio(g), Message::Audio(m)) => g.update(m).map(Message::Audio),
             (Self::Network(g), Message::Network(m)) => g.update(m).map(Message::Network),
-            (Self::Idle(g), Message::Idle(m)) => g.update(m).map(Message::Idle),
+            (Self::Power(g), Message::Power(m)) => g.update(m).map(Message::Power),
             _ => Action::None,
         }
     }
@@ -416,7 +419,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.view(ctx).map(Message::SystemMonitor),
             Self::Audio(g) => g.view(ctx).map(Message::Audio),
             Self::Network(g) => g.view(ctx).map(Message::Network),
-            Self::Idle(g) => g.view(ctx).map(Message::Idle),
+            Self::Power(g) => g.view(ctx).map(Message::Power),
         }
     }
 
@@ -431,7 +434,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.popup_view(ctx).map(Message::SystemMonitor),
             Self::Audio(g) => g.popup_view(ctx).map(Message::Audio),
             Self::Network(g) => g.popup_view(ctx).map(Message::Network),
-            Self::Idle(g) => g.popup_view(ctx).map(Message::Idle),
+            Self::Power(g) => g.popup_view(ctx).map(Message::Power),
         }
     }
 
@@ -446,7 +449,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.popup_size(ctx),
             Self::Audio(g) => g.popup_size(ctx),
             Self::Network(g) => g.popup_size(ctx),
-            Self::Idle(g) => g.popup_size(ctx),
+            Self::Power(g) => g.popup_size(ctx),
         }
     }
 
@@ -461,7 +464,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.popup(),
             Self::Audio(g) => g.popup(),
             Self::Network(g) => g.popup(),
-            Self::Idle(g) => g.popup(),
+            Self::Power(g) => g.popup(),
         }
     }
 
@@ -476,7 +479,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.popup_keyboard(),
             Self::Audio(g) => g.popup_keyboard(),
             Self::Network(g) => g.popup_keyboard(),
-            Self::Idle(g) => g.popup_keyboard(),
+            Self::Power(g) => g.popup_keyboard(),
         }
     }
 
@@ -491,7 +494,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.popup_key(event).map(Message::SystemMonitor),
             Self::Audio(g) => g.popup_key(event).map(Message::Audio),
             Self::Network(g) => g.popup_key(event).map(Message::Network),
-            Self::Idle(g) => g.popup_key(event).map(Message::Idle),
+            Self::Power(g) => g.popup_key(event).map(Message::Power),
         }
     }
 
@@ -515,7 +518,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => <SystemMonitor as Gadget>::popup_closed(g),
             Self::Audio(g) => <AudioGadget as Gadget>::popup_closed(g),
             Self::Network(g) => <NetworkGadget as Gadget>::popup_closed(g),
-            Self::Idle(g) => <IdleGadget as Gadget>::popup_closed(g),
+            Self::Power(g) => <PowerGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -530,7 +533,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.icon_names(),
             Self::Audio(g) => g.icon_names(),
             Self::Network(g) => g.icon_names(),
-            Self::Idle(g) => g.icon_names(),
+            Self::Power(g) => g.icon_names(),
         }
     }
 
@@ -545,7 +548,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.script(),
             Self::Audio(g) => g.script(),
             Self::Network(g) => g.script(),
-            Self::Idle(g) => g.script(),
+            Self::Power(g) => g.script(),
         }
     }
 
@@ -560,7 +563,7 @@ impl AnyGadget {
             Self::SystemMonitor(g) => g.subscription().map(Message::SystemMonitor),
             Self::Audio(g) => g.subscription().map(Message::Audio),
             Self::Network(g) => g.subscription().map(Message::Network),
-            Self::Idle(g) => g.subscription().map(Message::Idle),
+            Self::Power(g) => g.subscription().map(Message::Power),
         }
     }
 }

@@ -1,10 +1,10 @@
 //! The system bus side of idle: logind (the session's `Lock` signal,
 //! `loginctl lock-session`; `PrepareForSleep` and a delay inhibitor so
-//! the screen is locked before the machine sleeps; `Suspend`) and
-//! UPower (`OnBattery`). Either may be missing: what's there is used.
+//! the screen is locked before the machine sleeps; `Suspend`). It may
+//! be missing: then none of it happens. Whether the machine is on
+//! battery comes from `Power`.
 //!
-//! References: <https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.login1.html>,
-//! <https://upower.freedesktop.org/docs/UPower.html>
+//! Reference: <https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.login1.html>
 
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
@@ -48,16 +48,6 @@ trait Session {
     fn lock(&self) -> zbus::Result<()>;
 }
 
-#[proxy(
-    interface = "org.freedesktop.UPower",
-    default_service = "org.freedesktop.UPower",
-    default_path = "/org/freedesktop/UPower"
-)]
-trait UPower {
-    #[zbus(property)]
-    fn on_battery(&self) -> zbus::Result<bool>;
-}
-
 /// logind's delay inhibitor, held while the machine is about to sleep:
 /// it waits until [`SleepLock::release`] (the screen locked) or
 /// logind's `InhibitDelayMaxSec`.
@@ -77,12 +67,11 @@ impl SleepLock {
 enum Signal {
     Sleep(bool),
     Lock,
-    OnBattery(bool),
 }
 
-/// The event stream: the bus, the power source now, then the session
-/// lock requests, the sleeps and the power source changing. Holds a
-/// sleep inhibitor between sleeps when `lock_before_sleep`.
+/// The event stream: the bus, then the session lock requests and the
+/// sleeps. Holds a sleep inhibitor between sleeps when
+/// `lock_before_sleep`.
 pub fn events(lock_before_sleep: bool) -> impl Stream<Item = Event> {
     stream::channel(16, async move |mut out: mpsc::Sender<Event>| {
         let conn = match Connection::system().await {
@@ -121,25 +110,6 @@ async fn follow(conn: Connection, lock_before_sleep: bool, mut out: mpsc::Sender
         }
     }
 
-    match UPowerProxy::new(&conn).await {
-        Ok(upower) => {
-            match upower.on_battery().await {
-                Ok(on) => {
-                    let _ = out.send(Event::OnBattery(on)).await;
-                }
-                Err(e) => log::info!("idle: no UPower ({e}), taken as on AC"),
-            }
-            signals.push(
-                upower
-                    .receive_on_battery_changed()
-                    .await
-                    .filter_map(|c| async move { c.get().await.ok().map(Signal::OnBattery) })
-                    .boxed(),
-            );
-        }
-        Err(e) => log::info!("idle: no UPower ({e}), taken as on AC"),
-    }
-
     let inhibit = async || match &manager {
         Ok(manager) if lock_before_sleep => manager
             .inhibit(
@@ -169,7 +139,6 @@ async fn follow(conn: Connection, lock_before_sleep: bool, mut out: mpsc::Sender
                 continue;
             }
             Signal::Lock => Event::LockRequested,
-            Signal::OnBattery(on) => Event::OnBattery(on),
         };
         if out.send(event).await.is_err() {
             return;

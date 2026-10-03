@@ -60,6 +60,8 @@ pub enum DebugCommand {
     Network,
     /// The idle stages: power source, holds, screens, timers.
     Idle,
+    /// The battery, the peripherals, the power profiles.
+    Power,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -151,12 +153,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["audio"] => Ok(Parsed::Debug(DebugCommand::Audio)),
             ["network"] => Ok(Parsed::Debug(DebugCommand::Network)),
             ["idle"] => Ok(Parsed::Debug(DebugCommand::Idle)),
+            ["power"] => Ok(Parsed::Debug(DebugCommand::Power)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | widgets [filter])",
                 args.join(" ")
             )),
         },

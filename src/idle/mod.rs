@@ -5,16 +5,17 @@
 //! sleep too (lid, `systemctl suspend`), and on logind's `Lock`
 //! (`loginctl lock-session`).
 //!
-//! Nothing goes idle while held: by the user (the Idle gadget, `aria-shell
-//! idle inhibit`), by a media player playing (`inhibit_when_playing`),
+//! Nothing goes idle while held: by the user (the Power gadget's eye,
+//! `aria-shell idle inhibit`), by a media player playing (`inhibit_when_playing`),
 //! or by an app's Wayland idle inhibitor (a fullscreen video; the
 //! compositor's business, honoured by the timers themselves).
 //!
 //! One [`Idle`] lives in the daemon. The timers and the screens' power
-//! are a Wayland connection of its own (wayland.rs), logind and UPower
-//! the system bus (logind.rs); locking is the daemon's, told by
-//! [`Idle::apply`]. The shell does the locking and the screens, logind
-//! does the power: the suspend is a `Suspend` call, not a program.
+//! are a Wayland connection of its own (wayland.rs), logind the system
+//! bus (logind.rs), the power source `Power`'s; locking is the daemon's,
+//! told by [`Idle::apply`]. The shell does the locking and the screens,
+//! logind does the power: the suspend is a `Suspend` call, not a
+//! program.
 
 mod logind;
 mod wayland;
@@ -28,8 +29,8 @@ use crate::config::{Config, RawSection, Section};
 
 pub use logind::SleepLock;
 
-/// `[Idle]` section: the daemon's keys and the gadget's icons; the
-/// timeouts on battery come from `[Idle:battery]` ([`IdleConfig::load`]).
+/// `[Idle]` section; the timeouts on battery come from `[Idle:battery]`
+/// ([`IdleConfig::load`]). The eye on the bar is the Power gadget's.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdleConfig {
     pub ac: Timeouts,
@@ -38,9 +39,6 @@ pub struct IdleConfig {
     pub lock_before_sleep: bool,
     /// A media player playing holds the stages.
     pub inhibit_when_playing: bool,
-    /// The gadget's icon names, and the one while the user holds idle.
-    pub icon: String,
-    pub inhibit_icon: String,
 }
 
 impl Section for IdleConfig {
@@ -54,8 +52,6 @@ impl Section for IdleConfig {
             battery: ac,
             lock_before_sleep: raw.bool_or("lock_before_sleep", true),
             inhibit_when_playing: raw.bool_or("inhibit_when_playing", true),
-            icon: raw.str_or("icon", "view-conceal-symbolic"),
-            inhibit_icon: raw.str_or("inhibit_icon", "view-reveal-symbolic"),
         }
     }
 }
@@ -162,7 +158,6 @@ pub enum Event {
     Resumed(Stage),
     /// The system bus.
     Bus(Connection),
-    OnBattery(bool),
     /// The machine is about to sleep: lock, then release.
     Sleeping(SleepLock),
     /// logind asks the session to lock (`loginctl lock-session`).
@@ -237,13 +232,6 @@ impl Idle {
                 self.sync();
             }
             Event::Bus(conn) => self.bus = Some(conn),
-            Event::OnBattery(on) => {
-                if on != self.on_battery {
-                    log::info!("idle: on {}", if on { "battery" } else { "AC" });
-                    self.on_battery = on;
-                    self.sync();
-                }
-            }
             Event::Idled(stage) => {
                 log::info!("idle: {} reached", stage.name());
                 match stage {
@@ -297,6 +285,15 @@ impl Idle {
             if self.inhibited { "held by the user" } else { "let go by the user" }
         );
         self.sync();
+    }
+
+    /// Whether the machine runs on battery (from `Power`).
+    pub fn set_on_battery(&mut self, on: bool) {
+        if on != self.on_battery {
+            log::info!("idle: on {}", if on { "battery" } else { "AC" });
+            self.on_battery = on;
+            self.sync();
+        }
     }
 
     /// Whether a media player is playing.

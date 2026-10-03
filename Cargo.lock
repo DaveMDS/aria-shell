@@ -199,6 +199,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aria-upower"
+version = "0.0.1"
+dependencies = [
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

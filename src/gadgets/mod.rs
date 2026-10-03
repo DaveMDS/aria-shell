@@ -1,8 +1,8 @@
 pub mod audio;
 pub mod clock;
 pub mod custom;
-pub mod idle;
 pub mod network;
+pub mod power;
 pub mod notifications;
 pub mod system_monitor;
 pub mod themes;

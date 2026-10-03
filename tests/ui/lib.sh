@@ -332,6 +332,48 @@ nm_quiet() {
     fi
 }
 
+# --- UPower ------------------------------------------------------------------
+# `aria-upower` (tests/ui/upower) is UPower and power-profiles-daemon on
+# the scenario's private bus: commands in (`ac`, `battery`, `warning`,
+# `device`, `profiles`, `profile`, `degraded`, answered `ok`), what the
+# shell asked of it out (`set-profile <name>`). On descriptors 5/6, so
+# a scenario can run the media player next to it.
+
+upower_start() {
+    upower_dir=$(mktemp -d)
+    mkfifo "$upower_dir/in" "$upower_dir/out"
+    "$ARIA_UI_ROOT/target/debug/aria-upower" < "$upower_dir/in" > "$upower_dir/out" 2> "$ARIA_UI_OUT/upower.log" &
+    upower_pid=$!
+    exec 5> "$upower_dir/in" 6< "$upower_dir/out"
+    line=$(upower_event)
+    [ "$line" = ready ] || { echo "UPower didn't start: $line"; return 1; }
+}
+
+upower_stop() {
+    exec 5>&- 6<&-
+    kill "$upower_pid" 2> /dev/null
+    rm -rf "$upower_dir"
+}
+
+# One command to UPower; fails unless answered `ok`. The shell re-reads
+# after a pause in the signals: give it that.
+upower_send() {
+    echo "$1" >&5
+    read -r reply <&6
+    [ "$reply" = ok ] || { echo "upower '$1': $reply"; return 1; }
+    settle 0.5
+}
+
+# The next line UPower reported (within 5s), else fails.
+upower_event() {
+    if read -r -t 5 line <&6; then
+        echo "$line"
+    else
+        echo "no event from UPower"
+        return 1
+    fi
+}
+
 scroll() {
     inject "scroll $1"
     settle

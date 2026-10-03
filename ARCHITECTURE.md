@@ -1,34 +1,30 @@
-# Rust port
+# Architecture
 
-## Why
+How Aria Shell is built and why: the shape of the code, the decisions
+behind it, facts about the crates verified in their source or on a
+real session, the known risks and the internal limits. Read it before
+an architectural change. What the shell does for its users, and what
+it doesn't yet, is the README's checklist.
 
-`aria-shell` was Python + GTK4 + gtk4-layer-shell (~8.6k lines, now under
-`aria-shell-python/`). GTK4 turned out to be an uncomfortable fit: clunky
-development experience and, more importantly, GTK's CSS is too limited for
-the level of visual customization we actually want.
+## Why iced
 
-### Alternatives considered
+Aria Shell was Python + GTK4 + gtk4-layer-shell (`git log --
+aria-shell-python`), rewritten because GTK's CSS is too limited for the
+visual customization wanted. Qt was ruled out; EFL is effectively
+dead; a real CSS engine without GTK still means WebKitGTK on Linux
+(Blitz alone is too young). So: Rust + `iced` + `iced_exwlshell`
+(layer shell and session lock, formerly `iced_layershell` +
+`iced_sessionlock`): wgpu, actively maintained, and the `shader` widget
+for more visual freedom than CSS. COSMIC (`libcosmic`, an `iced` fork)
+ships every subsystem we need and is the pattern reference; we stay on
+vanilla `iced` and don't depend on `libcosmic`.
 
-- Qt: ruled out from the start.
-- EFL/Edje (the author has 20 years of history with `python-efl`): the EFL
-  project is effectively dead, and it would be a more extreme jump than
-  needed.
-- A "real" CSS engine without GTK (Blitz/Stylo): on Linux any webview with
-  real CSS still needs WebKitGTK underneath, so GTK comes back plus a whole
-  browser engine. Blitz standalone is too young to bet a rewrite on.
-- **Chosen: Rust + `iced` + `iced_exwlshell`** (formerly `iced_layershell`
-  + `iced_sessionlock`, merged as of v0.20): lightweight (wgpu), non-Qt,
-  non-GTK, actively maintained Wayland layer-shell support. `iced`'s
-  `shader` widget gives direct per-widget wgpu access, which covers the
-  "more visual freedom than CSS" requirement without committing to a
-  specific "skin format" yet.
-- **COSMIC** (System76, a production DE on an `iced` fork, `libcosmic`)
-  has shipped every subsystem we need: multi-monitor layer-shell panels,
-  SNI tray, notification daemon, PAM lock screen. Study and adapt their
-  patterns as reference; stay on vanilla `iced`, don't depend on
-  `libcosmic`.
+The config format (`aria.conf`: INI, case-sensitive, `[Name]` /
+`[Name:id]`, empty value = default) is the Python implementation's,
+kept compatible on purpose; nothing of its structure (`Singleton`,
+`AriaService`, `AriaModule`, `importlib` loading) is.
 
-### Known risks (from real research, not memory)
+## Known risks (from real research, not memory)
 
 - PAM in Rust is the weakest link: even COSMIC's official greeter has open
   production auth bugs. Ours is a hand-written `libpam` binding
@@ -40,23 +36,7 @@ the level of visual customization we actually want.
 - `iced_exwlshell` is a small, fast-moving crate: expect API churn, verify
   against its source in `~/.cargo/registry` rather than memory.
 
-## Relationship to the Python implementation
-
-The Python code is a **behaviour** reference, not a structure reference.
-
-Kept on purpose (it's the user-facing contract):
-- the `aria.conf` format: INI, case-sensitive, `[Name]` / `[Name:id]`
-  instances, empty value = default, same keys and defaults per section;
-- the feature list and the semantics of each gadget/component.
-
-Deliberately **not** mirrored: `Singleton` metaclass, the `AriaService`
-base, the `AriaModule`/`Gadget` split, runtime reflection over config
-models, dynamic `importlib` module loading. Those solved GTK/Python
-problems that iced doesn't have. Don't reintroduce them, and don't add
-"mirrors `foo.py`" comments for structure, only where a *behaviour* is
-being reproduced.
-
-## Architecture
+## Structure
 
 Plain Elm architecture as iced defines it, nested once per layer. Every
 layer is a struct with its own `Message`, `update`, `view` and
@@ -1050,340 +1030,27 @@ Two things flow between the daemon and the gadgets besides messages:
 - `hyprctl dispatch 'hl.dsp.focus({ monitor = "HDMI-A-2" })'` moves
   focus to a monitor, handy to test per-output behaviour.
 
-## Status (2026-09-18)
+## Internal limits
 
-Verified on the real Hyprland session with two outputs:
+What users don't see in the README's checklist but a change may run
+into: `:hover` only on buttons (iced containers have no hover state;
+needs a `mouse_area` wrapper: the system monitor's table rows, the
+notification popup rows), iced's default scrollbar (not themed), the
+panel height from the theme's `min-height` rather than from the
+content, `columns` of the exit menu from the config rather than the
+theme, the PAM conversation refusing visible prompts (no second prompt
+such as a one-time code), the GPU readers (amdgpu, nvidia) never run on
+a machine that has one (this one is Intel).
 
-- `hyprctl layers` shows one `aria-panel` surface per output, full width,
-  32px, in the configured layer, with an exclusive zone.
-- `assets/aria.conf` drives it: `[panel]` with `items_center = Clock` and
-  `items_end = Clock:2`, each `[Clock*]` with its own `format`. Screenshots
-  confirm both gadgets render on both bars and the seconds tick.
-- `[WorkSpaces]` (section spelled as in the Python config) on each bar
-  shows only that monitor's workspaces, the per-monitor active one
-  highlighted, one marker per window (filled for the active window),
-  and follows `hyprctl dispatch` switches live (Hyprland 0.56.2).
-- Clicking the Clock opens a month calendar popup centred under it
-  (weeks start on Monday, today highlighted, `<`/`>` change month, no
-  locale for month names); clicking the clock again or anywhere outside
-  closes it. Verified with screenshots on both outputs.
-- Theming: with no `[general] style` the bar is `base.css` alone; with
-  `style = manjaro` (or `waybar`) it follows `assets/themes/<name>.css`;
-  editing the file restyles live, changing `min-height`
-  resizes the layer surfaces (`hyprctl layers`), a syntax error logs
-  `path:line:col` and keeps the running theme. The calendar popup has
-  the themed background, rounded corners over a transparent surface,
-  today in the accent colour. Screenshots on both outputs.
-- Config hot-reload: editing `items_end` and `style =` in `aria.conf`
-  while running closes and reopens the bars with the new gadgets and
-  theme (log shows the rebuild; `hyprctl layers` shows new surfaces at
-  the new height).
-- The two GTK-era themes ported to the new vocabulary
-  (`assets/themes/manjaro.css`, `waybar.css`): reversed-colour cells via
-  `slot.start > gadget:first-child` / `gadget { height: fill }`,
-  translucent `rgba` bar, font fallback lists. What didn't port: inset
-  box-shadows (iced has none; plain backgrounds instead), gadgets that
-  don't exist yet (kept as rules for `gadget.cpu`/`gadget.audio`).
-- Window icons: Firefox (hicolor PNG), Code (`com.visualstudio.code.oss`
-  svg via the desktop entry) and kitty drawn at 16px in the workspace
-  buttons on both outputs; creating/removing a `.desktop` in
-  `~/.local/share/applications` rebuilds the index (80 -> 81 -> 80
-  apps in the log); `icon_theme = breeze` via config reload switches
-  the chain live.
-- Launcher: `aria-shell launcher toggle` from a terminal opens it centred
-  on the focused output (`hyprctl layers`: `aria-launcher` 520x420 at
-  700,330 on HDMI-A-1, at 2620,330 after `hl.dsp.focus({ monitor =
-  "HDMI-A-2" })`), with an `aria-launcher-grab` full-screen surface on
-  each output; screenshot shows the 80 apps with icons, names and
-  comments, the first row selected in the accent colour, the input
-  with its `:focus` border. `hide`/`show`/`toggle` and `ping` over the
-  socket verified, unknown commands get `ERR`. Driven with `ydotool`
-  and the `debug` commands (no hands): typing filters live (`term` →
-  Alacritty, kitty, Micro), Down/Down/Up move the selection and the
-  input keeps focus, a click on the kitty row launches it and closes
-  the launcher, `alacr` + Enter launches Alacritty, Esc closes, a
-  click outside (desktop, bar, other monitor) closes it through the
-  grab surface, moving keyboard focus elsewhere closes it. The click
-  outside is caught by a `listen_with` on button *release*
-  (`launcher::grab_clicks`), not a `mouse_area` on the grab: Hyprland
-  keeps pointer focus where it was until the pointer moves, so a
-  second click on the bar button that opened the launcher, without
-  moving, comes tagged with the launcher's window and no cursor
-  position; the daemon closes on a click reported on the launcher
-  while the pointer was last seen (`Message::Cursor`) on another
-  window. On the release because closing on the press destroys the
-  surface before its release, and Hyprland then swallows the next
-  click. Verified: button → open, same click again → closed, again →
-  open; clicks on the search field and on rows behave as before.
-- Tray: on the real desktop (noctalia owns the watcher, we host
-  through it) nm-applet (icon by name, from Adwaita) and MEGAsync
-  (22px `IconPixmap`) show on both bars at 16px; a right click on
-  MEGAsync opens its 3-row menu sized to its labels, on nm-applet the
-  full menu with disabled rows, separators, ✓ on the two checkmarks,
-  "Connessioni VPN ▸" unfolding in place (the app fills it on
-  `AboutToShow`) and the popup growing 451 -> 480px; a click outside
-  closes it. Not clicked on the live desktop (the rows do things).
-- `tests/ui/run.sh`: `launcher` (open, search, arrows, Esc, click
-  outside on both outputs, click a result, Enter, toggle/hide),
-  `clock` (popup on both outputs, today, next/prev month, centred under
-  the clock, click outside) and `tray` (a fake item registers with our
-  watcher and shows on both bars; left/middle click and the wheel
-  reach it with the expected arguments; the menu opens after
-  `AboutToShow(0)` with 4 rows, a separator, the hidden row dropped;
-  the submenu unfolds after `AboutToShow(3)`, the checked child shows,
-  the popup grows; a disabled row does nothing; a row click sends
-  `clicked` and closes the popup; `LayoutUpdated` reloads an open
-  menu; `NewIcon` recolours the icon, `NewStatus` adds `.attention`;
-  unregistering removes it) pass in the headless Sway.
-- Custom: `tests/ui/run.sh custom` (a static button with icon and
-  label, left click opens the launcher through `aria-shell launcher
-  show`, right/middle/wheel run their programs; `exec` output as text
-  and as JSON with a class and an icon, an empty output hides the
-  gadget, one run for both panels and another after a click) passes;
-  on the desktop `[Custom]` opens the launcher and `[Custom:updates]`
-  shows `checkupdates`' count on both bars.
-- Themes: `tests/ui/run.sh themes` (light at start, a left click on
-  either bar toggles, the menu lists Light/Dark/Base/manjaro/waybar
-  with the current ones checked, picking manjaro restyles live with
-  its 28px bars, Base goes back) passes; on the desktop a click flips
-  both bars' palette (`debug theme`).
-- Notifications: `tests/ui/run.sh notifications` (`notify-send` on the
-  scenario's bus: one surface per notification on the focused output,
-  360px wide, 8px from the right edge and under the bar, the newest at
-  the corner and the older ones pushed down with the gap; a theme icon,
-  a body wrapping on two lines; critical gets the `.critical` border
-  and no timeout; `-r` replaces in place and the surface shrinks;
-  `CloseNotification` removes one and the survivor moves up; a right
-  click dismisses; the `default` action has no button and a click on
-  the body sends it, a button click sends its key (notify-send `-A`
-  prints it) and closes; `-t 500` and the configured `duration = 2`
-  expire; markup shown as text; an image file and an `image-data`
-  hint draw) passes, screenshots in `target/ui/notifications/`. Not
-  yet run on the real desktop.
-- Notifications gadget: `tests/ui/run.sh notifications-gadget` (a bell
-  per bar, no count at rest; two notifications → "2" on both bars and
-  `.new`; the popup lists them, both `.unseen`, the count clears; a row
-  and the desktop toast of one notification are the same view: same
-  body width relative to their container, the icon at the toast's
-  size; ✕ on a row drops it and its toast; do-not-disturb from the
-  popup marks both bars `.dnd`, a new notification is listed but not
-  shown, a critical one shows; a click outside closes the popup and the
-  count shows the two new ones; right click turns quiet off, middle
-  click dismisses every toast with the history intact; Clear empties
-  it ("No notifications"); six in with `history = 5` keeps the newest
-  five; a row click sends the `default` action to the client and drops
-  the row and its toast) passes, screenshots in
-  `target/ui/notifications-gadget/`.
-- System monitor: `tests/ui/run.sh system-monitor` (four instances
-  per bar — cpu, `#mem`, `#net`, `#disk` — and `debug sysmon` with
-  every core, memory, `/` first among the disks, an interface;
-  the 40x14 sparkline with the `format` text over it, the mem
-  instance as a gauge, the net one as text alone; the popup with
-  the cpu/mem/disk/net/processes tabs (gpu only when there is one),
-  opened on the cpu tab from the cpu instance and on the mem tab from
-  the mem one, one section at a time, one meter per core, the root
-  mount, `processes = 5` rows sorted by cpu; sorting by memory
-  puts one of `ps --sort=-rss`'s top two first, by pid descends
-  then flips on a second click; a `sleep 1000` started by the
-  scenario shows as `row[pid=..][name="sleep"]`, its right click
-  offers Terminate/Kill and Terminate ends it (`kill -0` fails);
-  a click outside closes; a right click on the cpu instance runs its
-  `command`, on the mem instance the terminal monitor through
-  `[launcher] terminal`, logged as `["true", "-e", "btop"]`) passes,
-  screenshots in `target/ui/system-monitor/`. Not yet run on the real
-  desktop.
-- Locker: `tests/ui/run.sh locker` (`aria lock` → a `locker` surface
-  per output, 1920x1080 at 0,0 and 1920,0; avatar, username, time,
-  date, Unlock on both, the column centred; a second `lock` ignored;
-  with `password_prompt = no` Enter unlocks, so does the button; a
-  second shell on `tests/ui/config-locker` asks the password: two
-  fields, no avatar/date, the eye shows the typed text on both surfaces
-  and hides it again, a wrong password goes to PAM (a service
-  without a file, see above) and comes back refused, `auth.error` +
-  "Authentication failed" on both surfaces, the lock stays) passes,
-  screenshots in `target/ui/locker/`. `cargo test -- --ignored pam`
-  runs the binding against the system's PAM on that same service. On
-  the Hyprland desktop (2026-09-18): both monitors covered, the look as
-  in the scenario; the first try refused the right password because of
-  the `pam_faillock` tally the tests had built up (fixed above), the
-  desktop had to be restarted to get out; then the right password
-  unlocked, three wrong ones showed faillock's own message, and a
-  monitor unplugged and plugged back while locked got its surface.
-- Exiter: `tests/ui/run.sh exiter` (the six buttons on a centred
-  `exiter` surface with a grab per output; suspend runs at once by
-  click, hibernate by Right Right Enter; reboot asks: `exiter >
-  confirm` with its countdown replaces the grid, Escape brings the
-  grid back, Enter confirms; Cancel by click; shutdown runs by itself
-  after `confirm_timeout = 3`; a click outside closes, toggle twice;
-  lock from the menu locks and Enter unlocks; the launcher's row of
-  six icons: suspend runs and closes the launcher, reboot opens the
-  exit menu on its confirmation) passes, screenshots in
-  `target/ui/exiter/`. Not yet tried on the real desktop.
-- Wallpaper: `tests/ui/run.sh wallpaper` (a `wallpaper` surface per
-  output, `[wallpaper]` on HEADLESS-1 and `[wallpaper:HEADLESS-2]` on
-  the other, two 16x16 gradients stretched with `fit = fill`; the
-  screenshot's corner pixels (`grim -g "x,y 1x1" -t ppm`) tell a
-  horizontal gradient from a vertical one; the bar, the launcher and
-  the lock screen sit above; overwriting b.png reloads it and the
-  gradient turns) passes. Not yet tried on the real desktop.
-- Locale: `tests/ui/run.sh locale` (`debug locale` is `en`/`en_US` on
-  the shared config; a second shell on `tests/ui/config-locale` says
-  `it`/`it_IT`, and its screenshots show the calendar ("settembre
-  2026", "lun … dom"), the notifications popup ("Notifiche", "Non
-  disturbare"), the system monitor ("Memoria", "Carico:"), the launcher
-  (the test entry as "App di prova Aria", found by its Italian name)
-  and the lock screen ("venerdì 18 settembre", "Sblocca") in Italian)
-  passes.
-- Network: `tests/ui/run.sh network` (the bars offline before the fake
-  NetworkManager is up, "not running" in the popup; up: a Wi‑Fi device,
-  disconnected; four networks listed — the known one first, then by
-  strength —, a lock on the secured ones, the toggle on, the wired
-  device unplugged; a scan on every opening; a click on the known one
-  activates its profile, `.connecting` then `.active` with "Connected"
-  and the SSID on the bars; its details unfold (IPv4, gateway, DNS,
-  band line) with Disconnect / Forget; a secured unknown one unfolds
-  the password field: typed (through the bar, see above), the eye
-  shows it, Enter adds and activates a profile with the key; a
-  refused key deletes that profile and says "Wrong password" with the
-  field still there, the second try connects; the 802.1x one shows
-  the hint, the open one connects with no key; Disconnect; the chevron
-  of a known idle one unfolds Connect / Forget, Forget deletes the
-  profile; the toggle turns Wi‑Fi off ("Wi‑Fi is off", the bars `.off`), a middle
-  click on the bar back on; a wired profile up makes wired the
-  primary, its details and Disconnect, the cable unplugged; a VPN
-  profile with its toggle, NO_SECRETS says "Needs a password", the
-  next try connects with the badge on the bars, off again; the
-  Settings button runs `settings_command`; the fake leaving puts the
-  bars offline) passes, screenshots in `target/ui/network/`.
-- `cargo build`, `cargo clippy --workspace --all-targets`, `cargo test`
-  (141 tests: the network merge, sorting, summary, failures and settings, the NetworkManager property readers, the gadget's icons; the exiter config, buttons and confirm flow, the exiter command, the wallpaper config and per-output choice, `resolve_path`, the locale detection, the localized desktop keys, lookup and fallback, the catalogue
-  completeness scan, the lock command, the locker config and avatar lookup, /proc parsers on captured text, sensors, formats and
-  placeholders, history cap, process cpu%, graph geometry, the
-  gadget's config, thresholds and sorting; notifications config/timeouts/
-  replacement/history/dnd/markup/image-data/ages, config, theme incl. scheme variables and root class,
-  selectors, desktop entries, commands, launcher search, tray
-  key/pixmap/props/menu parsing, wheel clicks, menu widget, command
-  line splitting, script outputs, custom gadget): clean.
+## Verified where
 
-Implemented: config loading and hot-reload, `[general]` (`style`,
-`reload_style`, `reload_config`, `icon_theme`), `[apps_class_map]`,
-`[panel]` (`outputs`, `position`, `layer`, `items_*`), multi-output
-panels, Clock (`format`, calendar popup), Workspaces (all four keys,
-window icons, `show_title`: the active window's icon and title after
-the workspaces) over the Hyprland and Sway IPCs, with the daemon-owned
-`Compositor` / `Context` / `Action` plumbing and the popup plumbing
-(`Panel` <-> `Gadget` popup hooks), the CSS-like theme system
-(`theme/`, `assets/base.css`, hot reload, bar thickness from the theme),
-the command socket + CLI client, the launcher (`[launcher] terminal`),
-the tray (`[Tray]`, SNI watcher/host, pixmap and named icons, dbusmenu
-popups with inline submenus, popups sized from state and resized live),
-light/dark schemes and the `[Themes]` gadget (toggle, theme picker),
-`[Custom]` gadgets (label/icon, a program per button and wheel
-direction, `exec` with `interval`/`format`/`return_type`/`hide_empty`,
-run once by the daemon for every panel), the notification daemon
-(`[Notifications]` `enabled`/`duration`/`position`; one overlay layer
-surface per notification, sized from the theme's `notification { width }`
-and the measured content, stacked by margin from the corner with the
-`notifications { padding, gap }` of the theme; summary, body with the
-markup stripped, icon from `image-data` / `image-path` / `app_icon`,
-action buttons, `default` on click, right click dismisses, expiry with
-critical ones staying; `NotificationClosed` / `ActionInvoked`; another
-daemon owning the name is waited out), the `Notifications` gadget
-(bell and unseen count; the history popup with the same notification
-view as the desktop plus age and ✕, do-not-disturb, clear; all in
-memory). One `[Notifications]` section for both, as `[Tray]` is for the
-tray: `history` and the gadget's `icon`/`dnd_icon` sit next to the
-daemon's keys. The `[SystemMonitor]` gadget: one instance per value
-(`show = cpu|mem|swap|disk|net|gpu|temp|load`, `format` with
-placeholders, `icon`, `command`), a sparkline of its history, and the
-btop-like popup, one tab per section, opened on the tab of the value
-shown (cpu graph and per-core meters, memory/swap, disks, network,
-amdgpu/nvidia, the process table with sort and Terminate/Kill).
-Tried on the Hyprland desktop (2026-09-17): memory (used 9.7 GiB of
-31.1, cached, available), disks (`/`, `/boot`, an ext4 usb) and the
-wlan totals match `free` / `df` / `/proc/net/dev`; load, uptime,
-frequency and the package temperature read right; the popup's tabs,
-sorting by every column, selecting a `sleep` and Terminate from the bar under the table (a right-click menu before: nobody found it), and the
-right click (btop in kitty) all work. `[SystemMonitor]` is the sampler's and the popup's section (`interval`,
-`history`, `disks`, `interfaces`, `temperature`, `processes`, `sort`);
-the gadgets are its instances (`show`, required; `mode = text |
-sparkline | gauge`, the `format` text alone or over the value's
-history / a bar filled to it, wider than the theme's `width` when the
-text needs it; `max` to override the sparkline's top / the full gauge,
-else 100 for a percentage or the highest value seen; `warning` /
-`critical` thresholds in the value's unit, the button carrying the
-class — 70 / 90 by default for a percentage, none for the rest;
-`icon`, `command`); a bare `SystemMonitor` in `items_*` or an instance
-without `show` is refused with a warning. The Sway backend
-(`compositor/sway.rs`). The `[Audio]` gadget (`mixer_command`, `step`,
-`max_volume`, `show_percent`, `show_microphone`, `show_inputs` /
-`show_streams` / `show_players`): the
-mixer over libpulse, the players over MPRIS, verified on the desktop
-(pipewire-pulse: sinks, the source, a Firefox stream; a fake player)
-and by `tests/ui/scenarios/audio.sh` with `tests/ui/mpris` (a fake
-MPRIS player on the scenario's bus; the mixer part shows whatever the
-machine has and isn't asserted). The lock screen (`[locker]`, `aria-shell
-lock`): the runtime's session lock, one surface per output, avatar /
-name / time / date / password checked by PAM, or Enter alone with
-`password_prompt = no`. Translations (`[general] language`, `locale/`):
-every UI text and date through `Locale`, English and Italian catalogues.
-The wallpaper (`[wallpaper]`, `[wallpaper:<output>]`: `source`, `fit`):
-still images on a background surface per output, reloaded on change.
-The exit menu (`[exiter]`, `aria-shell exiter`; `[launcher] actions`).
-The `[Network]` gadget (`settings_command`, `show_label`, `show_vpn`):
-NetworkManager over the system bus, the bar icon by state, the popup
-with the Wi‑Fi networks (join, the password in place, details,
-Disconnect / Forget, scan, on/off), the wired devices and the VPN
-profiles with toggles; `aria-shell debug network`.
-`[autostart]`: `name = command line` pairs run once at start, in file
-order (not on a config reload). Idle (`[Idle]`, `idle/`): three
-stages with a timeout each on AC and on battery (`lock`,
-`screen_off`, `suspend`; `[Idle:battery]` the same keys, by UPower's
-`OnBattery`),
-timed by `ext-idle-notify-v1` on a Wayland connection of its own (so
-the compositor's idle inhibitors hold them), the screens through
-`wlr-output-power-management-v1`, the suspend a logind `Suspend` call;
-the session locked on logind's `Lock` and before any sleep (a delay
-inhibitor released once the lock is confirmed); held by a media player
-playing and by the user (the `Idle` gadget, `aria-shell idle inhibit`);
-`aria-shell debug idle`. Verified in the nested Sway (lock, screens
-off and back on at the first input, the holds); the logind and UPower
-parts only on a real session.
-
-Not yet: `[panel]`
-`size`/`align`/`margin`/`opacity`, panel height from content, Clock
-`tooltip_format`, theme
-properties beyond the current set (`margin`, `opacity`, gradients,
-`@import`, `!important`, `@font-face` for theme-shipped fonts,
-transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (terminal), idle
-niceties (a screensaver stage, which would also dim; stages running
-programs), exiter
-niceties (per-button hotkeys, `columns` from the theme),
-wallpaper niceties (gif/video/shadertoy as the Python had, a slideshow,
-`tile`, the locker reusing it), locker niceties (a wallpaper / blurred desktop behind it, the
-shake, a spinner, `Caps Lock` warning, a second PAM prompt such as a
-one-time code: the conversation refuses visible prompts), system monitor niceties (per-process graphs and
-command lines, a tree view, filtering, battery, sensors beyond the
-cpu, Intel GPU, `:hover` on the table rows, scrolling the popup to a
-section), notification niceties (`resident`/`transient` hints,
-sound, a per-app `image-data` downscale, `x`/`y` hints, animation,
-persisting the history and do-not-disturb, `:hover` on the popup rows
-— they're containers), network niceties (a secret agent so NetworkManager asks *us* for a
-VPN's or a known network's missing password, 802.1x identity + password
-in place, hidden networks, a hotspot, mobile broadband, a per-BSSID
-choice, editing profiles, an iwd backend), launcher `DBusActivatable` entries,
-a themed scrollbar (iced's default for now), persisting the theme
-picked at runtime and following/setting the desktop's colour scheme
-(portal / gsettings, per DE), tray tooltips / overlay
-icons / menu icons and shortcuts / `org.freedesktop.StatusNotifierItem`
-(the KDE name is what every app uses).
-
-## Next steps, in order
-
-1. amdgpu/nvidia in the system monitor on a machine that has one
-   (this one is Intel: `gpu=0`, no tab).
-2. More theme surface as gadgets need it (`margin` via a wrapping
-   container, `opacity`, `@font-face`, scrollbars); the `shader` widget
-   for `background: shader("x.wgsl")` when a theme asks for more than
-   CSS.
+Every interactive piece has a scenario in `tests/ui/scenarios/`, run in
+the nested Sway. Also tried on the real Hyprland session: the panels,
+workspaces, clock, theming and config hot reload, window icons, the
+launcher, the tray (nm-applet, MEGAsync), Custom, Themes, the system
+monitor, audio, the lock screen (PAM accepting the right password; the
+monitor hot-plugged while locked), idle (`loginctl lock-session`,
+the lock before a suspend, the battery timeouts).
+Only in the nested Sway so far: the notifications and their gadget,
+the exit menu, the wallpaper. Never exercised by a scenario: the
+logind and UPower side of idle (the nested Sway's bus has neither).

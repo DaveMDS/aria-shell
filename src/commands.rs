@@ -16,7 +16,7 @@
 //! `debug` commands are answered by the daemon: they carry a [`Reply`]
 //! channel and the listener waits for the text. They exist so a test
 //! driver can ask the shell where things are without going through
-//! compositor-specific tools (`hyprctl layers`), see RS-PORT.md.
+//! compositor-specific tools (`hyprctl layers`), see ARCHITECTURE.md.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;

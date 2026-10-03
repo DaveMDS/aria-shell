@@ -6,18 +6,15 @@ Aria Shell: a desktop shell for Wayland compositors (Hyprland, Sway, ...),
 providing a panel, launcher, lock screen, notification daemon, wallpaper
 manager, terminal, etc.
 
-**Currently being rewritten from Python/GTK4 to Rust** (`iced` +
-`iced_exwlshell`). The Rust code at the repo root is the active project.
-Read [RS-PORT.md](RS-PORT.md) before making architectural decisions — it
-has the full rationale for the rewrite, alternatives that were considered
-and rejected, known risks, and the current status of what's implemented.
+Rust, on `iced` + `iced_exwlshell`. Read [ARCHITECTURE.md](ARCHITECTURE.md)
+before making architectural decisions — it has the shape of the code and
+the reasons for it, facts about the crates verified in their source,
+known risks and internal limits. What's done and what isn't, for users,
+is the README's checklist (✅ / 🔲): keep it current with each feature.
 
-`aria-shell-python/` is the previous, considerably more feature-complete
-Python/GTK4 implementation. It is **legacy reference only** — a source of
-truth for real working behavior (config format, gadget semantics, protocol
-usage) to mirror while porting, not a codebase to add features to. Don't
-edit it casually; if you need to change it, that's worth flagging, not
-assuming.
+The previous Python/GTK4 implementation (`aria-shell-python/`) is gone
+from the tree; `git log -- aria-shell-python` finds it in the history,
+for the rare question about how it behaved.
 
 ## Build & run
 
@@ -70,7 +67,7 @@ lines from the config go through `process.rs`: split with shell-like
 quoting and run directly, no implicit shell, `aria-shell` meaning this
 binary. A popup's
 size is `Gadget::popup_size(ctx)`, a function of the state, re-asked
-after every update. See RS-PORT.md's "Architecture" section
+after every update. See ARCHITECTURE.md's "Structure" section
 before changing the shape of any of these.
 
 Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
@@ -84,11 +81,9 @@ build widgets with `ctx.theme.button/container/text/row`. A new element
 or class is documented in the tree at the top of `assets/base.css`, and
 given a neutral default there.
 
-The Python implementation is a reference for **behaviour** (config
-format, gadget semantics, protocol usage), not for structure. Don't port
-its `Singleton`/`Service`/`Module` machinery, and only write a "mirrors
-`foo.py`" comment where a specific behaviour is being reproduced, not for
-structure.
+The config format is the one the Python implementation had, kept
+compatible on purpose; nothing else of its structure (`Singleton`/
+`Service`/`Module` machinery) belongs here.
 
 ## Verifying
 
@@ -138,7 +133,7 @@ compiled in. Adding a text: a key in both files, then `cargo test`
 unused). Adding a language: a file with English's keys, one line in
 `CATALOGUES`.
 
-## Known risks (see RS-PORT.md for detail)
+## Known risks (see ARCHITECTURE.md for detail)
 
 - `iced_exwlshell` is a small, fast-moving crate (recently renamed from
   `iced_layershell`/`iced_sessionlock`) -- expect API churn, verify against

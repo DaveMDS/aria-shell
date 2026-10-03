@@ -6,7 +6,7 @@
 //! The daemon opens the surfaces this asks for, routes `Closed` and
 //! the clicks back, and draws the content; one dialog at a time.
 //!
-//! Learned on the launcher (see RS-PORT.md): Hyprland routes every
+//! Learned on the launcher (see ARCHITECTURE.md): Hyprland routes every
 //! pointer event to an exclusive-keyboard layer while it's mapped, so
 //! a click outside arrives tagged with the dialog's window (with
 //! surface-local coordinates past its size, or none at all when the

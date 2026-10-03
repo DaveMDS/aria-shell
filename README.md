@@ -16,8 +16,8 @@ themeable through a CSS-like stylesheet.
 >
 > AriaShell is being rewritten in **Rust** on [iced](https://iced.rs) (wgpu) and
 > [iced_exwlshell](https://github.com/waycrate/exwlshelleventloop); the previous
-> Python/GTK4 implementation is kept in `aria-shell-python/` as the behaviour
-> reference until the port has caught up. The tables below are the port's status.
+> Python/GTK4 implementation is in the git history (`git log -- aria-shell-python`).
+> The checklists below are the port's status.
 
 ---
 
@@ -39,9 +39,13 @@ bar per monitor (or per `[panel:*]` section):
 | `Notifications` | ✅ | Notification bell with unseen count, history popup and do-not-disturb           |
 | `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |
 | `logout`        | ✅ | A `Custom` button to invoke Aria Exiter (`aria-shell exiter toggle`)            |
-| `power`         | 🔲 | Idle inhibitor, battery status, power profiles                                  |
+| `Idle`          | ✅ | Idle inhibitor: holds lock, screens off and suspend (see Aria Idler)            |
+| `power`         | 🔲 | Battery status, power profiles                                                  |
 | `Network`       | ✅ | NetworkManager: Wi‑Fi networks, wired devices, VPN toggles, Wi‑Fi on/off        |
-| `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, iwd |
+| `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, per-BSSID choice, editing profiles, iwd |
+| `Clock`         | 🔲 | Tooltip (`tooltip_format`)                                                      |
+| `SystemMonitor` | 🔲 | Per-process graphs and command lines, tree view, filtering, battery, more sensors, Intel GPU |
+| `Tray`          | 🔲 | Tooltips, overlay icons, menu icons and shortcuts, the `org.freedesktop` SNI name |
 | `bluetooth`     | 🔲 | bluetooth manager                                                               |
 | `screenshot`    | 🔲 | Screenshot and screen recorder                                                  |
 | `apps`          | 🔲 | fixed list of apps to run (like a dock)                                         |
@@ -52,6 +56,8 @@ bar per monitor (or per `[panel:*]` section):
 
 - ✅ Multi-monitor, hot-plug aware
 - ✅ Config hot-reload (`aria.conf`) and theme hot-reload
+- ✅ Autostart: programs run once when the shell starts (`[autostart]`)
+- 🔲 `[panel]` `size`, `align`, `margin`, `opacity`
 
 Full configuration via the `aria.conf` file.
 
@@ -66,6 +72,7 @@ An application launcher with support for `.desktop` files.
 - ✅ The exit menu's actions as a row of buttons above the search field
 - ✅ Usage-based ranking (what you launch most comes first; counts in `~/.local/state/aria-shell/launcher-usage`)
 - ✅ Secondary commands: an entry's desktop actions (e.g. Firefox's "New Private Window") open as child rows with → or the chevron, ← closes them
+- 🔲 `DBusActivatable` entries
 
 
 ---
@@ -76,7 +83,9 @@ A lock screen implementing the `ext-session-lock-v1` Wayland protocol.
 - ✅ Date/time and user name/avatar display
 - ✅ PAM-based password authentication (with PAM's own messages, e.g. a locked account)
 - ✅ Show/hide the password
-- 🔲 Background customization (same capabilities as Aria Wallpaper)
+- 🔲 Background customization (same capabilities as Aria Wallpaper, or the desktop blurred)
+- 🔲 A spinner while checking, a shake on failure, a Caps Lock warning
+- 🔲 A second PAM prompt (e.g. a one-time code)
 
 
 ---
@@ -89,6 +98,7 @@ A session management dialog for locking, suspending, hibernating, logging out, r
 - ✅ Custom buttons with icon, label and confirmation support
 - ✅ `logout = auto` asks the compositor itself (Hyprland, Sway)
 - ✅ Keyboard navigation
+- 🔲 Per-button hotkeys
 
 
 ---
@@ -110,7 +120,8 @@ monitor, a live shader on the third.
 - ✅ Per-monitor backgrounds
 - ✅ Fit modes: cover, contain, fill, none, scale-down (CSS `object-fit`)
 - ✅ Static images (reloaded when the file changes)
-- 🔲 Animated GIFs
+- 🔲 Animated GIFs, videos
+- 🔲 `tile` fit mode
 - 🔲 [Shadertoy](https://shadertoy.com) shader support (`.shadertoy` files)
 - 🔲 texture based shader support
 - 🔲 Cycle through files in folder
@@ -129,7 +140,8 @@ A full-featured desktop notification server, replacing tools like `mako`.
 - ✅ Configurable corner, timeout, per-notification replacement
 - ✅ History and do-not-disturb (the `Notifications` gadget)
 - 🔲 Markup support (markup is stripped for now)
-- 🔲 Sound support, notification persistence
+- 🔲 Sound support, persisting the history and do-not-disturb
+- 🔲 `resident` / `transient` and `x` / `y` hints, animations
 - 🔲 Limit the number of visible notification somehow
 
 
@@ -147,17 +159,16 @@ A lightweight drop-down terminal.
 
 ---
 
-### 💤 Aria Idler *(experimental, not ported yet)*
-An idle daemon using the `ext_idle_notifier_v1` Wayland protocol.
+### 💤 Aria Idler
+What happens when nobody touches the machine (`[Idle]`, `[Idle:battery]`): each
+stage has its own timeout from the last input, on AC and on battery.
 
->[!NOTE] I'm not sure if this thing should be an aria responsibility, seems
->we are fighting with systemd abilities.
-
-- 🔲 Configurable idle/resume commands (Aria or external)
-- 🔲 Simple syntax in `aria.conf`
-- 🔲 Per-scenario timeouts (AC vs battery)
-- 🔲 manage events like on-lid-closed? How?
-- 🔲 manage before-sleep and the like?
+- ✅ Screens off (back on at the first input), lock, suspend (through logind)
+- ✅ Separate timeouts on battery (UPower)
+- ✅ Lock before any sleep (lid, `systemctl suspend`) and on `loginctl lock-session`
+- ✅ Held by the `Idle` gadget or `aria-shell idle inhibit`, by a media player playing,
+  and by apps inhibiting idle (a fullscreen video)
+- 🔲 A screensaver stage (which would also dim the screens)
 
 
 ---
@@ -171,7 +182,9 @@ is loaded on top, with light and dark colour schemes. Themes are found in
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`, `:nth-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ Hot reload while editing (a broken file keeps the running theme)
-- 🔲 `margin`, `opacity`, gradients, `@import`, `@font-face`, transitions
+- 🔲 `margin`, `opacity`, gradients, `@import`, `!important`, `@font-face`, transitions
+- 🔲 `:hover` on more than buttons, a themed scrollbar
+- 🔲 Remember the theme picked at runtime, follow and set the desktop's colour scheme
 - 🔲 Shader backgrounds for widgets (`background: shader("x.wgsl")`)
 
 
@@ -193,7 +206,8 @@ aria-shell ping
 aria-shell lock
 aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network
+aria-shell idle     inhibit [toggle|on|off]
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
@@ -211,6 +225,8 @@ TODO: dmenu ...
 libpam            # lock screen authentication
 libpulse          # audio gadget (PipeWire's pipewire-pulse or PulseAudio at runtime)
 NetworkManager    # network gadget (over the system bus, at runtime)
+systemd-logind    # idle: suspend, lock before sleep (at runtime)
+UPower            # idle: the timeouts on battery (at runtime, optional)
 a Vulkan or OpenGL driver for wgpu
 an icon theme (Adwaita, breeze, ...) and the fonts your theme names
 ```

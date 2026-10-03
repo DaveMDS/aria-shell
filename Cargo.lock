@@ -184,6 +184,9 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
  "zbus",
 ]
 

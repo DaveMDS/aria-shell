@@ -7,6 +7,7 @@ mod exiter;
 mod gadget;
 mod gadgets;
 mod icons;
+mod idle;
 mod launcher;
 mod locale;
 mod locker;
@@ -46,6 +47,7 @@ use dialog::Dialog;
 use exiter::{Exiter, ExiterConfig};
 use gadget::Shared;
 use icons::Icons;
+use idle::Idle;
 use launcher::Launcher;
 use locale::Locale;
 use locker::Locker;
@@ -83,6 +85,8 @@ enum Message {
     SysMon(sysmon::Event),
     Audio(audio::Event),
     Network(network::Event),
+    /// Idle stages, sleeps, the power source.
+    Idle(idle::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -142,6 +146,7 @@ struct AriaShell {
     sysmon: SysMon,
     audio: Audio,
     network: Network,
+    idle: Idle,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -214,6 +219,7 @@ impl AriaShell {
         let load_icons = icons.load().map(Message::Icons);
         let notifications = Notifications::new(config.section(None));
         let sysmon = SysMon::new(config.section(None));
+        let idle = Idle::new(idle::IdleConfig::load(&config));
         let shell = Self {
             config,
             general,
@@ -229,6 +235,7 @@ impl AriaShell {
             sysmon,
             audio: Audio::default(),
             network: Network::default(),
+            idle,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -255,6 +262,7 @@ impl AriaShell {
             sysmon: &self.sysmon,
             audio: &self.audio,
             network: &self.network,
+            idle: &self.idle,
             scripts: &self.scripts,
         }
     }
@@ -458,6 +466,12 @@ impl AriaShell {
                 if !self.audio.apply(event) {
                     return Task::none();
                 }
+                self.idle.set_playing(
+                    self.audio
+                        .players()
+                        .iter()
+                        .any(|p| p.status == audio::PlaybackStatus::Playing),
+                );
                 self.resolve_icons();
                 self.sync_popups()
             }
@@ -514,6 +528,24 @@ impl AriaShell {
                 Task::none()
             }
             Message::Command(Command::Lock) => self.lock(),
+            Message::Command(Command::Idle(cmd)) => {
+                self.idle.run(cmd);
+                Task::none()
+            }
+            Message::Idle(event) => {
+                let locker = match &self.locker {
+                    None => idle::Locker::None,
+                    Some(l) if l.locked => idle::Locker::Locked,
+                    Some(_) => idle::Locker::Locking,
+                };
+                let (lock, task) = self.idle.apply(event, locker);
+                let task = task.map(Message::Idle);
+                if lock {
+                    Task::batch([task, self.lock()])
+                } else {
+                    task
+                }
+            }
             Message::Locker(m) => {
                 let Some(locker) = &mut self.locker else {
                     return Task::none();
@@ -546,6 +578,10 @@ impl AriaShell {
                 }
                 DebugCommand::Network => {
                     reply.send(self.network.describe());
+                    Task::none()
+                }
+                DebugCommand::Idle => {
+                    reply.send(self.idle.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -877,6 +913,7 @@ impl AriaShell {
         self.locale = Locale::new(&self.general.language);
         self.notifications.set_config(self.config.section(None));
         self.sysmon.set_config(self.config.section(None));
+        self.idle.set_config(idle::IdleConfig::load(&self.config));
         let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -948,6 +985,10 @@ impl AriaShell {
             Action::SysMon(cmd) => self.sysmon.run(cmd).map(Message::SysMon),
             Action::Audio(cmd) => self.audio.run(cmd).map(Message::Audio),
             Action::Network(cmd) => self.network.run(cmd).map(Message::Network),
+            Action::Idle(cmd) => {
+                self.idle.run(cmd);
+                Task::none()
+            }
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1319,16 +1360,19 @@ impl AriaShell {
                 if let Some(locker) = &mut self.locker {
                     locker.locked = true;
                 }
+                self.idle.lock_settled();
                 Task::none()
             }
             ShellEvent::LockDenied => {
                 log::error!("the compositor denied the session lock");
                 self.locker = None;
+                self.idle.lock_settled();
                 Task::none()
             }
             ShellEvent::LockedFinished => {
                 log::info!("the compositor ended the session lock");
                 self.locker = None;
+                self.idle.lock_settled();
                 Task::none()
             }
             ShellEvent::OutputAdded(output) => {
@@ -1655,6 +1699,7 @@ impl AriaShell {
                 self.sysmon.subscription().map(Message::SysMon),
                 self.audio.subscription().map(Message::Audio),
                 self.network.subscription().map(Message::Network),
+                self.idle.subscription().map(Message::Idle),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

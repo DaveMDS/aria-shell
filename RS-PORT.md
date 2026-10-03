@@ -34,9 +34,9 @@ the level of visual customization we actually want.
   production auth bugs. Ours is a hand-written `libpam` binding
   (`locker/pam.rs`), small enough to read whole; refused-password path
   exercised by a UI scenario, the accepted one only by hand.
-- The idle-notifier protocol, raw PipeWire volume control and a
-  GStreamer→wgpu bridge for video all lack mature crates; expect to
-  hand-roll them.
+- Raw PipeWire volume control and a GStreamer→wgpu bridge for video
+  lack mature crates; expect to hand-roll them. (The idle-notifier
+  protocol didn't: `wayland-protocols` has it, see `idle/wayland.rs`.)
 - `iced_exwlshell` is a small, fast-moving crate: expect API churn, verify
   against its source in `~/.cargo/registry` rather than memory.
 
@@ -1335,6 +1335,20 @@ NetworkManager over the system bus, the bar icon by state, the popup
 with the Wi‑Fi networks (join, the password in place, details,
 Disconnect / Forget, scan, on/off), the wired devices and the VPN
 profiles with toggles; `aria-shell debug network`.
+`[autostart]`: `name = command line` pairs run once at start, in file
+order (not on a config reload). Idle (`[Idle]`, `idle/`): three
+stages with a timeout each on AC and on battery (`lock`,
+`screen_off`, `suspend`; `[Idle:battery]` the same keys, by UPower's
+`OnBattery`),
+timed by `ext-idle-notify-v1` on a Wayland connection of its own (so
+the compositor's idle inhibitors hold them), the screens through
+`wlr-output-power-management-v1`, the suspend a logind `Suspend` call;
+the session locked on logind's `Lock` and before any sleep (a delay
+inhibitor released once the lock is confirmed); held by a media player
+playing and by the user (the `Idle` gadget, `aria-shell idle inhibit`);
+`aria-shell debug idle`. Verified in the nested Sway (lock, screens
+off and back on at the first input, the holds); the logind and UPower
+parts only on a real session.
 
 Not yet: `[panel]`
 `size`/`align`/`margin`/`opacity`, panel height from content, Clock
@@ -1342,7 +1356,9 @@ Not yet: `[panel]`
 properties beyond the current set (`margin`, `opacity`, gradients,
 `@import`, `!important`, `@font-face` for theme-shipped fonts,
 transitions), `:hover` on non-button widgets (needs a `mouse_area`
-wrapper), every other gadget and component (terminal, idle), exiter
+wrapper), every other gadget and component (terminal), idle
+niceties (a screensaver stage, which would also dim; stages running
+programs), exiter
 niceties (per-button hotkeys, `columns` from the theme),
 wallpaper niceties (gif/video/shadertoy as the Python had, a slideshow,
 `tile`, the locker reusing it), locker niceties (a wallpaper / blurred desktop behind it, the

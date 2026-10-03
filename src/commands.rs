@@ -37,6 +37,8 @@ pub enum Command {
     Exiter(ToggleCommand),
     /// Lock the session (`aria-shell lock`).
     Lock,
+    /// Hold idle or let it go (`aria-shell idle inhibit [toggle|on|off]`).
+    Idle(crate::idle::Command),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -56,6 +58,8 @@ pub enum DebugCommand {
     Audio,
     /// The network: devices, networks around, profiles, active connections.
     Network,
+    /// The idle stages: power source, holds, screens, timers.
+    Idle,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -100,6 +104,7 @@ enum Parsed {
     Launcher(ToggleCommand),
     Exiter(ToggleCommand),
     Lock,
+    Idle(crate::idle::Command),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -126,6 +131,17 @@ fn parse(line: &str) -> Result<Parsed, String> {
             [] => Ok(Parsed::Lock),
             _ => Err(format!("invalid arguments for <lock>: {}", args.join(" "))),
         },
+        "idle" => match args.as_slice() {
+            ["inhibit"] | ["inhibit", "toggle"] => {
+                Ok(Parsed::Idle(crate::idle::Command::ToggleInhibit))
+            }
+            ["inhibit", "on"] => Ok(Parsed::Idle(crate::idle::Command::SetInhibit(true))),
+            ["inhibit", "off"] => Ok(Parsed::Idle(crate::idle::Command::SetInhibit(false))),
+            _ => Err(format!(
+                "invalid arguments for <idle>: {} (inhibit [toggle | on | off])",
+                args.join(" ")
+            )),
+        },
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -134,12 +150,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["sysmon"] => Ok(Parsed::Debug(DebugCommand::SysMon)),
             ["audio"] => Ok(Parsed::Debug(DebugCommand::Audio)),
             ["network"] => Ok(Parsed::Debug(DebugCommand::Network)),
+            ["idle"] => Ok(Parsed::Debug(DebugCommand::Idle)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | widgets [filter])",
                 args.join(" ")
             )),
         },
@@ -215,6 +232,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
             }
             Ok(Parsed::Lock) => {
                 let _ = tx.send(Command::Lock).await;
+                "OK".to_owned()
+            }
+            Ok(Parsed::Idle(cmd)) => {
+                let _ = tx.send(Command::Idle(cmd)).await;
                 "OK".to_owned()
             }
             Ok(Parsed::Debug(cmd)) => {

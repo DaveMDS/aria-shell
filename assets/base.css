@@ -137,6 +137,11 @@
  *   popup > gadget.themes
  *   ╰─ menu                                                   Light / Dark, then Base and every theme found
  *
+ *   gadget.idle
+ *   ╰─ button[.inhibited][.playing]                           left click holds idle / lets it go; .inhibited: held by
+ *      ╰─ icon                                                the user, .playing: held by a media player playing;
+ *                                                             drawn at the node's `height`
+ *
  *   gadget.notifications
  *   ╰─ button[.dnd][.new]                                     left: the history popup, right: do-not-disturb,
  *      ├─ icon                                                middle: closes the toasts; drawn at the node's `height`
@@ -663,6 +668,20 @@ gadget.themes > button:hover {
 }
 gadget.themes icon {
   height: 16px;
+}
+
+gadget.idle > button {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+gadget.idle > button:hover {
+  background: var(--aria-border);
+}
+gadget.idle icon {
+  height: 16px;
+}
+gadget.idle > button.inhibited icon {
+  color: var(--aria-accent);
 }
 
 gadget.notifications > button {

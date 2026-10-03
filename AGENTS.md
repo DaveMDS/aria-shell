@@ -37,11 +37,13 @@ With arguments the binary is a client of the running shell:
 aria-shell launcher toggle          # what a compositor keybind runs
 aria-shell lock                     # the lock screen (PAM checks the password)
 aria-shell exiter toggle            # the exit menu (lock, suspend, ..., shutdown)
+aria-shell idle inhibit             # hold idle (no lock, screens off, suspend) or let it go
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
 aria-shell debug audio              # the mixer channels and the media players as the daemon sees them
 aria-shell debug network            # the devices, the Wi‑Fi networks around, the profiles and the active connections
+aria-shell debug idle               # the idle stages: power source, holds, screens, timers armed
 ```
 
 ## Architecture
@@ -57,10 +59,11 @@ Shared state (the compositor's workspaces/windows, the app icons, the
 tray items, the outputs of gadget scripts, the mixer and the media
 players, ...) is owned by the daemon (`Compositor` in `compositor/`,
 `Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
-`Audio` in `audio/`, `Network` in `network/`), reaches gadgets read-only through
+`Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`), reaches gadgets read-only through
 `gadget::Context` in `view`, and is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
-`Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
+`Action::Idle(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like

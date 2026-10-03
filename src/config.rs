@@ -87,6 +87,20 @@ impl Config {
         RawSection(map)
     }
 
+    /// The key/value pairs of one section in file order, bare keys with
+    /// `""`: for sections whose keys are names the user picks.
+    pub fn pairs(&self, name: &str) -> Vec<(String, String)> {
+        self.ini
+            .get_map_ref()
+            .get(name)
+            .map(|kv| {
+                kv.iter()
+                    .map(|(k, v)| (k.clone(), v.clone().unwrap_or_default()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Names of every instance of a section: `prefix` itself plus every
     /// `prefix:id`, in file order.
     pub fn instances(&self, prefix: &str) -> Vec<String> {

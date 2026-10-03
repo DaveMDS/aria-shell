@@ -204,6 +204,7 @@ impl OpenPopup {
 impl AriaShell {
     fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
+        autostart(&config);
         let general: GeneralConfig = config.section(None);
         let style = general.style.clone();
         let scheme = general.color_scheme;
@@ -1734,6 +1735,19 @@ fn close_surfaces(dialog: &Dialog) -> Task<Message> {
             .windows()
             .map(|id| Task::done(Message::RemoveWindow(id))),
     )
+}
+
+/// `[autostart]`: `name = command line` pairs, run in file order once
+/// when the shell starts (not on a config reload).
+fn autostart(config: &Config) {
+    for (name, line) in config.pairs("autostart") {
+        if line.is_empty() {
+            log::warn!("[autostart] {name}: no command line");
+            continue;
+        }
+        log::info!("autostart {name}");
+        process::run(&line);
+    }
 }
 
 fn main() -> iced_exwlshell::Result {

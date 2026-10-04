@@ -306,10 +306,13 @@ nm_stop() {
     rm -rf "$nm_dir"
 }
 
-# One command to NetworkManager; fails unless answered `ok`.
+# One command to NetworkManager; fails unless answered `ok`. Answers
+# and events share the line: a scan may come first (the network popup
+# asks one every 10 s while open), and is left out.
 nm_send() {
     echo "$1" >&3
-    read -r reply <&4
+    reply=
+    while read -r reply <&4 && [ "$reply" = scan ]; do :; done
     [ "$reply" = ok ] || { echo "nm '$1': $reply"; return 1; }
     settle
 }

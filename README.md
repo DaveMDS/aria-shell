@@ -56,6 +56,7 @@ bar per monitor (or per `[panel:*]` section):
 - ✅ Multi-monitor, hot-plug aware
 - ✅ Config hot-reload (`aria.conf`) and theme hot-reload
 - ✅ Autostart: programs run once when the shell starts (`[autostart]`)
+- ✅ One shell per display: a second `aria-shell` refuses to start
 - 🔲 `[panel]` `size`, `align`, `margin`, `opacity`
 
 Full configuration via the `aria.conf` file.
@@ -263,6 +264,10 @@ cd aria-shell
 cargo build --release
 ./target/release/aria-shell
 ```
+
+Start it once per session (e.g. `exec-once = aria-shell` on Hyprland,
+`exec aria-shell` on Sway): one shell runs per display, and a second
+`aria-shell` started without arguments says so and leaves.
 
 Run from a checkout the shell finds its sample config and themes in
 `assets/`. For the lock screen's PAM service you may install

@@ -179,6 +179,36 @@ pub fn socket_path() -> Option<PathBuf> {
     )
 }
 
+/// Held for as long as the shell runs: one shell per display.
+pub struct Instance(#[allow(dead_code)] std::fs::File);
+
+/// Take the display's lock (`<WAYLAND_DISPLAY>.lock` next to the socket),
+/// or say who has it. A lock rather than asking the socket: two shells
+/// started together (a compositor's autostart and a terminal) can't
+/// both get it, and it goes with its process, however that ends.
+pub fn single_instance() -> Result<Instance, String> {
+    let socket = socket_path().ok_or("XDG_RUNTIME_DIR not set")?;
+    let path = socket.with_extension("lock");
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| format!("cannot open {}: {e}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Instance(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Err(format!(
+            "aria-shell is already running on this display (it holds {})",
+            path.display()
+        )),
+        Err(std::fs::TryLockError::Error(e)) => Err(format!("cannot lock {}: {e}", path.display())),
+    }
+}
+
 /// The daemon side: every command received, for as long as the shell
 /// runs.
 pub fn listen() -> Subscription<Command> {

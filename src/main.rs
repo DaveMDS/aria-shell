@@ -1949,6 +1949,16 @@ fn main() -> iced_exwlshell::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("aria_shell=info"))
         .init();
 
+    // Before anything runs (autostart, the surfaces, the socket, which
+    // a second shell would take from the first).
+    let _instance = match commands::single_instance() {
+        Ok(instance) => instance,
+        Err(e) => {
+            log::error!("{e}");
+            std::process::exit(1);
+        }
+    };
+
     let (shell_broadcast, shell_events) = shell::channel();
 
     daemon(

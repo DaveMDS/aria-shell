@@ -313,6 +313,10 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
 commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(ToggleCommand)`,
                             `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
+commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
+                            `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
+                            second shell would run the autostart again and take the socket); a lock,
+                            not a `ping`: atomic for two shells started together, gone with a crash
 
 watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, theme files and the
                             icon/applications dirs; yields `Changed(paths)`: config -> rebuild panels,

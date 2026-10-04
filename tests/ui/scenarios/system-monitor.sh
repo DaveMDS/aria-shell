@@ -3,7 +3,7 @@
 # on the tab of the instance's value, with the cpu (graph, one meter
 # per core), memory, disks, network and process tabs; the table sorts
 # by column; a click on a row selects it and a bar under the table
-# offers Terminate/Kill, and Terminate ends the `sleep` we started; a
+# offers Terminate/Kill, and Terminate ends the process we started; a
 # right click on the bar runs `command`, or the terminal monitor.
 
 bell='panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
@@ -95,26 +95,38 @@ for p in $(row_pids); do
     [ "$p" -ge "$first" ] || { echo "not ascending: $p < $first"; exit 1; }
 done
 
-# A process of ours, started now so that by pid descending it's among
-# the newest (the five rows); selected, then Terminate ends it.
-sleep 1000 &
+# A process of ours, named to come first by name (`!` sorts before
+# `(sd-pam)` and the rest; by pid it wouldn't: on a machine up for
+# days the pids have wrapped, the newest aren't the highest); selected,
+# then Terminate ends it. A script, so its name is the file's; it ends
+# its sleep on TERM, and ends anyway in five minutes if a step fails.
+cat > "$ARIA_UI_OUT/!victim" << 'EOF'
+#!/bin/sh
+trap 'kill $!; exit' TERM
+sleep 300 &
+wait
+EOF
+chmod +x "$ARIA_UI_OUT/!victim"
+"$ARIA_UI_OUT/!victim" &
 victim=$!
-click_widget 'table header column.pid'
+click_widget 'table header column.name'
+assert_eq "$(count_widgets 'table header column.name.sorted')" 1
 i=0
-while [ "$(count_widgets 'table row[pid="'"$victim"'"][name="sleep"]')" != 1 ]; do
+while [ "$(first_pid)" != "$victim" ]; do
     i=$((i + 1))
-    [ $i -le 5 ] || { echo "our sleep ($victim) never showed on the table"; exit 1; }
+    [ $i -le 5 ] || { echo "our victim ($victim) never showed first on the table"; exit 1; }
     settle 1
 done
-# The table is re-read every second and our own `aria` clients show
-# up at the top (newest pids), so a click may land on a shifted row:
-# try until the right row is the selected one.
+assert_eq "$(count_widgets 'table row[pid="'"$victim"'"][name="!victim"]')" 1 "named as the script"
+# The table is re-read every second and our own `aria` clients come
+# and go below it, so a click may still land on a shifted row: try
+# until the right row is the selected one.
 assert_eq "$(count_widgets 'section.processes > actions.none')" 1 "the bar with the help, nothing selected"
 select_victim() {
     i=0
     while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"]')" != 1 ]; do
         i=$((i + 1))
-        [ $i -le 5 ] || { echo "couldn't select the sleep"; return 1; }
+        [ $i -le 5 ] || { echo "couldn't select the victim"; return 1; }
         # The row may be out for a tick (a burst of our own clients).
         click_widget 'table row[pid="'"$victim"'"]' || settle 1
     done
@@ -125,9 +137,9 @@ assert_eq "$(count_widgets 'section.processes > actions > button.terminate')" 1
 assert_eq "$(count_widgets 'section.processes > actions > button.kill')" 1
 shot_surface popup-actions popup
 # A click on the selected row deselects it; selected again for Terminate.
-# The table shifts under the pointer as our own clients come and go
-# (newest pids first), so a click may select another row instead:
-# click whichever row is selected until none is.
+# The rows under the victim shift as our own clients come and go, so a
+# click may select another row instead: click whichever row is
+# selected until none is.
 i=0
 while [ "$(count_widgets 'section.processes > actions.none')" != 1 ]; do
     i=$((i + 1))
@@ -135,11 +147,11 @@ while [ "$(count_widgets 'section.processes > actions.none')" != 1 ]; do
     click_widget 'table row.selected' || settle 1
 done
 select_victim
-kill -0 "$victim" 2> /dev/null || { echo "the sleep died on its own"; exit 1; }
+kill -0 "$victim" 2> /dev/null || { echo "the victim died on its own"; exit 1; }
 i=0
 while kill -0 "$victim" 2> /dev/null; do
     i=$((i + 1))
-    [ $i -le 5 ] || { echo "the sleep survived Terminate"; exit 1; }
+    [ $i -le 5 ] || { echo "the victim survived Terminate"; exit 1; }
     if [ "$(count_widgets 'table row.selected[pid="'"$victim"'"]')" = 1 ]; then
         click_widget 'section.processes > actions > button.terminate' || :
     else

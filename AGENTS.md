@@ -26,7 +26,7 @@ cargo run
 Requires a Wayland compositor implementing `wlr-layer-shell-v1` (Hyprland,
 Sway, ...). Won't work under X11 or on compositors without layer-shell
 support. There's no mock mode, but there is a headless one: `tests/ui/`
-runs the shell inside a nested `sway` with no GPU output (see
+runs the shell inside a nested `sway` with no display output (see
 "Verifying").
 
 With arguments the binary is a client of the running shell:

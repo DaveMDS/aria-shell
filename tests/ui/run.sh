@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs UI scenarios against the shell inside a headless, nested Sway:
-# no GPU output, no dependency on the desktop's compositor, no root.
+# no display output, no dependency on the desktop's compositor, no root.
 #
 #   tests/ui/run.sh              every scenario in tests/ui/scenarios/
 #   tests/ui/run.sh launcher     one of them
@@ -33,7 +33,18 @@ fi
 
 # The nested compositor must not be mistaken for the desktop's.
 unset HYPRLAND_INSTANCE_SIGNATURE SWAYSOCK I3SOCK NIRI_SOCKET
-export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1
+export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1
+# Sway composes on the GPU when there is one: under pixman the shell's
+# wgpu falls back to llvmpipe, a core busy at rest and popups taking
+# seconds on a laptop. Without a render node, or with WLR_RENDERER set,
+# that's what it gets.
+if [ -z "${WLR_RENDERER:-}" ]; then
+    WLR_RENDERER=pixman
+    for node in /dev/dri/renderD*; do
+        [ -e "$node" ] && WLR_RENDERER=gles2
+    done
+fi
+export WLR_RENDERER
 export XDG_CONFIG_HOME=$here/config
 export XDG_DATA_HOME=$here/data
 export XDG_DATA_DIRS=${XDG_DATA_DIRS:-/usr/local/share:/usr/share}

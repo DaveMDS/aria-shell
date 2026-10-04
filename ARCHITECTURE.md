@@ -930,16 +930,23 @@ Two things flow between the daemon and the gadgets besides messages:
     (`:nth-child(n)` was added for it). A driver says "the third row"
     instead of measuring a screenshot.
 - **UI scenarios** (`tests/ui/`, see AGENTS.md "Verifying"): `run.sh`
-  starts a headless nested Sway (`WLR_BACKENDS=headless
-  WLR_RENDERER=pixman`, two 1920x1080 outputs, `sway.conf` execs
+  starts a headless nested Sway (`WLR_BACKENDS=headless`,
+  `WLR_RENDERER=gles2` when there's a render node, two 1920x1080
+  outputs, `sway.conf` execs
   `inner.sh` so everything inherits the nested `WAYLAND_DISPLAY`), the
   shell with `tests/ui/config` and `tests/ui/data` (a harmless
   `aria-test.desktop` with `Exec=true`), then each scenario with
   `lib.sh`'s vocabulary; `target/ui/<scenario>/` gets status, logs and
   screenshots. Facts learned building it:
-  - The shell renders under the pixman compositor with wgpu on the real
-    GPU (Vulkan, Intel here); a GPU-less CI would need iced's
-    `tiny-skia` fallback, untested.
+  - Under a pixman Sway (the default before, and still without a
+    render node) the shell's wgpu loads the Vulkan driver but ends up
+    drawing on llvmpipe (Mesa's software GL): with the test config's
+    clock in seconds the shell sat at a core at rest and ~4.5 cores
+    during a scenario, menus took 0.5-1s to show and `debug` answered
+    in ~130ms, enough to fail fixed `settle` pauses on a laptop. Under a
+    `gles2` Sway it renders on the GPU: ~9% at rest, the suite a
+    quarter faster. A GPU-less CI still gets llvmpipe (slow) or would
+    need iced's `tiny-skia` fallback, untested.
   - A popup that would overflow the output is slid back by the
     compositor (Sway and Hyprland alike), and `debug surfaces` /
     `widgets` report the requested placement: a scenario clicking in a

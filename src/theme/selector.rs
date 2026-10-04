@@ -91,6 +91,12 @@ impl Selector {
     pub fn matches(&self, node: &Node) -> bool {
         matches_from(&self.parts, node)
     }
+
+    /// The element type the rightmost compound asks for (`None`: any),
+    /// which a node must have to match.
+    pub fn subject_kind(&self) -> Option<&str> {
+        self.parts.last().and_then(|(_, c)| c.kind.as_deref())
+    }
 }
 
 /// Right-to-left: the last compound must match `node`, the rest its

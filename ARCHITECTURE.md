@@ -423,7 +423,12 @@ Two things flow between the daemon and the gadgets besides messages:
   (`panel.top#2 > slot.start > gadget.workspaces > workspace.active`),
   an immutable `Arc` list so style closures can own one. `Theme::resolve`
   walks root→leaf applying matching rules and inheriting `color` and
-  `font-*`; `Theme::button/container/text/row` do that and return plain
+  `font-*`; it only tries, at each node, the rules whose rightmost
+  compound names that node's type plus those naming none (indexed at
+  load, merged back into cascade order): trying all ~280 on every node
+  and ancestor was 46% of the CPU while the pointer moved over a bar,
+  as every message rebuilds every surface (optimized build, perf);
+  `Theme::button/container/text/row` do that and return plain
   iced widgets. A button's style closure re-resolves with
   `node.status(status)`, which is how `:hover`/`:active` work. Text gets
   an explicit colour only when a rule set it on the text node itself;

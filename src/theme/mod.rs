@@ -122,6 +122,13 @@ pub enum Command {
 pub struct Theme {
     /// In cascade order: later rules win.
     rules: Vec<Rule>,
+    /// Indices into `rules`, ascending, of those whose selector names
+    /// an element type, by that type: a node is only tried against its
+    /// own type's and `any_kind`'s (most of the time in a rebuild went
+    /// to trying every rule on every node and its ancestors).
+    by_kind: HashMap<String, Vec<usize>>,
+    /// Indices of the rules naming no type (`.active`, `*`), ascending.
+    any_kind: Vec<usize>,
     /// User files loaded, for the daemon to watch (see `watch.rs`).
     files: Vec<PathBuf>,
     scheme: Scheme,
@@ -284,8 +291,18 @@ impl Theme {
         }
         // Stable sort: equal specificity keeps source order.
         rules.sort_by_key(|r| r.selector.specificity());
+        let mut by_kind: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut any_kind = Vec::new();
+        for (i, rule) in rules.iter().enumerate() {
+            match rule.selector.subject_kind() {
+                Some(kind) => by_kind.entry(kind.to_owned()).or_default().push(i),
+                None => any_kind.push(i),
+            }
+        }
         Ok(Self {
             rules,
+            by_kind,
+            any_kind,
             files: Vec::new(),
             scheme,
             name: None,
@@ -308,7 +325,7 @@ impl Theme {
             } else {
                 n
             };
-            for rule in &self.rules {
+            for rule in self.candidates(n.kind()) {
                 if rule.selector.matches(n) {
                     for p in &rule.props {
                         own.apply(p);
@@ -318,6 +335,32 @@ impl Theme {
             style = own;
         }
         style
+    }
+
+    /// The rules a node of type `kind` may match, in cascade order: its
+    /// type's merged with those naming none.
+    fn candidates(&self, kind: &str) -> impl Iterator<Item = &Rule> {
+        let typed = self.by_kind.get(kind).map_or(&[][..], Vec::as_slice);
+        let any = self.any_kind.as_slice();
+        let (mut i, mut j) = (0, 0);
+        std::iter::from_fn(move || {
+            let next = match (typed.get(i), any.get(j)) {
+                (Some(&a), Some(&b)) if a < b => {
+                    i += 1;
+                    a
+                }
+                (_, Some(&b)) => {
+                    j += 1;
+                    b
+                }
+                (Some(&a), None) => {
+                    i += 1;
+                    a
+                }
+                (None, None) => return None,
+            };
+            Some(&self.rules[next])
+        })
     }
 
     /// A `container` styled as `node`: padding, size, background,
@@ -929,6 +972,18 @@ mod tests {
             t.resolve(&Node::root("panel").child("gadget")).color,
             Some(Color::from_rgb(0.0, 0.5019608, 0.0))
         );
+    }
+
+    #[test]
+    fn cascade_order_across_the_rule_index() {
+        // Same specificity (0,1,1), one rule indexed under `gadget`, the
+        // other under no type: source order decides, either way round.
+        let node = Node::root("panel").child("gadget").class("a");
+        let blue = Color::from_rgb(0.0, 0.0, 1.0);
+        let t = theme("gadget.a { color: red } panel .a { color: blue }");
+        assert_eq!(t.resolve(&node).color, Some(blue));
+        let t = theme("panel .a { color: blue } gadget.a { color: red }");
+        assert_eq!(t.resolve(&node).color, Some(red()));
     }
 
     #[test]

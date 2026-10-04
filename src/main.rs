@@ -1797,7 +1797,7 @@ impl AriaShell {
         if self.general.reload_style {
             files.extend(self.theme.files().iter().cloned());
         }
-        files.extend(self.icons.watch_dirs());
+        files.extend(self.icons.watch_dirs().iter().cloned());
         files.extend(self.images.files().cloned());
         let popups = (!self.popups.is_empty())
             .then(|| panel::presses_outside().map(Message::PressedOutside));

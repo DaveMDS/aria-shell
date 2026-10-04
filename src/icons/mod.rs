@@ -87,6 +87,10 @@ impl Icon {
 pub struct Index {
     icons: IconIndex,
     apps: DesktopDb,
+    /// What `Icons::watch_dirs` hands out, listed once with the index
+    /// (asked after every update, with the subscriptions: hundreds of
+    /// `stat`s each time otherwise).
+    watch: Vec<PathBuf>,
 }
 
 impl Index {
@@ -100,6 +104,7 @@ impl Index {
         Self {
             icons: IconIndex::load("", &[], &[]),
             apps,
+            watch: Vec::new(),
         }
     }
 }
@@ -261,16 +266,10 @@ impl Icons {
     }
 
     /// Directories whose changes should rebuild the index: where the
-    /// desktop entries and the theme icons live.
-    pub fn watch_dirs(&self) -> Vec<PathBuf> {
-        let mut dirs: Vec<PathBuf> = application_dirs()
-            .into_iter()
-            .filter(|d| d.is_dir())
-            .collect();
-        if let Some(index) = &self.index {
-            dirs.extend(index.icons.dirs());
-        }
-        dirs
+    /// desktop entries and the theme icons live (none until the index
+    /// is built, which reads them anyway).
+    pub fn watch_dirs(&self) -> &[PathBuf] {
+        self.index.as_ref().map_or(&[], |index| &index.watch)
     }
 }
 
@@ -288,7 +287,12 @@ fn build(theme: &str, languages: &[String]) -> Index {
     let t = Instant::now();
     let apps = DesktopDb::load(&application_dirs(), languages);
     log::debug!("icons: desktop entries in {:?}", t.elapsed());
-    Index { icons, apps }
+    let mut watch: Vec<PathBuf> = application_dirs()
+        .into_iter()
+        .filter(|d| d.is_dir())
+        .collect();
+    watch.extend(icons.dirs());
+    Index { icons, apps, watch }
 }
 
 fn application_dirs() -> Vec<PathBuf> {

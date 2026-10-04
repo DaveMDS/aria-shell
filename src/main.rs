@@ -1663,6 +1663,10 @@ impl AriaShell {
                 margin: None,
                 keyboard_interactivity: KeyboardInteractivity::None,
                 output_option: OutputOption::GlobalName(output.id),
+                // Nothing to point at: the pointer over the desktop would
+                // only be messages, each a rebuild of every surface and a
+                // frame of this one (`Message::redraw_scope`).
+                events_transparent: true,
                 namespace: Some("aria-wallpaper".to_owned()),
                 ..Default::default()
             },

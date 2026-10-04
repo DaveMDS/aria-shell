@@ -1068,7 +1068,14 @@ Two things flow between the daemon and the gadgets besides messages:
   frame, and entering a surface gives `CursorEntered` with no
   `CursorMoved`: the hover showed up to a second late. Hence the
   pointer's own events (`Cursor`, `PointerCrossed`) redraw the surface
-  they happen on.
+  they happen on. Over an empty desktop that surface was the wallpaper:
+  a frame of it, and a rebuild of everything, per pointer motion (64%
+  CPU in a debug build on gles2, 460% on pixman). The wallpapers are
+  `events_transparent` (an empty input region), so the pointer there
+  reaches nobody (11% / 15%, the same as at rest); a click on the bare
+  desktop still closes an open popup, by the compositor's popup grab
+  (verified on Sway 1.12 by every scenario's `click 600 600`;
+  Hyprland's grab does it too).
 - `notify` 8: `recommended_watcher(handler)` runs its own thread; watch
   the parent directory (editors save by rename) and filter on paths.
   `futures::mpsc::UnboundedReceiver::try_next` is deprecated for

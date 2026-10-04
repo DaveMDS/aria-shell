@@ -181,6 +181,7 @@ dependencies = [
  "libpulse-binding",
  "log",
  "notify",
+ "pure-rust-locales",
  "serde",
  "serde_json",
  "tokio",

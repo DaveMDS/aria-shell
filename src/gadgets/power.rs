@@ -292,7 +292,7 @@ impl PowerGadget {
             if b.energy_rate > 0.0 && b.state != State::Full {
                 lines.push(ctx.locale.fmt(
                     "power.rate",
-                    &[("w", &format!("{:.1}", b.energy_rate))],
+                    &[("w", &ctx.locale.decimal(b.energy_rate, 1))],
                 ));
             }
             if let Some(c) = b.capacity {

@@ -420,13 +420,13 @@ fn strength_icon(strength: u8) -> &'static str {
 }
 
 /// Mb/s, Gb/s.
-fn speed(mbps: u32) -> String {
+fn speed(locale: &Locale, mbps: u32) -> String {
     if mbps >= 1000 {
         let g = mbps as f32 / 1000.0;
         if g.fract() == 0.0 {
             format!("{} Gb/s", g as u32)
         } else {
-            format!("{g:.1} Gb/s")
+            format!("{} Gb/s", locale.decimal(g.into(), 1))
         }
     } else {
         format!("{mbps} Mb/s")
@@ -724,7 +724,7 @@ impl NetworkGadget {
                 let mut lines = ip_lines(locale, ip4, ip6);
                 let mut extra = vec![
                     ap.band().to_owned(),
-                    speed(ap.max_bitrate / 1000),
+                    speed(locale, ap.max_bitrate / 1000),
                     ap.security.label().to_owned(),
                 ];
                 if let Some(d) = device {
@@ -869,7 +869,7 @@ impl NetworkGadget {
             let mut lines = ip_lines(locale, d.ip4.as_ref(), d.ip6.as_ref());
             let mut extra = Vec::new();
             if d.speed > 0 {
-                extra.push(speed(d.speed));
+                extra.push(speed(locale, d.speed));
             }
             extra.push(d.iface.clone());
             if !d.hw_address.is_empty() {
@@ -1287,8 +1287,10 @@ mod tests {
 
     #[test]
     fn speeds() {
-        assert_eq!(speed(100), "100 Mb/s");
-        assert_eq!(speed(1000), "1 Gb/s");
-        assert_eq!(speed(2500), "2.5 Gb/s");
+        let en = Locale::new("en");
+        assert_eq!(speed(&en, 100), "100 Mb/s");
+        assert_eq!(speed(&en, 1000), "1 Gb/s");
+        assert_eq!(speed(&en, 2500), "2.5 Gb/s");
+        assert_eq!(speed(&Locale::new("it"), 2500), "2,5 Gb/s");
     }
 }

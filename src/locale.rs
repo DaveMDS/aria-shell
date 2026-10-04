@@ -36,6 +36,8 @@ pub struct Locale {
     /// English under the chosen language's texts.
     texts: HashMap<&'static str, &'static str>,
     dates: chrono::Locale,
+    /// The region's, `,` in Italy.
+    decimal_point: &'static str,
     /// `lang_COUNTRY` as the environment or the catalogue gave it.
     region: String,
 }
@@ -73,6 +75,7 @@ impl Locale {
             lang,
             texts,
             dates,
+            decimal_point: pure_rust_locales::locale_match!(dates => LC_NUMERIC::DECIMAL_POINT),
             region,
         }
     }
@@ -115,6 +118,12 @@ impl Locale {
     /// The same for a date alone.
     pub fn naive_date(&self, date: &NaiveDate, fmt: &str) -> String {
         date.format_localized(fmt, self.dates).to_string()
+    }
+
+    /// `value` with `places` decimals and the region's decimal point:
+    /// `8,4` in Italian.
+    pub fn decimal(&self, value: f64, places: usize) -> String {
+        format!("{value:.places$}").replacen('.', self.decimal_point, 1)
     }
 
     /// `lang=<code> dates=<locale>`, for `debug locale`.
@@ -190,6 +199,14 @@ mod tests {
         let en = Locale::new("en").date(&day, "%A");
         let it = Locale::new("it").date(&day, "%A");
         assert_ne!(en, it, "{en} vs {it}");
+    }
+
+    #[test]
+    fn decimals_follow_the_region() {
+        assert_eq!(Locale::new("it").decimal(8.4392, 1), "8,4");
+        assert_eq!(Locale::new("en").decimal(8.4392, 1), "8.4");
+        assert_eq!(Locale::new("it").decimal(-0.25, 2), "-0,25");
+        assert_eq!(Locale::new("it").decimal(12.0, 0), "12");
     }
 
     /// Every `.tr("key")` / `.fmt("key"` in the sources has an English

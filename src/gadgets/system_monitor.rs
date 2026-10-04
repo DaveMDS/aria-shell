@@ -320,7 +320,7 @@ impl Gadget for SystemMonitor {
                 None => Space::new().width(size).height(size).into(),
             });
         }
-        let text = format::expand(&self.config.format, sample);
+        let text = format::expand(ctx.locale, &self.config.format, sample);
         let max = self.config.max.or(auto_max);
         parts.push(match self.config.mode {
             Mode::Text => {
@@ -403,11 +403,11 @@ impl Gadget for SystemMonitor {
             (_, None) => Vec::new(),
             (SectionKind::Cpu, Some(s)) => cpu_section(theme, locale, &node, s, sysmon),
             (SectionKind::Mem, Some(s)) => mem_section(theme, locale, &node, s, sysmon),
-            (SectionKind::Disk, Some(s)) => disk_section(theme, &node, s, sysmon),
-            (SectionKind::Net, Some(s)) => net_section(theme, &node, s, sysmon),
+            (SectionKind::Disk, Some(s)) => disk_section(theme, locale, &node, s, sysmon),
+            (SectionKind::Net, Some(s)) => net_section(theme, locale, &node, s, sysmon),
             (SectionKind::Gpu, Some(s)) => gpu_section(theme, locale, &node, s, sysmon),
         };
-        let value = section_value(tab, sample);
+        let value = section_value(locale, tab, sample);
         let header = header(theme, &node, locale.tr(tab.title()), &value);
         let section: Element<'a, Message> = theme
             .container(
@@ -569,8 +569,8 @@ impl SystemMonitor {
                     Column::Name => p.name.clone(),
                     Column::Pid => p.pid.to_string(),
                     Column::User => p.user.clone(),
-                    Column::Cpu => format!("{:.1}", p.cpu),
-                    Column::Mem => format::bytes(p.rss),
+                    Column::Cpu => locale.decimal(p.cpu.into(), 1),
+                    Column::Mem => format::bytes(locale, p.rss),
                 };
                 let cell = theme
                     .container(&n, theme.text(&n, text))
@@ -668,7 +668,7 @@ fn pct(used: u64, total: u64) -> f32 {
 }
 
 /// The number shown in a section's header.
-fn section_value(kind: SectionKind, sample: Option<&Sample>) -> String {
+fn section_value(locale: &Locale, kind: SectionKind, sample: Option<&Sample>) -> String {
     let Some(s) = sample else {
         return String::new();
     };
@@ -677,13 +677,13 @@ fn section_value(kind: SectionKind, sample: Option<&Sample>) -> String {
         SectionKind::Mem => format!("{:.0}%", pct(s.mem.used, s.mem.total)),
         SectionKind::Disk => format!(
             "{} / {}",
-            format::rate(s.disks.iter().map(|d| d.read_bps).sum()),
-            format::rate(s.disks.iter().map(|d| d.write_bps).sum())
+            format::rate(locale, s.disks.iter().map(|d| d.read_bps).sum()),
+            format::rate(locale, s.disks.iter().map(|d| d.write_bps).sum())
         ),
         SectionKind::Net => format!(
             "↓ {}  ↑ {}",
-            format::rate(s.net.iter().map(|i| i.rx_bps).sum()),
-            format::rate(s.net.iter().map(|i| i.tx_bps).sum())
+            format::rate(locale, s.net.iter().map(|i| i.rx_bps).sum()),
+            format::rate(locale, s.net.iter().map(|i| i.tx_bps).sum())
         ),
         SectionKind::Gpu => s
             .gpus
@@ -719,7 +719,7 @@ fn text_line<'a, M: 'a>(theme: &Theme, node: &Node, text: String) -> Element<'a,
 
 fn cpu_section<'a, M: 'a>(
     theme: &Theme,
-    locale: &Locale,
+    locale: &'a Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -728,6 +728,7 @@ fn cpu_section<'a, M: 'a>(
     let h = sysmon.history();
     let mut out = vec![graph::graph(
         theme,
+        locale,
         &node.child("graph"),
         &[&h.cpu],
         Some(100.0),
@@ -773,15 +774,18 @@ fn cpu_section<'a, M: 'a>(
     let mut lines = vec![locale.fmt(
         "sysmon.cpu.load",
         &[
-            ("load1", &format_args!("{:.2}", s.load.0)),
-            ("load5", &format_args!("{:.2}", s.load.1)),
-            ("load15", &format_args!("{:.2}", s.load.2)),
+            ("load1", &locale.decimal(s.load.0.into(), 2)),
+            ("load5", &locale.decimal(s.load.1.into(), 2)),
+            ("load15", &locale.decimal(s.load.2.into(), 2)),
             ("uptime", &format::duration(s.uptime)),
         ],
     )];
     let mut hw = Vec::new();
     if let Some(f) = s.cpu.freq_mhz {
-        hw.push(locale.fmt("sysmon.cpu.frequency", &[("freq", &format::freq(f))]));
+        hw.push(locale.fmt(
+            "sysmon.cpu.frequency",
+            &[("freq", &format::freq(locale, f))],
+        ));
     }
     if let Some(t) = s.cpu.temp_c {
         hw.push(locale.fmt(
@@ -818,7 +822,7 @@ impl Sample {
 
 fn mem_section<'a, M: 'a>(
     theme: &Theme,
-    locale: &Locale,
+    locale: &'a Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -833,10 +837,10 @@ fn mem_section<'a, M: 'a>(
             locale.fmt(
                 "sysmon.mem.used",
                 &[
-                    ("used", &format::bytes(s.mem.used)),
-                    ("total", &format::bytes(s.mem.total)),
-                    ("cached", &format::bytes(s.mem.cached)),
-                    ("available", &format::bytes(s.mem.available)),
+                    ("used", &format::bytes(locale, s.mem.used)),
+                    ("total", &format::bytes(locale, s.mem.total)),
+                    ("cached", &format::bytes(locale, s.mem.cached)),
+                    ("available", &format::bytes(locale, s.mem.available)),
                 ],
             ),
         ),
@@ -858,8 +862,8 @@ fn mem_section<'a, M: 'a>(
             locale.fmt(
                 "sysmon.mem.swap",
                 &[
-                    ("used", &format::bytes(s.mem.swap_used)),
-                    ("total", &format::bytes(s.mem.swap_total)),
+                    ("used", &format::bytes(locale, s.mem.swap_used)),
+                    ("total", &format::bytes(locale, s.mem.swap_total)),
                 ],
             ),
         ));
@@ -875,6 +879,7 @@ fn mem_section<'a, M: 'a>(
     }
     out.push(graph::graph(
         theme,
+        locale,
         &node.child("graph"),
         &[&h.mem, &h.swap],
         Some(100.0),
@@ -886,6 +891,7 @@ fn mem_section<'a, M: 'a>(
 
 fn disk_section<'a, M: 'a>(
     theme: &Theme,
+    locale: &'a Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -914,10 +920,10 @@ fn disk_section<'a, M: 'a>(
                     &r.child("text"),
                     format!(
                         "{} / {}   ↓ {}  ↑ {}",
-                        format::bytes(d.used),
-                        format::bytes(d.total),
-                        format::rate(d.read_bps),
-                        format::rate(d.write_bps)
+                        format::bytes(locale, d.used),
+                        format::bytes(locale, d.total),
+                        format::rate(locale, d.read_bps),
+                        format::rate(locale, d.write_bps)
                     )
                 ),
             ]
@@ -943,6 +949,7 @@ fn disk_section<'a, M: 'a>(
         .collect();
     out.push(graph::graph(
         theme,
+        locale,
         &node.child("graph"),
         &[&h.disk_read, &h.disk_write],
         None,
@@ -954,6 +961,7 @@ fn disk_section<'a, M: 'a>(
 
 fn net_section<'a, M: 'a>(
     theme: &Theme,
+    locale: &'a Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -981,10 +989,10 @@ fn net_section<'a, M: 'a>(
                             &r.child("text"),
                             format!(
                                 "↓ {}  ↑ {}   ({} / {} total)",
-                                format::rate(iface.rx_bps),
-                                format::rate(iface.tx_bps),
-                                format::bytes(iface.rx_total),
-                                format::bytes(iface.tx_total)
+                                format::rate(locale, iface.rx_bps),
+                                format::rate(locale, iface.tx_bps),
+                                format::bytes(locale, iface.rx_total),
+                                format::bytes(locale, iface.tx_total)
                             )
                         ),
                     ]
@@ -996,6 +1004,7 @@ fn net_section<'a, M: 'a>(
         .collect();
     out.push(graph::graph(
         theme,
+        locale,
         &node.child("graph"),
         &[&h.net_rx, &h.net_tx],
         None,
@@ -1007,7 +1016,7 @@ fn net_section<'a, M: 'a>(
 
 fn gpu_section<'a, M: 'a>(
     theme: &Theme,
-    locale: &Locale,
+    locale: &'a Locale,
     node: &Node,
     s: &Sample,
     sysmon: &'a SysMon,
@@ -1026,7 +1035,10 @@ fn gpu_section<'a, M: 'a>(
             if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
                 info.push(locale.fmt(
                     "sysmon.gpu.vram",
-                    &[("used", &format::bytes(u)), ("total", &format::bytes(t))],
+                    &[
+                        ("used", &format::bytes(locale, u)),
+                        ("total", &format::bytes(locale, t)),
+                    ],
                 ));
             }
             if let Some(t) = g.temp_c {
@@ -1059,6 +1071,7 @@ fn gpu_section<'a, M: 'a>(
         .collect();
     out.push(graph::graph(
         theme,
+        locale,
         &node.child("graph"),
         &[&h.gpu],
         Some(100.0),

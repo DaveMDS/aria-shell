@@ -13,6 +13,7 @@ use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
 use iced::widget::{Space, canvas as canvas_widget, container, row};
 use iced::{Color, Element, Font, Length, Point, Rectangle, Renderer, Size, mouse};
 
+use crate::locale::Locale;
 use crate::theme::{self, Node, Theme};
 
 /// One series: its values (oldest first) and its colour.
@@ -149,6 +150,8 @@ pub struct Graph<'a> {
     /// with (top left, inside the graph).
     pub unit: Unit,
     pub scale_label: Option<Label>,
+    /// For the scale's decimal point.
+    pub locale: &'a Locale,
 }
 
 /// What a graph's values are, for its scale.
@@ -160,10 +163,10 @@ pub enum Unit {
 }
 
 impl Unit {
-    fn format(self, v: f32) -> String {
+    fn format(self, locale: &Locale, v: f32) -> String {
         match self {
             Self::Percent => format!("{v:.0}%"),
-            Self::Rate => crate::sysmon::format::rate(v),
+            Self::Rate => crate::sysmon::format::rate(locale, v),
         }
     }
 }
@@ -295,7 +298,7 @@ impl<Message> canvas::Program<Message> for Graph<'_> {
         }
         if let Some(label) = &self.scale_label {
             frame.fill_text(Text {
-                content: self.unit.format(max),
+                content: self.unit.format(self.locale, max),
                 position: Point::new(4.0, 2.0),
                 color: label.color,
                 size: label.size.into(),
@@ -399,6 +402,7 @@ pub fn gauge<'a, M: 'a>(
 /// { color }`, the grid in `border-color`.
 pub fn graph<'a, M: 'a>(
     theme: &Theme,
+    locale: &'a Locale,
     node: &Node,
     series: &[&'a VecDeque<f32>],
     max: Option<f32>,
@@ -431,6 +435,7 @@ pub fn graph<'a, M: 'a>(
         grid: s.border_color,
         unit,
         scale_label,
+        locale,
     };
     theme
         .container(

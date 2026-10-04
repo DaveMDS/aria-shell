@@ -69,8 +69,11 @@ lines from the config go through `process.rs`: split with shell-like
 quoting and run directly, no implicit shell, `aria-shell` meaning this
 binary. A popup's
 size is `Gadget::popup_size(ctx)`, a function of the state, re-asked
-after every update. See ARCHITECTURE.md's "Structure" section
-before changing the shape of any of these.
+after every update. Only the surfaces `Message::redraw_scope` names
+get a new frame: a new top-level message, or a change that reaches
+another surface, needs its scope (or a `Message::Redraw`) — see
+ARCHITECTURE.md's facts about the crates. See ARCHITECTURE.md's
+"Structure" section before changing the shape of any of these.
 
 Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
 plus `[general] style`), loaded for a light or dark scheme

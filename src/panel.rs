@@ -233,6 +233,26 @@ pub enum Action {
     Many(Vec<Action>),
 }
 
+impl Action {
+    /// Whether what it changes right away is only the gadgets' own
+    /// state, what this panel and its popups show: then only those
+    /// surfaces need a new frame. A command to a daemon that changes
+    /// nothing until its answer comes back (`run(&self)`) is: the
+    /// answer's message redraws whatever shows it.
+    pub fn is_local(&self) -> bool {
+        match self {
+            Self::None
+            | Self::Run(_)
+            | Self::Compositor(_)
+            | Self::Tray(_)
+            | Self::SysMon(_)
+            | Self::Audio(_) => true,
+            Self::Many(actions) => actions.iter().all(Self::is_local),
+            _ => false,
+        }
+    }
+}
+
 impl Panel {
     pub fn new(
         section: String,

@@ -1026,6 +1026,45 @@ Two things flow between the daemon and the gadgets besides messages:
   = ["png"] }` keeps only the PNG decoder in the binary.
 - The boot closure of `iced_exwlshell::daemon` may return `(State,
   Task)`: that's where the icon index build starts.
+- After every batch of messages `iced_exwlshell` rebuilds the widget
+  tree of **every** surface (not ours to change), and asks a frame of
+  the surfaces its redraw policy names, asked per message *before*
+  `update`; without a `Daemon::redraw_scope` that's all of them, and a
+  frame is always a full draw and present (no "nothing changed" check,
+  no damage with wgpu). With the default a clock tick or a pointer move
+  redrew both wallpapers, and the shell spent ~1 core at rest in the
+  nested pixman Sway. Ours is `Message::redraw_scope`: `None` for what
+  is only answered (`debug`), `Window(id)` for a panel's own messages
+  and for the pointer's surface (see below), `None` for the
+  shared-state events, whose
+  `update` sends `Message::Redraw(Some(id))` for each surface showing
+  `Shared` (all but the wallpapers), and `All` for the rest. A gadget's
+  popup is another surface: a `Panel` message with a local action
+  (`panel::Action::is_local`) redraws its popups the same way, any
+  other action everything. Measured in the nested Sway (2 bars, 2
+  wallpapers, test config, an optimized build), shell CPU before →
+  after: under pixman (software drawing, a weak GPU's case) at rest
+  112% → 6%, pointer moving on a bar 962% → 43%, system monitor popup
+  open 198% → 53%; under gles2 at rest 2.7% either way, pointer 21% →
+  19%, popup within the noise (7-10%): on a GPU drawing a wallpaper is
+  cheap, and each `Redraw` batch is one more widget-tree rebuild of
+  every surface (the shared events as `All` instead measured the same
+  on gles2, 60/99/160% on pixman). Frames at rest 8.4/s → 4/s, with
+  the pointer moving 82/s → 26/s (the pointer's bar only), wallpapers
+  none. A debug build costs 4-5× the CPU on gles2 (~10% at rest).
+  A new message that changes what some surface shows must either be
+  `All` or be followed by `Redraw` of that surface: the scenarios read
+  the widget tree, which is always fresh, so a stale frame only shows
+  on screen (`tests/ui/scenarios/redraw.sh` compares screenshots).
+- iced 0.14's widgets keep their status (hovered, pressed, ...) in the
+  widget itself (`button.rs`: `status: Option<Status>`), so it's lost
+  with every rebuild and set again only on a `RedrawRequested`; while
+  it's `None` a hover change asks no frame. A surface rebuilt (every
+  message, above) but not drawn ignores the pointer until its next
+  frame, and entering a surface gives `CursorEntered` with no
+  `CursorMoved`: the hover showed up to a second late. Hence the
+  pointer's own events (`Cursor`, `PointerCrossed`) redraw the surface
+  they happen on.
 - `notify` 8: `recommended_watcher(handler)` runs its own thread; watch
   the parent directory (editors save by rename) and filter on paths.
   `futures::mpsc::UnboundedReceiver::try_next` is deprecated for

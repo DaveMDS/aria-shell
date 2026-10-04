@@ -32,6 +32,7 @@ use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
 use iced::{Color, Element, Event, Length, Point, Rectangle, Size, Subscription, Task, widget};
 use iced_exwlshell::build_pattern::daemon;
+use iced_exwlshell::redraw::Scope;
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
@@ -120,6 +121,8 @@ enum Message {
     PressedOutside(Id),
     /// The pointer moved over one of our surfaces (for `debug cursor`).
     Cursor(Id, Point),
+    /// The pointer entered or left one of our surfaces.
+    PointerCrossed(Id),
     /// The widget tree answered `debug widgets`: element paths and
     /// surface-local rectangles.
     Widgets(Reply, Option<String>, Vec<(String, Rectangle)>),
@@ -130,6 +133,42 @@ enum Message {
         anchor: Rectangle,
         size: (u32, u32),
     },
+    /// Nothing to update: a new frame of that surface (`None`: of all of
+    /// them), for a change `Message::redraw_scope` couldn't tell from
+    /// the message that made it.
+    Redraw(Option<Id>),
+}
+
+impl Message {
+    /// The surfaces that need a new frame after this message (the
+    /// runtime's redraw policy, asked before `update`): every one of
+    /// them by default, which also redraws the wallpapers for a clock
+    /// tick or a pointer move. Messages changing the shared state
+    /// redraw nothing here: their `update` asks frames of the surfaces
+    /// showing it (`AriaShell::redraw_shared`).
+    fn redraw_scope(&self) -> Scope {
+        match self {
+            // Only answered.
+            Message::Widgets(..) | Message::Command(Command::Debug(..)) => Scope::None,
+            // The pointer's surface, for its hover styles: an iced widget
+            // keeps its status (hovered, pressed) in itself, rebuilt as
+            // unknown with every message and known again only when
+            // drawn; until then a hover change asks no frame.
+            Message::Cursor(id, _) | Message::PointerCrossed(id) => Scope::Window(*id),
+            Message::Compositor(_)
+            | Message::Tray(_)
+            | Message::Scripts(_)
+            | Message::SysMon(_)
+            | Message::Audio(_)
+            | Message::Network(_)
+            | Message::Power(_) => Scope::None,
+            // A gadget's own state: its popups follow (`update`).
+            Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
+                Scope::Window(*id)
+            }
+            _ => Scope::All,
+        }
+    }
 }
 
 struct AriaShell {
@@ -373,6 +412,35 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
+    /// New frames for the surfaces showing the shared state (`Shared`):
+    /// all of them but the wallpapers.
+    fn redraw_shared(&self) -> Task<Message> {
+        let dialogs = self
+            .launcher
+            .iter()
+            .map(|(d, _)| d)
+            .chain(self.exiter.iter().map(|(d, _)| d));
+        let ids = self
+            .panels
+            .keys()
+            .chain(self.popups.keys())
+            .copied()
+            .chain(dialogs.map(|d| d.window))
+            .chain(self.locker.iter().flat_map(|l| l.windows().map(|(id, _)| id)))
+            .chain(self.toasts.iter().map(|t| t.window));
+        Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
+    }
+
+    /// New frames for a panel's popups, which show its gadgets' state.
+    fn redraw_popups(&self, panel: Id) -> Task<Message> {
+        Task::batch(
+            self.popups
+                .iter()
+                .filter(|(_, open)| open.panel == panel)
+                .map(|(&id, _)| Task::done(Message::Redraw(Some(id)))),
+        )
+    }
+
     /// A bar whose popup shows a text field becomes keyboard-interactive
     /// (the compositor sends keys to the popup, which holds the grab),
     /// and stops being so when it doesn't any more.
@@ -426,20 +494,27 @@ impl AriaShell {
                     // shows (a submenu unfolded) or which icons it
                     // draws (a Custom's output named one).
                     self.resolve_icons();
+                    let redraw = if action.is_local() {
+                        self.redraw_popups(id)
+                    } else {
+                        Task::done(Message::Redraw(None))
+                    };
                     // The keyboard first: a popup wanting it must map
                     // on a bar that already has it.
                     Task::batch([
                         self.sync_keyboard(),
                         self.perform(id, action),
                         self.sync_popups(),
+                        redraw,
                     ])
                 }
                 None => Task::none(),
             },
+            Message::Redraw(_) | Message::PointerCrossed(_) => Task::none(),
             Message::Compositor(event) => {
                 self.compositor.apply(event);
                 self.resolve_icons();
-                Task::none()
+                self.redraw_shared()
             }
             Message::Icons(event) => {
                 self.icons.apply(event);
@@ -454,13 +529,13 @@ impl AriaShell {
             Message::Tray(event) => {
                 let follow_up = self.tray.apply(event).map(Message::Tray);
                 self.resolve_icons();
-                Task::batch([follow_up, self.sync_popups()])
+                Task::batch([follow_up, self.sync_popups(), self.redraw_shared()])
             }
             Message::Scripts(event) => {
                 self.scripts.apply(event);
                 // The output may name an icon.
                 self.resolve_icons();
-                Task::none()
+                self.redraw_shared()
             }
             Message::Notifications(event) => {
                 let follow_up = self.notifications.apply(event).map(Message::Notifications);
@@ -469,7 +544,7 @@ impl AriaShell {
             }
             Message::SysMon(event) => {
                 self.sysmon.apply(event);
-                Task::none()
+                self.redraw_shared()
             }
             Message::Audio(event) => {
                 if !self.audio.apply(event) {
@@ -482,7 +557,7 @@ impl AriaShell {
                         .any(|p| p.status == audio::PlaybackStatus::Playing),
                 );
                 self.resolve_icons();
-                self.sync_popups()
+                Task::batch([self.sync_popups(), self.redraw_shared()])
             }
             Message::Network(event) => {
                 let (changed, follow_up) = self.network.apply(event);
@@ -490,7 +565,7 @@ impl AriaShell {
                 if !changed {
                     return follow_up;
                 }
-                Task::batch([follow_up, self.sync_popups()])
+                Task::batch([follow_up, self.sync_popups(), self.redraw_shared()])
             }
             Message::Toast(m) => {
                 let signals = self
@@ -551,6 +626,7 @@ impl AriaShell {
                 if changed {
                     self.resolve_icons();
                     tasks.push(self.sync_popups());
+                    tasks.push(self.redraw_shared());
                 }
                 Task::batch(tasks)
             }
@@ -1763,6 +1839,9 @@ impl AriaShell {
                     Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                         Some(Message::Cursor(window, position))
                     }
+                    Event::Mouse(
+                        iced::mouse::Event::CursorEntered | iced::mouse::Event::CursorLeft,
+                    ) => Some(Message::PointerCrossed(window)),
                     Event::Keyboard(k) => Some(Message::PanelKey(window, k)),
                     _ => None,
                 }),
@@ -1879,6 +1958,7 @@ fn main() -> iced_exwlshell::Result {
         AriaShell::view,
     )
     .subscription(AriaShell::subscription)
+    .redraw_scope(Message::redraw_scope)
     // Surfaces start transparent: what shows is the theme's `panel` /
     // `popup` background, which may itself be translucent or rounded.
     .style(|_, theme| iced::theme::Style {

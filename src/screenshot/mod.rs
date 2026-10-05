@@ -43,6 +43,8 @@ pub struct ScreenshotConfig {
     pub directory: String,
     /// The command line that edits a picture, given its path last.
     pub editor: Option<String>,
+    /// The gadget's.
+    pub icon: String,
 }
 
 impl Section for ScreenshotConfig {
@@ -56,6 +58,7 @@ impl Section for ScreenshotConfig {
                 .map(str::trim)
                 .filter(|e| !e.is_empty())
                 .map(str::to_owned),
+            icon: raw.str_or("icon", "applets-screenshooter-symbolic"),
         }
     }
 }

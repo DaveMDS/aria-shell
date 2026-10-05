@@ -25,3 +25,10 @@ hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("aria-shell volume mute --input"
 -- DDC/CI); the shell shows its OSD on each. `--output eDP-1` for one
 hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("aria-shell brightness up"),   { locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("aria-shell brightness down"), { locked = true, repeating = true })
+
+-- Screenshots: the picker (a window, a screen or an area), the focused
+-- screen, the active window; a file in [Screenshot] directory, or
+-- `--clipboard` to copy instead
+hl.bind("Print",         hl.dsp.exec_cmd("aria-shell screenshot"))
+hl.bind("SHIFT + Print", hl.dsp.exec_cmd("aria-shell screenshot output"))
+hl.bind("ALT + Print",   hl.dsp.exec_cmd("aria-shell screenshot window"))

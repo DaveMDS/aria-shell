@@ -170,6 +170,12 @@
  *   popup > gadget.themes
  *   ╰─ menu                                                   Light / Dark, then Base and every theme found
  *
+ *   gadget.screenshot
+ *   ╰─ button                                                 left click opens the picker, right the menu
+ *      ╰─ icon                                                `[Screenshot] icon`, drawn at the node's `height`
+ *   popup > gadget.screenshot
+ *   ╰─ menu                                                   the active window, this screen, all screens
+ *
  *   gadget.power                                              a row (`gap` between the buttons); middle click holds
  *   │                                                         idle / lets it go, right click runs `settings_command`
  *   ├─ button.status[.charging|.discharging|.full|.not-charging|.empty][.low|.critical]
@@ -797,6 +803,17 @@ gadget.themes > button:hover {
   background: var(--aria-border);
 }
 gadget.themes icon {
+  height: 16px;
+}
+
+gadget.screenshot > button {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+gadget.screenshot > button:hover {
+  background: var(--aria-border);
+}
+gadget.screenshot icon {
   height: 16px;
 }
 

@@ -39,6 +39,7 @@ aria-shell idle inhibit             # hold idle (no lock, screens off, suspend) 
 aria-shell osd show --icon display-brightness-symbolic --value 40   # the OSD, from a script
 aria-shell brightness up            # every screen's brightness (--output eDP-1: one; down, set 40)
 aria-shell volume up                # the default output's volume (--input: the microphone; down, set 40, mute)
+aria-shell screenshot               # the picker; `window`, `output [connector]`, `all` at once (--clipboard, --edit)
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
@@ -47,6 +48,7 @@ aria-shell debug network            # the devices, the Wi‑Fi networks around, 
 aria-shell debug idle               # the idle stages: power source, holds, screens, timers armed
 aria-shell debug power              # the battery, the peripherals, the power profiles as UPower sees them
 aria-shell debug brightness         # the screens (backlight, DDC monitors), their outputs and levels
+aria-shell debug screenshot         # the capture protocols, the picker's selection, the last picture
 ```
 
 ## Architecture
@@ -63,11 +65,13 @@ tray items, the outputs of gadget scripts, the mixer and the media
 players, ...) is owned by the daemon (`Compositor` in `compositor/`,
 `Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
 `Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`,
-`Power` in `power/`, `Brightness` in `brightness/`), reaches gadgets read-only through
+`Power` in `power/`, `Brightness` in `brightness/`, `Screenshot` in
+`screenshot/`), reaches gadgets read-only through
 `gadget::Context` in `view`, and is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
 `Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
-`Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` /
+`Action::Screenshot(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
@@ -116,10 +120,10 @@ through `tests/ui/nm` (a fake one on the same bus, which the shell takes
 for the system bus: `DBUS_SYSTEM_BUS_ADDRESS`), UPower and the power
 profiles through `tests/ui/upower` (the same way), the monitors' DDC/CI
 through `tests/ui/bin/ddcutil` (a fake `ddcutil`, first on every
-scenario's PATH), so nothing
+scenario's PATH), the clipboard through `wl-paste`, so nothing
 depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`
-(status, logs, screenshots). Needs `sway`, `grim` and `dbus-run-session`
-installed; no root. Add a scenario for every new interactive
+(status, logs, screenshots). Needs `sway`, `grim`, `dbus-run-session`,
+`wl-clipboard` and `python3` installed; no root. Add a scenario for every new interactive
 piece; run them before reporting a UI change as done.
 
 On the live desktop, the same without the nested compositor: `ydotool`

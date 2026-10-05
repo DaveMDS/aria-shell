@@ -1215,6 +1215,13 @@ impl AriaShell {
                 self.observe_osd()
             }
             Action::Power(cmd) => self.power.run(cmd).map(Message::Power),
+            // After the popup it came from is gone from the screen: the
+            // menu closed with this same action, the compositor shows
+            // that in its next frames.
+            Action::Screenshot(cmd) => Task::perform(
+                tokio::time::sleep(std::time::Duration::from_millis(150)),
+                move |_| Message::Command(Command::Screenshot(cmd)),
+            ),
             Action::Brightness(cmd) => {
                 if self.brightness.run(cmd) {
                     self.brightness_changed()

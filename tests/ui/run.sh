@@ -20,7 +20,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 
-for tool in sway swaymsg grim dbus-run-session; do
+for tool in sway swaymsg grim dbus-run-session wl-paste wl-copy python3; do
     command -v "$tool" > /dev/null || { echo "missing: $tool" >&2; exit 2; }
 done
 cargo build --quiet --workspace --manifest-path "$root/Cargo.toml" || exit 2

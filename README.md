@@ -8,7 +8,7 @@ A fast, modern and customizable desktop shell for your Wayland compositor.
 
 AriaShell is a full-featured desktop shell designed to complement Wayland compositors
 such as **Hyprland**, **Sway**, and others. It provides a panel, launcher, lock screen,
-exit menu, notification daemon, OSD, wallpaper manager, and more — all configurable and
+exit menu, notification daemon, OSD, wallpaper manager, screenshots, and more — all configurable and
 themeable through a CSS-like stylesheet.
 
 > [!WARNING]
@@ -47,7 +47,8 @@ bar per monitor (or per `[panel:*]` section):
 | `SystemMonitor` | 🔲 | Per-process graphs and command lines, tree view, filtering, battery, more sensors, Intel GPU |
 | `Tray`          | 🔲 | Tooltips, overlay icons, menu icons and shortcuts, the `org.freedesktop` SNI name |
 | `bluetooth`     | 🔲 | bluetooth manager                                                               |
-| `screenshot`    | 🔲 | Screenshot and screen recorder                                                  |
+| `Screenshot`    | ✅ | A button: the screenshot picker, a menu for the active window, the bar's screen, every screen |
+| `Screenshot`    | 🔲 | Screen recorder                                                                 |
 | `apps`          | 🔲 | fixed list of apps to run (like a dock)                                         |
 | `home`          | 🔲 | a menu (cinnamon style) with app categories, search, favorites and sys controls |
 | `file`          | 🔲 | file browser in a tree of menus?                                                |
@@ -166,6 +167,24 @@ it never changes anything (`[osd]`, the theme's `osd`).
 
 ---
 
+### 📸 Aria Screenshot
+Screenshots of the active window, a screen, every screen, or what you pick:
+`aria-shell screenshot` freezes the screens and lets you click a window or a
+screen, or drag an area, then resize and move it. Captured by the shell itself
+over Wayland (`ext-image-copy-capture-v1`), no `grim` needed.
+
+- ✅ The picker: click a window or a screen, drag an area; resize it by its edges and corners, move it; a toolbar (save, copy, edit, every screen), Enter / Escape
+- ✅ At once, for keybinds: `aria-shell screenshot window | output [connector] | all`
+- ✅ Every screen side by side, at the sharpest screen's scale; rotated screens come out upright
+- ✅ A PNG in `[Screenshot] directory`, opened in `[Screenshot] editor` (satty, swappy, ...) with `--edit`; or only on the clipboard with `--clipboard`
+- ✅ The `Screenshot` gadget
+- 🔲 Screen recording
+- 🔲 A delay, the pointer in the picture, a notification with a preview
+- 🔲 Compositors without `ext-image-copy-capture-v1` (`wlr-screencopy`)
+
+
+---
+
 ### 💻 Aria Terminal *(not ported yet)*
 A lightweight drop-down terminal.
 
@@ -231,7 +250,8 @@ aria-shell idle     inhibit [toggle|on|off]
 aria-shell osd      show [--icon <name>] [--value <percent>] [text]
 aria-shell brightness up [percent]|down [percent]|set <percent> [--output <connector>]
 aria-shell volume   up [percent]|down [percent]|set <percent>|mute [toggle|on|off] [--input]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness
+aria-shell screenshot [window|output [connector]|all] [--edit|--clipboard]
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness|screenshot
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
@@ -252,6 +272,8 @@ systemd-logind    # idle: suspend, lock before sleep; the laptop's brightness (a
 ddcutil           # the Brightness gadget's external monitors (at runtime, optional; needs the
                   # i2c-dev module loaded and access to /dev/i2c-*, as ddcutil's own docs say)
 UPower            # the Power gadget, idle's timeouts on battery (at runtime, optional)
+a compositor with ext-image-copy-capture-v1 and ext-data-control-v1   # screenshots, and
+                  # copying them (Hyprland 0.56 and Sway 1.12 have them)
 power-profiles-daemon or tuned-ppd   # the Power gadget's profiles (at runtime, optional)
 a Vulkan or OpenGL driver for wgpu
 an icon theme (Adwaita, breeze, ...) and the fonts your theme names
@@ -270,8 +292,8 @@ sudo pacman -S rust pam libpulse pipewire-pulse adwaita-icon-theme
 ### Development extras
 UI scenarios run in a headless nested Sway (`tests/ui/run.sh`):
 ```bash
-sudo pacman -S sway grim dbus     # tests/ui
-sudo pacman -S ydotool            # driving the shell on the live desktop
+sudo pacman -S sway grim dbus wl-clipboard python   # tests/ui
+sudo pacman -S ydotool                              # driving the shell on the live desktop
 ```
 
 ---
@@ -322,7 +344,7 @@ doesn't take them down with it.
 Keys are the compositor's: bind them to the shell's commands
 (`aria-shell launcher toggle`, `aria-shell exiter toggle`,
 `aria-shell lock`, ...). Ready-made examples, with the start of the
-shell, volume and brightness keys, are in
+shell, volume, brightness and screenshot keys, are in
 [`assets/compositors/`](assets/compositors/): `hyprland.lua`
 (Hyprland 0.56 and later), `hyprland.conf` (earlier Hyprland),
 `sway.conf`.

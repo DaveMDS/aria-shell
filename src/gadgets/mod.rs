@@ -6,6 +6,7 @@ pub mod network;
 pub mod notifications;
 pub mod power;
 pub mod system_monitor;
+pub mod screenshot;
 pub mod themes;
 pub mod tray;
 pub mod workspaces;

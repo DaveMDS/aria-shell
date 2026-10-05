@@ -3,8 +3,9 @@
 # moves it, Enter saves it; a click on bare desktop picks the output,
 # on a window the window; Escape or a right click cancels; the toolbar
 # copies, edits, takes every output. A drag stays on the output it
-# started on. HOME is the scenario's output directory, as in
-# screenshot.sh.
+# started on. The gadget: a left click opens the picker, its menu
+# takes the bar's screen with the menu gone. HOME is the scenario's
+# output directory, as in screenshot.sh.
 
 export HOME=$ARIA_UI_OUT/home
 restart_shell "$XDG_CONFIG_HOME"
@@ -118,3 +119,16 @@ before=$(last)
 click_widget 'screenshot toolbar button.all'
 wait_picker 0
 assert_eq "$(wait_picture "$before")" 3840x1080 "every output"
+
+# --- the gadget ------------------------------------------------------------------
+click_widget 'panel[output="HEADLESS-2"] gadget.screenshot > button'
+wait_picker 2 "a left click opens the picker"
+key Escape
+wait_picker 0
+click_widget_with right 'panel[output="HEADLESS-2"] gadget.screenshot > button'
+wait_for 'menu > item' 3 "window, screen, all"
+before=$(last)
+click_widget 'menu > item:nth-child(2)'
+assert_eq "$(wait_picture "$before")" 1920x1080 "this screen"
+assert_no_surface popup
+assert_logged "capturing 1920,0 1920x1080"

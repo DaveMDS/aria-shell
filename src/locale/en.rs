@@ -101,6 +101,8 @@ pub const CATALOGUE: Catalogue = &[
     ("screenshot.copy", "Copy"),
     ("screenshot.edit", "Edit"),
     ("screenshot.save", "Save"),
+    ("screenshot.window", "Active window"),
+    ("screenshot.screen", "This screen"),
     // themes
     ("themes.light", "Light"),
     ("themes.dark", "Dark"),

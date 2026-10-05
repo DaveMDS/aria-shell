@@ -276,6 +276,42 @@ BrightnessGadget (gadgets/brightness.rs)  impl Gadget: `button` (the icon, the b
                             percent, slider), Settings; opening it asks `Refresh`
   Message::TogglePopup | Scroll | Set(id, %) | RunSettings   -> Action::Brightness
 
+Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory, editor, the gadget's icon);
+                            `run(Command { target, destination })`: target Pick | Window | Output(name) | All,
+                            destination File { edit } | Clipboard. A job per capture: the global logical rect
+                            to cut (Window: the active one of `Compositor::shown_windows()`, asked then), the
+                            outputs it touches captured -> `pixels.rs` (pure, unit-tested: shm format -> RGBA,
+                            the output's transform undone, `compose` the rect out of the shots at the largest
+                            scale among them, PNG) in `spawn_blocking` -> `Event::Taken` (file written, or
+                            the PNG to the clipboard; the editor run on the file with `--edit`)
+  subscription()            wayland.rs, the idle/wayland.rs pattern (its own connection, fd polled by tokio,
+                            `Handle` + `Request`s): `ext-image-copy-capture-v1` on an
+                            `ext-output-image-capture-source` per output, one frame each into a memfd shm
+                            buffer read back; `ext-data-control-v1` for the clipboard (a source offering
+                            `image/png` until `cancelled`, each `send` written from a thread, other clients'
+                            offers destroyed at once); plus the picker's events while it's open
+  apply(Event, outputs, &Compositor) -> (Task, Surfaces)   `Surfaces { open, close, redraw }`: the daemon opens
+                            and closes the picker's layer surfaces and redraws those it names
+                            (`Message::Screenshot` is `Scope::None`)
+  picker.rs                 Pick: every output and the shown windows asked together, the frames made upright
+                            (`Event::Frozen`), then `Picker::open`: one `Layer::Overlay` surface per output
+                            (`exclusive_zone -1`, all `OnDemand`), `stack![image(frozen), canvas(Overlay),
+                            toolbar]`. State in the global logical space (surface-local + the output's
+                            origin): `Drag::New` (a click picks the topmost window under it or the output, a
+                            drag draws; clamped to the output it started on) / `Move` / `Resize { edges }`
+                            (`grip`: within 10 px of an edge, two at a corner). The overlay's canvas draws
+                            the theme's shade around the selection, the hover, the outline and the handles,
+                            sets the cursor (crosshair, resize, grab), and publishes the presses with their
+                            position; moves, the release, Escape/Enter, a right click come from
+                            `listen_with`. `Look` before/after a message names the surfaces to redraw.
+                            Enter takes the command's destination, the toolbar's buttons theirs, All every
+                            output; the picture is cut from the frozen shots
+
+ScreenshotGadget (gadgets/screenshot.rs)  impl Gadget: an icon button; left click the picker, right click a
+                            menu (the active window, the bar's screen, every screen)
+  Message::Pick | OpenMenu | Menu  -> Action::Screenshot (with the popup's close: the daemon waits 150 ms
+                            before capturing, so the menu is off the screen)
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
@@ -383,7 +419,8 @@ commands::listen()          (commands.rs) the command socket as a Subscription; 
                             `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`,
                             `Command::Osd(Content)`, `Command::Brightness(brightness::Command)`,
                             `Command::Volume(VolumeCommand)` (made an `audio::Command` by the daemon with the
-                            Audio gadget's `[Audio] step` / `max_volume`, so keys and wheel agree)
+                            Audio gadget's `[Audio] step` / `max_volume`, so keys and wheel agree),
+                            `Command::Screenshot(screenshot::Command)`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
                             `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
@@ -1226,18 +1263,54 @@ Two things flow between the daemon and the gadgets besides messages:
   focused monitor by connector name.
 - `hyprctl dispatch 'hl.dsp.focus({ monitor = "HDMI-A-2" })'` moves
   focus to a monitor, handy to test per-output behaviour.
+- Screen capture: Hyprland 0.56 and Sway 1.12 (headless too) serve
+  `ext-image-copy-capture-v1`, `ext-output-image-capture-source-v1`
+  and `ext-data-control-v1` (Hyprland also `ext-foreign-toplevel-
+  image-capture-source`, `zwlr_screencopy`, its own toplevel export).
+  A session sends `buffer_size`, the `shm_format`s and `done`, then a
+  frame with our buffer attached and fully damaged gets `transform`
+  and `ready`. The buffer is in the output's own orientation: Sway's
+  `transform 90` comes back with `transform` 90 and `rotate90`
+  (clockwise) makes it upright (the panel on top: `screenshot.sh`).
+  wl-clipboard 2.3 reads an `ext-data-control` selection in the
+  nested Sway, where nothing has the keyboard.
+- `ShellEvent::OutputUpdated` (a rotated, moved, rescaled output) was
+  ignored, and the daemon's outputs kept their first geometry: it now
+  replaces the stored `OutputInfo` (sctk's has no `PartialEq`).
+- Window geometry for screenshots: Sway's `get_tree` views carry
+  `rect` (global, borders included), `window_rect` (the contents,
+  relative to `rect`) and `visible`; the last of `floating_nodes` is on
+  top. Hyprland's `j/clients` carry `at` / `size` (global, the
+  contents), `hidden`, `floating`, `focusHistoryID` (0: the most
+  recent); a monitor's open special workspace is
+  `j/monitors[].specialWorkspace.id` (0 when none).
+- iced reports a pointer entering a surface as `CursorEntered`, with
+  no position: a surface mapped under a still pointer doesn't know
+  where it is until it moves. A `canvas::Program::update` gets the
+  cursor's position with every event, so the picker takes its presses
+  there. `stack` hands events to its layers top first and stops at
+  the first that captures (a toolbar button keeps its click from the
+  canvas under it).
+- Keyboard on the picker's surfaces: with one `OnDemand` and the
+  others `None`, a click on another output in Sway focuses that
+  output's workspace and the picker loses Escape/Enter; with all
+  `OnDemand` the clicked one takes the keyboard. On Hyprland Escape
+  works right after opening, no click needed (tried live).
 
 ## Internal limits
 
 What users don't see in the README's checklist but a change may run
-into: `:hover` only on buttons (iced containers have no hover state;
-needs a `mouse_area` wrapper: the system monitor's table rows, the
+into: screenshots from the gadget's menu wait a fixed 150 ms for the
+menu to leave the screen (no frame callback to wait on); the picker
+holds every output twice (the RGBA shots, the image handles' copies);
+`:hover` only on buttons (iced containers have no hover state; needs a
+`mouse_area` wrapper: the system monitor's table rows, the
 notification popup rows), iced's default scrollbar (not themed), the
 panel height from the theme's `min-height` rather than from the
 content, `columns` of the exit menu from the config rather than the
 theme, the PAM conversation refusing visible prompts (no second prompt
-such as a one-time code), the GPU readers (amdgpu, nvidia) never run on
-a machine that has one (this one is Intel).
+such as a one-time code), the GPU readers (amdgpu, nvidia) never run
+on a machine that has one (this one is Intel).
 
 ## Verified where
 
@@ -1247,7 +1320,9 @@ workspaces, clock, theming and config hot reload, window icons, the
 launcher, the tray (nm-applet, MEGAsync), Custom, Themes, the system
 monitor, audio, the lock screen (PAM accepting the right password; the
 monitor hot-plugged while locked), idle (`loginctl lock-session`,
-the lock before a suspend, the battery timeouts).
+the lock before a suspend, the battery timeouts), screenshots (the
+commands, the clipboard, the editor, the picker, the gadget; not yet
+with a HiDPI screen, only the unit tests mix scales).
 Only in the nested Sway so far: the notifications and their gadget,
 the exit menu, the wallpaper, the OSD (its volume side only by the
 unit tests: the nested Sway's mixer is the desktop's own), the Power gadget (with `tests/ui/upower`,

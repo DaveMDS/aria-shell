@@ -259,6 +259,7 @@ pub enum Action {
     Idle(crate::idle::Command),
     Power(crate::power::Command),
     Brightness(crate::brightness::Command),
+    Screenshot(crate::screenshot::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -282,7 +283,8 @@ impl Action {
             | Self::Compositor(_)
             | Self::Tray(_)
             | Self::SysMon(_)
-            | Self::Audio(_) => true,
+            | Self::Audio(_)
+            | Self::Screenshot(_) => true,
             Self::Many(actions) => actions.iter().all(Self::is_local),
             _ => false,
         }
@@ -447,6 +449,7 @@ impl Panel {
             gadget::Action::Idle(cmd) => Action::Idle(cmd),
             gadget::Action::Power(cmd) => Action::Power(cmd),
             gadget::Action::Brightness(cmd) => Action::Brightness(cmd),
+            gadget::Action::Screenshot(cmd) => Action::Screenshot(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);

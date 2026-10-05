@@ -23,6 +23,7 @@ use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::audio::{self, AudioGadget};
 use crate::gadgets::brightness::{self, BrightnessGadget};
+use crate::gadgets::screenshot::{self, ScreenshotGadget};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
 use crate::gadgets::network::{self, NetworkGadget};
@@ -87,6 +88,9 @@ pub enum Action<M> {
     Idle(crate::idle::Command),
     Power(crate::power::Command),
     Brightness(crate::brightness::Command),
+    /// Take a screenshot; the daemon waits for the gadget's popup to
+    /// be gone first.
+    Screenshot(crate::screenshot::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -199,6 +203,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Idle(cmd) => Action::Idle(cmd),
             Self::Power(cmd) => Action::Power(cmd),
             Self::Brightness(cmd) => Action::Brightness(cmd),
+            Self::Screenshot(cmd) => Action::Screenshot(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -290,6 +295,7 @@ pub enum AnyGadget {
     Network(NetworkGadget),
     Power(PowerGadget),
     Brightness(BrightnessGadget),
+    Screenshot(ScreenshotGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -305,6 +311,7 @@ pub enum Message {
     Network(network::Message),
     Power(power::Message),
     Brightness(brightness::Message),
+    Screenshot(screenshot::Message),
 }
 
 impl AnyGadget {
@@ -374,6 +381,9 @@ impl AnyGadget {
             crate::brightness::BrightnessConfig::NAME => Some(Self::Brightness(
                 BrightnessGadget::new(config.section(Some(name)), output),
             )),
+            crate::screenshot::ScreenshotConfig::NAME => Some(Self::Screenshot(
+                ScreenshotGadget::new(config.section(Some(name)), output),
+            )),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -395,6 +405,7 @@ impl AnyGadget {
             Self::Network(_) => "network",
             Self::Power(_) => "power",
             Self::Brightness(_) => "brightness",
+            Self::Screenshot(_) => "screenshot",
         }
     }
 
@@ -415,6 +426,7 @@ impl AnyGadget {
             (Self::Network(g), Message::Network(m)) => g.update(m).map(Message::Network),
             (Self::Power(g), Message::Power(m)) => g.update(m).map(Message::Power),
             (Self::Brightness(g), Message::Brightness(m)) => g.update(m).map(Message::Brightness),
+            (Self::Screenshot(g), Message::Screenshot(m)) => g.update(m).map(Message::Screenshot),
             _ => Action::None,
         }
     }
@@ -432,6 +444,7 @@ impl AnyGadget {
             Self::Network(g) => g.view(ctx).map(Message::Network),
             Self::Power(g) => g.view(ctx).map(Message::Power),
             Self::Brightness(g) => g.view(ctx).map(Message::Brightness),
+            Self::Screenshot(g) => g.view(ctx).map(Message::Screenshot),
         }
     }
 
@@ -448,6 +461,7 @@ impl AnyGadget {
             Self::Network(g) => g.popup_view(ctx).map(Message::Network),
             Self::Power(g) => g.popup_view(ctx).map(Message::Power),
             Self::Brightness(g) => g.popup_view(ctx).map(Message::Brightness),
+            Self::Screenshot(g) => g.popup_view(ctx).map(Message::Screenshot),
         }
     }
 
@@ -464,6 +478,7 @@ impl AnyGadget {
             Self::Network(g) => g.popup_size(ctx),
             Self::Power(g) => g.popup_size(ctx),
             Self::Brightness(g) => g.popup_size(ctx),
+            Self::Screenshot(g) => g.popup_size(ctx),
         }
     }
 
@@ -480,6 +495,7 @@ impl AnyGadget {
             Self::Network(g) => g.popup(),
             Self::Power(g) => g.popup(),
             Self::Brightness(g) => g.popup(),
+            Self::Screenshot(g) => g.popup(),
         }
     }
 
@@ -496,6 +512,7 @@ impl AnyGadget {
             Self::Network(g) => g.popup_keyboard(),
             Self::Power(g) => g.popup_keyboard(),
             Self::Brightness(g) => g.popup_keyboard(),
+            Self::Screenshot(g) => g.popup_keyboard(),
         }
     }
 
@@ -512,6 +529,7 @@ impl AnyGadget {
             Self::Network(g) => g.popup_key(event).map(Message::Network),
             Self::Power(g) => g.popup_key(event).map(Message::Power),
             Self::Brightness(g) => g.popup_key(event).map(Message::Brightness),
+            Self::Screenshot(g) => g.popup_key(event).map(Message::Screenshot),
         }
     }
 
@@ -537,6 +555,7 @@ impl AnyGadget {
             Self::Network(g) => <NetworkGadget as Gadget>::popup_closed(g),
             Self::Power(g) => <PowerGadget as Gadget>::popup_closed(g),
             Self::Brightness(g) => <BrightnessGadget as Gadget>::popup_closed(g),
+            Self::Screenshot(g) => <ScreenshotGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -553,6 +572,7 @@ impl AnyGadget {
             Self::Network(g) => g.icon_names(),
             Self::Power(g) => g.icon_names(),
             Self::Brightness(g) => g.icon_names(),
+            Self::Screenshot(g) => g.icon_names(),
         }
     }
 
@@ -569,6 +589,7 @@ impl AnyGadget {
             Self::Network(g) => g.script(),
             Self::Power(g) => g.script(),
             Self::Brightness(g) => g.script(),
+            Self::Screenshot(g) => g.script(),
         }
     }
 
@@ -585,6 +606,7 @@ impl AnyGadget {
             Self::Network(g) => g.subscription().map(Message::Network),
             Self::Power(g) => g.subscription().map(Message::Power),
             Self::Brightness(g) => g.subscription().map(Message::Brightness),
+            Self::Screenshot(g) => g.subscription().map(Message::Screenshot),
         }
     }
 }

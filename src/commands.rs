@@ -41,6 +41,8 @@ pub enum Command {
     Idle(crate::idle::Command),
     /// Show the OSD (`aria-shell osd show ...`).
     Osd(crate::osd::Content),
+    /// Set the screens' brightness (`aria-shell brightness up`).
+    Brightness(crate::brightness::Command),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -64,6 +66,8 @@ pub enum DebugCommand {
     Idle,
     /// The battery, the peripherals, the power profiles.
     Power,
+    /// The screens and their brightness.
+    Brightness,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -110,6 +114,7 @@ enum Parsed {
     Lock,
     Idle(crate::idle::Command),
     Osd(crate::osd::Content),
+    Brightness(crate::brightness::Command),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -154,6 +159,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
                 args.join(" ")
             )),
         },
+        "brightness" => Ok(Parsed::Brightness(parse_brightness(&args)?)),
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -164,12 +170,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["network"] => Ok(Parsed::Debug(DebugCommand::Network)),
             ["idle"] => Ok(Parsed::Debug(DebugCommand::Idle)),
             ["power"] => Ok(Parsed::Debug(DebugCommand::Power)),
+            ["brightness"] => Ok(Parsed::Debug(DebugCommand::Brightness)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | widgets [filter])",
                 args.join(" ")
             )),
         },
@@ -213,7 +220,49 @@ fn parse_osd_show(args: &[&str]) -> Result<crate::osd::Content, String> {
         value,
         text,
         muted: false,
+        outputs: None,
     })
+}
+
+/// `brightness up [percent] | down [percent] | set <percent>
+/// [--output <connector>]`: every screen without `--output`.
+fn parse_brightness(args: &[&str]) -> Result<crate::brightness::Command, String> {
+    use crate::brightness::{Command, Target};
+    const USAGE: &str = "(up [percent] | down [percent] | set <percent>) [--output <connector>]";
+    let mut target = Target::All;
+    let mut rest = Vec::new();
+    let mut words = args.iter();
+    while let Some(&word) = words.next() {
+        if word == "--output" {
+            match words.next() {
+                Some(name) => target = Target::Output((*name).to_owned()),
+                None => return Err("brightness: --output needs a connector (eDP-1)".to_owned()),
+            }
+        } else {
+            rest.push(word);
+        }
+    }
+    let percent = |v: &str| match v.trim_end_matches('%').parse::<u32>() {
+        Ok(n) if n <= 100 => Ok(n),
+        _ => Err(format!("brightness: {v:?} isn't a percent (0 to 100)")),
+    };
+    match rest.as_slice() {
+        [dir @ ("up" | "down")] => Ok(Command::Step {
+            target,
+            up: *dir == "up",
+            by: None,
+        }),
+        [dir @ ("up" | "down"), by] => Ok(Command::Step {
+            target,
+            up: *dir == "up",
+            by: Some(percent(by)?),
+        }),
+        ["set", value] => Ok(Command::Set(target, percent(value)?)),
+        _ => Err(format!(
+            "invalid arguments for <brightness>: {} {USAGE}",
+            args.join(" ")
+        )),
+    }
 }
 
 /// `$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`, so the shell
@@ -324,6 +373,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Osd(content)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Brightness(cmd)) => {
+                let _ = tx.send(Command::Brightness(cmd)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Debug(cmd)) => {
                 let (reply_tx, mut reply_rx) = mpsc::channel(1);
                 let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
@@ -416,6 +469,7 @@ mod tests {
                 value,
                 text: text.map(str::to_owned),
                 muted: false,
+                outputs: None,
             }))
         };
         assert_eq!(
@@ -435,6 +489,43 @@ mod tests {
         assert!(parse("osd show --value loud").is_err());
         assert!(parse("osd").is_err());
         assert!(parse("osd hide").is_err());
+    }
+
+    #[test]
+    fn parses_brightness() {
+        use crate::brightness::{Command, Target};
+        assert_eq!(
+            parse("brightness up"),
+            Ok(Parsed::Brightness(Command::Step {
+                target: Target::All,
+                up: true,
+                by: None
+            }))
+        );
+        assert_eq!(
+            parse("brightness down 10% --output eDP-1"),
+            Ok(Parsed::Brightness(Command::Step {
+                target: Target::Output("eDP-1".into()),
+                up: false,
+                by: Some(10)
+            }))
+        );
+        assert_eq!(
+            parse("brightness --output HDMI-A-1 set 40"),
+            Ok(Parsed::Brightness(Command::Set(
+                Target::Output("HDMI-A-1".into()),
+                40
+            )))
+        );
+        assert!(parse("brightness").is_err());
+        assert!(parse("brightness set").is_err());
+        assert!(parse("brightness set 140").is_err());
+        assert!(parse("brightness up --output").is_err());
+        assert!(parse("brightness sideways").is_err());
+        assert_eq!(
+            parse("debug brightness"),
+            Ok(Parsed::Debug(DebugCommand::Brightness))
+        );
     }
 
     #[test]

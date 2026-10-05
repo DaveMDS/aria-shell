@@ -250,6 +250,31 @@ PowerGadget (gadgets/power.rs)  impl Gadget: `button.status` (UPower's battery i
                             battery, details, the peripherals, the profile picker, "Keep awake", Settings
   Message::TogglePopup | ToggleIdle | SetIdle(bool) | SetProfile | RunSettings   -> Action::Power / Action::Idle
 
+Brightness (brightness/)    daemon-owned screens: `displays()` (id `backlight:<device>` / `ddc:<bus>`, kind, the
+                            output's connector, the monitor's model, `Level { value, max }` raw, `None` until
+                            read), `on_output(connector)`, `describe()`
+  subscription()            worker.rs, keyed on `[Brightness] backlight`: finds the screens
+                            (backlight.rs: one of /sys/class/backlight, firmware > platform > raw as GNOME, tied
+                            to its output by its `device` link `card0-eDP-1`, else the one internal panel connected;
+                            ddc.rs: `ddcutil detect --terse` when it's on the PATH (else a warning, and no
+                            monitors), the `DRM connector` `card1-HDMI-A-1`), again a
+                            second after outputs come or go; one task per screen, whose writes coalesce to the
+                            latest (`setvcp 10 <n> --noverify` ~100 ms each; a backlight through logind's
+                            `Session.SetBrightness`, no root); a thread `poll(POLLPRI)`s the backlight's
+                            `actual_brightness` -> `Event::Level`. DDC has no notification: read when found and
+                            on `Command::Refresh` (the popup opening)
+  run(Command) -> bool      Set(target, %) / Step { target, up, by } (target: All | Output(connector) |
+                            Display(id)): the new raw level is the state at once, the write goes to the
+                            worker; a step stops at 1% going down and moves one raw unit when the percent
+                            rounds back (a backlight with few levels). Readings other than the last level asked
+                            are ignored until `Event::Written` (a backlight reports every write on the way)
+
+BrightnessGadget (gadgets/brightness.rs)  impl Gadget: `button` (the icon, the bar's screen's percent with
+                            `show_percent`); wheel: `step` on every screen or the bar's (`wheel = all | output`),
+                            right click `settings_command`; popup: a row per screen (icon, name, connector,
+                            percent, slider), Settings; opening it asks `Refresh`
+  Message::TogglePopup | Scroll | Set(id, %) | RunSettings   -> Action::Brightness
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
@@ -336,9 +361,10 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             container (the theme's background shows around a `contain`ed image)
 
 Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
-                            margin); `observe(&Audio, &Network, &Power, &Idle)` after every change of those
-                            (and of the user's hold on idle) reads a `Watched` (the default output's and
-                            input's device/percent/mute, whether some app records, Wi‑Fi enabled, the network
+                            margin); `observe(&Audio, &Network, &Power, &Idle, &Brightness)` after every change of
+                            those (and of the user's hold on idle) reads a `Watched` (the default output's and
+                            input's device/percent/mute, each screen's brightness, whether some app records,
+                            Wi‑Fi enabled, the network
                             connected + label, the VPN up, the charger plugged with a battery, the power
                             profile, keep awake; each `None` until known, so the first reading after start or
                             a source coming back shows nothing; "connecting" keeps the last reading) and
@@ -346,13 +372,15 @@ Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what t
                             in `Watch`'s order (Wi‑Fi turned off before the disconnection it brings). Whoever
                             made the change (a keybind, a gadget, another app) is not its business. `show(Content)` from there or from
                             `Command::Osd` (`aria-shell osd show`); the daemon opens one `Layer::Overlay`
-                            surface per output (`events_transparent`, sized by the theme's `osd`, anchored by
+                            surface per output (`Content::outputs`: only those, each with its own percent, the
+                            others' surfaces closed: a brightness change shows on the screens that changed;
+                            `events_transparent`, sized by the theme's `osd`, anchored by
                             `position`), redraws the open ones, and a timer per show sends `OsdExpired(serial)`:
                             only the last show's closes them, so a held volume key keeps the bar up
 
 commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(ToggleCommand)`,
                             `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`,
-                            `Command::Osd(Content)`
+                            `Command::Osd(Content)`, `Command::Brightness(brightness::Command)`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
                             `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
@@ -879,6 +907,28 @@ Two things flow between the daemon and the gadgets besides messages:
   a property `state` and a signal `StateChanged` clash on the generated
   `state_changed`: name the signal fn differently with
   `#[zbus(signal, name = "StateChanged")]`.
+- Brightness, verified in the kernel's `drivers/video/backlight/backlight.c`
+  (master, 2026-10): `brightness_store` -> `backlight_device_set_brightness`
+  -> `backlight_generate_event`, which sends a `change` uevent and
+  `sysfs_notify(.., "actual_brightness")`; the firmware's hotkeys come
+  the same way (`BACKLIGHT_UPDATE_HOTKEY`). So a `poll(POLLPRI | POLLERR)`
+  on `actual_brightness`, re-armed by reading it from offset 0, sees
+  every change, logind's writes included (inotify sees nothing on
+  sysfs). `brightness` and `max_brightness` are readable by anyone, the
+  former writable by root only: logind's `SetBrightness("backlight",
+  name, value)` on `/org/freedesktop/login1/session/auto` is the user's
+  way, what `brightnessctl` does when built with logind. Not yet tried
+  on a laptop.
+- `ddcutil` 2.2 (tried on two Dell P2314H over HDMI): `detect --terse`
+  prints `Display N` blocks (`I2C bus: /dev/i2c-0`, `DRM connector:
+  card1-HDMI-A-1`, `Monitor: DEL:DELL P2314H:<serial>`) and `Invalid
+  display` ones for what doesn't answer; `getvcp 10 --bus 0 --terse`
+  is `VCP 10 C 75 100` (~0.1-0.35 s), `setvcp 10 75 --bus 0 --noverify`
+  ~0.15 s, exit 1 with `No monitor detected on bus ...` on a bus without
+  one. `/dev/i2c-*` are `root:i2c` with an ACL for the seat's user here
+  (`i2c-dev` loaded); without access, `detect` finds nothing. The DRM
+  connector is the Wayland output's name, which is how a monitor is tied
+  to its bar.
 - `iced::widget::toggler` styled through `toggler::Style` (track
   background/border, `foreground` the knob, `border_radius: None` for
   round); `Theme::toggler(node, on, f)` is a container-tagged one
@@ -1198,5 +1248,6 @@ the lock before a suspend, the battery timeouts).
 Only in the nested Sway so far: the notifications and their gadget,
 the exit menu, the wallpaper, the OSD (its volume side only by the
 unit tests: the nested Sway's mixer is the desktop's own), the Power gadget (with `tests/ui/upower`,
-a fake UPower and power-profiles-daemon). Never exercised by a scenario: the
+a fake UPower and power-profiles-daemon), the Brightness gadget (with `tests/ui/bin/ddcutil`; the
+backlight side only by its unit tests until tried on a laptop). Never exercised by a scenario: the
 logind and UPower side of idle (the nested Sway's bus has neither).

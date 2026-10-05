@@ -1,0 +1,60 @@
+#!/bin/sh
+# A fake ddcutil, first on every scenario's PATH (inner.sh), so the
+# desktop's monitors are never asked: two monitors on i2c buses
+# 3 and 4, plugged into the nested Sway's HEADLESS-1 and HEADLESS-2,
+# their brightness (0..100) kept in $ARIA_UI_OUT/ddc/<bus> so the
+# scenario can read it and change it as the monitor's own buttons
+# would. Every call is logged to $ARIA_UI_OUT/ddcutil.log. Only the
+# terse forms the shell uses: `detect --terse`, `getvcp 10 --bus N
+# --terse`, `setvcp 10 <value> --bus N --noverify`.
+state=$ARIA_UI_OUT/ddc
+mkdir -p "$state"
+[ -f "$state/3" ] || echo 70 > "$state/3"
+[ -f "$state/4" ] || echo 30 > "$state/4"
+echo "$*" >> "$ARIA_UI_OUT/ddcutil.log"
+
+# The value after --bus.
+bus() {
+    while [ $# -gt 0 ]; do
+        [ "$1" = --bus ] && { echo "$2"; return; }
+        shift
+    done
+}
+
+case "$1" in
+    detect)
+        cat <<END
+Display 1
+   I2C bus:          /dev/i2c-3
+   DRM connector:    card0-HEADLESS-1
+   drm_connector_id: 31
+   Monitor:          FAK:Fake Monitor:0001
+
+Invalid display
+   I2C bus:          /dev/i2c-5
+   DRM connector:    card0-eDP-1
+   Monitor:          BOE::
+
+Display 2
+   I2C bus:          /dev/i2c-4
+   DRM connector:    card0-HEADLESS-2
+   drm_connector_id: 32
+   Monitor:          FAK:Fake Monitor:0002
+
+END
+        ;;
+    getvcp)
+        b=$(bus "$@")
+        [ -f "$state/$b" ] || { echo "No monitor detected on bus /dev/i2c-$b"; exit 1; }
+        echo "VCP 10 C $(cat "$state/$b") 100"
+        ;;
+    setvcp)
+        b=$(bus "$@")
+        [ -f "$state/$b" ] || { echo "No monitor detected on bus /dev/i2c-$b" >&2; exit 1; }
+        echo "$3" > "$state/$b"
+        ;;
+    *)
+        echo "fake ddcutil: unexpected $*" >&2
+        exit 1
+        ;;
+esac

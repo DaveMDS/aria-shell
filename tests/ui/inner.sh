@@ -12,6 +12,9 @@ cd "$ARIA_UI_ROOT" || exit 1
 inject_start
 # Let the second output appear before the shell looks around.
 sleep 0.5
+# Fakes of the programs the shell runs (ddcutil): the desktop's
+# monitors stay out of it.
+export PATH=$ARIA_UI_ROOT/tests/ui/bin:$PATH
 # The shell's system bus is the scenario's private bus (zbus honours
 # this), where `aria-nm` plays NetworkManager.
 export DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS

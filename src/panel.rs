@@ -258,6 +258,7 @@ pub enum Action {
     Network(crate::network::Command),
     Idle(crate::idle::Command),
     Power(crate::power::Command),
+    Brightness(crate::brightness::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {
@@ -445,6 +446,7 @@ impl Panel {
             gadget::Action::Network(cmd) => Action::Network(cmd),
             gadget::Action::Idle(cmd) => Action::Idle(cmd),
             gadget::Action::Power(cmd) => Action::Power(cmd),
+            gadget::Action::Brightness(cmd) => Action::Brightness(cmd),
             gadget::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);

@@ -1,4 +1,5 @@
 mod audio;
+mod brightness;
 mod commands;
 mod compositor;
 mod config;
@@ -43,6 +44,7 @@ use iced_exwlshell::to_exwlshell_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use audio::Audio;
+use brightness::Brightness;
 use commands::{Command, DebugCommand, Reply, ToggleCommand};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
@@ -94,6 +96,8 @@ enum Message {
     Idle(idle::Event),
     /// The battery, the peripherals, the power profiles.
     Power(power::Event),
+    /// The screens' brightness.
+    Brightness(brightness::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -167,7 +171,8 @@ impl Message {
             | Message::SysMon(_)
             | Message::Audio(_)
             | Message::Network(_)
-            | Message::Power(_) => Scope::None,
+            | Message::Power(_)
+            | Message::Brightness(_) => Scope::None,
             // A gadget's own state: its popups follow (`update`).
             Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
                 Scope::Window(*id)
@@ -197,6 +202,7 @@ struct AriaShell {
     network: Network,
     idle: Idle,
     power: Power,
+    brightness: Brightness,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -274,6 +280,7 @@ impl AriaShell {
         let sysmon = SysMon::new(config.section(None));
         let idle = Idle::new(idle::IdleConfig::load(&config));
         let power = Power::new(config.section(None));
+        let brightness = Brightness::new(config.section(None));
         let osd = Osd::new(config.section(None));
         let shell = Self {
             config,
@@ -292,6 +299,7 @@ impl AriaShell {
             network: Network::default(),
             idle,
             power,
+            brightness,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -321,6 +329,7 @@ impl AriaShell {
             network: &self.network,
             idle: &self.idle,
             power: &self.power,
+            brightness: &self.brightness,
             scripts: &self.scripts,
         }
     }
@@ -666,6 +675,20 @@ impl AriaShell {
                 }
                 Task::batch(tasks)
             }
+            Message::Brightness(event) => {
+                if self.brightness.apply(event) {
+                    self.brightness_changed()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::Command(Command::Brightness(cmd)) => {
+                if self.brightness.run(cmd) {
+                    self.brightness_changed()
+                } else {
+                    Task::none()
+                }
+            }
             Message::Idle(event) => {
                 let locker = match &self.locker {
                     None => idle::Locker::None,
@@ -720,6 +743,10 @@ impl AriaShell {
                 }
                 DebugCommand::Power => {
                     reply.send(self.power.describe());
+                    Task::none()
+                }
+                DebugCommand::Brightness => {
+                    reply.send(self.brightness.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -1067,6 +1094,7 @@ impl AriaShell {
         self.sysmon.set_config(self.config.section(None));
         self.idle.set_config(idle::IdleConfig::load(&self.config));
         self.power.set_config(self.config.section(None));
+        self.brightness.set_config(self.config.section(None));
         self.osd.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
@@ -1155,6 +1183,13 @@ impl AriaShell {
                 self.observe_osd()
             }
             Action::Power(cmd) => self.power.run(cmd).map(Message::Power),
+            Action::Brightness(cmd) => {
+                if self.brightness.run(cmd) {
+                    self.brightness_changed()
+                } else {
+                    Task::none()
+                }
+            }
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1371,6 +1406,11 @@ impl AriaShell {
         Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
     }
 
+    /// The screens' brightness changed: the OSD, the gadgets.
+    fn brightness_changed(&mut self) -> Task<Message> {
+        Task::batch([self.observe_osd(), self.sync_popups(), self.redraw_shared()])
+    }
+
     /// Read what the OSD watches after a change of the shared state, and
     /// show what changed.
     fn observe_osd(&mut self) -> Task<Message> {
@@ -1379,6 +1419,7 @@ impl AriaShell {
             &self.network,
             &self.power,
             &self.idle,
+            &self.brightness,
             &self.locale,
         ) {
             Some(content) => self.show_osd(content),
@@ -1386,11 +1427,32 @@ impl AriaShell {
         }
     }
 
-    /// Show `content` on every output: a surface for those without one,
-    /// a new frame for the others, and the timer that closes them.
+    /// Show `content` on every output it's for (every one, unless it
+    /// names some): a surface for those without one, a new frame for
+    /// the others, and the timer that closes them; the surfaces on
+    /// other outputs go.
     fn show_osd(&mut self, content: osd::Content) -> Task<Message> {
         log::debug!("osd: {content:?}");
+        let names: Vec<&str> = self
+            .outputs
+            .values()
+            .filter_map(|o| o.name.as_deref())
+            .collect();
+        let shown_on = content.shown_on(&names);
         let serial = self.osd.show(content);
+        let mut tasks = Vec::new();
+        let elsewhere: Vec<OutputId> = self
+            .osd
+            .windows
+            .keys()
+            .filter(|o| !shown_on(self.output_name(**o)))
+            .copied()
+            .collect();
+        for output in elsewhere {
+            if let Some(id) = self.osd.windows.remove(&output) {
+                tasks.push(Task::done(Message::RemoveWindow(id)));
+            }
+        }
         self.resolve_icons();
         let size = self.osd.size(&self.theme);
         let config = self.osd.config().clone();
@@ -1401,8 +1463,10 @@ impl AriaShell {
             osd::Position::Center => (0, 0, 0, 0),
             osd::Position::Bottom => (0, 0, config.margin - room.bottom as i32, 0),
         };
-        let mut tasks = Vec::new();
         for (&output, info) in &self.outputs {
+            if !shown_on(info.name.as_deref().unwrap_or_default()) {
+                continue;
+            }
             if let Some(&id) = self.osd.windows.get(&output) {
                 tasks.push(Task::done(Message::Redraw(Some(id))));
                 continue;
@@ -1702,12 +1766,22 @@ impl AriaShell {
                     output.logical_position,
                     output.logical_size
                 );
-                self.outputs.insert(OutputId::from(&output), output.clone());
+                // Announced again to late subscribers: only a new one
+                // may bring a monitor.
+                if self
+                    .outputs
+                    .insert(OutputId::from(&output), output.clone())
+                    .is_none()
+                {
+                    self.brightness.outputs_changed();
+                }
                 Task::batch([self.open_panels(&output), self.open_wallpaper(&output)])
             }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
-                self.outputs.remove(&gone);
+                if self.outputs.remove(&gone).is_some() {
+                    self.brightness.outputs_changed();
+                }
                 let ids: Vec<Id> = self
                     .panels
                     .iter()
@@ -2043,6 +2117,7 @@ impl AriaShell {
                 self.network.subscription().map(Message::Network),
                 self.idle.subscription().map(Message::Idle),
                 self.power.subscription().map(Message::Power),
+                self.brightness.subscription().map(Message::Brightness),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

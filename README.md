@@ -40,6 +40,7 @@ bar per monitor (or per `[panel:*]` section):
 | `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |
 | `logout`        | ✅ | A `Custom` button to invoke Aria Exiter (`aria-shell exiter toggle`)            |
 | `Power`         | ✅ | Battery (charge, time left, health), peripherals' charge, power profiles, idle inhibitor; low battery notifications |
+| `Brightness`    | ✅ | Every screen's brightness: the laptop's panel (backlight, through logind) and monitors over DDC/CI (`ddcutil`); wheel, a slider per screen |
 | `Network`       | ✅ | NetworkManager: Wi‑Fi networks, wired devices, VPN toggles, Wi‑Fi on/off        |
 | `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, per-BSSID choice, editing profiles, iwd |
 | `Clock`         | 🔲 | Tooltip (`tooltip_format`)                                                      |
@@ -51,7 +52,7 @@ bar per monitor (or per `[panel:*]` section):
 | `home`          | 🔲 | a menu (cinnamon style) with app categories, search, favorites and sys controls |
 | `file`          | 🔲 | file browser in a tree of menus?                                                |
 | `places`        | 🔲 | menu with usefully locations, like home, favorites, devices                     |
-| `brightness`    | 🔲 | set monitor bright....how?                                                      |
+| `Brightness`    | 🔲 | Night light (colour temperature), a monitor's own buttons seen without reopening the popup |
 
 - ✅ Multi-monitor, hot-plug aware
 - ✅ Config hot-reload (`aria.conf`) and theme hot-reload
@@ -158,10 +159,10 @@ it never changes anything (`[osd]`, the theme's `osd`).
 - ✅ The microphone in use by an app, and free again
 - ✅ Wi‑Fi on / off, network connected / disconnected, a VPN up / down
 - ✅ Charger plugged in / out (with the charge), power profile, keep awake on / off
+- ✅ A screen's brightness, on that screen (`aria-shell brightness`, the gadget, the laptop's keys)
 - ✅ `aria-shell osd show [--icon <name>] [--value <percent>] [text]` from a script
-  (e.g. brightness from a `brightnessctl` keybind)
 - ✅ Position (top, center, bottom) and duration from the config, size and look from the theme
-- 🔲 Brightness as a source of its own, Caps Lock / Num Lock
+- 🔲 Caps Lock / Num Lock
 - 🔲 The new output device's name, animations
 
 
@@ -230,7 +231,8 @@ aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
 aria-shell idle     inhibit [toggle|on|off]
 aria-shell osd      show [--icon <name>] [--value <percent>] [text]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power
+aria-shell brightness up [percent]|down [percent]|set <percent> [--output <connector>]
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
@@ -247,7 +249,9 @@ TODO: dmenu ...
 libpam            # lock screen authentication
 libpulse          # audio gadget (PipeWire's pipewire-pulse or PulseAudio at runtime)
 NetworkManager    # network gadget (over the system bus, at runtime)
-systemd-logind    # idle: suspend, lock before sleep (at runtime)
+systemd-logind    # idle: suspend, lock before sleep; the laptop's brightness (at runtime)
+ddcutil           # the Brightness gadget's external monitors (at runtime, optional; needs the
+                  # i2c-dev module loaded and access to /dev/i2c-*, as ddcutil's own docs say)
 UPower            # the Power gadget, idle's timeouts on battery (at runtime, optional)
 power-profiles-daemon or tuned-ppd   # the Power gadget's profiles (at runtime, optional)
 a Vulkan or OpenGL driver for wgpu

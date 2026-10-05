@@ -22,6 +22,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::audio::{self, AudioGadget};
+use crate::gadgets::brightness::{self, BrightnessGadget};
 use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
 use crate::gadgets::network::{self, NetworkGadget};
@@ -48,6 +49,7 @@ pub struct Shared<'a> {
     pub network: &'a crate::network::Network,
     pub idle: &'a crate::idle::Idle,
     pub power: &'a crate::power::Power,
+    pub brightness: &'a crate::brightness::Brightness,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -84,6 +86,7 @@ pub enum Action<M> {
     Network(crate::network::Command),
     Idle(crate::idle::Command),
     Power(crate::power::Command),
+    Brightness(crate::brightness::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -195,6 +198,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Network(cmd) => Action::Network(cmd),
             Self::Idle(cmd) => Action::Idle(cmd),
             Self::Power(cmd) => Action::Power(cmd),
+            Self::Brightness(cmd) => Action::Brightness(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -285,6 +289,7 @@ pub enum AnyGadget {
     Audio(AudioGadget),
     Network(NetworkGadget),
     Power(PowerGadget),
+    Brightness(BrightnessGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +304,7 @@ pub enum Message {
     Audio(audio::Message),
     Network(network::Message),
     Power(power::Message),
+    Brightness(brightness::Message),
 }
 
 impl AnyGadget {
@@ -365,6 +371,9 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
+            crate::brightness::BrightnessConfig::NAME => Some(Self::Brightness(
+                BrightnessGadget::new(config.section(Some(name)), output),
+            )),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -385,6 +394,7 @@ impl AnyGadget {
             Self::Audio(_) => "audio",
             Self::Network(_) => "network",
             Self::Power(_) => "power",
+            Self::Brightness(_) => "brightness",
         }
     }
 
@@ -404,6 +414,7 @@ impl AnyGadget {
             (Self::Audio(g), Message::Audio(m)) => g.update(m).map(Message::Audio),
             (Self::Network(g), Message::Network(m)) => g.update(m).map(Message::Network),
             (Self::Power(g), Message::Power(m)) => g.update(m).map(Message::Power),
+            (Self::Brightness(g), Message::Brightness(m)) => g.update(m).map(Message::Brightness),
             _ => Action::None,
         }
     }
@@ -420,6 +431,7 @@ impl AnyGadget {
             Self::Audio(g) => g.view(ctx).map(Message::Audio),
             Self::Network(g) => g.view(ctx).map(Message::Network),
             Self::Power(g) => g.view(ctx).map(Message::Power),
+            Self::Brightness(g) => g.view(ctx).map(Message::Brightness),
         }
     }
 
@@ -435,6 +447,7 @@ impl AnyGadget {
             Self::Audio(g) => g.popup_view(ctx).map(Message::Audio),
             Self::Network(g) => g.popup_view(ctx).map(Message::Network),
             Self::Power(g) => g.popup_view(ctx).map(Message::Power),
+            Self::Brightness(g) => g.popup_view(ctx).map(Message::Brightness),
         }
     }
 
@@ -450,6 +463,7 @@ impl AnyGadget {
             Self::Audio(g) => g.popup_size(ctx),
             Self::Network(g) => g.popup_size(ctx),
             Self::Power(g) => g.popup_size(ctx),
+            Self::Brightness(g) => g.popup_size(ctx),
         }
     }
 
@@ -465,6 +479,7 @@ impl AnyGadget {
             Self::Audio(g) => g.popup(),
             Self::Network(g) => g.popup(),
             Self::Power(g) => g.popup(),
+            Self::Brightness(g) => g.popup(),
         }
     }
 
@@ -480,6 +495,7 @@ impl AnyGadget {
             Self::Audio(g) => g.popup_keyboard(),
             Self::Network(g) => g.popup_keyboard(),
             Self::Power(g) => g.popup_keyboard(),
+            Self::Brightness(g) => g.popup_keyboard(),
         }
     }
 
@@ -495,6 +511,7 @@ impl AnyGadget {
             Self::Audio(g) => g.popup_key(event).map(Message::Audio),
             Self::Network(g) => g.popup_key(event).map(Message::Network),
             Self::Power(g) => g.popup_key(event).map(Message::Power),
+            Self::Brightness(g) => g.popup_key(event).map(Message::Brightness),
         }
     }
 
@@ -519,6 +536,7 @@ impl AnyGadget {
             Self::Audio(g) => <AudioGadget as Gadget>::popup_closed(g),
             Self::Network(g) => <NetworkGadget as Gadget>::popup_closed(g),
             Self::Power(g) => <PowerGadget as Gadget>::popup_closed(g),
+            Self::Brightness(g) => <BrightnessGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -534,6 +552,7 @@ impl AnyGadget {
             Self::Audio(g) => g.icon_names(),
             Self::Network(g) => g.icon_names(),
             Self::Power(g) => g.icon_names(),
+            Self::Brightness(g) => g.icon_names(),
         }
     }
 
@@ -549,6 +568,7 @@ impl AnyGadget {
             Self::Audio(g) => g.script(),
             Self::Network(g) => g.script(),
             Self::Power(g) => g.script(),
+            Self::Brightness(g) => g.script(),
         }
     }
 
@@ -564,6 +584,7 @@ impl AnyGadget {
             Self::Audio(g) => g.subscription().map(Message::Audio),
             Self::Network(g) => g.subscription().map(Message::Network),
             Self::Power(g) => g.subscription().map(Message::Power),
+            Self::Brightness(g) => g.subscription().map(Message::Brightness),
         }
     }
 }

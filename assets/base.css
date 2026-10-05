@@ -77,7 +77,7 @@
  *      ╰─ button                                              one per action the app offers
  *         ╰─ text
  *
- *   osd.<volume|microphone|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
+ *   osd.<volume|microphone|brightness|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
  *                                                             the OSD, one surface per output while shown
  *                                                             (width/height size it; [osd] position places it);
  *                                                             a row (gap between its parts)
@@ -175,6 +175,22 @@
  *      │  ╰─ button.power-saver|.balanced|.performance[.active] ├─ icon ╰─ text
  *      ├─ idle[.inhibited][.playing] ├─ icon ├─ title ╰─ toggle   "Keep awake" (see `toggle`)
  *      ├─ message                                             why performance is limited; held by a player
+ *      ╰─ button.settings > text                              runs `settings_command`
+ *
+ *   gadget.brightness
+ *   ╰─ button[.none]                                          .none: no screen to adjust; left click: the popup,
+ *      │                                                      wheel: the brightness, right: `settings_command`
+ *      ├─ icon                                                drawn at the node's `height`
+ *      ╰─ text                                                the bar's screen's percent (show_percent)
+ *   popup > gadget.brightness
+ *   ╰─ list                                                   `width` sizes the popup (a column; `gap`)
+ *      ├─ screen.backlight|.ddc[.unknown][output="<connector>"]   one per screen (.unknown: level not read)
+ *      │  ├─ icon                                             the laptop's panel / a monitor
+ *      │  ├─ name                                             "Built-in display", the monitor's model
+ *      │  ├─ output                                           its connector
+ *      │  ├─ value                                            the percent
+ *      │  ╰─ slider ╰─ handle                                 (see `slider`)
+ *      ├─ empty                                               "No screen to adjust"
  *      ╰─ button.settings > text                              runs `settings_command`
  *
  *   gadget.notifications
@@ -841,6 +857,50 @@ gadget.power button.settings {
   border: 1px solid var(--aria-border);
 }
 gadget.power button.settings:hover {
+  border-color: var(--aria-accent);
+}
+
+gadget.brightness > button {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.brightness > button:hover {
+  background: var(--aria-border);
+}
+gadget.brightness > button icon {
+  height: 16px;
+}
+gadget.brightness > button.none icon {
+  color: var(--aria-muted);
+}
+gadget.brightness list {
+  width: 340px;
+  padding: 8px;
+  gap: 6px;
+}
+gadget.brightness screen {
+  padding: 2px 0;
+  gap: 8px;
+}
+gadget.brightness screen icon {
+  height: 20px;
+}
+gadget.brightness screen output,
+gadget.brightness screen value,
+gadget.brightness screen.unknown icon {
+  color: var(--aria-muted);
+}
+gadget.brightness empty {
+  padding: 12px;
+  color: var(--aria-muted);
+}
+gadget.brightness button.settings {
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border);
+}
+gadget.brightness button.settings:hover {
   border-color: var(--aria-accent);
 }
 

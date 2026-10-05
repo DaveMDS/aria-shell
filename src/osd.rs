@@ -1,6 +1,7 @@
 //! The OSD: a short-lived bar on every output when something it
 //! watches changes (the default output's volume, the microphone's,
-//! their mute, the microphone in use, Wi‑Fi on or off, the network and
+//! their mute, a screen's brightness, the microphone in use, Wi‑Fi on
+//! or off, the network and
 //! a VPN going up or down, the charger, the power profile, the hold on
 //! idle), whatever changed it: a keybind running `wpctl`, a gadget,
 //! another app. It only shows, it never changes anything; `aria-shell
@@ -12,17 +13,18 @@
 //! to show. The daemon opens one overlay surface per output, draws
 //! [`Osd::view`] on each, and closes them all when the last change is
 //! `duration` old (a serial-checked timer, so a held volume key keeps
-//! the bar up and updates it in place).
+//! the bar up and updates it in place). A brightness change shows on
+//! the screens it happened on, each with its own level.
 //!
 //! ```text
-//! osd.<volume|microphone|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
+//! osd.<volume|microphone|brightness|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
 //! ├─ icon
 //! ├─ meter > fill         the level, with a value
 //! ├─ value                the percent, with a value
 //! ╰─ label                the text, with one
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use iced::widget::{Space, row};
@@ -31,6 +33,7 @@ use iced::{Alignment, Element, Length, Padding};
 use iced_wayland_subscriber::OutputId;
 
 use crate::audio::{Audio, Kind as Channel};
+use crate::brightness::Brightness;
 use crate::config::{RawSection, Section};
 use crate::gadgets;
 use crate::icons::Icons;
@@ -52,11 +55,13 @@ const ICON_WIFI_ON: &str = "network-wireless-symbolic";
 const ICON_WIFI_OFF: &str = "network-wireless-disabled-symbolic";
 const ICON_VPN_UP: &str = "network-vpn-symbolic";
 const ICON_VPN_DOWN: &str = "network-vpn-disconnected-symbolic";
+const ICON_BRIGHTNESS: &str = "display-brightness-symbolic";
 
 /// Every watch, in the order the default `show` lists them.
 const ALL_WATCHES: &[&str] = &[
     "volume",
     "microphone",
+    "brightness",
     "recording",
     "wifi",
     "network",
@@ -118,6 +123,8 @@ pub enum Watch {
     Volume,
     /// The default input: its level and mute.
     Microphone,
+    /// A screen's brightness.
+    Brightness,
     /// The microphone in use by some app, or free again.
     Recording,
     /// Wi‑Fi on / off.
@@ -139,6 +146,7 @@ impl Watch {
         Some(match s {
             "volume" => Self::Volume,
             "microphone" => Self::Microphone,
+            "brightness" => Self::Brightness,
             "recording" => Self::Recording,
             "wifi" => Self::Wifi,
             "network" => Self::Network,
@@ -175,6 +183,7 @@ impl Position {
 pub enum Kind {
     Volume,
     Microphone,
+    Brightness,
     Recording,
     Wifi,
     Network,
@@ -191,6 +200,7 @@ impl Kind {
         match self {
             Self::Volume => "volume",
             Self::Microphone => "microphone",
+            Self::Brightness => "brightness",
             Self::Recording => "recording",
             Self::Wifi => "wifi",
             Self::Network => "network",
@@ -214,6 +224,35 @@ pub struct Content {
     pub value: Option<u32>,
     pub text: Option<String>,
     pub muted: bool,
+    /// Only on these outputs (connectors), each with its own percent in
+    /// place of `value`; `None`: on every output.
+    pub outputs: Option<BTreeMap<String, u32>>,
+}
+
+impl Content {
+    /// Whether it shows on the output named so, among those present:
+    /// on all of them when it names none of these.
+    pub fn shown_on(&self, present: &[&str]) -> impl Fn(&str) -> bool + use<> {
+        let only: Option<BTreeSet<String>> = self
+            .outputs
+            .as_ref()
+            .map(|m| {
+                m.keys()
+                    .filter(|o| present.contains(&o.as_str()))
+                    .cloned()
+                    .collect()
+            })
+            .filter(|s: &BTreeSet<String>| !s.is_empty());
+        move |output| only.as_ref().is_none_or(|s| s.contains(output))
+    }
+
+    /// The percent on `output`.
+    fn value_on(&self, output: &str) -> Option<u32> {
+        self.outputs
+            .as_ref()
+            .and_then(|m| m.get(output).copied())
+            .or(self.value)
+    }
 }
 
 /// The default output or input as last read.
@@ -251,6 +290,7 @@ impl Level {
             value: Some(n.percent),
             text: None,
             muted: n.muted,
+            outputs: None,
         })
     }
 }
@@ -277,6 +317,14 @@ struct Charger {
     icon: String,
 }
 
+/// A screen's brightness as last read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Screen {
+    /// Its connector, when known.
+    output: Option<String>,
+    percent: u32,
+}
+
 /// The user's hold on idle as last read; the icon is the Power
 /// gadget's eye for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,6 +340,8 @@ struct Hold {
 pub struct Watched {
     output: Option<Level>,
     input: Option<Level>,
+    /// The screens whose level is known, by id.
+    brightness: BTreeMap<String, Screen>,
     /// Some app listens to a microphone.
     recording: Option<bool>,
     /// Wi‑Fi enabled (with a Wi‑Fi device).
@@ -314,10 +364,24 @@ impl Watched {
         network: &Network,
         power: &Power,
         idle: &Idle,
+        brightness: &Brightness,
         previous: &Watched,
     ) -> Self {
         let output = Level::read(audio, Channel::Output);
         let input = Level::read(audio, Channel::Input);
+        let brightness = brightness
+            .displays()
+            .iter()
+            .filter_map(|d| {
+                Some((
+                    d.id.clone(),
+                    Screen {
+                        output: d.output.clone(),
+                        percent: d.percent()?,
+                    },
+                ))
+            })
+            .collect();
         let recording = audio.recordings().map(|mut apps| apps.next().is_some());
         let nm = network.running() && !network.devices().is_empty();
         let wifi = (nm && network.devices_of(DeviceKind::Wifi).next().is_some())
@@ -372,6 +436,7 @@ impl Watched {
         Self {
             output,
             input,
+            brightness,
             recording,
             wifi,
             network,
@@ -398,6 +463,11 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
     {
         return Some(content);
     }
+    if show.contains(&Watch::Brightness)
+        && let Some(content) = brightness_change(&old.brightness, &new.brightness)
+    {
+        return Some(content);
+    }
     if show.contains(&Watch::Recording)
         && let (Some(was), Some(now)) = (old.recording, new.recording)
         && was != now
@@ -413,6 +483,7 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
             value: None,
             text: Some(locale.tr(key).to_owned()),
             muted: false,
+            outputs: None,
         });
     }
     if show.contains(&Watch::Wifi)
@@ -441,6 +512,7 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
             value: None,
             text: Some(text),
             muted: false,
+            outputs: None,
         });
     }
     if show.contains(&Watch::Vpn)
@@ -493,6 +565,33 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
     None
 }
 
+/// The screens whose level changed, each on its output with its
+/// percent; everywhere when one of them has no known output. A screen
+/// coming or going isn't a change.
+fn brightness_change(
+    old: &BTreeMap<String, Screen>,
+    new: &BTreeMap<String, Screen>,
+) -> Option<Content> {
+    let changed: Vec<&Screen> = new
+        .iter()
+        .filter(|(id, n)| old.get(*id).is_some_and(|o| o.percent != n.percent))
+        .map(|(_, n)| n)
+        .collect();
+    let first = changed.first()?;
+    let outputs = changed
+        .iter()
+        .map(|s| Some((s.output.clone()?, s.percent)))
+        .collect::<Option<BTreeMap<String, u32>>>();
+    Some(Content {
+        kind: Kind::Brightness,
+        icon: Some(ICON_BRIGHTNESS.to_owned()),
+        value: Some(first.percent),
+        text: None,
+        muted: false,
+        outputs,
+    })
+}
+
 /// An icon and a text.
 fn notice(kind: Kind, icon: &str, text: &str) -> Content {
     Content {
@@ -501,6 +600,7 @@ fn notice(kind: Kind, icon: &str, text: &str) -> Content {
         value: None,
         text: Some(text.to_owned()),
         muted: false,
+        outputs: None,
     }
 }
 
@@ -544,9 +644,10 @@ impl Osd {
         network: &Network,
         power: &Power,
         idle: &Idle,
+        brightness: &Brightness,
         locale: &Locale,
     ) -> Option<Content> {
-        let new = Watched::read(audio, network, power, idle, &self.watched);
+        let new = Watched::read(audio, network, power, idle, brightness, &self.watched);
         if new == self.watched {
             return None;
         }
@@ -640,7 +741,8 @@ impl Osd {
             };
             parts.push(theme.container(&icon_node, icon).into());
         }
-        if let Some(value) = content.value {
+        let value = content.value_on(output);
+        if let Some(value) = value {
             parts.push(graph::meter(
                 theme,
                 &node.child("meter"),
@@ -650,12 +752,12 @@ impl Osd {
         if let Some(text) = &content.text {
             let label = node.child("label");
             let mut label = theme.container(&label, theme.text(&label, text.clone()));
-            if content.value.is_none() {
+            if value.is_none() {
                 label = label.width(Length::Fill);
             }
             parts.push(label.into());
         }
-        if let Some(value) = content.value {
+        if let Some(value) = value {
             let value_node = node.child("value");
             parts.push(
                 theme
@@ -684,6 +786,7 @@ mod tests {
     const ALL: &[Watch] = &[
         Watch::Volume,
         Watch::Microphone,
+        Watch::Brightness,
         Watch::Recording,
         Watch::Wifi,
         Watch::Network,
@@ -896,6 +999,66 @@ mod tests {
             change(&hold(false), &hold(true), &[Watch::Profile], &en),
             None
         );
+    }
+
+    #[test]
+    fn brightness_on_its_screens() {
+        let en = Locale::new("en");
+        let screens = |levels: &[(&str, Option<&str>, u32)]| Watched {
+            brightness: levels
+                .iter()
+                .map(|(id, output, percent)| {
+                    (
+                        (*id).to_owned(),
+                        Screen {
+                            output: output.map(str::to_owned),
+                            percent: *percent,
+                        },
+                    )
+                })
+                .collect(),
+            ..Watched::default()
+        };
+        let old = screens(&[
+            ("ddc:0", Some("HDMI-A-1"), 75),
+            ("ddc:1", Some("HDMI-A-2"), 40),
+        ]);
+        // Read for the first time, or a monitor plugged in: nothing.
+        assert_eq!(change(&Watched::default(), &old, ALL, &en), None);
+        let one = screens(&[
+            ("ddc:0", Some("HDMI-A-1"), 80),
+            ("ddc:1", Some("HDMI-A-2"), 40),
+        ]);
+        let c = change(&old, &one, ALL, &en).unwrap();
+        assert_eq!((c.kind, c.value), (Kind::Brightness, Some(80)));
+        assert_eq!(
+            c.outputs,
+            Some(BTreeMap::from([("HDMI-A-1".to_owned(), 80)]))
+        );
+        let both = screens(&[
+            ("ddc:0", Some("HDMI-A-1"), 80),
+            ("ddc:1", Some("HDMI-A-2"), 45),
+        ]);
+        let c = change(&old, &both, ALL, &en).unwrap();
+        assert_eq!(c.value_on("HDMI-A-1"), Some(80));
+        assert_eq!(c.value_on("HDMI-A-2"), Some(45));
+        let shown_on = c.shown_on(&["HDMI-A-1", "HDMI-A-2"]);
+        assert!(shown_on("HDMI-A-1") && shown_on("HDMI-A-2"));
+        let shown_on = one_content(&old, &one).shown_on(&["HDMI-A-1", "HDMI-A-2"]);
+        assert!(shown_on("HDMI-A-1") && !shown_on("HDMI-A-2"));
+        // Named after outputs that aren't there: everywhere.
+        let shown_on = one_content(&old, &one).shown_on(&["DP-1"]);
+        assert!(shown_on("DP-1"));
+        // A panel on an output unknown: everywhere, with its level.
+        let laptop = screens(&[("backlight:x", None, 50)]);
+        let brighter = screens(&[("backlight:x", None, 55)]);
+        let c = change(&laptop, &brighter, ALL, &en).unwrap();
+        assert_eq!((c.value, c.outputs), (Some(55), None));
+        assert_eq!(change(&old, &one, &[Watch::Volume], &en), None);
+    }
+
+    fn one_content(old: &Watched, new: &Watched) -> Content {
+        change(old, new, ALL, &Locale::new("en")).unwrap()
     }
 
     #[test]

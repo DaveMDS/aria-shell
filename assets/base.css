@@ -70,6 +70,16 @@
  *      ╰─ button                                              one per action the app offers
  *         ╰─ text
  *
+ *   osd.<volume|microphone|network|custom>[.muted][output="<connector>"]
+ *                                                             the OSD, one surface per output while shown
+ *                                                             (width/height size it; [osd] position places it);
+ *                                                             a row (gap between its parts)
+ *   ├─ icon                                                   drawn at the node's `height` (symbolic: `color`)
+ *   ├─ meter > fill                                           the level, when there is one (as the system
+ *                                                             monitor's: `height`, `background`, `border-radius`)
+ *   ├─ label                                                  the text: the network, a script's
+ *   ╰─ value                                                  the percent, when there is a level
+ *
  *   launcher                                                  the launcher surface (width/height size it)
  *   ├─ actions                                                the exit menu's buttons as icons ([launcher] actions)
  *   │  ╰─ button[.lock|.reboot|...] > icon                    drawn at the node's `height`
@@ -556,6 +566,37 @@ locker auth button:hover {
 }
 locker auth.busy button {
   background: var(--aria-muted);
+}
+
+osd {
+  width: 320px;
+  height: 56px;
+  padding: 0 18px;
+  gap: 14px;
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  font-size: 15px;
+  border: 1px solid var(--aria-border);
+  border-radius: 28px;
+  box-shadow: 0 2px 8px var(--aria-shadow);
+}
+osd icon {
+  height: 24px;
+}
+osd meter {
+  height: 6px;
+  background: var(--aria-border);
+  border-radius: 3px;
+}
+osd meter fill {
+  background: var(--aria-accent);
+  border-radius: 3px;
+}
+osd.muted meter fill {
+  background: var(--aria-muted);
+}
+osd value {
+  width: 44px;
 }
 
 notifications {

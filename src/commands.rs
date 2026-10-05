@@ -39,6 +39,8 @@ pub enum Command {
     Lock,
     /// Hold idle or let it go (`aria-shell idle inhibit [toggle|on|off]`).
     Idle(crate::idle::Command),
+    /// Show the OSD (`aria-shell osd show ...`).
+    Osd(crate::osd::Content),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -107,6 +109,7 @@ enum Parsed {
     Exiter(ToggleCommand),
     Lock,
     Idle(crate::idle::Command),
+    Osd(crate::osd::Content),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -144,6 +147,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
                 args.join(" ")
             )),
         },
+        "osd" => match args.split_first() {
+            Some((&"show", rest)) => Ok(Parsed::Osd(parse_osd_show(rest)?)),
+            _ => Err(format!(
+                "invalid arguments for <osd>: {} (show [--icon <name>] [--value <percent>] [text])",
+                args.join(" ")
+            )),
+        },
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -165,6 +175,45 @@ fn parse(line: &str) -> Result<Parsed, String> {
         },
         other => Err(format!("unknown command <{other}>")),
     }
+}
+
+/// `osd show [--icon <name>] [--value <percent>] [text...]`: the
+/// options first, then the text (every word left; the client sends its
+/// arguments as one line, so this is how a text with spaces comes).
+fn parse_osd_show(args: &[&str]) -> Result<crate::osd::Content, String> {
+    let mut icon = None;
+    let mut value = None;
+    let mut words = args.iter();
+    let mut text = Vec::new();
+    while let Some(&word) = words.next() {
+        match word {
+            "--icon" => match words.next() {
+                Some(name) => icon = Some((*name).to_owned()),
+                None => return Err("osd show: --icon needs a name".to_owned()),
+            },
+            "--value" => match words.next().map(|v| v.parse::<u32>()) {
+                Some(Ok(v)) => value = Some(v),
+                _ => return Err("osd show: --value needs a percent (0, 40, 120)".to_owned()),
+            },
+            _ => {
+                text.push(word);
+                text.extend(words.by_ref());
+            }
+        }
+    }
+    let text = (!text.is_empty()).then(|| text.join(" "));
+    if icon.is_none() && value.is_none() && text.is_none() {
+        return Err(
+            "osd show: nothing to show (--icon <name>, --value <percent>, text)".to_owned(),
+        );
+    }
+    Ok(crate::osd::Content {
+        kind: crate::osd::Kind::Custom,
+        icon,
+        value,
+        text,
+        muted: false,
+    })
 }
 
 /// `$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`, so the shell
@@ -271,6 +320,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Idle(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Osd(content)) => {
+                let _ = tx.send(Command::Osd(content)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Debug(cmd)) => {
                 let (reply_tx, mut reply_rx) = mpsc::channel(1);
                 let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
@@ -352,6 +405,36 @@ mod tests {
         assert_eq!(parse("lock"), Ok(Parsed::Lock));
         assert_eq!(parse("aria lock"), Ok(Parsed::Lock));
         assert!(parse("lock now").is_err());
+    }
+
+    #[test]
+    fn parses_osd_show() {
+        let custom = |icon: Option<&str>, value, text: Option<&str>| {
+            Ok(Parsed::Osd(crate::osd::Content {
+                kind: crate::osd::Kind::Custom,
+                icon: icon.map(str::to_owned),
+                value,
+                text: text.map(str::to_owned),
+                muted: false,
+            }))
+        };
+        assert_eq!(
+            parse("osd show --icon display-brightness-symbolic --value 40"),
+            custom(Some("display-brightness-symbolic"), Some(40), None)
+        );
+        assert_eq!(
+            parse("osd show Caps Lock on"),
+            custom(None, None, Some("Caps Lock on"))
+        );
+        assert_eq!(
+            parse("osd show --value 120 Boost --value"),
+            custom(None, Some(120), Some("Boost --value"))
+        );
+        assert!(parse("osd show").is_err());
+        assert!(parse("osd show --icon").is_err());
+        assert!(parse("osd show --value loud").is_err());
+        assert!(parse("osd").is_err());
+        assert!(parse("osd hide").is_err());
     }
 
     #[test]

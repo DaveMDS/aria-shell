@@ -314,8 +314,22 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
                             container (the theme's background shows around a `contain`ed image)
 
+Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
+                            margin); `observe(&Audio, &Network)` after every change of those reads a `Watched`
+                            (the default output's and input's device/percent/mute, the network connected +
+                            label; each `None` until known, so the first reading after start or a
+                            source coming back shows nothing; "connecting" keeps the last reading) and
+                            `change(old, new)` (pure, unit-tested) says what to show: the volume, else the
+                            microphone, else the network. Whoever made the change (a keybind, the gadget,
+                            another app) is not its business. `show(Content)` from there or from
+                            `Command::Osd` (`aria-shell osd show`); the daemon opens one `Layer::Overlay`
+                            surface per output (`events_transparent`, sized by the theme's `osd`, anchored by
+                            `position`), redraws the open ones, and a timer per show sends `OsdExpired(serial)`:
+                            only the last show's closes them, so a held volume key keeps the bar up
+
 commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(ToggleCommand)`,
-                            `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`
+                            `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`,
+                            `Command::Osd(Content)`
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
                             `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
@@ -1147,6 +1161,7 @@ monitor, audio, the lock screen (PAM accepting the right password; the
 monitor hot-plugged while locked), idle (`loginctl lock-session`,
 the lock before a suspend, the battery timeouts).
 Only in the nested Sway so far: the notifications and their gadget,
-the exit menu, the wallpaper, the Power gadget (with `tests/ui/upower`,
+the exit menu, the wallpaper, the OSD (its volume side only by the
+unit tests: the nested Sway's mixer is the desktop's own), the Power gadget (with `tests/ui/upower`,
 a fake UPower and power-profiles-daemon). Never exercised by a scenario: the
 logind and UPower side of idle (the nested Sway's bus has neither).

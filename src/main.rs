@@ -13,6 +13,7 @@ mod locale;
 mod locker;
 mod network;
 mod notifications;
+mod osd;
 mod panel;
 mod power;
 mod process;
@@ -55,6 +56,7 @@ use locale::Locale;
 use locker::Locker;
 use network::Network;
 use notifications::{Notifications, toast};
+use osd::Osd;
 use panel::{Action, Panel, PanelConfig};
 use power::Power;
 use sysmon::SysMon;
@@ -113,6 +115,8 @@ enum Message {
     ExiterEvent(Option<Id>, exiter::Message),
     /// A wallpaper image finished decoding.
     Wallpaper(wallpaper::Event),
+    /// The OSD shown with this serial has been up its duration.
+    OsdExpired(u64),
     /// A press or release on window `Id` while a dialog is open: a
     /// click outside closes it.
     DialogPointer(Id, dialog::PointerEvent),
@@ -150,6 +154,8 @@ impl Message {
         match self {
             // Only answered.
             Message::Widgets(..) | Message::Command(Command::Debug(..)) => Scope::None,
+            // Only closes surfaces.
+            Message::OsdExpired(_) => Scope::None,
             // The pointer's surface, for its hover styles: an iced widget
             // keeps its status (hovered, pressed) in itself, rebuilt as
             // unknown with every message and known again only when
@@ -213,6 +219,8 @@ struct AriaShell {
     cursor: Option<(Id, Point)>,
     /// One layer surface per notification shown.
     toasts: Vec<Toast>,
+    /// The OSD, and its surfaces while shown.
+    osd: Osd,
 }
 
 /// A notification's surface: stacked from the configured corner of its
@@ -265,6 +273,7 @@ impl AriaShell {
         let sysmon = SysMon::new(config.section(None));
         let idle = Idle::new(idle::IdleConfig::load(&config));
         let power = Power::new(config.section(None));
+        let osd = Osd::new(config.section(None));
         let shell = Self {
             config,
             general,
@@ -293,6 +302,7 @@ impl AriaShell {
             locker: None,
             cursor: None,
             toasts: Vec::new(),
+            osd,
         };
         (shell, load_icons)
     }
@@ -345,6 +355,7 @@ impl AriaShell {
             .chain(self.notifications.icon_names().map(str::to_owned))
             .chain(self.audio.icon_names().map(str::to_owned))
             .chain(self.power.icon_names().map(str::to_owned))
+            .chain(self.osd.icon_names().map(str::to_owned))
             .chain(
                 self.locker
                     .iter()
@@ -431,7 +442,8 @@ impl AriaShell {
                     .iter()
                     .flat_map(|l| l.windows().map(|(id, _)| id)),
             )
-            .chain(self.toasts.iter().map(|t| t.window));
+            .chain(self.toasts.iter().map(|t| t.window))
+            .chain(self.osd.windows.values().copied());
         Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
     }
 
@@ -560,8 +572,9 @@ impl AriaShell {
                         .iter()
                         .any(|p| p.status == audio::PlaybackStatus::Playing),
                 );
+                let osd = self.observe_osd();
                 self.resolve_icons();
-                Task::batch([self.sync_popups(), self.redraw_shared()])
+                Task::batch([osd, self.sync_popups(), self.redraw_shared()])
             }
             Message::Network(event) => {
                 let (changed, follow_up) = self.network.apply(event);
@@ -569,7 +582,16 @@ impl AriaShell {
                 if !changed {
                     return follow_up;
                 }
-                Task::batch([follow_up, self.sync_popups(), self.redraw_shared()])
+                let osd = self.observe_osd();
+                Task::batch([follow_up, osd, self.sync_popups(), self.redraw_shared()])
+            }
+            Message::Command(Command::Osd(content)) => self.show_osd(content),
+            Message::OsdExpired(serial) => {
+                if self.osd.expired(serial) {
+                    self.close_osd()
+                } else {
+                    Task::none()
+                }
             }
             Message::Toast(m) => {
                 let signals = self
@@ -888,6 +910,11 @@ impl AriaShell {
                 list.push((toast.window, "notification", toast.output, rect));
             }
         }
+        for (&output, &id) in &self.osd.windows {
+            if let Some(rect) = self.osd_rect(output) {
+                list.push((id, "osd", output, rect));
+            }
+        }
         for (id, output) in self.locker.iter().flat_map(Locker::windows) {
             if let Some(out) = self.output_rect(output) {
                 list.push((id, "locker", output, out));
@@ -1021,6 +1048,7 @@ impl AriaShell {
         self.sysmon.set_config(self.config.section(None));
         self.idle.set_config(idle::IdleConfig::load(&self.config));
         self.power.set_config(self.config.section(None));
+        self.osd.set_config(self.config.section(None));
         let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -1048,6 +1076,8 @@ impl AriaShell {
                 .map(|t| Task::done(Message::RemoveWindow(t.window))),
         );
         tasks.push(self.sync_toasts());
+        // The position may have changed.
+        tasks.push(self.close_osd());
         Task::batch(tasks)
     }
 
@@ -1071,6 +1101,15 @@ impl AriaShell {
         }
         tasks.push(self.sync_popups());
         tasks.push(self.sync_toasts());
+        let size = self.osd.size(&self.theme);
+        let anchor = osd_anchor(self.osd.config().position);
+        tasks.extend(self.osd.windows.values().map(|&id| {
+            Task::done(Message::LayoutChange {
+                id,
+                anchor,
+                size: LayerSize::px(size.0, size.1),
+            })
+        }));
         Task::batch(tasks)
     }
 
@@ -1296,6 +1335,97 @@ impl AriaShell {
             out.y + reserved(panel::Position::Top) + top as f32
         } else {
             out.y + out.height - reserved(panel::Position::Bottom) - bottom as f32 - h
+        };
+        Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
+    }
+
+    /// Read what the OSD watches after a change of the shared state, and
+    /// show what changed.
+    fn observe_osd(&mut self) -> Task<Message> {
+        match self.osd.observe(&self.audio, &self.network, &self.locale) {
+            Some(content) => self.show_osd(content),
+            None => Task::none(),
+        }
+    }
+
+    /// Show `content` on every output: a surface for those without one,
+    /// a new frame for the others, and the timer that closes them.
+    fn show_osd(&mut self, content: osd::Content) -> Task<Message> {
+        log::debug!("osd: {content:?}");
+        let serial = self.osd.show(content);
+        self.resolve_icons();
+        let size = self.osd.size(&self.theme);
+        let config = self.osd.config().clone();
+        let margin = match config.position {
+            osd::Position::Top => (config.margin, 0, 0, 0),
+            osd::Position::Center => (0, 0, 0, 0),
+            osd::Position::Bottom => (0, 0, config.margin, 0),
+        };
+        let mut tasks = Vec::new();
+        for (&output, info) in &self.outputs {
+            if let Some(&id) = self.osd.windows.get(&output) {
+                tasks.push(Task::done(Message::Redraw(Some(id))));
+                continue;
+            }
+            let id = Id::unique();
+            self.osd.windows.insert(output, id);
+            tasks.push(Task::done(Message::NewLayerShell {
+                settings: NewLayerShellSettings {
+                    anchor: osd_anchor(config.position),
+                    size: LayerSize::px(size.0, size.1),
+                    layer: Layer::Overlay,
+                    exclusive_zone: None,
+                    margin: Some(margin),
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    output_option: OutputOption::GlobalName(info.id),
+                    // Shown over whatever is under the pointer: it must
+                    // not take its clicks.
+                    events_transparent: true,
+                    namespace: Some("aria-osd".to_owned()),
+                    ..Default::default()
+                },
+                id,
+            }));
+        }
+        let duration = config.duration;
+        tasks.push(Task::future(async move {
+            tokio::time::sleep(duration).await;
+            Message::OsdExpired(serial)
+        }));
+        Task::batch(tasks)
+    }
+
+    fn close_osd(&mut self) -> Task<Message> {
+        let windows: Vec<Id> = self.osd.windows.values().copied().collect();
+        self.osd.hide();
+        Task::batch(
+            windows
+                .into_iter()
+                .map(|id| Task::done(Message::RemoveWindow(id))),
+        )
+    }
+
+    /// Where the OSD is on `output`, as asked: centred, from its edge
+    /// past a bar's exclusive zone there, by the margin.
+    fn osd_rect(&self, output: OutputId) -> Option<Rectangle> {
+        let out = self.output_rect(output)?;
+        let (w, h) = self.osd.size(&self.theme);
+        let (w, h) = (w as f32, h as f32);
+        let config = self.osd.config();
+        let reserved = |wanted: panel::Position| -> f32 {
+            self.panels
+                .values()
+                .filter(|p| p.output == output && p.position() == wanted)
+                .map(|p| p.height() as f32)
+                .fold(0.0, f32::max)
+        };
+        let x = out.x + (out.width - w) / 2.0;
+        let y = match config.position {
+            osd::Position::Top => out.y + reserved(panel::Position::Top) + config.margin as f32,
+            osd::Position::Center => out.y + (out.height - h) / 2.0,
+            osd::Position::Bottom => {
+                out.y + out.height - reserved(panel::Position::Bottom) - config.margin as f32 - h
+            }
         };
         Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
     }
@@ -1562,6 +1692,9 @@ impl AriaShell {
                         .map(|t| Task::done(Message::RemoveWindow(t.window))),
                 );
                 tasks.push(self.sync_toasts());
+                if let Some(id) = self.osd.windows.remove(&OutputId::from(&output)) {
+                    tasks.push(Task::done(Message::RemoveWindow(id)));
+                }
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
@@ -1597,6 +1730,10 @@ impl AriaShell {
                     return self.sync_toasts();
                 }
                 if self.wallpapers.remove(&id).is_some() {
+                    return Task::none();
+                }
+                if let Some(output) = self.osd.output_of(id) {
+                    self.osd.windows.remove(&output);
                     return Task::none();
                 }
                 if self.panels.remove(&id).is_some() {
@@ -1777,6 +1914,11 @@ impl AriaShell {
                 .into();
             return root.map(Message::Toast);
         }
+        if let Some(output) = self.osd.output_of(window) {
+            return self
+                .osd
+                .view(&self.theme, &self.icons, self.output_name(output));
+        }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
@@ -1864,6 +2006,15 @@ impl AriaShell {
             .chain(exiter)
             .chain(locker),
         )
+    }
+}
+
+/// The layer-shell anchor of the OSD: none centres it.
+fn osd_anchor(position: osd::Position) -> Anchor {
+    match position {
+        osd::Position::Top => Anchor::Top,
+        osd::Position::Center => Anchor::empty(),
+        osd::Position::Bottom => Anchor::Bottom,
     }
 }
 

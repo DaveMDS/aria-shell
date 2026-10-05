@@ -254,7 +254,7 @@ fn anchor(kind: Kind) -> usize {
 }
 
 /// The volume icon for a channel's level; the microphone for an input.
-fn level_icon(c: &Channel) -> &'static str {
+pub(crate) fn level_icon(c: &Channel) -> &'static str {
     if c.kind == Kind::Input {
         if c.muted {
             ICON_INPUT_MUTED

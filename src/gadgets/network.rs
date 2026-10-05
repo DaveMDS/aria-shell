@@ -371,7 +371,7 @@ impl Gadget for NetworkGadget {
 }
 
 /// The bar's icon for the primary connection.
-fn bar_icon(s: &Summary, running: bool, wireless: bool) -> &'static str {
+pub(crate) fn bar_icon(s: &Summary, running: bool, wireless: bool) -> &'static str {
     if !running {
         return ICON_OFFLINE;
     }

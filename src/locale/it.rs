@@ -130,4 +130,7 @@ pub const CATALOGUE: Catalogue = &[
     ("power.critical_title", "Batteria quasi esaurita"),
     ("power.low_body", "{n}% rimanente"),
     ("power.low_body_time", "{n}% rimanente, circa {time}"),
+    // osd
+    ("osd.network.connected", "Connesso: {name}"),
+    ("osd.network.disconnected", "Disconnesso"),
 ];

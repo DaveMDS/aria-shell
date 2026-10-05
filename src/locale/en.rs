@@ -126,4 +126,7 @@ pub const CATALOGUE: Catalogue = &[
     ("power.critical_title", "Battery critically low"),
     ("power.low_body", "{n}% left"),
     ("power.low_body_time", "{n}% left, about {time}"),
+    // osd
+    ("osd.network.connected", "Connected: {name}"),
+    ("osd.network.disconnected", "Disconnected"),
 ];

@@ -8,7 +8,7 @@ A fast, modern and customizable desktop shell for your Wayland compositor.
 
 AriaShell is a full-featured desktop shell designed to complement Wayland compositors
 such as **Hyprland**, **Sway**, and others. It provides a panel, launcher, lock screen,
-exit menu, notification daemon, wallpaper manager, and more — all configurable and
+exit menu, notification daemon, OSD, wallpaper manager, and more — all configurable and
 themeable through a CSS-like stylesheet.
 
 > [!WARNING]
@@ -147,6 +147,24 @@ A full-featured desktop notification server, replacing tools like `mako`.
 
 ---
 
+### 🔆 Aria OSD
+A short-lived bar on every screen when something changes, whatever changed it
+(a keybind running `wpctl`, the Audio gadget, another app). It only shows,
+it never changes anything (`[osd]`, the theme's `osd`).
+
+- ✅ Volume and mute of the default output, the device changing (headphones plugged in)
+- ✅ Microphone level and mute (the default input)
+- ✅ Network connected / disconnected
+- ✅ `aria-shell osd show [--icon <name>] [--value <percent>] [text]` from a script
+  (e.g. brightness from a `brightnessctl` keybind)
+- ✅ Position (top, center, bottom) and duration from the config, size and look from the theme
+- 🔲 Brightness as a source of its own, Caps Lock / Num Lock
+- 🔲 VPN up / down, power profile, AC plugged / unplugged
+- 🔲 The new output device's name, animations
+
+
+---
+
 ### 💻 Aria Terminal *(not ported yet)*
 A lightweight drop-down terminal.
 
@@ -207,11 +225,11 @@ aria-shell lock
 aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
 aria-shell idle     inhibit [toggle|on|off]
+aria-shell osd      show [--icon <name>] [--value <percent>] [text]
 aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....
-TODO: osd ...
 TODO: dmenu ...
 ```
 

@@ -38,6 +38,7 @@ aria-shell exiter toggle            # the exit menu (lock, suspend, ..., shutdow
 aria-shell idle inhibit             # hold idle (no lock, screens off, suspend) or let it go
 aria-shell osd show --icon display-brightness-symbolic --value 40   # the OSD, from a script
 aria-shell brightness up            # every screen's brightness (--output eDP-1: one; down, set 40)
+aria-shell volume up                # the default output's volume (--input: the microphone; down, set 40, mute)
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us

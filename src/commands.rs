@@ -43,6 +43,8 @@ pub enum Command {
     Osd(crate::osd::Content),
     /// Set the screens' brightness (`aria-shell brightness up`).
     Brightness(crate::brightness::Command),
+    /// The default output's or input's volume (`aria-shell volume up`).
+    Volume(VolumeCommand),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -83,6 +85,49 @@ impl Reply {
     }
 }
 
+/// `aria-shell volume ...`, on the default output, or the default
+/// input with `--input`. The step and the ceiling are the Audio
+/// gadget's (`[Audio] step`, `max_volume`), given to [`VolumeCommand::command`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VolumeCommand {
+    /// Up or down by `by` percent, `step` when `None`.
+    Step {
+        input: bool,
+        up: bool,
+        by: Option<u32>,
+    },
+    /// To a percent (no higher than the ceiling).
+    Set { input: bool, percent: u32 },
+    /// Mute or unmute; toggle when `None`.
+    Mute { input: bool, mute: Option<bool> },
+}
+
+impl VolumeCommand {
+    /// The mixer's command, with the step and the ceiling in percent.
+    pub fn command(&self, step: f32, max: f32) -> crate::audio::Command {
+        use crate::audio::{Command, Kind};
+        let kind = |input: bool| if input { Kind::Input } else { Kind::Output };
+        match *self {
+            Self::Step { input, up, by } => {
+                let by = by.map_or(step, |b| b as f32);
+                Command::StepDefault {
+                    kind: kind(input),
+                    delta: if up { by } else { -by } / 100.0,
+                    max: max / 100.0,
+                }
+            }
+            Self::Set { input, percent } => {
+                Command::SetDefaultVolume(kind(input), (percent as f32).min(max) / 100.0)
+            }
+            Self::Mute { input, mute: None } => Command::ToggleDefaultMute(kind(input)),
+            Self::Mute {
+                input,
+                mute: Some(mute),
+            } => Command::SetDefaultMuted(kind(input), mute),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleCommand {
     Toggle,
@@ -115,6 +160,7 @@ enum Parsed {
     Idle(crate::idle::Command),
     Osd(crate::osd::Content),
     Brightness(crate::brightness::Command),
+    Volume(VolumeCommand),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -160,6 +206,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
             )),
         },
         "brightness" => Ok(Parsed::Brightness(parse_brightness(&args)?)),
+        "volume" => Ok(Parsed::Volume(parse_volume(&args)?)),
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -260,6 +307,49 @@ fn parse_brightness(args: &[&str]) -> Result<crate::brightness::Command, String>
         ["set", value] => Ok(Command::Set(target, percent(value)?)),
         _ => Err(format!(
             "invalid arguments for <brightness>: {} {USAGE}",
+            args.join(" ")
+        )),
+    }
+}
+
+/// `volume up [percent] | down [percent] | set <percent> | mute
+/// [toggle | on | off]`, `--input` anywhere for the microphone.
+fn parse_volume(args: &[&str]) -> Result<VolumeCommand, String> {
+    const USAGE: &str =
+        "(up [percent] | down [percent] | set <percent> | mute [toggle | on | off]) [--input]";
+    let input = args.contains(&"--input");
+    let rest: Vec<&str> = args.iter().copied().filter(|a| *a != "--input").collect();
+    let percent = |v: &str| {
+        v.trim_end_matches('%')
+            .parse::<u32>()
+            .map_err(|_| format!("volume: {v:?} isn't a percent (0, 40, 120)"))
+    };
+    match rest.as_slice() {
+        [dir @ ("up" | "down")] => Ok(VolumeCommand::Step {
+            input,
+            up: *dir == "up",
+            by: None,
+        }),
+        [dir @ ("up" | "down"), by] => Ok(VolumeCommand::Step {
+            input,
+            up: *dir == "up",
+            by: Some(percent(by)?),
+        }),
+        ["set", value] => Ok(VolumeCommand::Set {
+            input,
+            percent: percent(value)?,
+        }),
+        ["mute"] | ["mute", "toggle"] => Ok(VolumeCommand::Mute { input, mute: None }),
+        ["mute", "on"] => Ok(VolumeCommand::Mute {
+            input,
+            mute: Some(true),
+        }),
+        ["mute", "off"] => Ok(VolumeCommand::Mute {
+            input,
+            mute: Some(false),
+        }),
+        _ => Err(format!(
+            "invalid arguments for <volume>: {} {USAGE}",
             args.join(" ")
         )),
     }
@@ -375,6 +465,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
             }
             Ok(Parsed::Brightness(cmd)) => {
                 let _ = tx.send(Command::Brightness(cmd)).await;
+                "OK".to_owned()
+            }
+            Ok(Parsed::Volume(cmd)) => {
+                let _ = tx.send(Command::Volume(cmd)).await;
                 "OK".to_owned()
             }
             Ok(Parsed::Debug(cmd)) => {
@@ -525,6 +619,99 @@ mod tests {
         assert_eq!(
             parse("debug brightness"),
             Ok(Parsed::Debug(DebugCommand::Brightness))
+        );
+    }
+
+    #[test]
+    fn parses_volume() {
+        assert_eq!(
+            parse("volume up"),
+            Ok(Parsed::Volume(VolumeCommand::Step {
+                input: false,
+                up: true,
+                by: None
+            }))
+        );
+        assert_eq!(
+            parse("volume --input down 10%"),
+            Ok(Parsed::Volume(VolumeCommand::Step {
+                input: true,
+                up: false,
+                by: Some(10)
+            }))
+        );
+        assert_eq!(
+            parse("volume set 120"),
+            Ok(Parsed::Volume(VolumeCommand::Set {
+                input: false,
+                percent: 120
+            }))
+        );
+        assert_eq!(
+            parse("volume mute"),
+            Ok(Parsed::Volume(VolumeCommand::Mute {
+                input: false,
+                mute: None
+            }))
+        );
+        assert_eq!(
+            parse("volume mute on --input"),
+            Ok(Parsed::Volume(VolumeCommand::Mute {
+                input: true,
+                mute: Some(true)
+            }))
+        );
+        assert!(parse("volume").is_err());
+        assert!(parse("volume set").is_err());
+        assert!(parse("volume set loud").is_err());
+        assert!(parse("volume mute maybe").is_err());
+    }
+
+    #[test]
+    fn volume_with_the_gadgets_step_and_ceiling() {
+        use crate::audio::{Command, Kind};
+        let up = VolumeCommand::Step {
+            input: false,
+            up: true,
+            by: None,
+        };
+        assert_eq!(
+            up.command(5.0, 100.0),
+            Command::StepDefault {
+                kind: Kind::Output,
+                delta: 0.05,
+                max: 1.0
+            }
+        );
+        let down = VolumeCommand::Step {
+            input: true,
+            up: false,
+            by: Some(10),
+        };
+        assert_eq!(
+            down.command(5.0, 150.0),
+            Command::StepDefault {
+                kind: Kind::Input,
+                delta: -0.1,
+                max: 1.5
+            }
+        );
+        let loud = VolumeCommand::Set {
+            input: false,
+            percent: 120,
+        };
+        assert_eq!(
+            loud.command(5.0, 100.0),
+            Command::SetDefaultVolume(Kind::Output, 1.0),
+            "no higher than max_volume"
+        );
+        let mute = VolumeCommand::Mute {
+            input: true,
+            mute: None,
+        };
+        assert_eq!(
+            mute.command(5.0, 100.0),
+            Command::ToggleDefaultMute(Kind::Input)
         );
     }
 

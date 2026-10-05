@@ -682,6 +682,12 @@ impl AriaShell {
                     Task::none()
                 }
             }
+            Message::Command(Command::Volume(cmd)) => {
+                let config: gadgets::audio::AudioConfig = self.config.section(None);
+                self.audio
+                    .run(cmd.command(config.step, config.max_volume))
+                    .map(Message::Audio)
+            }
             Message::Command(Command::Brightness(cmd)) => {
                 if self.brightness.run(cmd) {
                     self.brightness_changed()

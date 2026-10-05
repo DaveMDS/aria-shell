@@ -14,11 +14,12 @@ hl.bind("SUPER + Space",  hl.dsp.exec_cmd("aria-shell launcher toggle"))
 hl.bind("SUPER + Escape", hl.dsp.exec_cmd("aria-shell exiter toggle"))
 hl.bind("SUPER + L",      hl.dsp.exec_cmd("aria-shell lock"))
 
--- Volume: whatever changes it, the shell shows its OSD by itself
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
-hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true })
-hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true })
+-- Volume: the default output (--input: the microphone), by [Audio] step
+-- up to max_volume; whatever changes it, the shell shows its OSD by itself
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("aria-shell volume up"),           { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("aria-shell volume down"),         { locked = true, repeating = true })
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("aria-shell volume mute"),         { locked = true })
+hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("aria-shell volume mute --input"), { locked = true })
 
 -- Brightness: every screen (the laptop's panel, the monitors over
 -- DDC/CI); the shell shows its OSD on each. `--output eDP-1` for one

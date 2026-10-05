@@ -151,7 +151,7 @@ A full-featured desktop notification server, replacing tools like `mako`.
 
 ### 🔆 Aria OSD
 A short-lived bar on every screen when something changes, whatever changed it
-(a keybind running `wpctl`, a gadget, another app). It only shows,
+(a keybind, a gadget, another app). It only shows,
 it never changes anything (`[osd]`, the theme's `osd`).
 
 - ✅ Volume and mute of the default output, the device changing (headphones plugged in)
@@ -232,6 +232,7 @@ aria-shell exiter   [toggle|show|hide]
 aria-shell idle     inhibit [toggle|on|off]
 aria-shell osd      show [--icon <name>] [--value <percent>] [text]
 aria-shell brightness up [percent]|down [percent]|set <percent> [--output <connector>]
+aria-shell volume   up [percent]|down [percent]|set <percent>|mute [toggle|on|off] [--input]
 aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness
 TODO: reload
 TODO: terminal [toggle|show|hide]

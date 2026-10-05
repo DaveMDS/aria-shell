@@ -123,7 +123,7 @@ pub enum Event {
     PlayerGone(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     /// A channel's volume, 1.0 being 100%.
     SetVolume(Kind, u32, f32),
@@ -136,8 +136,11 @@ pub enum Command {
         delta: f32,
         max: f32,
     },
+    /// The default device's volume, 1.0 being 100%.
+    SetDefaultVolume(Kind, f32),
     /// Mute or unmute the default device.
     ToggleDefaultMute(Kind),
+    SetDefaultMuted(Kind, bool),
     PlayPause(String),
     Next(String),
     Previous(String),
@@ -441,12 +444,31 @@ impl Audio {
                     });
                 }
             }
+            Command::SetDefaultVolume(kind, volume) => {
+                if let Some(c) = self.default_of(kind) {
+                    mixer(Request::SetVolume {
+                        kind: c.kind,
+                        index: c.index,
+                        channels: c.channels,
+                        volume: volume.max(0.0),
+                    });
+                }
+            }
             Command::ToggleDefaultMute(kind) => {
                 if let Some(c) = self.default_of(kind) {
                     mixer(Request::SetMute {
                         kind: c.kind,
                         index: c.index,
                         mute: !c.muted,
+                    });
+                }
+            }
+            Command::SetDefaultMuted(kind, mute) => {
+                if let Some(c) = self.default_of(kind) {
+                    mixer(Request::SetMute {
+                        kind: c.kind,
+                        index: c.index,
+                        mute,
                     });
                 }
             }

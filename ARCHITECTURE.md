@@ -168,8 +168,9 @@ Audio      (audio/)          daemon-owned mixer and players: `channels_of(kind)`
                             `NameOwnerChanged` + one task per `org.mpris.MediaPlayer2.*` name
                             (`PropertiesProxy` get_all, then `PropertiesChanged`) -> `Event::Player` / `PlayerGone`
   apply(Event)              patches the lists (channels grouped by kind, the defaults flagged), loads covers
-  run(Command)              SetVolume/SetMuted/SetDefault(kind, index, ..), StepDefault/ToggleDefaultMute (the
-                            default device of a kind), PlayPause/Next/Previous(bus) over a `#[proxy]`
+  run(Command)              SetVolume/SetMuted/SetDefault(kind, index, ..), StepDefault/SetDefaultVolume/
+                            ToggleDefaultMute/SetDefaultMuted (the default device of a kind),
+                            PlayPause/Next/Previous(bus) over a `#[proxy]`
 
 AudioGadget (gadgets/audio.rs)  impl Gadget: the default output's level icon (+ the percent with
                             `show_percent`; the default input's beside it with `show_microphone`, the popup
@@ -380,7 +381,9 @@ Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what t
 
 commands::listen()          (commands.rs) the command socket as a Subscription; `Command::Launcher(ToggleCommand)`,
                             `Command::Exiter(ToggleCommand)` (toggle | show | hide), `Command::Lock`,
-                            `Command::Osd(Content)`, `Command::Brightness(brightness::Command)`
+                            `Command::Osd(Content)`, `Command::Brightness(brightness::Command)`,
+                            `Command::Volume(VolumeCommand)` (made an `audio::Command` by the daemon with the
+                            Audio gadget's `[Audio] step` / `max_volume`, so keys and wheel agree)
 commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
 commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
                             `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
@@ -917,8 +920,8 @@ Two things flow between the daemon and the gadgets besides messages:
   sysfs). `brightness` and `max_brightness` are readable by anyone, the
   former writable by root only: logind's `SetBrightness("backlight",
   name, value)` on `/org/freedesktop/login1/session/auto` is the user's
-  way, what `brightnessctl` does when built with logind. Not yet tried
-  on a laptop.
+  way, what `brightnessctl` does when built with logind. Tried on a
+  laptop: the keys the firmware handles show the OSD too.
 - `ddcutil` 2.2 (tried on two Dell P2314H over HDMI): `detect --terse`
   prints `Display N` blocks (`I2C bus: /dev/i2c-0`, `DRM connector:
   card1-HDMI-A-1`, `Monitor: DEL:DELL P2314H:<serial>`) and `Invalid
@@ -1249,5 +1252,5 @@ Only in the nested Sway so far: the notifications and their gadget,
 the exit menu, the wallpaper, the OSD (its volume side only by the
 unit tests: the nested Sway's mixer is the desktop's own), the Power gadget (with `tests/ui/upower`,
 a fake UPower and power-profiles-daemon), the Brightness gadget (with `tests/ui/bin/ddcutil`; the
-backlight side only by its unit tests until tried on a laptop). Never exercised by a scenario: the
+backlight side by its unit tests, and by hand on a laptop). Never exercised by a scenario: the
 logind and UPower side of idle (the nested Sway's bus has neither).

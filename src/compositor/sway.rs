@@ -20,7 +20,7 @@ use serde::Deserialize;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
-use super::{Command, Event, Window, Workspace};
+use super::{Command, Event, Window, WindowGeometry, Workspace};
 
 const MAGIC: &[u8; 6] = b"i3-ipc";
 
@@ -134,10 +134,27 @@ struct Node {
     focused: bool,
     #[serde(default)]
     urgent: bool,
+    /// On views: on screen (its workspace shown, not hidden in tabs).
+    #[serde(default)]
+    visible: bool,
+    /// Where it is, in the global space, borders included.
+    #[serde(default)]
+    rect: SwayRect,
+    /// Its contents, relative to `rect`.
+    #[serde(default)]
+    window_rect: SwayRect,
     #[serde(default)]
     nodes: Vec<Node>,
     #[serde(default)]
     floating_nodes: Vec<Node>,
+}
+
+#[derive(Deserialize, Default, Clone, Copy)]
+struct SwayRect {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 }
 
 /// The X11 side of an Xwayland view.
@@ -258,6 +275,37 @@ async fn windows() -> Vec<Event> {
     .into_iter()
     .chain(urgent)
     .collect()
+}
+
+/// The views on screen, topmost first: floating over tiled, in
+/// stacking order (the last floating one is on top).
+pub async fn shown_windows() -> Vec<WindowGeometry> {
+    let Some(tree): Option<Node> = request_json(GET_TREE, b"").await else {
+        return Vec::new();
+    };
+    shown(&tree)
+}
+
+fn shown(tree: &Node) -> Vec<WindowGeometry> {
+    let mut views = Vec::new();
+    walk(tree, None, &mut views);
+    let (mut floating, tiled): (Vec<&Node>, Vec<&Node>) = views
+        .into_iter()
+        .map(|(n, _)| n)
+        .filter(|n| n.visible)
+        .partition(|n| n.kind == "floating_con");
+    floating.reverse();
+    floating
+        .into_iter()
+        .chain(tiled)
+        .map(|n| WindowGeometry {
+            x: n.rect.x + n.window_rect.x,
+            y: n.rect.y + n.window_rect.y,
+            width: n.window_rect.width,
+            height: n.window_rect.height,
+            active: n.focused,
+        })
+        .collect()
 }
 
 /// Everything: after (re)connecting and when outputs change.
@@ -471,6 +519,39 @@ mod tests {
         );
         assert_eq!(tree.focused_view().map(|n| n.id), Some(7));
         assert!(views.iter().any(|(n, _)| n.id == 8 && n.urgent));
+    }
+
+    #[test]
+    fn shown_windows_floating_on_top() {
+        let view = |id: i64, kind: &str, x: i32, visible: bool, focused: bool| {
+            serde_json::json!({
+                "id": id, "type": kind, "pid": id, "visible": visible, "focused": focused,
+                "rect": {"x": x, "y": 0, "width": 100, "height": 60},
+                "window_rect": {"x": 2, "y": 20, "width": 96, "height": 38}
+            })
+        };
+        let tree: Node = serde_json::from_value(serde_json::json!({
+            "id": 1, "type": "root", "nodes": [
+                {"id": 3, "type": "output", "name": "DP-1", "nodes": [
+                    {"id": 5, "type": "workspace", "name": "1", "nodes": [
+                        view(6, "con", 0, true, true),
+                        view(7, "con", 100, false, false)
+                    ], "floating_nodes": [
+                        view(8, "floating_con", 200, true, false),
+                        view(9, "floating_con", 300, true, false)
+                    ]}
+                ]}
+            ]
+        }))
+        .unwrap();
+        let got: Vec<(i32, i32, i32, bool)> = shown(&tree)
+            .iter()
+            .map(|w| (w.x, w.y, w.width, w.active))
+            .collect();
+        assert_eq!(
+            got,
+            [(302, 20, 96, false), (202, 20, 96, false), (2, 20, 96, true)]
+        );
     }
 
     #[test]

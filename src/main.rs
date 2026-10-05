@@ -18,6 +18,7 @@ mod osd;
 mod panel;
 mod power;
 mod process;
+mod screenshot;
 mod scripts;
 mod sysmon;
 mod theme;
@@ -61,6 +62,7 @@ use notifications::{Notifications, toast};
 use osd::Osd;
 use panel::{Action, Panel, PanelConfig};
 use power::Power;
+use screenshot::Screenshot;
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
@@ -98,6 +100,8 @@ enum Message {
     Power(power::Event),
     /// The screens' brightness.
     Brightness(brightness::Event),
+    /// Captures and saved pictures.
+    Screenshot(screenshot::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -172,7 +176,8 @@ impl Message {
             | Message::Audio(_)
             | Message::Network(_)
             | Message::Power(_)
-            | Message::Brightness(_) => Scope::None,
+            | Message::Brightness(_)
+            | Message::Screenshot(_) => Scope::None,
             // A gadget's own state: its popups follow (`update`).
             Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
                 Scope::Window(*id)
@@ -203,6 +208,7 @@ struct AriaShell {
     idle: Idle,
     power: Power,
     brightness: Brightness,
+    screenshot: Screenshot,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -282,6 +288,7 @@ impl AriaShell {
         let power = Power::new(config.section(None));
         let brightness = Brightness::new(config.section(None));
         let osd = Osd::new(config.section(None));
+        let screenshot = Screenshot::new(&config);
         let shell = Self {
             config,
             general,
@@ -300,6 +307,7 @@ impl AriaShell {
             idle,
             power,
             brightness,
+            screenshot,
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -688,6 +696,11 @@ impl AriaShell {
                     .run(cmd.command(config.step, config.max_volume))
                     .map(Message::Audio)
             }
+            Message::Command(Command::Screenshot(cmd)) => self
+                .screenshot
+                .run(cmd, &self.outputs, &self.compositor)
+                .map(Message::Screenshot),
+            Message::Screenshot(event) => self.screenshot.apply(event).map(Message::Screenshot),
             Message::Command(Command::Brightness(cmd)) => {
                 if self.brightness.run(cmd) {
                     self.brightness_changed()
@@ -753,6 +766,10 @@ impl AriaShell {
                 }
                 DebugCommand::Brightness => {
                     reply.send(self.brightness.describe());
+                    Task::none()
+                }
+                DebugCommand::Screenshot => {
+                    reply.send(self.screenshot.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -1102,6 +1119,7 @@ impl AriaShell {
         self.power.set_config(self.config.section(None));
         self.brightness.set_config(self.config.section(None));
         self.osd.set_config(self.config.section(None));
+        self.screenshot.set_config(&self.config);
         let mut icons = Icons::new(&self.config, self.locale.languages());
         icons.keep_index_of(&self.icons);
         self.icons = icons;
@@ -1783,6 +1801,14 @@ impl AriaShell {
                 }
                 Task::batch([self.open_panels(&output), self.open_wallpaper(&output)])
             }
+            // Moved, rotated, rescaled: where it is now (debug surfaces,
+            // screenshots).
+            ShellEvent::OutputUpdated(output) => {
+                if let Some(known) = self.outputs.get_mut(&OutputId::from(&output)) {
+                    *known = output;
+                }
+                Task::none()
+            }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
                 if self.outputs.remove(&gone).is_some() {
@@ -2124,6 +2150,7 @@ impl AriaShell {
                 self.idle.subscription().map(Message::Idle),
                 self.power.subscription().map(Message::Power),
                 self.brightness.subscription().map(Message::Brightness),
+                self.screenshot.subscription().map(Message::Screenshot),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

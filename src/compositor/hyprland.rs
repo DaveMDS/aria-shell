@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
-use super::{Command, Event, Window, Workspace};
+use super::{Command, Event, Window, WindowGeometry, Workspace};
 
 fn runtime_dir() -> Option<PathBuf> {
     let sig = env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
@@ -85,6 +85,31 @@ struct HyprMonitor {
     active_workspace: HyprWorkspaceRef,
 }
 
+/// A client with its place, for [`shown_windows`].
+#[derive(Deserialize)]
+struct HyprPlaced {
+    address: String,
+    mapped: bool,
+    hidden: bool,
+    at: (i32, i32),
+    size: (i32, i32),
+    floating: bool,
+    workspace: HyprWorkspaceRef,
+    /// 0 for the most recently focused.
+    #[serde(rename = "focusHistoryID")]
+    focus_history: i64,
+}
+
+/// A monitor's workspaces on screen, for [`shown_windows`].
+#[derive(Deserialize)]
+struct HyprShown {
+    #[serde(rename = "activeWorkspace")]
+    active_workspace: HyprWorkspaceRef,
+    /// Id 0 when none is open.
+    #[serde(rename = "specialWorkspace")]
+    special_workspace: Option<HyprWorkspaceRef>,
+}
+
 #[derive(Deserialize)]
 struct HyprActiveWindow {
     #[serde(default)]
@@ -146,6 +171,43 @@ async fn active_window() -> Option<Event> {
     Some(Event::ActiveWindow(
         (!win.address.is_empty()).then(|| window_id(&win.address).to_owned()),
     ))
+}
+
+/// The clients on the workspaces shown (a special one over the
+/// monitor's own), topmost first: the special workspace's, then
+/// floating over tiled, the most recently focused first.
+pub async fn shown_windows() -> Vec<WindowGeometry> {
+    let monitors: Vec<HyprShown> = request_json("j/monitors").await.unwrap_or_default();
+    let clients: Vec<HyprPlaced> = request_json("j/clients").await.unwrap_or_default();
+    let active: HyprActiveWindow = request_json("j/activewindow")
+        .await
+        .unwrap_or(HyprActiveWindow {
+            address: String::new(),
+        });
+    shown(&monitors, clients, &active.address)
+}
+
+fn shown(monitors: &[HyprShown], mut clients: Vec<HyprPlaced>, active: &str) -> Vec<WindowGeometry> {
+    let workspaces: Vec<i64> = monitors
+        .iter()
+        .flat_map(|m| {
+            let special = m.special_workspace.as_ref().map(|w| w.id);
+            [Some(m.active_workspace.id), special.filter(|&id| id != 0)]
+        })
+        .flatten()
+        .collect();
+    clients.retain(|c| c.mapped && !c.hidden && workspaces.contains(&c.workspace.id));
+    clients.sort_by_key(|c| (c.workspace.id >= 0, !c.floating, c.focus_history));
+    clients
+        .into_iter()
+        .map(|c| WindowGeometry {
+            x: c.at.0,
+            y: c.at.1,
+            width: c.size.0,
+            height: c.size.1,
+            active: !active.is_empty() && c.address == active,
+        })
+        .collect()
 }
 
 /// Window ids are the client address without the `0x`, which is how the
@@ -245,5 +307,42 @@ pub async fn run(command: Command) {
             String::from_utf8_lossy(&reply)
         ),
         Err(e) => log::error!("hyprland: {dispatch:?} failed: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shown_windows_are_the_visible_workspaces_topmost_first() {
+        let monitors: Vec<HyprShown> = serde_json::from_value(serde_json::json!([
+            {"activeWorkspace": {"id": 1}, "specialWorkspace": {"id": 0}},
+            {"activeWorkspace": {"id": 2}, "specialWorkspace": {"id": -98}}
+        ]))
+        .unwrap();
+        let client = |address: &str, ws: i64, floating: bool, focus: i64, at: (i32, i32)| {
+            serde_json::json!({
+                "address": address, "mapped": true, "hidden": false,
+                "at": [at.0, at.1], "size": [100, 50], "floating": floating,
+                "workspace": {"id": ws}, "focusHistoryID": focus
+            })
+        };
+        let mut hidden = client("0x6", 1, false, 5, (0, 0));
+        hidden["hidden"] = serde_json::json!(true);
+        let clients: Vec<HyprPlaced> = serde_json::from_value(serde_json::json!([
+            client("0x1", 1, false, 1, (0, 0)),
+            client("0x2", 1, true, 2, (10, 10)),
+            client("0x3", 3, false, 0, (20, 20)),
+            client("0x4", -98, true, 3, (30, 30)),
+            client("0x5", 2, false, 4, (40, 40)),
+            hidden,
+        ]))
+        .unwrap();
+        let got: Vec<(i32, bool)> = shown(&monitors, clients, "0x1")
+            .iter()
+            .map(|w| (w.x, w.active))
+            .collect();
+        assert_eq!(got, [(30, false), (10, false), (0, true), (40, false)]);
     }
 }

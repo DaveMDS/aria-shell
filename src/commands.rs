@@ -45,6 +45,8 @@ pub enum Command {
     Brightness(crate::brightness::Command),
     /// The default output's or input's volume (`aria-shell volume up`).
     Volume(VolumeCommand),
+    /// Take a screenshot (`aria-shell screenshot window`).
+    Screenshot(crate::screenshot::Command),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -70,6 +72,8 @@ pub enum DebugCommand {
     Power,
     /// The screens and their brightness.
     Brightness,
+    /// The capture protocol, the last picture saved.
+    Screenshot,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -161,6 +165,7 @@ enum Parsed {
     Osd(crate::osd::Content),
     Brightness(crate::brightness::Command),
     Volume(VolumeCommand),
+    Screenshot(crate::screenshot::Command),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -207,6 +212,21 @@ fn parse(line: &str) -> Result<Parsed, String> {
         },
         "brightness" => Ok(Parsed::Brightness(parse_brightness(&args)?)),
         "volume" => Ok(Parsed::Volume(parse_volume(&args)?)),
+        "screenshot" => {
+            use crate::screenshot::Command;
+            match args.as_slice() {
+                ["window"] => Ok(Parsed::Screenshot(Command::Window)),
+                ["output"] => Ok(Parsed::Screenshot(Command::Output(None))),
+                ["output", name] => Ok(Parsed::Screenshot(Command::Output(Some(
+                    (*name).to_owned(),
+                )))),
+                ["all"] => Ok(Parsed::Screenshot(Command::All)),
+                _ => Err(format!(
+                    "invalid arguments for <screenshot>: {} (window | output [connector] | all)",
+                    args.join(" ")
+                )),
+            }
+        }
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -218,12 +238,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["idle"] => Ok(Parsed::Debug(DebugCommand::Idle)),
             ["power"] => Ok(Parsed::Debug(DebugCommand::Power)),
             ["brightness"] => Ok(Parsed::Debug(DebugCommand::Brightness)),
+            ["screenshot"] => Ok(Parsed::Debug(DebugCommand::Screenshot)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | screenshot | widgets [filter])",
                 args.join(" ")
             )),
         },
@@ -471,6 +492,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Volume(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Screenshot(cmd)) => {
+                let _ = tx.send(Command::Screenshot(cmd)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Debug(cmd)) => {
                 let (reply_tx, mut reply_rx) = mpsc::channel(1);
                 let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
@@ -712,6 +737,29 @@ mod tests {
         assert_eq!(
             mute.command(5.0, 100.0),
             Command::ToggleDefaultMute(Kind::Input)
+        );
+    }
+
+    #[test]
+    fn parses_screenshot() {
+        use crate::screenshot::Command;
+        assert_eq!(
+            parse("screenshot window"),
+            Ok(Parsed::Screenshot(Command::Window))
+        );
+        assert_eq!(
+            parse("screenshot output"),
+            Ok(Parsed::Screenshot(Command::Output(None)))
+        );
+        assert_eq!(
+            parse("screenshot output DP-1"),
+            Ok(Parsed::Screenshot(Command::Output(Some("DP-1".into()))))
+        );
+        assert_eq!(parse("screenshot all"), Ok(Parsed::Screenshot(Command::All)));
+        assert!(parse("screenshot desk").is_err());
+        assert_eq!(
+            parse("debug screenshot"),
+            Ok(Parsed::Debug(DebugCommand::Screenshot))
         );
     }
 

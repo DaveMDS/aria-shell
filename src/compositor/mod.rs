@@ -36,6 +36,18 @@ pub struct Window {
     pub urgent: bool,
 }
 
+/// A window on screen and where it is, in the global logical space
+/// (its contents, no border or title bar): what a screenshot cuts out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    /// The one with the keyboard.
+    pub active: bool,
+}
+
 /// What a backend reports. Full-list events replace the current list
 /// (keeping the active/urgent flags), the others patch it.
 #[derive(Debug, Clone)]
@@ -106,6 +118,19 @@ impl Compositor {
             Some(Backend::Hyprland) => Task::future(hyprland::run(command)).discard(),
             Some(Backend::Sway) => Task::future(sway::run(command)).discard(),
             None => Task::none(),
+        }
+    }
+
+    /// The windows on screen now, topmost first: asked of the backend
+    /// at the call, the geometry isn't tracked.
+    pub fn shown_windows(&self) -> impl Future<Output = Vec<WindowGeometry>> + Send + 'static {
+        let backend = self.backend;
+        async move {
+            match backend {
+                Some(Backend::Hyprland) => hyprland::shown_windows().await,
+                Some(Backend::Sway) => sway::shown_windows().await,
+                None => Vec::new(),
+            }
         }
     }
 

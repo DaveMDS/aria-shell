@@ -1,0 +1,18 @@
+# Aria Shell as a systemd user service, started with the graphical
+# session: `systemctl --user enable aria-shell.service`. Needs a session
+# that reaches graphical-session.target with WAYLAND_DISPLAY in systemd's
+# environment (UWSM does both; elsewhere see the compositor examples).
+[Unit]
+Description=Aria Shell
+Documentation=https://github.com/davemds/aria-shell
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=@bindir@/aria-shell
+Slice=session.slice
+
+[Install]
+WantedBy=graphical-session.target

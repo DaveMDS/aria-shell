@@ -21,6 +21,7 @@ for the rare question about how it behaved.
 ```bash
 cargo build
 cargo run
+make install PREFIX=$HOME/.local   # installed, as a user would have it (see README)
 ```
 
 Requires a Wayland compositor implementing `wlr-layer-shell-v1` (Hyprland,

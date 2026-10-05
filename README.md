@@ -57,6 +57,7 @@ bar per monitor (or per `[panel:*]` section):
 - ✅ Config hot-reload (`aria.conf`) and theme hot-reload
 - ✅ Autostart: programs run once when the shell starts (`[autostart]`)
 - ✅ One shell per display: a second `aria-shell` refuses to start
+- ✅ `make install`, a systemd user service, the programs it starts in systemd scopes of their own
 - 🔲 `[panel]` `size`, `align`, `margin`, `opacity`
 
 Full configuration via the `aria.conf` file.
@@ -276,24 +277,52 @@ sudo pacman -S ydotool            # driving the shell on the live desktop
 
 > Packaging for distributions is a work in progress... help needed!
 
-To run AriaShell just clone the repo and build it:
+Build it and install it (dependencies above):
 
 ```bash
-# install dependencies (see above), then:
 git clone https://github.com/davemds/aria-shell.git
 cd aria-shell
-cargo build --release
-./target/release/aria-shell
+make                              # cargo build --release
+sudo make install                 # in /usr/local
+# or, for your user only and without root:
+make install PREFIX=$HOME/.local
 ```
 
-Start it once per session (e.g. `exec-once = aria-shell` on Hyprland,
-`exec aria-shell` on Sway): one shell runs per display, and a second
-`aria-shell` started without arguments says so and leaves.
+That installs the binary, the themes, a systemd user unit, the PAM
+service (`/etc/pam.d/aria-shell`, only when installing as root: the
+`login` service is used otherwise) and, in `share/doc/aria-shell/`, the
+sample `aria.conf` and the compositor examples. `make uninstall` with
+the same `PREFIX` removes them. Packagers: `make DESTDIR=... PREFIX=/usr install`.
 
-Run from a checkout the shell finds its sample config and themes in
-`assets/`. For the lock screen's PAM service you may install
-`assets/pam.d/aria-shell` as `/etc/pam.d/aria-shell` (the default `login`
-service is used otherwise).
+Run from a checkout (`cargo run`) the shell finds its sample config and
+themes in `assets/`.
+
+### Starting it
+
+Once per session, one of:
+
+- **As a systemd user service**, with a session that starts
+  `graphical-session.target` (UWSM, sway-systemd, ...):
+  `systemctl --user enable aria-shell.service`. The journal has its log
+  (`journalctl --user -u aria-shell`).
+- **From the compositor**: `exec-once = aria-shell` on Hyprland,
+  `exec aria-shell` on Sway.
+
+One shell runs per display: a second `aria-shell` started without
+arguments says so and leaves. Every program the shell starts (apps from
+the launcher, `[autostart]`, gadget commands) gets a systemd scope of
+its own when there's a systemd user manager, so restarting the shell
+doesn't take them down with it.
+
+### Key bindings
+
+Keys are the compositor's: bind them to the shell's commands
+(`aria-shell launcher toggle`, `aria-shell exiter toggle`,
+`aria-shell lock`, ...). Ready-made examples, with the start of the
+shell, volume and brightness keys, are in
+[`assets/compositors/`](assets/compositors/): `hyprland.lua`
+(Hyprland 0.56 and later), `hyprland.conf` (earlier Hyprland),
+`sway.conf`.
 
 
 ---

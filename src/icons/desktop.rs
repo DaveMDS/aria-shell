@@ -338,7 +338,7 @@ pub fn launch(
     if let Some(dir) = &entry.working_dir {
         cmd.current_dir(dir);
     }
-    process::spawn_detached(cmd)?;
+    process::spawn_detached(cmd, &entry.id)?;
     match action {
         Some(action) => log::info!("launched {:?} action {:?}: {argv:?}", entry.id, action.id),
         None => log::info!("launched {:?}: {argv:?}", entry.id),

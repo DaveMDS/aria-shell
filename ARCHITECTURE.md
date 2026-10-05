@@ -275,7 +275,11 @@ time       (time.rs)        `aligned_ticks(step)` (a wall-clock-aligned tick str
 
 process    (process.rs)     split_words (shell-like quoting, no shell), command(line), spawn_detached, run(line):
                             the config's command lines and the launcher's desktop entries; `aria-shell` as
-                            the program is this very binary
+                            the program is this very binary. Each child is moved (systemd's
+                            `StartTransientUnit` with its pid, on the session bus, best effort) into
+                            `app-aria\x2dshell-<app>-<pid>.scope` in `app.slice`: out of our cgroup, so a
+                            `systemctl --user restart aria-shell` (the unit kills its whole cgroup) spares
+                            them. Moved after the spawn: a fork made before the move stays with us
 
 Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once for one Scheme
   load / try_load(&Config, style, scheme)   css.rs (scanner) -> selector.rs + value.rs (typed rules)

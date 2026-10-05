@@ -7,6 +7,7 @@
 //! the view context and filters it for the output the panel is on.
 
 use iced::Element;
+use iced::widget::text;
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::compositor::{Command, Window, Workspace};
@@ -147,7 +148,8 @@ impl Workspaces {
     }
 
     /// The active window's icon (at the `icon` node's `height`) and
-    /// title, as `title[class="<app id>"]`.
+    /// title, as `title[class="<app id>"]`: one line, cut where the
+    /// slot ends.
     fn title_view<'a>(&'a self, win: &'a Window, ctx: &Context<'a>) -> Element<'a, Message> {
         let theme = ctx.theme;
         let node = ctx.node.child("title").attr("class", win.class.clone());
@@ -161,12 +163,18 @@ impl Workspaces {
         if let (Some(icon), Some(size)) = (ctx.icons.get(&win.class), size) {
             parts.push(icon.view(size, style.color));
         }
-        parts.push(theme.text(&node.child("text"), &win.title).into());
+        parts.push(
+            theme
+                .text(&node.child("text"), &win.title)
+                .wrapping(text::Wrapping::None)
+                .into(),
+        );
         theme
             .container(
                 &node,
                 theme.row(&node, parts).align_y(iced::Alignment::Center),
             )
+            .clip(true)
             .into()
     }
 

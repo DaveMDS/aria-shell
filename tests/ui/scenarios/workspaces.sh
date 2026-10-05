@@ -38,6 +38,18 @@ set -- $(widget "$p1 gadget.workspaces > title > text")
 old_w=$3
 assert_eq "$(count_widgets "$p1 gadget.workspaces > title[class=\"aria-one\"]")" 1 "still the title"
 
+# A title longer than the room left: one line all the same, cut where
+# the start slot (a third of the bar) ends.
+set -- $(widget "$p1 gadget.workspaces > title")
+short_h=$4
+retitle_window aria-one "$(printf 'A very long window title %.0s' 1 2 3 4 5 6 7 8)"
+settle 0.5
+set -- $(widget "$p1 gadget.workspaces > title")
+assert_eq "$4" "$short_h" "a long title on one line"
+[ "$(($1 + $3))" -le 640 ] || { echo "the long title past the start slot: $*"; exit 1; }
+shot_gadget bar-long-title
+retitle_window aria-one "Window one, renamed"
+
 # A second window: two in the workspace, the new one active.
 open_window aria-two
 wait_for "$p1 workspace[name=\"1\"] > window" 2 "two windows in workspace 1"

@@ -162,8 +162,6 @@ it never changes anything (`[osd]`, the theme's `osd`).
 - ✅ A screen's brightness, on that screen (`aria-shell brightness`, the gadget, the laptop's keys)
 - ✅ `aria-shell osd show [--icon <name>] [--value <percent>] [text]` from a script
 - ✅ Position (top, center, bottom) and duration from the config, size and look from the theme
-- 🔲 Caps Lock / Num Lock
-- 🔲 The new output device's name, animations
 
 
 ---

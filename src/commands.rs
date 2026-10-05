@@ -212,21 +212,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
         },
         "brightness" => Ok(Parsed::Brightness(parse_brightness(&args)?)),
         "volume" => Ok(Parsed::Volume(parse_volume(&args)?)),
-        "screenshot" => {
-            use crate::screenshot::Command;
-            match args.as_slice() {
-                ["window"] => Ok(Parsed::Screenshot(Command::Window)),
-                ["output"] => Ok(Parsed::Screenshot(Command::Output(None))),
-                ["output", name] => Ok(Parsed::Screenshot(Command::Output(Some(
-                    (*name).to_owned(),
-                )))),
-                ["all"] => Ok(Parsed::Screenshot(Command::All)),
-                _ => Err(format!(
-                    "invalid arguments for <screenshot>: {} (window | output [connector] | all)",
-                    args.join(" ")
-                )),
-            }
-        }
+        "screenshot" => Ok(Parsed::Screenshot(parse_screenshot(&args)?)),
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -374,6 +360,43 @@ fn parse_volume(args: &[&str]) -> Result<VolumeCommand, String> {
             args.join(" ")
         )),
     }
+}
+
+/// `screenshot window | output [connector] | all`, then `--edit` to
+/// open the file in the editor or `--clipboard` to copy it instead of
+/// a file, anywhere.
+fn parse_screenshot(args: &[&str]) -> Result<crate::screenshot::Command, String> {
+    use crate::screenshot::{Command, Destination, Target};
+    let edit = args.contains(&"--edit");
+    let clipboard = args.contains(&"--clipboard");
+    let destination = match (edit, clipboard) {
+        (true, true) => {
+            return Err("screenshot: --edit opens the file, --clipboard makes none".to_owned());
+        }
+        (_, true) => Destination::Clipboard,
+        (edit, false) => Destination::File { edit },
+    };
+    let rest: Vec<&str> = args
+        .iter()
+        .copied()
+        .filter(|a| !matches!(*a, "--edit" | "--clipboard"))
+        .collect();
+    let target = match rest.as_slice() {
+        ["window"] => Target::Window,
+        ["output"] => Target::Output(None),
+        ["output", name] => Target::Output(Some((*name).to_owned())),
+        ["all"] => Target::All,
+        _ => {
+            return Err(format!(
+                "invalid arguments for <screenshot>: {} (window | output [connector] | all) [--edit | --clipboard]",
+                args.join(" ")
+            ));
+        }
+    };
+    Ok(Command {
+        target,
+        destination,
+    })
 }
 
 /// `$XDG_RUNTIME_DIR/aria-shell/<WAYLAND_DISPLAY>.sock`, so the shell
@@ -742,21 +765,30 @@ mod tests {
 
     #[test]
     fn parses_screenshot() {
-        use crate::screenshot::Command;
+        use crate::screenshot::{Command, Destination, Target};
+        let shot = |target, destination| {
+            Ok(Parsed::Screenshot(Command {
+                target,
+                destination,
+            }))
+        };
+        let file = Destination::File { edit: false };
+        assert_eq!(parse("screenshot window"), shot(Target::Window, file));
+        assert_eq!(parse("screenshot output"), shot(Target::Output(None), file));
         assert_eq!(
-            parse("screenshot window"),
-            Ok(Parsed::Screenshot(Command::Window))
+            parse("screenshot output DP-1 --edit"),
+            shot(
+                Target::Output(Some("DP-1".into())),
+                Destination::File { edit: true }
+            )
         );
         assert_eq!(
-            parse("screenshot output"),
-            Ok(Parsed::Screenshot(Command::Output(None)))
+            parse("screenshot --clipboard all"),
+            shot(Target::All, Destination::Clipboard)
         );
-        assert_eq!(
-            parse("screenshot output DP-1"),
-            Ok(Parsed::Screenshot(Command::Output(Some("DP-1".into()))))
-        );
-        assert_eq!(parse("screenshot all"), Ok(Parsed::Screenshot(Command::All)));
+        assert!(parse("screenshot window --edit --clipboard").is_err());
         assert!(parse("screenshot desk").is_err());
+        assert!(parse("screenshot").is_err());
         assert_eq!(
             parse("debug screenshot"),
             Ok(Parsed::Debug(DebugCommand::Screenshot))

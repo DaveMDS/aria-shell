@@ -4,6 +4,10 @@
 //! copied into a shm buffer we read back. The outputs of a request are
 //! captured together and answered together.
 //!
+//! The clipboard is `ext-data-control-v1` on the same connection: a
+//! picture copied is offered as `image/png` until another selection
+//! replaces it, its bytes kept here till then.
+//!
 //! The connection lives in the subscription's future, as idle's does
 //! (see `idle/wayland.rs`): its fd polled by tokio next to the daemon's
 //! [`Request`]s, which come through the [`Handle`] sent with
@@ -11,7 +15,7 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io;
+use std::io::{self, Write};
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::FileExt;
 use std::sync::Arc;
@@ -24,9 +28,18 @@ use wayland_client::backend::WaylandError;
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_output::{Transform, WlOutput};
 use wayland_client::protocol::wl_registry::{self, WlRegistry};
+use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::protocol::wl_shm::{self, WlShm};
 use wayland_client::protocol::wl_shm_pool::WlShmPool;
-use wayland_client::{Connection, Dispatch, QueueHandle, WEnum, delegate_noop};
+use wayland_client::{Connection, Dispatch, QueueHandle, WEnum, delegate_noop, event_created_child};
+use wayland_protocols::ext::data_control::v1::client::ext_data_control_device_v1::{
+    self, ExtDataControlDeviceV1,
+};
+use wayland_protocols::ext::data_control::v1::client::ext_data_control_manager_v1::ExtDataControlManagerV1;
+use wayland_protocols::ext::data_control::v1::client::ext_data_control_offer_v1::ExtDataControlOfferV1;
+use wayland_protocols::ext::data_control::v1::client::ext_data_control_source_v1::{
+    self, ExtDataControlSourceV1,
+};
 use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
 use wayland_protocols::ext::image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1;
 use wayland_protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::{
@@ -47,12 +60,20 @@ pub enum Request {
     /// A frame of each output (global names), answered with
     /// [`Event::Captured`] under `job`.
     Capture { job: u64, outputs: Vec<u32> },
+    /// Put a PNG on the clipboard.
+    Copy(Arc<Vec<u8>>),
+}
+
+/// What the compositor lets us do.
+#[derive(Debug, Clone, Copy)]
+pub struct Support {
+    pub capture: bool,
+    pub clipboard: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    /// The connection is up; whether the compositor can capture.
-    Connected(Handle, bool),
+    Connected(Handle, Support),
     Captured(u64, Result<Frames, String>),
 }
 
@@ -90,6 +111,11 @@ struct State {
     shm: Option<WlShm>,
     sources: Option<ExtOutputImageCaptureSourceManagerV1>,
     copier: Option<ExtImageCopyCaptureManagerV1>,
+    seat: Option<WlSeat>,
+    clipboard: Option<ExtDataControlManagerV1>,
+    device: Option<ExtDataControlDeviceV1>,
+    /// What we have on the clipboard, while it's ours.
+    copied: Option<(ExtDataControlSourceV1, Arc<Vec<u8>>)>,
     /// Every output, by its global name.
     outputs: Vec<(u32, WlOutput)>,
     /// One per output being captured, by a key of ours.
@@ -136,15 +162,24 @@ async fn serve(out: &mut mpsc::Sender<Event>) -> Result<(), Box<dyn std::error::
     conn.display().get_registry(&qh, ());
     let mut state = State::default();
     queue.roundtrip(&mut state)?;
-    let capable = state.shm.is_some() && state.sources.is_some() && state.copier.is_some();
-    if !capable {
+    let capture = state.shm.is_some() && state.sources.is_some() && state.copier.is_some();
+    if !capture {
         log::warn!(
             "screenshot: the compositor has no ext-image-copy-capture-v1 for outputs, no screenshots"
         );
     }
+    if let (Some(manager), Some(seat)) = (&state.clipboard, &state.seat) {
+        state.device = Some(manager.get_data_device(seat, &qh, ()));
+    } else {
+        log::warn!("screenshot: the compositor has no ext-data-control-v1, nothing copied");
+    }
+    let support = Support {
+        capture,
+        clipboard: state.device.is_some(),
+    };
 
     let (tx, mut requests) = mpsc::unbounded();
-    out.send(Event::Connected(Handle(tx), capable)).await?;
+    out.send(Event::Connected(Handle(tx), support)).await?;
     let fd = AsyncFd::new(conn.backend().poll_fd().as_raw_fd())?;
     loop {
         queue.dispatch_pending(&mut state)?;
@@ -235,6 +270,17 @@ impl State {
                     self.events.push(Event::Captured(job, Err(error)));
                 } else {
                     self.jobs.insert(job, entry);
+                }
+            }
+            Request::Copy(png) => {
+                let (Some(manager), Some(device)) = (&self.clipboard, &self.device) else {
+                    return;
+                };
+                let source = manager.create_data_source(qh, ());
+                source.offer(PNG.to_owned());
+                device.set_selection(Some(&source));
+                if let Some((old, _)) = self.copied.replace((source, png)) {
+                    old.destroy();
                 }
             }
         }
@@ -350,6 +396,8 @@ fn memfd(len: usize) -> io::Result<File> {
     Ok(file)
 }
 
+const PNG: &str = "image/png";
+
 fn from_shm(format: wl_shm::Format) -> Option<Format> {
     match format {
         wl_shm::Format::Xrgb8888 => Some(Format::Xrgb),
@@ -383,6 +431,12 @@ impl Dispatch<WlRegistry, ()> for State {
                 name, interface, ..
             } => match interface.as_str() {
                 "wl_shm" => state.shm = Some(registry.bind(name, 1, qh, ())),
+                "wl_seat" if state.seat.is_none() => {
+                    state.seat = Some(registry.bind(name, 1, qh, ()));
+                }
+                "ext_data_control_manager_v1" => {
+                    state.clipboard = Some(registry.bind(name, 1, qh, ()));
+                }
                 "ext_output_image_capture_source_manager_v1" => {
                     state.sources = Some(registry.bind(name, 1, qh, ()));
                 }
@@ -465,7 +519,76 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, u64> for State {
     }
 }
 
+impl Dispatch<ExtDataControlSourceV1, ()> for State {
+    fn event(
+        state: &mut Self,
+        source: &ExtDataControlSourceV1,
+        event: ext_data_control_source_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let current = match &state.copied {
+            Some((s, png)) if s == source => Some(png.clone()),
+            _ => None,
+        };
+        match event {
+            ext_data_control_source_v1::Event::Send { mime_type, fd } => {
+                if let (Some(png), PNG) = (current, mime_type.as_str()) {
+                    // A pipe: the reader takes its time, and a big
+                    // picture doesn't fit in its buffer.
+                    std::thread::spawn(move || {
+                        if let Err(e) = File::from(fd).write_all(&png) {
+                            log::warn!("screenshot: pasting: {e}");
+                        }
+                    });
+                }
+            }
+            ext_data_control_source_v1::Event::Cancelled => {
+                source.destroy();
+                if current.is_some() {
+                    state.copied = None;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Other clients' selections: not ours to read, their offers go at once.
+impl Dispatch<ExtDataControlDeviceV1, ()> for State {
+    fn event(
+        state: &mut Self,
+        _: &ExtDataControlDeviceV1,
+        event: ext_data_control_device_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        use ext_data_control_device_v1::Event as E;
+        match event {
+            E::Selection { id: Some(offer) } | E::PrimarySelection { id: Some(offer) } => {
+                offer.destroy();
+            }
+            E::Finished => {
+                log::warn!("screenshot: the clipboard device is gone, nothing copied");
+                if let Some(device) = state.device.take() {
+                    device.destroy();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    event_created_child!(State, ExtDataControlDeviceV1, [
+        ext_data_control_device_v1::EVT_DATA_OFFER_OPCODE => (ExtDataControlOfferV1, ()),
+    ]);
+}
+
 delegate_noop!(State: ignore WlShm);
+delegate_noop!(State: ignore WlSeat);
+delegate_noop!(State: ExtDataControlManagerV1);
+delegate_noop!(State: ignore ExtDataControlOfferV1);
 delegate_noop!(State: WlShmPool);
 delegate_noop!(State: ignore WlBuffer);
 delegate_noop!(State: ignore WlOutput);

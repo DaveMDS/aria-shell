@@ -316,6 +316,10 @@ impl Power {
         }
     }
 
+    pub fn config(&self) -> &PowerConfig {
+        &self.config
+    }
+
     pub fn on_battery(&self) -> bool {
         self.upower.as_ref().is_some_and(|u| u.on_battery)
     }

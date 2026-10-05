@@ -648,7 +648,7 @@ impl AriaShell {
             Message::Command(Command::Lock) => self.lock(),
             Message::Command(Command::Idle(cmd)) => {
                 self.idle.run(cmd);
-                Task::none()
+                self.observe_osd()
             }
             Message::Power(event) => {
                 let (changed, low, follow_up) = self.power.apply(event);
@@ -658,6 +658,7 @@ impl AriaShell {
                     tasks.push(self.notify_low(low));
                 }
                 if changed {
+                    tasks.push(self.observe_osd());
                     self.resolve_icons();
                     tasks.push(self.sync_popups());
                     tasks.push(self.redraw_shared());
@@ -1142,7 +1143,7 @@ impl AriaShell {
             Action::Network(cmd) => self.network.run(cmd).map(Message::Network),
             Action::Idle(cmd) => {
                 self.idle.run(cmd);
-                Task::none()
+                self.observe_osd()
             }
             Action::Power(cmd) => self.power.run(cmd).map(Message::Power),
             Action::Theme(cmd) => {
@@ -1364,7 +1365,13 @@ impl AriaShell {
     /// Read what the OSD watches after a change of the shared state, and
     /// show what changed.
     fn observe_osd(&mut self) -> Task<Message> {
-        match self.osd.observe(&self.audio, &self.network, &self.locale) {
+        match self.osd.observe(
+            &self.audio,
+            &self.network,
+            &self.power,
+            &self.idle,
+            &self.locale,
+        ) {
             Some(content) => self.show_osd(content),
             None => Task::none(),
         }

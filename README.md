@@ -149,18 +149,18 @@ A full-featured desktop notification server, replacing tools like `mako`.
 
 ### 🔆 Aria OSD
 A short-lived bar on every screen when something changes, whatever changed it
-(a keybind running `wpctl`, the Audio gadget, another app). It only shows,
+(a keybind running `wpctl`, a gadget, another app). It only shows,
 it never changes anything (`[osd]`, the theme's `osd`).
 
 - ✅ Volume and mute of the default output, the device changing (headphones plugged in)
 - ✅ Microphone level and mute (the default input)
 - ✅ The microphone in use by an app, and free again
-- ✅ Network connected / disconnected
+- ✅ Wi‑Fi on / off, network connected / disconnected, a VPN up / down
+- ✅ Charger plugged in / out (with the charge), power profile, keep awake on / off
 - ✅ `aria-shell osd show [--icon <name>] [--value <percent>] [text]` from a script
   (e.g. brightness from a `brightnessctl` keybind)
 - ✅ Position (top, center, bottom) and duration from the config, size and look from the theme
 - 🔲 Brightness as a source of its own, Caps Lock / Num Lock
-- 🔲 VPN up / down, power profile, AC plugged / unplugged
 - 🔲 The new output device's name, animations
 
 

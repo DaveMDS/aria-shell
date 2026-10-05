@@ -135,4 +135,13 @@ pub const CATALOGUE: Catalogue = &[
     ("osd.network.disconnected", "Disconnesso"),
     ("osd.recording.started", "Microfono in uso"),
     ("osd.recording.stopped", "Microfono non più in uso"),
+    ("osd.wifi.on", "Wi‑Fi acceso"),
+    ("osd.wifi.off", "Wi‑Fi spento"),
+    ("osd.vpn.connected", "VPN connessa: {name}"),
+    ("osd.vpn.disconnected", "VPN disconnessa"),
+    ("osd.charger.plugged", "Alimentatore collegato, {n}%"),
+    ("osd.charger.unplugged", "A batteria, {n}%"),
+    ("osd.profile", "Profilo energetico: {name}"),
+    ("osd.idle.on", "Tieni sveglio: attivo"),
+    ("osd.idle.off", "Tieni sveglio: disattivato"),
 ];

@@ -337,6 +337,16 @@ nm_event() {
     fi
 }
 
+# The next thing the shell asked NetworkManager, the periodic scans
+# (every 10 s while the popup is open) left out.
+nm_action() {
+    while line=$(nm_event); do
+        [ "$line" = scan ] || { echo "$line"; return 0; }
+    done
+    echo "$line"
+    return 1
+}
+
 # Nothing reported for a moment.
 nm_quiet() {
     if read -r -t 1 line <&4; then

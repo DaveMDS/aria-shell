@@ -332,15 +332,15 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             container (the theme's background shows around a `contain`ed image)
 
 Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
-                            margin); `observe(&Audio, &Network)` after every change of those reads a `Watched`
-                            (the default output's and input's device/percent/mute, whether some app records,
-                            the network connected + label; each `None` until known, so the first reading
-                            after start or a source coming back shows nothing; "connecting" keeps the last
-                            reading) and
-                            `change(old, new)` (pure, unit-tested) says what to show: the volume, else the
-                            microphone, else the microphone coming into use by some app or free again,
-                            else the network. Whoever made the change (a keybind, the gadget,
-                            another app) is not its business. `show(Content)` from there or from
+                            margin); `observe(&Audio, &Network, &Power, &Idle)` after every change of those
+                            (and of the user's hold on idle) reads a `Watched` (the default output's and
+                            input's device/percent/mute, whether some app records, Wi‑Fi enabled, the network
+                            connected + label, the VPN up, the charger plugged with a battery, the power
+                            profile, keep awake; each `None` until known, so the first reading after start or
+                            a source coming back shows nothing; "connecting" keeps the last reading) and
+                            `change(old, new)` (pure, unit-tested) says what to show, the first that changed
+                            in `Watch`'s order (Wi‑Fi turned off before the disconnection it brings). Whoever
+                            made the change (a keybind, a gadget, another app) is not its business. `show(Content)` from there or from
                             `Command::Osd` (`aria-shell osd show`); the daemon opens one `Layer::Overlay`
                             surface per output (`events_transparent`, sized by the theme's `osd`, anchored by
                             `position`), redraws the open ones, and a timer per show sends `OsdExpired(serial)`:

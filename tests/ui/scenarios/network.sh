@@ -6,16 +6,6 @@
 bar='panel[output="HEADLESS-1"] gadget.network > button'
 list='popup gadget.network'
 
-# The next thing the shell asked NetworkManager, the periodic scans
-# (every 10 s while the popup is open) left out.
-nm_action() {
-    while line=$(nm_event); do
-        [ "$line" = scan ] || { echo "$line"; return 0; }
-    done
-    echo "$line"
-    return 1
-}
-
 # Nothing but scans for a moment.
 nm_idle() {
     if read -r -t 1 line <&4 && [ "$line" != scan ]; then

@@ -1,9 +1,10 @@
 //! The OSD: a short-lived bar on every output when something it
 //! watches changes (the default output's volume, the microphone's,
-//! their mute, an app starting to record, the network going up or down), whatever changed it: a
-//! keybind running `wpctl`, the Audio gadget, another app. It only
-//! shows, it never changes anything; `aria-shell osd show` shows one
-//! from a script.
+//! their mute, the microphone in use, Wi‑Fi on or off, the network and
+//! a VPN going up or down, the charger, the power profile, the hold on
+//! idle), whatever changed it: a keybind running `wpctl`, a gadget,
+//! another app. It only shows, it never changes anything; `aria-shell
+//! osd show` shows one from a script.
 //!
 //! The daemon owns one [`Osd`]: after every change of the shared
 //! state it calls [`Osd::observe`], which compares what it watches
@@ -14,7 +15,7 @@
 //! the bar up and updates it in place).
 //!
 //! ```text
-//! osd.<volume|microphone|recording|network|custom>[.muted][output="<connector>"]
+//! osd.<volume|microphone|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
 //! ├─ icon
 //! ├─ meter > fill         the level, with a value
 //! ├─ value                the percent, with a value
@@ -33,8 +34,10 @@ use crate::audio::{Audio, Kind as Channel};
 use crate::config::{RawSection, Section};
 use crate::gadgets;
 use crate::icons::Icons;
+use crate::idle::Idle;
 use crate::locale::Locale;
 use crate::network::{DeviceKind, Network, Summary};
+use crate::power::Power;
 use crate::theme::{self, Node, Theme};
 use crate::widgets::graph;
 
@@ -45,6 +48,23 @@ const DEFAULT_ICON: f32 = 24.0;
 /// An app started listening to a microphone; none listens any more.
 const ICON_RECORDING: &str = "audio-input-microphone-symbolic";
 const ICON_NOT_RECORDING: &str = "microphone-disabled-symbolic";
+const ICON_WIFI_ON: &str = "network-wireless-symbolic";
+const ICON_WIFI_OFF: &str = "network-wireless-disabled-symbolic";
+const ICON_VPN_UP: &str = "network-vpn-symbolic";
+const ICON_VPN_DOWN: &str = "network-vpn-disconnected-symbolic";
+
+/// Every watch, in the order the default `show` lists them.
+const ALL_WATCHES: &[&str] = &[
+    "volume",
+    "microphone",
+    "recording",
+    "wifi",
+    "network",
+    "vpn",
+    "charger",
+    "profile",
+    "idle",
+];
 
 /// `[osd]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,15 +84,13 @@ impl Section for OsdConfig {
 
     fn from_raw(raw: &RawSection) -> Self {
         let show = raw
-            .list_or("show", &["volume", "microphone", "recording", "network"])
+            .list_or("show", ALL_WATCHES)
             .iter()
             .filter(|name| *name != "none")
             .filter_map(|name| {
                 let watch = Watch::parse(name);
                 if watch.is_none() {
-                    log::warn!(
-                        "[osd] show: unknown {name:?} (volume | microphone | recording | network)"
-                    );
+                    log::warn!("[osd] show: unknown {name:?} ({})", ALL_WATCHES.join(" | "));
                 }
                 watch
             })
@@ -102,8 +120,18 @@ pub enum Watch {
     Microphone,
     /// The microphone in use by some app, or free again.
     Recording,
+    /// Wi‑Fi on / off.
+    Wifi,
     /// Connected / disconnected.
     Network,
+    /// A VPN up / down.
+    Vpn,
+    /// The charger plugged in / out (with a battery).
+    Charger,
+    /// Another power profile.
+    Profile,
+    /// Idle held by the user / let go.
+    Idle,
 }
 
 impl Watch {
@@ -112,7 +140,12 @@ impl Watch {
             "volume" => Self::Volume,
             "microphone" => Self::Microphone,
             "recording" => Self::Recording,
+            "wifi" => Self::Wifi,
             "network" => Self::Network,
+            "vpn" => Self::Vpn,
+            "charger" => Self::Charger,
+            "profile" => Self::Profile,
+            "idle" => Self::Idle,
             _ => return None,
         })
     }
@@ -143,7 +176,12 @@ pub enum Kind {
     Volume,
     Microphone,
     Recording,
+    Wifi,
     Network,
+    Vpn,
+    Charger,
+    Profile,
+    Idle,
     /// From `aria-shell osd show`.
     Custom,
 }
@@ -154,7 +192,12 @@ impl Kind {
             Self::Volume => "volume",
             Self::Microphone => "microphone",
             Self::Recording => "recording",
+            Self::Wifi => "wifi",
             Self::Network => "network",
+            Self::Vpn => "vpn",
+            Self::Charger => "charger",
+            Self::Profile => "profile",
+            Self::Idle => "idle",
             Self::Custom => "custom",
         }
     }
@@ -223,6 +266,25 @@ struct Link {
     icon: &'static str,
 }
 
+/// The charger as last read: only a change of `plugged` shows, the
+/// rest is what it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Charger {
+    plugged: bool,
+    /// The battery's charge.
+    percent: u32,
+    /// UPower's battery icon.
+    icon: String,
+}
+
+/// The user's hold on idle as last read; the icon is the Power
+/// gadget's eye for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Hold {
+    held: bool,
+    icon: String,
+}
+
 /// What the OSD watches, as last read; `None` until known (at start,
 /// and again while a source is away), so the first reading shows
 /// nothing.
@@ -232,18 +294,52 @@ pub struct Watched {
     input: Option<Level>,
     /// Some app listens to a microphone.
     recording: Option<bool>,
+    /// Wi‑Fi enabled (with a Wi‑Fi device).
+    wifi: Option<bool>,
     network: Option<Link>,
+    /// The VPN up, by name.
+    vpn: Option<Option<String>>,
+    charger: Option<Charger>,
+    /// The active power profile.
+    profile: Option<String>,
+    idle: Option<Hold>,
 }
 
 impl Watched {
     /// Read the shared state. The network passing through "connecting"
     /// keeps the last reading: switching networks shows the new one,
     /// not a disconnection first.
-    fn read(audio: &Audio, network: &Network, previous: &Watched) -> Self {
+    fn read(
+        audio: &Audio,
+        network: &Network,
+        power: &Power,
+        idle: &Idle,
+        previous: &Watched,
+    ) -> Self {
         let output = Level::read(audio, Channel::Output);
         let input = Level::read(audio, Channel::Input);
         let recording = audio.recordings().map(|mut apps| apps.next().is_some());
-        let network = if !network.running() || network.devices().is_empty() {
+        let nm = network.running() && !network.devices().is_empty();
+        let wifi = (nm && network.devices_of(DeviceKind::Wifi).next().is_some())
+            .then(|| network.wireless_enabled());
+        let vpn = nm.then(|| network.active_vpn().map(str::to_owned));
+        let charger = power.battery().map(|b| Charger {
+            plugged: !power.on_battery(),
+            percent: b.percentage.round() as u32,
+            icon: gadgets::power::battery_icon(b).to_owned(),
+        });
+        let profile = power.profiles().map(|p| p.active.clone());
+        let held = idle.inhibited();
+        let config = power.config();
+        let idle = Some(Hold {
+            held,
+            icon: if held {
+                config.inhibit_icon.clone()
+            } else {
+                config.idle_icon.clone()
+            },
+        });
+        let network = if !nm {
             None
         } else {
             let s = network.summary();
@@ -277,15 +373,20 @@ impl Watched {
             output,
             input,
             recording,
+            wifi,
             network,
+            vpn,
+            charger,
+            profile,
+            idle,
         }
     }
 }
 
 /// What changed from `old` to `new` among what `show` watches, as
-/// something to show: the volume first, then the microphone, then the
-/// network when several changed at once. A value becoming known isn't
-/// a change.
+/// something to show; when several changed at once, the first in the
+/// order of [`Watch`] (Wi‑Fi turned off before the disconnection it
+/// brings). A value becoming known isn't a change.
 pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> Option<Content> {
     if show.contains(&Watch::Volume)
         && let Some(content) = Level::change(&old.output, &new.output, Kind::Volume)
@@ -314,6 +415,17 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
             muted: false,
         });
     }
+    if show.contains(&Watch::Wifi)
+        && let (Some(was), Some(now)) = (old.wifi, new.wifi)
+        && was != now
+    {
+        let (icon, key) = if now {
+            (ICON_WIFI_ON, "osd.wifi.on")
+        } else {
+            (ICON_WIFI_OFF, "osd.wifi.off")
+        };
+        return Some(notice(Kind::Wifi, icon, locale.tr(key)));
+    }
     if show.contains(&Watch::Network)
         && let (Some(o), Some(n)) = (&old.network, &new.network)
         && (o.connected != n.connected || o.label != n.label)
@@ -331,7 +443,65 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
             muted: false,
         });
     }
+    if show.contains(&Watch::Vpn)
+        && let (Some(was), Some(now)) = (&old.vpn, &new.vpn)
+        && was != now
+    {
+        return Some(match now {
+            Some(name) => notice(
+                Kind::Vpn,
+                ICON_VPN_UP,
+                &locale.fmt("osd.vpn.connected", &[("name", name)]),
+            ),
+            None => notice(Kind::Vpn, ICON_VPN_DOWN, locale.tr("osd.vpn.disconnected")),
+        });
+    }
+    if show.contains(&Watch::Charger)
+        && let (Some(o), Some(n)) = (&old.charger, &new.charger)
+        && o.plugged != n.plugged
+    {
+        let key = if n.plugged {
+            "osd.charger.plugged"
+        } else {
+            "osd.charger.unplugged"
+        };
+        let text = locale.fmt(key, &[("n", &n.percent)]);
+        return Some(notice(Kind::Charger, &n.icon, &text));
+    }
+    if show.contains(&Watch::Profile)
+        && let (Some(was), Some(now)) = (&old.profile, &new.profile)
+        && was != now
+    {
+        let name = gadgets::power::profile_label(locale, now);
+        return Some(notice(
+            Kind::Profile,
+            &gadgets::power::profile_icon(now),
+            &locale.fmt("osd.profile", &[("name", &name)]),
+        ));
+    }
+    if show.contains(&Watch::Idle)
+        && let (Some(o), Some(n)) = (&old.idle, &new.idle)
+        && o.held != n.held
+    {
+        let key = if n.held {
+            "osd.idle.on"
+        } else {
+            "osd.idle.off"
+        };
+        return Some(notice(Kind::Idle, &n.icon, locale.tr(key)));
+    }
     None
+}
+
+/// An icon and a text.
+fn notice(kind: Kind, icon: &str, text: &str) -> Content {
+    Content {
+        kind,
+        icon: Some(icon.to_owned()),
+        value: None,
+        text: Some(text.to_owned()),
+        muted: false,
+    }
 }
 
 pub struct Osd {
@@ -372,9 +542,11 @@ impl Osd {
         &mut self,
         audio: &Audio,
         network: &Network,
+        power: &Power,
+        idle: &Idle,
         locale: &Locale,
     ) -> Option<Content> {
-        let new = Watched::read(audio, network, &self.watched);
+        let new = Watched::read(audio, network, power, idle, &self.watched);
         if new == self.watched {
             return None;
         }
@@ -513,7 +685,12 @@ mod tests {
         Watch::Volume,
         Watch::Microphone,
         Watch::Recording,
+        Watch::Wifi,
         Watch::Network,
+        Watch::Vpn,
+        Watch::Charger,
+        Watch::Profile,
+        Watch::Idle,
     ];
 
     fn level(device: &str, percent: u32, muted: bool) -> Option<Level> {
@@ -538,8 +715,8 @@ mod tests {
         Watched {
             output,
             input,
-            recording: None,
             network,
+            ..Watched::default()
         }
     }
 
@@ -618,6 +795,110 @@ mod tests {
     }
 
     #[test]
+    fn wifi_before_the_disconnection_it_brings() {
+        let en = Locale::new("en");
+        let on = Watched {
+            wifi: Some(true),
+            ..watched(None, None, link(true, "Home"))
+        };
+        let off = Watched {
+            wifi: Some(false),
+            ..watched(None, None, link(false, ""))
+        };
+        let c = change(&on, &off, ALL, &en).unwrap();
+        assert_eq!(
+            (c.kind, c.text.as_deref(), c.icon.as_deref()),
+            (Kind::Wifi, Some("Wi‑Fi off"), Some(ICON_WIFI_OFF))
+        );
+        let c = change(&off, &on, ALL, &en).unwrap();
+        assert_eq!(c.text.as_deref(), Some("Wi‑Fi on"));
+        // Without the Wi‑Fi watch, the disconnection.
+        let c = change(&on, &off, &[Watch::Network], &en).unwrap();
+        assert_eq!(c.kind, Kind::Network);
+    }
+
+    #[test]
+    fn vpn_up_and_down() {
+        let en = Locale::new("en");
+        let vpn = |v: Option<Option<&str>>| Watched {
+            vpn: v.map(|v| v.map(str::to_owned)),
+            ..Watched::default()
+        };
+        assert_eq!(
+            change(&vpn(None), &vpn(Some(Some("Office"))), ALL, &en),
+            None
+        );
+        let c = change(&vpn(Some(None)), &vpn(Some(Some("Office"))), ALL, &en).unwrap();
+        assert_eq!(
+            (c.kind, c.text.as_deref()),
+            (Kind::Vpn, Some("VPN connected: Office"))
+        );
+        let c = change(&vpn(Some(Some("Office"))), &vpn(Some(None)), ALL, &en).unwrap();
+        assert_eq!(c.text.as_deref(), Some("VPN disconnected"));
+    }
+
+    #[test]
+    fn charger_with_the_charge() {
+        let en = Locale::new("en");
+        let charger = |plugged, percent| Watched {
+            charger: Some(Charger {
+                plugged,
+                percent,
+                icon: "battery-good-symbolic".to_owned(),
+            }),
+            ..Watched::default()
+        };
+        let c = change(&charger(false, 60), &charger(true, 60), ALL, &en).unwrap();
+        assert_eq!(
+            (c.kind, c.value, c.text.as_deref()),
+            (Kind::Charger, None, Some("Charger connected, 60%"))
+        );
+        let c = change(&charger(true, 60), &charger(false, 60), ALL, &en).unwrap();
+        assert_eq!(c.text.as_deref(), Some("On battery, 60%"));
+        // The charge going up isn't news.
+        assert_eq!(
+            change(&charger(true, 60), &charger(true, 61), ALL, &en),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_and_idle() {
+        let en = Locale::new("en");
+        let profile = |p: &str| Watched {
+            profile: Some(p.to_owned()),
+            ..Watched::default()
+        };
+        let c = change(&profile("balanced"), &profile("power-saver"), ALL, &en).unwrap();
+        assert_eq!(
+            (c.kind, c.text.as_deref(), c.icon.as_deref()),
+            (
+                Kind::Profile,
+                Some("Power profile: Saver"),
+                Some("power-profile-power-saver-symbolic")
+            )
+        );
+        let hold = |held| Watched {
+            idle: Some(Hold {
+                held,
+                icon: if held { "eye-open" } else { "eye-closed" }.to_owned(),
+            }),
+            ..Watched::default()
+        };
+        let c = change(&hold(false), &hold(true), ALL, &en).unwrap();
+        assert_eq!(
+            (c.kind, c.text.as_deref(), c.icon.as_deref()),
+            (Kind::Idle, Some("Keep awake: on"), Some("eye-open"))
+        );
+        let c = change(&hold(true), &hold(false), ALL, &en).unwrap();
+        assert_eq!(c.text.as_deref(), Some("Keep awake: off"));
+        assert_eq!(
+            change(&hold(false), &hold(true), &[Watch::Profile], &en),
+            None
+        );
+    }
+
+    #[test]
     fn network_up_and_down() {
         let en = Locale::new("en");
         let up = watched(None, None, link(true, "Home"));
@@ -659,15 +940,7 @@ mod tests {
     #[test]
     fn config() {
         let c: OsdConfig = crate::config::Config::parse("").section(None);
-        assert_eq!(
-            c.show,
-            vec![
-                Watch::Volume,
-                Watch::Microphone,
-                Watch::Recording,
-                Watch::Network
-            ]
-        );
+        assert_eq!(c.show, ALL);
         assert_eq!(c.duration, Duration::from_secs(2));
         assert_eq!(c.position, Position::Bottom);
         assert_eq!(c.margin, 100);

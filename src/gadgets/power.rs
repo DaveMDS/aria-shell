@@ -196,7 +196,7 @@ impl Gadget for PowerGadget {
 /// The profiles power-profiles-daemon knows, in the picker's order.
 const PROFILES: [&str; 3] = ["power-saver", "balanced", "performance"];
 
-fn profile_icon(profile: &str) -> String {
+pub(crate) fn profile_icon(profile: &str) -> String {
     format!("power-profile-{profile}-symbolic")
 }
 
@@ -209,7 +209,7 @@ fn profile_class(profile: &str) -> &'static str {
         .unwrap_or("other")
 }
 
-fn profile_label(locale: &Locale, profile: &str) -> String {
+pub(crate) fn profile_label(locale: &Locale, profile: &str) -> String {
     match profile {
         "power-saver" => locale.tr("power.profile.power_saver").to_owned(),
         "balanced" => locale.tr("power.profile.balanced").to_owned(),
@@ -218,7 +218,7 @@ fn profile_label(locale: &Locale, profile: &str) -> String {
     }
 }
 
-fn battery_icon(b: &Battery) -> &str {
+pub(crate) fn battery_icon(b: &Battery) -> &str {
     if b.icon.is_empty() {
         ICON_BATTERY
     } else {

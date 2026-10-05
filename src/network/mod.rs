@@ -669,6 +669,15 @@ impl Network {
         self.snapshot.active.iter().find(|a| a.uuid == uuid)
     }
 
+    /// The name of the VPN up, if one is (the first, when several are).
+    pub fn active_vpn(&self) -> Option<&str> {
+        self.snapshot
+            .active
+            .iter()
+            .find(|a| a.vpn && a.state == ActiveState::Activated)
+            .map(|a| a.id.as_str())
+    }
+
     /// The VPN profiles, in NetworkManager's order.
     pub fn vpns(&self) -> impl Iterator<Item = &Profile> {
         self.snapshot

@@ -116,6 +116,16 @@ assert_logged() {
     return 1
 }
 
+# Until the selector matches `$2` widgets (3 s), else fails with `$3`:
+# for what comes asynchronously (a bus, a first reading).
+wait_for() {
+    i=0
+    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
+        sleep 0.1; i=$((i + 1))
+    done
+    assert_eq "$(count_widgets "$1")" "$2" "$3"
+}
+
 # --- acting --------------------------------------------------------------
 # Input goes through `aria-inject` (tests/ui/inject), one process for the
 # whole scenario holding a virtual keyboard and pointer, talked to over

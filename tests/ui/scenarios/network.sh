@@ -24,15 +24,6 @@ nm_idle() {
     fi
 }
 
-# Until the selector matches n widgets (the bus is async).
-wait_for() {
-    i=0
-    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
-        sleep 0.1; i=$((i + 1))
-    done
-    assert_eq "$(count_widgets "$1")" "$2" "$3"
-}
-
 # --- no NetworkManager yet ---------------------------------------------------
 assert_eq "$(count_widgets 'gadget.network > button.none')" 2 "offline on both bars, nobody on the bus"
 click_widget "$bar"

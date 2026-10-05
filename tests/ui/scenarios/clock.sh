@@ -1,6 +1,13 @@
 # The clock's calendar popup: opens under the clock, shows today,
 # navigates months, closes on a click outside; on both outputs.
 
+# The clock shares the centre slot with the system monitor, whose memory
+# gauge widens with its first reading (the percent appears), about a
+# second after the start: the slot re-centres and the clock moves 4 px
+# left, away from a popup opened before. The net value turning critical
+# (`critical = 0`) says the reading is in, on each bar.
+wait_for 'gadget#net.system-monitor > button.net.critical' 2 "the first system reading"
+
 for output in HEADLESS-1 HEADLESS-2; do
     assert_no_surface popup
     click_widget "panel[output=\"$output\"] slot.center gadget.clock > button"

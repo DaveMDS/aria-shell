@@ -12,15 +12,6 @@ assert_eq "$(count_widgets 'gadget.audio > button.output')" 2 "a volume button p
 assert_eq "$(count_widgets 'gadget.audio > button.input')" 2 "a microphone button per bar (show_microphone)"
 assert_eq "$(count_widgets 'gadget.audio > button > text')" 4 "the percent after each icon (show_percent)"
 
-# Until the gadget shows the player (the bus watcher is async).
-wait_for() {
-    i=0
-    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
-        sleep 0.1; i=$((i + 1))
-    done
-    assert_eq "$(count_widgets "$1")" "$2" "$3"
-}
-
 click_widget "$button"
 assert_surface popup
 wait_for "$player" 1 "the fake player in the popup"

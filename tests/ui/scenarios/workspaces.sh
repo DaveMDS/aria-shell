@@ -15,16 +15,6 @@ shot_gadget() {
     shot "$name" "$(($1 - 4)),$2 $(($3 + 160))x$4"
 }
 
-# Until the gadget shows what the compositor has (the initial fetch is
-# async), else fails.
-wait_for() {
-    i=0
-    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
-        sleep 0.1; i=$((i + 1))
-    done
-    assert_eq "$(count_widgets "$1")" "$2" "$3"
-}
-
 # Sway starts with one workspace per output, the first one focused.
 wait_for "$p1 $ws" 1 "one workspace on the first bar"
 wait_for "$p2 $ws" 1 "one workspace on the second bar"

@@ -18,15 +18,6 @@ wait_osd() {
     assert_eq "$(count_osd)" "$1" "$2"
 }
 
-# Until the selector matches n widgets (the bus is async).
-wait_for() {
-    i=0
-    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
-        sleep 0.1; i=$((i + 1))
-    done
-    assert_eq "$(count_widgets "$1")" "$2" "$3"
-}
-
 # --- from a script -------------------------------------------------------------
 assert_eq "$(count_osd)" 0 "no OSD at rest"
 aria osd show --icon audio-volume-high-symbolic --value 40 Test

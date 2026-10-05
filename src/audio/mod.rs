@@ -57,6 +57,19 @@ pub struct Channel {
     pub default: bool,
 }
 
+/// An application recording from a source (a source output), as last
+/// reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recording {
+    pub index: u32,
+    /// The application's name, else the stream's.
+    pub app: String,
+    /// The source it records from, by index.
+    pub source: u32,
+    /// Paused: not listening.
+    pub corked: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackStatus {
     Playing,
@@ -97,6 +110,12 @@ pub enum Event {
         sink: String,
         source: String,
     },
+    /// An application started recording, or its recording changed.
+    Recording(Recording),
+    RecordingGone(u32),
+    /// The first listing after connecting is complete: what's recording
+    /// is known from here.
+    Listed,
     /// The session bus is up; player commands can be sent.
     Bus(Connection),
     /// A player appeared or changed.
@@ -133,6 +152,10 @@ pub struct Audio {
     channels: Vec<Channel>,
     default_sink: String,
     default_source: String,
+    /// Every source output, monitors' included (see `recordings`).
+    recordings: Vec<Recording>,
+    /// The first listing is complete.
+    listed: bool,
     /// In appearance order.
     players: Vec<Player>,
     /// The players' covers, by bus name: the URL loaded and its icon
@@ -159,9 +182,32 @@ impl Audio {
             }
             Event::Disconnected => {
                 self.mixer = None;
-                let had = !self.channels.is_empty();
+                self.listed = false;
+                let had = !self.channels.is_empty() || !self.recordings.is_empty();
                 self.channels.clear();
+                self.recordings.clear();
                 had
+            }
+            Event::Recording(recording) => {
+                match self
+                    .recordings
+                    .iter_mut()
+                    .find(|r| r.index == recording.index)
+                {
+                    Some(old) if *old == recording => return false,
+                    Some(old) => *old = recording,
+                    None => self.recordings.push(recording),
+                }
+                true
+            }
+            Event::RecordingGone(index) => {
+                let before = self.recordings.len();
+                self.recordings.retain(|r| r.index != index);
+                self.recordings.len() != before
+            }
+            Event::Listed => {
+                self.listed = true;
+                true
             }
             Event::Channel(mut channel) => {
                 channel.default = self.is_default(&channel);
@@ -282,6 +328,15 @@ impl Audio {
         if self.mixer.is_none() {
             lines.push("mixer: not connected".to_owned());
         }
+        for r in &self.recordings {
+            lines.push(format!(
+                "recording {} {:?} source={}{}",
+                r.index,
+                r.app,
+                r.source,
+                if r.corked { " corked" } else { "" },
+            ));
+        }
         for c in &self.channels {
             lines.push(format!(
                 "{:?} {} {:?} volume={:.0}%{}{}",
@@ -309,6 +364,17 @@ impl Audio {
     /// The default device of a kind, if known.
     pub fn default_of(&self, kind: Kind) -> Option<&Channel> {
         self.channels_of(kind).find(|c| c.default)
+    }
+
+    /// The applications listening to a microphone: recording, not
+    /// paused, from a source that is one (a sink's monitor isn't among
+    /// the inputs); `None` until the first listing is complete.
+    pub fn recordings(&self) -> Option<impl Iterator<Item = &Recording>> {
+        self.listed.then(|| {
+            self.recordings
+                .iter()
+                .filter(|r| !r.corked && self.channels_of(Kind::Input).any(|c| c.index == r.source))
+        })
     }
 
     pub fn players(&self) -> &[Player] {
@@ -451,6 +517,34 @@ mod tests {
             has_volume: true,
             default: false,
         }
+    }
+
+    #[test]
+    fn recordings_from_microphones_once_listed() {
+        let mut a = Audio::default();
+        let rec = |index, source, corked| Recording {
+            index,
+            app: format!("app{index}"),
+            source,
+            corked,
+        };
+        let apps = |a: &Audio| -> Option<Vec<String>> {
+            a.recordings().map(|r| r.map(|r| r.app.clone()).collect())
+        };
+        a.apply(Event::Channel(channel(Kind::Input, 3, "mic")));
+        a.apply(Event::Recording(rec(1, 3, false)));
+        assert_eq!(apps(&a), None, "not listed yet");
+        assert!(a.apply(Event::Listed));
+        assert_eq!(apps(&a), Some(vec!["app1".to_owned()]));
+        // From a monitor (not an input), or paused: not listening.
+        a.apply(Event::Recording(rec(2, 9, false)));
+        a.apply(Event::Recording(rec(4, 3, true)));
+        assert_eq!(apps(&a), Some(vec!["app1".to_owned()]));
+        assert!(!a.apply(Event::Recording(rec(1, 3, false))), "nothing new");
+        assert!(a.apply(Event::RecordingGone(1)));
+        assert_eq!(apps(&a), Some(vec![]));
+        a.apply(Event::Disconnected);
+        assert_eq!(apps(&a), None);
     }
 
     #[test]

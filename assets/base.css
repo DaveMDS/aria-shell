@@ -77,7 +77,7 @@
  *      ╰─ button                                              one per action the app offers
  *         ╰─ text
  *
- *   osd.<volume|microphone|network|custom>[.muted][output="<connector>"]
+ *   osd.<volume|microphone|recording|network|custom>[.muted][output="<connector>"]
  *                                                             the OSD, one surface per output while shown
  *                                                             (width/height size it; [osd] position places it);
  *                                                             a row (gap between its parts)

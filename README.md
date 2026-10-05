@@ -154,6 +154,7 @@ it never changes anything (`[osd]`, the theme's `osd`).
 
 - ✅ Volume and mute of the default output, the device changing (headphones plugged in)
 - ✅ Microphone level and mute (the default input)
+- ✅ The microphone in use by an app, and free again
 - ✅ Network connected / disconnected
 - ✅ `aria-shell osd show [--icon <name>] [--value <percent>] [text]` from a script
   (e.g. brightness from a `brightnessctl` keybind)

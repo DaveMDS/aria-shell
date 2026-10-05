@@ -156,12 +156,15 @@ SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[System
 Audio      (audio/)          daemon-owned mixer and players: `channels_of(kind)` (outputs, inputs, the streams
                             playing: label, icon hints, volume as a fraction of 100%, mute, `default`),
                             `default_output()`, `players()` (identity, status, title/artist/album, cover
-                            URL, what it can do), `cover(bus)` (a `file://` cover as an `Icon`)
+                            URL, what it can do), `cover(bus)` (a `file://` cover as an `Icon`),
+                            `recordings()` (the apps listening to a microphone: source outputs not corked, from
+                            a source among the inputs, i.e. not a sink's monitor; `None` until the first
+                            listing is in, `Event::Listed` at the end of it)
   subscription()            pulse.rs: libpulse (`pipewire-pulse` / PulseAudio) on a thread of ours owning the
                             threaded mainloop and the context; its callbacks only post `Request`s the thread
                             serves under the lock (state, subscribe changes, the daemon's commands via the
                             `Handle` carried by `Event::Connected`); introspection answers go out as
-                            `Event::Channel` / `ChannelGone` / `Defaults`. mpris.rs: the session bus,
+                            `Event::Channel` / `ChannelGone` / `Defaults` / `Recording` / `RecordingGone`. mpris.rs: the session bus,
                             `NameOwnerChanged` + one task per `org.mpris.MediaPlayer2.*` name
                             (`PropertiesProxy` get_all, then `PropertiesChanged`) -> `Event::Player` / `PlayerGone`
   apply(Event)              patches the lists (channels grouped by kind, the defaults flagged), loads covers
@@ -330,11 +333,13 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
 
 Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
                             margin); `observe(&Audio, &Network)` after every change of those reads a `Watched`
-                            (the default output's and input's device/percent/mute, the network connected +
-                            label; each `None` until known, so the first reading after start or a
-                            source coming back shows nothing; "connecting" keeps the last reading) and
+                            (the default output's and input's device/percent/mute, whether some app records,
+                            the network connected + label; each `None` until known, so the first reading
+                            after start or a source coming back shows nothing; "connecting" keeps the last
+                            reading) and
                             `change(old, new)` (pure, unit-tested) says what to show: the volume, else the
-                            microphone, else the network. Whoever made the change (a keybind, the gadget,
+                            microphone, else the microphone coming into use by some app or free again,
+                            else the network. Whoever made the change (a keybind, the gadget,
                             another app) is not its business. `show(Content)` from there or from
                             `Command::Osd` (`aria-shell osd show`); the daemon opens one `Layer::Overlay`
                             surface per output (`events_transparent`, sized by the theme's `osd`, anchored by

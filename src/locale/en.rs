@@ -129,4 +129,6 @@ pub const CATALOGUE: Catalogue = &[
     // osd
     ("osd.network.connected", "Connected: {name}"),
     ("osd.network.disconnected", "Disconnected"),
+    ("osd.recording.started", "Microphone in use"),
+    ("osd.recording.stopped", "Microphone no longer in use"),
 ];

@@ -1,6 +1,6 @@
 //! The OSD: a short-lived bar on every output when something it
 //! watches changes (the default output's volume, the microphone's,
-//! their mute, the network going up or down), whatever changed it: a
+//! their mute, an app starting to record, the network going up or down), whatever changed it: a
 //! keybind running `wpctl`, the Audio gadget, another app. It only
 //! shows, it never changes anything; `aria-shell osd show` shows one
 //! from a script.
@@ -14,7 +14,7 @@
 //! the bar up and updates it in place).
 //!
 //! ```text
-//! osd.<volume|microphone|network|custom>[.muted][output="<connector>"]
+//! osd.<volume|microphone|recording|network|custom>[.muted][output="<connector>"]
 //! ├─ icon
 //! ├─ meter > fill         the level, with a value
 //! ├─ value                the percent, with a value
@@ -42,6 +42,9 @@ use crate::widgets::graph;
 const DEFAULT_SIZE: (f32, f32) = (320.0, 56.0);
 /// Icon size when the theme doesn't set `height` on `osd icon`.
 const DEFAULT_ICON: f32 = 24.0;
+/// An app started listening to a microphone; none listens any more.
+const ICON_RECORDING: &str = "audio-input-microphone-symbolic";
+const ICON_NOT_RECORDING: &str = "microphone-disabled-symbolic";
 
 /// `[osd]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,13 +64,15 @@ impl Section for OsdConfig {
 
     fn from_raw(raw: &RawSection) -> Self {
         let show = raw
-            .list_or("show", &["volume", "microphone", "network"])
+            .list_or("show", &["volume", "microphone", "recording", "network"])
             .iter()
             .filter(|name| *name != "none")
             .filter_map(|name| {
                 let watch = Watch::parse(name);
                 if watch.is_none() {
-                    log::warn!("[osd] show: unknown {name:?} (volume | microphone | network)");
+                    log::warn!(
+                        "[osd] show: unknown {name:?} (volume | microphone | recording | network)"
+                    );
                 }
                 watch
             })
@@ -95,6 +100,8 @@ pub enum Watch {
     Volume,
     /// The default input: its level and mute.
     Microphone,
+    /// The microphone in use by some app, or free again.
+    Recording,
     /// Connected / disconnected.
     Network,
 }
@@ -104,6 +111,7 @@ impl Watch {
         Some(match s {
             "volume" => Self::Volume,
             "microphone" => Self::Microphone,
+            "recording" => Self::Recording,
             "network" => Self::Network,
             _ => return None,
         })
@@ -134,6 +142,7 @@ impl Position {
 pub enum Kind {
     Volume,
     Microphone,
+    Recording,
     Network,
     /// From `aria-shell osd show`.
     Custom,
@@ -144,6 +153,7 @@ impl Kind {
         match self {
             Self::Volume => "volume",
             Self::Microphone => "microphone",
+            Self::Recording => "recording",
             Self::Network => "network",
             Self::Custom => "custom",
         }
@@ -220,6 +230,8 @@ struct Link {
 pub struct Watched {
     output: Option<Level>,
     input: Option<Level>,
+    /// Some app listens to a microphone.
+    recording: Option<bool>,
     network: Option<Link>,
 }
 
@@ -230,6 +242,7 @@ impl Watched {
     fn read(audio: &Audio, network: &Network, previous: &Watched) -> Self {
         let output = Level::read(audio, Channel::Output);
         let input = Level::read(audio, Channel::Input);
+        let recording = audio.recordings().map(|mut apps| apps.next().is_some());
         let network = if !network.running() || network.devices().is_empty() {
             None
         } else {
@@ -263,6 +276,7 @@ impl Watched {
         Self {
             output,
             input,
+            recording,
             network,
         }
     }
@@ -282,6 +296,23 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
         && let Some(content) = Level::change(&old.input, &new.input, Kind::Microphone)
     {
         return Some(content);
+    }
+    if show.contains(&Watch::Recording)
+        && let (Some(was), Some(now)) = (old.recording, new.recording)
+        && was != now
+    {
+        let (icon, key) = if now {
+            (ICON_RECORDING, "osd.recording.started")
+        } else {
+            (ICON_NOT_RECORDING, "osd.recording.stopped")
+        };
+        return Some(Content {
+            kind: Kind::Recording,
+            icon: Some(icon.to_owned()),
+            value: None,
+            text: Some(locale.tr(key).to_owned()),
+            muted: false,
+        });
     }
     if show.contains(&Watch::Network)
         && let (Some(o), Some(n)) = (&old.network, &new.network)
@@ -478,7 +509,12 @@ impl Osd {
 mod tests {
     use super::*;
 
-    const ALL: &[Watch] = &[Watch::Volume, Watch::Microphone, Watch::Network];
+    const ALL: &[Watch] = &[
+        Watch::Volume,
+        Watch::Microphone,
+        Watch::Recording,
+        Watch::Network,
+    ];
 
     fn level(device: &str, percent: u32, muted: bool) -> Option<Level> {
         Some(Level {
@@ -502,7 +538,15 @@ mod tests {
         Watched {
             output,
             input,
+            recording: None,
             network,
+        }
+    }
+
+    fn recording(in_use: Option<bool>) -> Watched {
+        Watched {
+            recording: in_use,
+            ..Watched::default()
         }
     }
 
@@ -556,6 +600,24 @@ mod tests {
     }
 
     #[test]
+    fn recording_starts_and_stops() {
+        let en = Locale::new("en");
+        let free = recording(Some(false));
+        let in_use = recording(Some(true));
+        // Known at the first listing: nothing to say.
+        assert_eq!(change(&recording(None), &in_use, ALL, &en), None);
+        let c = change(&free, &in_use, ALL, &en).unwrap();
+        assert_eq!(c.kind, Kind::Recording);
+        assert_eq!(c.text.as_deref(), Some("Microphone in use"));
+        assert_eq!(c.icon.as_deref(), Some(ICON_RECORDING));
+        assert_eq!(change(&in_use, &in_use, ALL, &en), None);
+        let c = change(&in_use, &free, ALL, &en).unwrap();
+        assert_eq!(c.text.as_deref(), Some("Microphone no longer in use"));
+        assert_eq!(c.icon.as_deref(), Some(ICON_NOT_RECORDING));
+        assert_eq!(change(&free, &in_use, &[Watch::Microphone], &en), None);
+    }
+
+    #[test]
     fn network_up_and_down() {
         let en = Locale::new("en");
         let up = watched(None, None, link(true, "Home"));
@@ -599,7 +661,12 @@ mod tests {
         let c: OsdConfig = crate::config::Config::parse("").section(None);
         assert_eq!(
             c.show,
-            vec![Watch::Volume, Watch::Microphone, Watch::Network]
+            vec![
+                Watch::Volume,
+                Watch::Microphone,
+                Watch::Recording,
+                Watch::Network
+            ]
         );
         assert_eq!(c.duration, Duration::from_secs(2));
         assert_eq!(c.position, Position::Bottom);

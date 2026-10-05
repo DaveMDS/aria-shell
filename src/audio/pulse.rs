@@ -1,7 +1,7 @@
 //! The mixer over the PulseAudio client API (`libpulse`), which
 //! PipeWire serves through `pipewire-pulse`: sinks, sources and the
-//! streams playing to a sink, their volume and mute, and the default
-//! devices.
+//! streams playing to a sink, their volume and mute, the default
+//! devices, and the streams recording from a source.
 //!
 //! libpulse is callback-driven and single-threaded behind a lock. A
 //! thread of ours owns the threaded mainloop and the context; the
@@ -20,14 +20,16 @@ use iced::futures::channel::mpsc as fmpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::stream;
 use libpulse_binding::callbacks::ListResult;
-use libpulse_binding::context::introspect::{ServerInfo, SinkInfo, SinkInputInfo, SourceInfo};
+use libpulse_binding::context::introspect::{
+    ServerInfo, SinkInfo, SinkInputInfo, SourceInfo, SourceOutputInfo,
+};
 use libpulse_binding::context::subscribe::{Facility, InterestMaskSet, Operation};
 use libpulse_binding::context::{Context, FlagSet, State};
 use libpulse_binding::mainloop::threaded::Mainloop;
 use libpulse_binding::proplist::{Proplist, properties};
 use libpulse_binding::volume::{ChannelVolumes, Volume};
 
-use super::{Channel, Event, Kind};
+use super::{Channel, Event, Kind, Recording};
 
 /// What the serving thread does under the lock.
 #[derive(Debug)]
@@ -157,6 +159,7 @@ fn serve(
                         InterestMaskSet::SINK
                             | InterestMaskSet::SOURCE
                             | InterestMaskSet::SINK_INPUT
+                            | InterestMaskSet::SOURCE_OUTPUT
                             | InterestMaskSet::SERVER,
                         |ok| {
                             if !ok {
@@ -178,6 +181,15 @@ fn serve(
                 Some(Facility::SinkInput) => Some(Kind::Stream),
                 Some(Facility::Server) => {
                     fetch_defaults(ctx, tx);
+                    None
+                }
+                Some(Facility::SourceOutput) => {
+                    match operation {
+                        Some(Operation::Removed) => {
+                            let _ = tx.unbounded_send(Event::RecordingGone(index));
+                        }
+                        _ => fetch_recording(ctx, tx, index),
+                    }
                     None
                 }
                 _ => None,
@@ -247,7 +259,26 @@ fn fetch_all(ctx: &Context, tx: &fmpsc::UnboundedSender<Event>) {
             let _ = out.unbounded_send(Event::Channel(from_stream(info)));
         }
     });
+    // Answered in order: the sources are in by the end of this one.
+    let out = tx.clone();
+    introspect.get_source_output_info_list(move |r| match r {
+        ListResult::Item(info) => {
+            let _ = out.unbounded_send(Event::Recording(from_recording(info)));
+        }
+        ListResult::End | ListResult::Error => {
+            let _ = out.unbounded_send(Event::Listed);
+        }
+    });
     fetch_defaults(ctx, tx);
+}
+
+fn fetch_recording(ctx: &Context, tx: &fmpsc::UnboundedSender<Event>, index: u32) {
+    let out = tx.clone();
+    ctx.introspect().get_source_output_info(index, move |r| {
+        if let ListResult::Item(info) = r {
+            let _ = out.unbounded_send(Event::Recording(from_recording(info)));
+        }
+    });
 }
 
 fn fetch_one(ctx: &Context, tx: &fmpsc::UnboundedSender<Event>, kind: Kind, index: u32) {
@@ -363,6 +394,20 @@ fn from_stream(info: &SinkInputInfo) -> Channel {
         channels: info.volume.len(),
         has_volume: info.has_volume && info.volume_writable,
         default: false,
+    }
+}
+
+/// A recording is named by its application, else by the stream.
+fn from_recording(info: &SourceOutputInfo) -> Recording {
+    Recording {
+        index: info.index,
+        app: info
+            .proplist
+            .get_str(properties::APPLICATION_NAME)
+            .or_else(|| info.name.as_deref().map(str::to_owned))
+            .unwrap_or_default(),
+        source: info.source,
+        corked: info.corked,
     }
 }
 

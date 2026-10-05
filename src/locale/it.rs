@@ -121,7 +121,10 @@ pub const CATALOGUE: Catalogue = &[
     ("power.degraded.lap", "appoggiato sulle gambe"),
     ("power.degraded.heat", "temperatura troppo alta"),
     ("power.keep_awake", "Tieni sveglio"),
-    ("power.held_by_player", "Tenuto sveglio mentre un player riproduce"),
+    (
+        "power.held_by_player",
+        "Tenuto sveglio mentre un player riproduce",
+    ),
     ("power.settings", "Impostazioni energia"),
     ("power.low_title", "Batteria scarica"),
     ("power.critical_title", "Batteria quasi esaurita"),

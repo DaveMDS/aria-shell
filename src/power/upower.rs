@@ -106,7 +106,9 @@ async fn follow(conn: Connection, mut out: mpsc::Sender<Event>) -> zbus::Result<
         .await?
         .filter_map(|s| async move {
             let a = s.args().ok()?;
-            [UPOWER, PROFILES].contains(&a.name().as_str()).then_some(())
+            [UPOWER, PROFILES]
+                .contains(&a.name().as_str())
+                .then_some(())
         });
     let rule = MatchRule::builder()
         .msg_type(MessageType::Signal)
@@ -222,10 +224,7 @@ async fn profiles(conn: &Connection, dbus: &DBusProxy<'_>) -> Option<Profiles> {
         Some(Value::Array(a)) => a
             .iter()
             .filter_map(|d| match d {
-                Value::Dict(d) => d
-                    .get::<&str, String>(&"Profile")
-                    .ok()
-                    .flatten(),
+                Value::Dict(d) => d.get::<&str, String>(&"Profile").ok().flatten(),
                 _ => None,
             })
             .collect(),
@@ -259,7 +258,16 @@ pub async fn notify(
     hints.insert("urgency", Value::U8(if critical { 2 } else { 1 }));
     NotificationsProxy::new(&conn)
         .await?
-        .notify("Aria Shell", replaces, &icon, &summary, &body, &[], hints, -1)
+        .notify(
+            "Aria Shell",
+            replaces,
+            &icon,
+            &summary,
+            &body,
+            &[],
+            hints,
+            -1,
+        )
         .await
 }
 

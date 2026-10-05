@@ -109,7 +109,11 @@ impl Gadget for PowerGadget {
             }
             let mut content: Vec<Element<'a, Message>> = Vec::new();
             if let Some(b) = battery {
-                content.push(icon(&ctx, &button.child("icon").class("battery"), battery_icon(b)));
+                content.push(icon(
+                    &ctx,
+                    &button.child("icon").class("battery"),
+                    battery_icon(b),
+                ));
                 if self.config.show_percent {
                     let t = button.child("text");
                     content.push(
@@ -120,14 +124,21 @@ impl Gadget for PowerGadget {
                 }
             }
             if let Some(p) = profile {
-                content.push(icon(&ctx, &button.child("icon").class("profile"), &profile_icon(p)));
+                content.push(icon(
+                    &ctx,
+                    &button.child("icon").class("profile"),
+                    &profile_icon(p),
+                ));
             }
             let content = row(content)
                 .spacing(theme.resolve(&button).gap)
                 .align_y(Alignment::Center);
             parts.push(
-                self.popup
-                    .anchor(theme.button(&button, content).on_press(Message::TogglePopup)),
+                self.popup.anchor(
+                    theme
+                        .button(&button, content)
+                        .on_press(Message::TogglePopup),
+                ),
             );
         }
         if self.config.show_idle {
@@ -163,8 +174,7 @@ impl Gadget for PowerGadget {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let list = ctx.node.child("list");
-        let rows: Vec<Element<'a, Message>> =
-            self.rows(&ctx).into_iter().map(|(e, _)| e).collect();
+        let rows: Vec<Element<'a, Message>> = self.rows(&ctx).into_iter().map(|(e, _)| e).collect();
         ctx.theme.column(&list, rows).width(Length::Fill).into()
     }
 
@@ -209,7 +219,11 @@ fn profile_label(locale: &Locale, profile: &str) -> String {
 }
 
 fn battery_icon(b: &Battery) -> &str {
-    if b.icon.is_empty() { ICON_BATTERY } else { &b.icon }
+    if b.icon.is_empty() {
+        ICON_BATTERY
+    } else {
+        &b.icon
+    }
 }
 
 /// `1 h 20 min`, `45 min`.
@@ -310,7 +324,11 @@ impl PowerGadget {
                 } else {
                     d.model.clone()
                 };
-                let icon_name = if d.icon.is_empty() { ICON_BATTERY } else { &d.icon };
+                let icon_name = if d.icon.is_empty() {
+                    ICON_BATTERY
+                } else {
+                    &d.icon
+                };
                 rows.push(self.device(ctx, &list, icon_name, name, d.percentage));
             }
         }
@@ -337,9 +355,10 @@ impl PowerGadget {
         if !self.config.settings_command.is_empty() {
             let b = list.child("button").class("settings");
             let t = b.child("text");
-            let label = iced::widget::container(ctx.theme.text(&t, ctx.locale.tr("power.settings")))
-                .width(Length::Fill)
-                .align_x(Alignment::Center);
+            let label =
+                iced::widget::container(ctx.theme.text(&t, ctx.locale.tr("power.settings")))
+                    .width(Length::Fill)
+                    .align_x(Alignment::Center);
             rows.push((
                 ctx.theme
                     .button(&b, label)
@@ -422,7 +441,12 @@ impl PowerGadget {
         let t = header.child("title");
         (
             theme
-                .container(&header, theme.container(&t, theme.text(&t, title)).width(Length::Fill))
+                .container(
+                    &header,
+                    theme
+                        .container(&t, theme.text(&t, title))
+                        .width(Length::Fill),
+                )
                 .width(Length::Fill)
                 .into(),
             padded(theme, &header, line(ctx, &t)),

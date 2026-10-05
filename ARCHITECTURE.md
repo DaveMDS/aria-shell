@@ -35,6 +35,10 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
   protocol didn't: `wayland-protocols` has it, see `idle/wayland.rs`.)
 - `iced_exwlshell` is a small, fast-moving crate: expect API churn, verify
   against its source in `~/.cargo/registry` rather than memory.
+  The branch `exwlshell-0.21` (on 0.21.0-rc1: surfaces rebuilt only
+  when drawn, a fraction of the CPU with the pointer moving) waits for
+  the 0.21 release: merge it then, adapting to the API changes made
+  after the rc.
 
 ## Structure
 

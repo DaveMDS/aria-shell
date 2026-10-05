@@ -84,7 +84,9 @@ impl Timeouts {
                 return base;
             };
             parse_duration(value).unwrap_or_else(|| {
-                log::warn!("[{section}] {key}: invalid duration {value:?} (30s, 5m, 1h or 0), never");
+                log::warn!(
+                    "[{section}] {key}: invalid duration {value:?} (30s, 5m, 1h or 0), never"
+                );
                 None
             })
         };
@@ -282,7 +284,11 @@ impl Idle {
         };
         log::info!(
             "idle: {}",
-            if self.inhibited { "held by the user" } else { "let go by the user" }
+            if self.inhibited {
+                "held by the user"
+            } else {
+                "let go by the user"
+            }
         );
         self.sync();
     }
@@ -301,7 +307,10 @@ impl Idle {
         if playing != self.playing {
             self.playing = playing;
             if self.config.inhibit_when_playing {
-                log::debug!("idle: a player is {}", if playing { "playing" } else { "not playing" });
+                log::debug!(
+                    "idle: a player is {}",
+                    if playing { "playing" } else { "not playing" }
+                );
             }
             self.sync();
         }
@@ -330,7 +339,7 @@ impl Idle {
         [Stage::Lock, Stage::ScreenOff, Stage::Suspend]
             .into_iter()
             .filter_map(|stage| Some((stage, timeouts.get(stage)?)))
-        .collect()
+            .collect()
     }
 
     /// Ask for the timers the state wants, when they changed; a hold
@@ -437,10 +446,21 @@ mod tests {
         );
         let idle = IdleConfig::load(&config);
         let m = |n: u64| Some(Duration::from_secs(n * 60));
-        assert_eq!(idle.ac, Timeouts { lock: m(5), screen_off: m(10), suspend: None });
+        assert_eq!(
+            idle.ac,
+            Timeouts {
+                lock: m(5),
+                screen_off: m(10),
+                suspend: None
+            }
+        );
         assert_eq!(
             idle.battery,
-            Timeouts { lock: m(2), screen_off: m(10), suspend: m(15) },
+            Timeouts {
+                lock: m(2),
+                screen_off: m(10),
+                suspend: m(15)
+            },
             "an empty key is as on AC"
         );
         let config = Config::parse("[Idle]\nlock = 5m\n[Idle:battery]\nlock = 0\n");

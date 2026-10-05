@@ -251,11 +251,14 @@ impl Power {
                     time_to_empty: b.time_to_empty,
                 },
             ),
-            _ => (Warning::None, Low {
-                warning: Warning::None,
-                percentage: 0.0,
-                time_to_empty: 0,
-            }),
+            _ => (
+                Warning::None,
+                Low {
+                    warning: Warning::None,
+                    percentage: 0.0,
+                    time_to_empty: 0,
+                },
+            ),
         };
         if warning == self.warned {
             return (None, Task::none());
@@ -283,10 +286,7 @@ impl Power {
     /// Send the low battery notification, replacing the previous one.
     pub fn notify(&self, summary: String, body: String, critical: bool) -> Task<Event> {
         let replaces = self.notification;
-        let icon = self
-            .battery()
-            .map(|b| b.icon.clone())
-            .unwrap_or_default();
+        let icon = self.battery().map(|b| b.icon.clone()).unwrap_or_default();
         Task::future(async move {
             match upower::notify(replaces, icon, summary, body, critical).await {
                 Ok(id) => Some(Event::Notified(id)),
@@ -407,12 +407,20 @@ mod tests {
     #[test]
     fn upower_values() {
         assert_eq!(State::from_upower(1), State::Charging);
-        assert_eq!(State::from_upower(6), State::Discharging, "pending discharge");
+        assert_eq!(
+            State::from_upower(6),
+            State::Discharging,
+            "pending discharge"
+        );
         assert_eq!(State::from_upower(5), State::NotCharging);
         assert_eq!(State::from_upower(0), State::Unknown);
         assert_eq!(Warning::from_upower(1), Warning::None);
         assert_eq!(Warning::from_upower(3), Warning::Low);
-        assert_eq!(Warning::from_upower(5), Warning::Critical, "action is past critical");
+        assert_eq!(
+            Warning::from_upower(5),
+            Warning::Critical,
+            "action is past critical"
+        );
     }
 
     #[test]

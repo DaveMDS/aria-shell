@@ -426,7 +426,11 @@ impl AriaShell {
             .chain(self.popups.keys())
             .copied()
             .chain(dialogs.map(|d| d.window))
-            .chain(self.locker.iter().flat_map(|l| l.windows().map(|(id, _)| id)))
+            .chain(
+                self.locker
+                    .iter()
+                    .flat_map(|l| l.windows().map(|(id, _)| id)),
+            )
             .chain(self.toasts.iter().map(|t| t.window));
         Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
     }
@@ -1397,7 +1401,10 @@ impl AriaShell {
                 "power.low_body_time",
                 &[
                     ("n", &percent),
-                    ("time", &gadgets::power::duration(&self.locale, low.time_to_empty)),
+                    (
+                        "time",
+                        &gadgets::power::duration(&self.locale, low.time_to_empty),
+                    ),
                 ],
             )
         } else {

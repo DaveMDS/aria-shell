@@ -148,7 +148,10 @@ async fn follow(conn: Connection, lock_before_sleep: bool, mut out: mpsc::Sender
 
 /// Our logind session: `auto` is the caller's, or the user's display
 /// session when the caller has none (a shell started by a user unit).
-async fn session(conn: &Connection, manager: &ManagerProxy<'_>) -> zbus::Result<SessionProxy<'static>> {
+async fn session(
+    conn: &Connection,
+    manager: &ManagerProxy<'_>,
+) -> zbus::Result<SessionProxy<'static>> {
     let path = manager.get_session("auto").await?;
     SessionProxy::builder(conn).path(path)?.build().await
 }

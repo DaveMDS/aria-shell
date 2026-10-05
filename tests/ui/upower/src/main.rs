@@ -76,7 +76,9 @@ impl Root {
 
     fn enumerate_devices(&self) -> Vec<OwnedObjectPath> {
         let s = self.state.lock().unwrap();
-        let mut paths = vec![OwnedObjectPath::try_from("/org/freedesktop/UPower/devices/line_power_AC").unwrap()];
+        let mut paths = vec![
+            OwnedObjectPath::try_from("/org/freedesktop/UPower/devices/line_power_AC").unwrap(),
+        ];
         if s.battery.is_some() {
             paths.push(OwnedObjectPath::try_from(BAT0).unwrap());
         }
@@ -180,12 +182,16 @@ impl Device {
 
     #[zbus(property)]
     fn time_to_empty(&self) -> i64 {
-        self.battery().filter(|b| b.state == 2).map_or(0, |b| b.secs)
+        self.battery()
+            .filter(|b| b.state == 2)
+            .map_or(0, |b| b.secs)
     }
 
     #[zbus(property)]
     fn time_to_full(&self) -> i64 {
-        self.battery().filter(|b| b.state == 1).map_or(0, |b| b.secs)
+        self.battery()
+            .filter(|b| b.state == 1)
+            .map_or(0, |b| b.secs)
     }
 
     #[zbus(property)]
@@ -245,8 +251,14 @@ impl Profiles {
             .iter()
             .map(|p| {
                 let mut d = HashMap::new();
-                d.insert("Profile".to_owned(), OwnedValue::try_from(Value::from(*p)).unwrap());
-                d.insert("Driver".to_owned(), OwnedValue::try_from(Value::from("fake")).unwrap());
+                d.insert(
+                    "Profile".to_owned(),
+                    OwnedValue::try_from(Value::from(*p)).unwrap(),
+                );
+                d.insert(
+                    "Driver".to_owned(),
+                    OwnedValue::try_from(Value::from("fake")).unwrap(),
+                );
                 d
             })
             .collect()
@@ -292,10 +304,20 @@ async fn main() -> zbus::Result<()> {
     // this side just joins the same bus.
     let conn = Connection::session().await?;
     let server = conn.object_server();
-    server.at(ROOT, Root { state: state.clone() }).await?;
+    server
+        .at(
+            ROOT,
+            Root {
+                state: state.clone(),
+            },
+        )
+        .await?;
     for (path, which) in [
         (DISPLAY, Which::Display),
-        ("/org/freedesktop/UPower/devices/line_power_AC", Which::LinePower),
+        (
+            "/org/freedesktop/UPower/devices/line_power_AC",
+            Which::LinePower,
+        ),
         (BAT0, Which::Bat0),
     ] {
         server
@@ -309,7 +331,12 @@ async fn main() -> zbus::Result<()> {
             .await?;
     }
     server
-        .at(PROFILES_PATH, Profiles { state: state.clone() })
+        .at(
+            PROFILES_PATH,
+            Profiles {
+                state: state.clone(),
+            },
+        )
         .await?;
     conn.request_name(UPOWER).await?;
     println!("ready");
@@ -363,12 +390,19 @@ async fn main() -> zbus::Result<()> {
             ["profile", name] => {
                 state.lock().unwrap().profile = (*name).to_owned();
                 if let Ok(p) = server.interface::<_, Profiles>(PROFILES_PATH).await {
-                    let _ = p.get().await.active_profile_changed(p.signal_emitter()).await;
+                    let _ = p
+                        .get()
+                        .await
+                        .active_profile_changed(p.signal_emitter())
+                        .await;
                 }
             }
             ["degraded", reason] => {
-                state.lock().unwrap().degraded =
-                    if *reason == "none" { String::new() } else { (*reason).to_owned() };
+                state.lock().unwrap().degraded = if *reason == "none" {
+                    String::new()
+                } else {
+                    (*reason).to_owned()
+                };
                 if let Ok(p) = server.interface::<_, Profiles>(PROFILES_PATH).await {
                     let _ = p
                         .get()

@@ -95,6 +95,13 @@ pub const CATALOGUE: Catalogue = &[
     ("exiter.confirm", "{action}?"),
     ("exiter.countdown", "Automaticamente tra {n} s"),
     ("exiter.cancel", "Annulla"),
+    // the screenshot picker
+    ("screenshot.hint", "Clicca una finestra o uno schermo, o trascina un'area"),
+    ("screenshot.all", "Tutti gli schermi"),
+    ("screenshot.cancel", "Annulla"),
+    ("screenshot.copy", "Copia"),
+    ("screenshot.edit", "Modifica"),
+    ("screenshot.save", "Salva"),
     // themes
     ("themes.light", "Chiaro"),
     ("themes.dark", "Scuro"),

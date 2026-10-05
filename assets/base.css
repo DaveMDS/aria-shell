@@ -109,6 +109,22 @@
  *      ├─ button.cancel > text
  *      ╰─ button.ok[.<name>] > text                            the action's label
  *
+ *   screenshot[output="<connector>"]                          the screenshot picker, one surface per output over its
+ *   │                                                         frozen picture; `padding` keeps the toolbar off the edges
+ *   ├─ shade                                                  `background`: dims the picture outside the selection
+ *   ├─ hover                                                  `background`, `border`: what a click would pick (the
+ *   │                                                         window under the pointer, or the output)
+ *   ├─ selection                                              `border`: the selected area's outline
+ *   │  ╰─ handle                                              `background`, `border`, `height`: the squares on its
+ *   │                                                         corners and edges
+ *   ╰─ toolbar                                                a row at the bottom of the selection's output (the
+ *      │                                                      focused one before there is a selection)
+ *      ├─ text                                                the hint, or the selection's size
+ *      ╰─ button.all | button.cancel | button.copy | button.edit | button.save > text
+ *                                                             copy without a clipboard and edit without
+ *                                                             `[Screenshot] editor` aren't there; all but all and
+ *                                                             cancel are :disabled without a selection
+ *
  *   wallpaper[output="<connector>"]                           the desktop background, one surface per output; its
  *                                                             `background` shows without an image or around a
  *                                                             `contain`ed one
@@ -506,6 +522,49 @@ exiter confirm button.ok {
 exiter confirm button:hover {
   background: var(--aria-accent);
   color: var(--aria-on-accent);
+}
+
+screenshot {
+  padding: 32px;
+}
+screenshot shade {
+  background: rgba(0, 0, 0, 0.45);
+}
+screenshot hover {
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--aria-accent);
+}
+screenshot selection {
+  border: 2px solid var(--aria-accent);
+}
+screenshot selection handle {
+  height: 10px;
+  background: var(--aria-accent);
+  border: 1px solid var(--aria-on-accent);
+}
+screenshot toolbar {
+  padding: 8px 12px;
+  gap: 6px;
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  font-size: 14px;
+  border: 1px solid var(--aria-border);
+  border-radius: 8px;
+}
+screenshot toolbar button {
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+screenshot toolbar button:hover {
+  background: var(--aria-border);
+}
+screenshot toolbar button.save {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+}
+screenshot toolbar button:disabled {
+  background: transparent;
+  color: var(--aria-muted);
 }
 
 wallpaper {

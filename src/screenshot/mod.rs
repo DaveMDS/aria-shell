@@ -1,15 +1,19 @@
-//! Screenshots: the active window, one output, every output, saved as
-//! PNG in `[Screenshot] directory` (with `--edit`, then opened in
+//! Screenshots: the active window, one output, every output, or what
+//! the picker selects (picker.rs: a window, an output, an area), saved
+//! as PNG in `[Screenshot] directory` (with `--edit`, then opened in
 //! `[Screenshot] editor`) or, with `--clipboard`, only copied to the
-//! clipboard. `aria-shell screenshot window`.
+//! clipboard. `aria-shell screenshot [window | output | all]`.
 //!
 //! One [`Screenshot`] lives in the daemon. The pixels come from a
 //! Wayland connection of its own (wayland.rs, the clipboard too), one
 //! frame per output the picture touches; the picture is a rectangle of
 //! the global logical space cut out of them (pixels.rs), at the largest
-//! scale of those outputs. A window's rectangle is asked of the
-//! compositor at the time ([`Compositor::shown_windows`]).
+//! scale of those outputs. The windows' rectangles are asked of the
+//! compositor at the time ([`Compositor::shown_windows`]). The picker
+//! shows every output frozen: captured first, its surfaces opened by
+//! the daemon after ([`Surfaces`]), the picture cut from those frames.
 
+mod picker;
 mod pixels;
 mod wayland;
 
@@ -17,13 +21,18 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use iced::{Subscription, Task};
+use iced::window::Id;
+use iced::{Element, Subscription, Task};
+use iced_exwlshell::reexport::NewLayerShellSettings;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::compositor::{Compositor, WindowGeometry};
 use crate::config::{Config, RawSection, Section};
+use crate::locale::Locale;
 use crate::process;
-use pixels::{Frames, Rect, Shot};
+use crate::theme::Theme;
+use picker::Picker;
+use pixels::{Frames, RawFrame, Rect, Shot};
 use wayland::{Handle, Request, Support};
 
 /// `[Screenshot]` section.
@@ -60,6 +69,8 @@ pub struct Command {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
+    /// What the picker selects.
+    Pick,
     /// The window with the keyboard.
     Window,
     /// One output by connector name; the focused one when `None`.
@@ -81,6 +92,13 @@ pub enum Event {
     Wayland(wayland::Event),
     /// The windows on screen, for the job waiting on them.
     Windows(u64, Vec<WindowGeometry>),
+    /// The picker's outputs, upright, ready to show.
+    Frozen {
+        shots: Shots,
+        windows: Vec<WindowGeometry>,
+        destination: Destination,
+    },
+    Picker(picker::Message),
     Taken {
         destination: Destination,
         result: Result<(Picture, Png), String>,
@@ -93,6 +111,25 @@ pub struct Picture {
     pub path: Option<PathBuf>,
     pub width: u32,
     pub height: u32,
+}
+
+/// The outputs' pictures, for the picker.
+#[derive(Clone)]
+pub struct Shots(Arc<Vec<Shot>>);
+
+impl std::fmt::Debug for Shots {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Shots({})", self.0.len())
+    }
+}
+
+/// What the daemon does to surfaces after an event: the picker's to
+/// open or close, those showing something else.
+#[derive(Default)]
+pub struct Surfaces {
+    pub open: Vec<(Id, NewLayerShellSettings)>,
+    pub close: Vec<Id>,
+    pub redraw: Vec<Id>,
 }
 
 /// A picture encoded, for the clipboard.
@@ -113,6 +150,7 @@ pub struct Screenshot {
     next_job: u64,
     /// Captures under way.
     jobs: HashMap<u64, Job>,
+    picker: Option<Picker>,
     last: Option<Picture>,
 }
 
@@ -123,6 +161,14 @@ struct Job {
     /// The outputs when it started: global name and place.
     outputs: Vec<(u32, Rect)>,
     destination: Destination,
+    /// For the picker: the frames and the windows, as they come.
+    pick: Option<Pick>,
+}
+
+#[derive(Default)]
+struct Pick {
+    frames: Option<Frames>,
+    windows: Option<Vec<WindowGeometry>>,
 }
 
 impl Screenshot {
@@ -138,6 +184,7 @@ impl Screenshot {
             },
             next_job: 0,
             jobs: HashMap::new(),
+            picker: None,
             last: None,
         }
     }
@@ -148,7 +195,11 @@ impl Screenshot {
     }
 
     pub fn subscription(&self) -> Subscription<Event> {
-        Subscription::run(wayland::events).map(Event::Wayland)
+        let wayland = Subscription::run(wayland::events).map(Event::Wayland);
+        match self.picker {
+            Some(_) => Subscription::batch([wayland, Picker::subscription().map(Event::Picker)]),
+            None => wayland,
+        }
     }
 
     pub fn run(
@@ -162,9 +213,14 @@ impl Screenshot {
             return Task::none();
         }
         let placed: Vec<(u32, Rect)> = outputs.values().filter_map(place).collect();
+        let picking = self.picker.is_some() || self.jobs.values().any(|j| j.pick.is_some());
         let rect = match &command.target {
+            Target::Pick if picking => {
+                log::debug!("screenshot: the picker is open already");
+                return Task::none();
+            }
             Target::Window => None,
-            Target::All => {
+            Target::All | Target::Pick => {
                 let all = placed.iter().map(|(_, r)| *r).reduce(|a, b| a.union(&b));
                 if all.is_none() {
                     log::warn!("screenshot: no output to capture");
@@ -194,16 +250,22 @@ impl Screenshot {
                 rect: None,
                 outputs: placed,
                 destination: command.destination,
+                pick: (command.target == Target::Pick).then(Pick::default),
             },
         );
-        match rect {
-            Some(rect) => {
+        let windows = Task::perform(compositor.shown_windows(), move |windows| {
+            Event::Windows(job, windows)
+        });
+        match (rect, &command.target) {
+            (Some(rect), Target::Pick) => {
+                self.capture(job, rect);
+                windows
+            }
+            (Some(rect), _) => {
                 self.capture(job, rect);
                 Task::none()
             }
-            None => Task::perform(compositor.shown_windows(), move |windows| {
-                Event::Windows(job, windows)
-            }),
+            (None, _) => windows,
         }
     }
 
@@ -228,43 +290,130 @@ impl Screenshot {
         handle.send(Request::Capture { job, outputs });
     }
 
-    pub fn apply(&mut self, event: Event) -> Task<Event> {
+    pub fn apply(
+        &mut self,
+        event: Event,
+        outputs: &BTreeMap<OutputId, OutputInfo>,
+        compositor: &Compositor,
+    ) -> (Task<Event>, Surfaces) {
+        let mut surfaces = Surfaces::default();
         match event {
             Event::Wayland(wayland::Event::Connected(handle, support)) => {
                 self.handle = Some(handle);
                 self.support = support;
             }
-            Event::Windows(job, windows) => match windows.iter().find(|w| w.active) {
-                Some(w) => self.capture(job, Rect::new(w.x, w.y, w.width, w.height)),
-                None => {
-                    log::warn!("screenshot: no active window");
-                    self.jobs.remove(&job);
+            Event::Windows(job, windows) => {
+                let Some(entry) = self.jobs.get_mut(&job) else {
+                    return (Task::none(), surfaces);
+                };
+                if let Some(pick) = &mut entry.pick {
+                    pick.windows = Some(windows);
+                    return (self.freeze(job), surfaces);
                 }
-            },
+                match windows.iter().find(|w| w.active) {
+                    Some(w) => self.capture(job, Rect::new(w.x, w.y, w.width, w.height)),
+                    None => {
+                        log::warn!("screenshot: no active window");
+                        self.jobs.remove(&job);
+                    }
+                }
+            }
             Event::Wayland(wayland::Event::Captured(job, result)) => {
+                let frames = match result {
+                    Ok(frames) => frames,
+                    Err(e) => {
+                        log::warn!("screenshot: {e}");
+                        self.jobs.remove(&job);
+                        return (Task::none(), surfaces);
+                    }
+                };
+                if let Some(pick) = self.jobs.get_mut(&job).and_then(|j| j.pick.as_mut()) {
+                    pick.frames = Some(frames);
+                    return (self.freeze(job), surfaces);
+                }
                 let Some(Job {
                     rect: Some(rect),
                     outputs,
                     destination,
+                    ..
                 }) = self.jobs.remove(&job)
                 else {
-                    return Task::none();
+                    return (Task::none(), surfaces);
                 };
-                match result {
-                    Ok(frames) => {
-                        let directory = match destination {
-                            Destination::File { .. } => Some(self.directory.clone()),
-                            Destination::Clipboard => None,
-                        };
-                        return Task::perform(
-                            develop(frames, outputs, rect, directory),
+                let directory = self.directory_for(destination);
+                let task = Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            picture(&shots_of(&frames, &outputs), rect, directory)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                    },
+                    move |result| Event::Taken {
+                        destination,
+                        result,
+                    },
+                );
+                return (task, surfaces);
+            }
+            Event::Frozen {
+                shots,
+                windows,
+                destination,
+            } => {
+                let outputs: Vec<picker::Output> = outputs
+                    .values()
+                    .map(|info| picker::Output {
+                        id: OutputId::from(info),
+                        global: info.id,
+                        name: info.name.clone().unwrap_or_default(),
+                        focused: info.name.is_some() && info.name == compositor.focused_output,
+                    })
+                    .collect();
+                let setup = picker::Setup {
+                    shots: shots.0,
+                    windows: windows
+                        .iter()
+                        .map(|w| Rect::new(w.x, w.y, w.width, w.height))
+                        .collect(),
+                    destination,
+                    can_copy: self.support.clipboard,
+                    can_edit: self.config.editor.is_some(),
+                };
+                let (picker, open) = Picker::open(setup, &outputs);
+                log::info!("screenshot: picking on {} output(s)", open.len());
+                surfaces.open = open;
+                self.picker = Some(picker);
+            }
+            Event::Picker(message) => {
+                let Some(picker) = &mut self.picker else {
+                    return (Task::none(), surfaces);
+                };
+                match picker.update(message) {
+                    picker::Action::Redraw(ids) => surfaces.redraw = ids,
+                    picker::Action::Cancel => {
+                        log::info!("screenshot: picking cancelled");
+                        surfaces = self.close_picker();
+                    }
+                    picker::Action::Take { rect, destination } => {
+                        let shots = picker.shots.clone();
+                        surfaces = self.close_picker();
+                        let directory = self.directory_for(destination);
+                        let task = Task::perform(
+                            async move {
+                                tokio::task::spawn_blocking(move || {
+                                    picture(&shots, rect, directory)
+                                })
+                                .await
+                                .map_err(|e| e.to_string())?
+                            },
                             move |result| Event::Taken {
                                 destination,
                                 result,
                             },
                         );
+                        return (task, surfaces);
                     }
-                    Err(e) => log::warn!("screenshot: {e}"),
                 }
             }
             Event::Taken {
@@ -298,7 +447,99 @@ impl Screenshot {
             }
             Event::Taken { result: Err(e), .. } => log::warn!("screenshot: {e}"),
         }
-        Task::none()
+        (Task::none(), surfaces)
+    }
+
+    fn directory_for(&self, destination: Destination) -> Option<PathBuf> {
+        match destination {
+            Destination::File { .. } => Some(self.directory.clone()),
+            Destination::Clipboard => None,
+        }
+    }
+
+    /// A pick with its frames and its windows in: turned upright off
+    /// the runtime's threads, then shown ([`Event::Frozen`]).
+    fn freeze(&mut self, job: u64) -> Task<Event> {
+        let ready = self
+            .jobs
+            .get(&job)
+            .and_then(|j| j.pick.as_ref())
+            .is_some_and(|p| p.frames.is_some() && p.windows.is_some());
+        if !ready {
+            return Task::none();
+        }
+        let Some(Job {
+            outputs,
+            destination,
+            pick: Some(Pick {
+                frames: Some(frames),
+                windows: Some(windows),
+            }),
+            ..
+        }) = self.jobs.remove(&job)
+        else {
+            return Task::none();
+        };
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || shots_of(&frames, &outputs))
+                    .await
+                    .unwrap_or_default()
+            },
+            move |shots| Event::Frozen {
+                shots: Shots(Arc::new(shots)),
+                windows,
+                destination,
+            },
+        )
+    }
+
+    fn close_picker(&mut self) -> Surfaces {
+        Surfaces {
+            close: self
+                .picker
+                .take()
+                .map(|p| p.surfaces().iter().map(|s| s.window).collect())
+                .unwrap_or_default(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// One of our surfaces went away (its output did): the picker
+    /// closes, it was showing every output.
+    pub fn surface_closed(&mut self, window: Id) -> Surfaces {
+        match &self.picker {
+            Some(p) if p.has_window(window) => {
+                log::info!("screenshot: a picker surface closed, picking cancelled");
+                self.close_picker()
+            }
+            _ => Surfaces::default(),
+        }
+    }
+
+    /// The outputs changed under the picker: it closes.
+    pub fn outputs_changed(&mut self) -> Surfaces {
+        if self.picker.is_some() {
+            log::info!("screenshot: the outputs changed, picking cancelled");
+        }
+        self.close_picker()
+    }
+
+    /// The picker's surfaces: window and output.
+    pub fn picker_surfaces(&self) -> impl Iterator<Item = (Id, OutputId)> + '_ {
+        self.picker
+            .iter()
+            .flat_map(|p| p.surfaces().iter().map(|s| (s.window, s.output.clone())))
+    }
+
+    pub fn view<'a>(
+        &'a self,
+        window: Id,
+        theme: &'a Theme,
+        locale: &'a Locale,
+    ) -> Option<Element<'a, Event>> {
+        let view = self.picker.as_ref()?.view(window, theme, locale)?;
+        Some(view.map(Event::Picker))
     }
 
     /// Open the picture in `[Screenshot] editor`.
@@ -339,7 +580,11 @@ impl Screenshot {
             }
             None => "none".to_owned(),
         };
-        format!("capture={capture}; clipboard={clipboard}; last={last}")
+        let picker = match &self.picker {
+            Some(p) => p.describe(),
+            None => "picker=closed".to_owned(),
+        };
+        format!("capture={capture}; clipboard={clipboard}; {picker}; last={last}")
     }
 }
 
@@ -350,48 +595,48 @@ fn place(info: &OutputInfo) -> Option<(u32, Rect)> {
     Some((info.id, Rect::new(x, y, w, h)))
 }
 
-/// The picture out of the frames as a PNG, and a new file in
-/// `directory` when there is one; off the runtime's threads, it's
-/// seconds of work on big screens.
-async fn develop(
-    frames: Frames,
-    outputs: Vec<(u32, Rect)>,
+/// Each frame upright, placed where its output is.
+fn shots_of(frames: &[RawFrame], outputs: &[(u32, Rect)]) -> Vec<Shot> {
+    frames
+        .iter()
+        .filter_map(|f| {
+            let (_, place) = outputs.iter().find(|(name, _)| *name == f.output)?;
+            Some(Shot {
+                output: f.output,
+                rect: *place,
+                image: pixels::upright(f),
+            })
+        })
+        .collect()
+}
+
+/// `rect` out of the shots as a PNG, and a new file in `directory`
+/// when there is one. Seconds of work on big screens: run it off the
+/// runtime's threads.
+fn picture(
+    shots: &[Shot],
     rect: Rect,
     directory: Option<PathBuf>,
 ) -> Result<(Picture, Png), String> {
-    tokio::task::spawn_blocking(move || {
-        let shots: Vec<Shot> = frames
-            .iter()
-            .filter_map(|f| {
-                let (_, place) = outputs.iter().find(|(name, _)| *name == f.output)?;
-                Some(Shot {
-                    rect: *place,
-                    image: pixels::upright(f),
-                })
-            })
-            .collect();
-        let picture = pixels::compose(&shots, rect).ok_or("the picture is on no output")?;
-        let png = pixels::encode_png(&picture)?;
-        let path = match directory {
-            Some(directory) => {
-                std::fs::create_dir_all(&directory)
-                    .map_err(|e| format!("cannot create {}: {e}", directory.display()))?;
-                let path = free_name(&directory, &chrono::Local::now());
-                std::fs::write(&path, &png)
-                    .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-                Some(path)
-            }
-            None => None,
-        };
-        let picture = Picture {
-            path,
-            width: picture.width(),
-            height: picture.height(),
-        };
-        Ok((picture, Png(Arc::new(png))))
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let picture = pixels::compose(shots, rect).ok_or("the picture is on no output")?;
+    let png = pixels::encode_png(&picture)?;
+    let path = match directory {
+        Some(directory) => {
+            std::fs::create_dir_all(&directory)
+                .map_err(|e| format!("cannot create {}: {e}", directory.display()))?;
+            let path = free_name(&directory, &chrono::Local::now());
+            std::fs::write(&path, &png)
+                .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            Some(path)
+        }
+        None => None,
+    };
+    let picture = Picture {
+        path,
+        width: picture.width(),
+        height: picture.height(),
+    };
+    Ok((picture, Png(Arc::new(png))))
 }
 
 /// `Screenshot_2026-10-05_14-03-22.png`, or `..._2.png` and on when

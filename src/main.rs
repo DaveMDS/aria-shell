@@ -700,7 +700,10 @@ impl AriaShell {
                 .screenshot
                 .run(cmd, &self.outputs, &self.compositor)
                 .map(Message::Screenshot),
-            Message::Screenshot(event) => self.screenshot.apply(event).map(Message::Screenshot),
+            Message::Screenshot(event) => {
+                let (task, surfaces) = self.screenshot.apply(event, &self.outputs, &self.compositor);
+                Task::batch([task.map(Message::Screenshot), screenshot_surfaces(surfaces)])
+            }
             Message::Command(Command::Brightness(cmd)) => {
                 if self.brightness.run(cmd) {
                     self.brightness_changed()
@@ -982,6 +985,11 @@ impl AriaShell {
         for (&output, &id) in &self.osd.windows {
             if let Some(rect) = self.osd_rect(output) {
                 list.push((id, "osd", output, rect));
+            }
+        }
+        for (id, output) in self.screenshot.picker_surfaces() {
+            if let Some(out) = self.output_rect(output) {
+                list.push((id, "screenshot", output, out));
             }
         }
         for (id, output) in self.locker.iter().flat_map(Locker::windows) {
@@ -1792,27 +1800,46 @@ impl AriaShell {
                 );
                 // Announced again to late subscribers: only a new one
                 // may bring a monitor.
+                let mut tasks = Vec::new();
                 if self
                     .outputs
                     .insert(OutputId::from(&output), output.clone())
                     .is_none()
                 {
                     self.brightness.outputs_changed();
+                    tasks.push(screenshot_surfaces(self.screenshot.outputs_changed()));
                 }
-                Task::batch([self.open_panels(&output), self.open_wallpaper(&output)])
+                tasks.extend([self.open_panels(&output), self.open_wallpaper(&output)]);
+                Task::batch(tasks)
             }
             // Moved, rotated, rescaled: where it is now (debug surfaces,
             // screenshots).
             ShellEvent::OutputUpdated(output) => {
-                if let Some(known) = self.outputs.get_mut(&OutputId::from(&output)) {
-                    *known = output;
+                let Some(known) = self.outputs.get_mut(&OutputId::from(&output)) else {
+                    return Task::none();
+                };
+                let place = |o: &OutputInfo| {
+                    (
+                        o.logical_position,
+                        o.logical_size,
+                        o.scale_factor,
+                        o.transform,
+                    )
+                };
+                let moved = place(known) != place(&output);
+                *known = output;
+                if moved {
+                    screenshot_surfaces(self.screenshot.outputs_changed())
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
+                let mut closing = Task::none();
                 if self.outputs.remove(&gone).is_some() {
                     self.brightness.outputs_changed();
+                    closing = screenshot_surfaces(self.screenshot.outputs_changed());
                 }
                 let ids: Vec<Id> = self
                     .panels
@@ -1855,9 +1882,13 @@ impl AriaShell {
                 if let Some(id) = self.osd.windows.remove(&OutputId::from(&output)) {
                     tasks.push(Task::done(Message::RemoveWindow(id)));
                 }
+                tasks.push(closing);
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
+                if self.screenshot.picker_surfaces().any(|(w, _)| w == id) {
+                    return screenshot_surfaces(self.screenshot.surface_closed(id));
+                }
                 if let Some(locker) = &mut self.locker
                     && locker.remove_window(id)
                 {
@@ -2006,6 +2037,9 @@ impl AriaShell {
                 .align_y(iced::Alignment::Center)
                 .into();
             return content.map(Message::Locker);
+        }
+        if let Some(picker) = self.screenshot.view(window, &self.theme, &self.locale) {
+            return picker.map(Message::Screenshot);
         }
         if let Some((dialog, launcher)) = &self.launcher
             && dialog.is_window(window)
@@ -2241,6 +2275,23 @@ fn open_surfaces(surfaces: Vec<(Id, NewLayerShellSettings)>) -> Task<Message> {
         surfaces
             .into_iter()
             .map(|(id, settings)| Task::done(Message::NewLayerShell { settings, id })),
+    )
+}
+
+/// Open, close and redraw what the screenshot picker asks.
+fn screenshot_surfaces(surfaces: screenshot::Surfaces) -> Task<Message> {
+    let close = surfaces
+        .close
+        .into_iter()
+        .map(|id| Task::done(Message::RemoveWindow(id)));
+    let redraw = surfaces
+        .redraw
+        .into_iter()
+        .map(|id| Task::done(Message::Redraw(Some(id))));
+    Task::batch(
+        std::iter::once(open_surfaces(surfaces.open))
+            .chain(close)
+            .chain(redraw),
     )
 }
 

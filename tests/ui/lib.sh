@@ -172,6 +172,19 @@ click_widget() {
     click $(($1 + $3 / 2)) $(($2 + $4 / 2))
 }
 
+# Press at x1,y1, move to x2,y2 in steps, release there.
+drag() {
+    pointer "$1" "$2"
+    inject press
+    settle 0.1
+    for i in 1 2 3 4; do
+        pointer $(($1 + ($3 - $1) * i / 4)) $(($2 + ($4 - $2) * i / 4))
+        settle 0.05
+    done
+    inject release
+    settle
+}
+
 type_text() {
     inject "type $1"
     settle

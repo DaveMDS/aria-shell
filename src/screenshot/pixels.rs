@@ -81,6 +81,8 @@ pub type Frames = Arc<Vec<RawFrame>>;
 /// An output's picture, upright, and where the output is: its scale is
 /// the image's pixels over the rectangle's.
 pub struct Shot {
+    /// The output's global name.
+    pub output: u32,
     pub rect: Rect,
     pub image: RgbaImage,
 }
@@ -198,6 +200,7 @@ mod tests {
 
     fn solid(rect: Rect, scale: u32, color: [u8; 4]) -> Shot {
         Shot {
+            output: 1,
             rect,
             image: RgbaImage::from_pixel(
                 rect.width as u32 * scale,

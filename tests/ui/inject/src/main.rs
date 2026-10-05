@@ -13,6 +13,7 @@
 //!   layout W H      the global space `move` refers to (default 3840x1080)
 //!   move X Y        pointer to global X,Y
 //!   click [button]  press and release (left, right, middle; left by default)
+//!   press, release  the left button alone, for a drag (press, move, release)
 //!   scroll N        N wheel clicks down (negative: up)
 //!   key NAME        press and release an xkb keysym name: Down, Return,
 //!                   Escape, BackSpace, Tab, space, a, ...
@@ -349,6 +350,16 @@ impl Injector {
                 self.pointer.frame();
                 self.pointer
                     .button(self.now(), button, wl_pointer::ButtonState::Released);
+                self.pointer.frame();
+            }
+            // Half a click, for a drag: `press`, `move`s, `release`.
+            "press" | "release" => {
+                let state = if verb == "press" {
+                    wl_pointer::ButtonState::Pressed
+                } else {
+                    wl_pointer::ButtonState::Released
+                };
+                self.pointer.button(self.now(), BTN_LEFT, state);
                 self.pointer.frame();
             }
             "scroll" => {

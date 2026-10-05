@@ -362,7 +362,8 @@ fn parse_volume(args: &[&str]) -> Result<VolumeCommand, String> {
     }
 }
 
-/// `screenshot window | output [connector] | all`, then `--edit` to
+/// `screenshot [window | output [connector] | all]` (none: the picker),
+/// then `--edit` to
 /// open the file in the editor or `--clipboard` to copy it instead of
 /// a file, anywhere.
 fn parse_screenshot(args: &[&str]) -> Result<crate::screenshot::Command, String> {
@@ -382,13 +383,14 @@ fn parse_screenshot(args: &[&str]) -> Result<crate::screenshot::Command, String>
         .filter(|a| !matches!(*a, "--edit" | "--clipboard"))
         .collect();
     let target = match rest.as_slice() {
+        [] => Target::Pick,
         ["window"] => Target::Window,
         ["output"] => Target::Output(None),
         ["output", name] => Target::Output(Some((*name).to_owned())),
         ["all"] => Target::All,
         _ => {
             return Err(format!(
-                "invalid arguments for <screenshot>: {} (window | output [connector] | all) [--edit | --clipboard]",
+                "invalid arguments for <screenshot>: {} [window | output [connector] | all] [--edit | --clipboard]",
                 args.join(" ")
             ));
         }
@@ -788,7 +790,11 @@ mod tests {
         );
         assert!(parse("screenshot window --edit --clipboard").is_err());
         assert!(parse("screenshot desk").is_err());
-        assert!(parse("screenshot").is_err());
+        assert_eq!(parse("screenshot"), shot(Target::Pick, file));
+        assert_eq!(
+            parse("screenshot --clipboard"),
+            shot(Target::Pick, Destination::Clipboard)
+        );
         assert_eq!(
             parse("debug screenshot"),
             Ok(Parsed::Debug(DebugCommand::Screenshot))

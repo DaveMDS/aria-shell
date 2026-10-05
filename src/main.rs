@@ -253,8 +253,8 @@ struct OpenPopup {
 impl OpenPopup {
     /// Where it was asked to be, relative to the panel's surface (the
     /// compositor may slide it; a `debug surfaces` estimate).
-    fn estimate(&self, position: panel::Position) -> Rectangle {
-        panel::popup_estimate(position, self.anchor, self.size)
+    fn estimate(&self, position: panel::Position, room: iced::Padding) -> Rectangle {
+        panel::popup_estimate(position, self.anchor, self.size, room)
     }
 }
 
@@ -417,7 +417,8 @@ impl AriaShell {
             let Some(position) = self.panels.get(&open.panel).map(Panel::position) else {
                 continue;
             };
-            let settings = panel::popup_settings(open.panel, position, open.anchor, size);
+            let settings =
+                panel::popup_settings(open.panel, position, open.anchor, size, self.popup_room());
             tasks.push(Task::done(Message::PopUpReposition { settings, id }));
         }
         Task::batch(tasks)
@@ -481,16 +482,23 @@ impl AriaShell {
     }
 
     /// Surface size for popup `id` of `panel`: what its gadget wants
-    /// for the content, plus the `popup` root's padding and border.
+    /// for the content, plus the `popup` root's padding and border, plus
+    /// the room for its shadow.
     fn popup_surface_size(&self, panel: Id, id: Id) -> Option<(u32, u32)> {
         let size = self.panels.get(&panel)?.popup_size(id, self.shared())?;
         let chrome = self.theme.resolve(&Node::root("popup"));
         let pad = chrome.padding;
+        let room = self.popup_room();
         let extra = 2.0 * chrome.border_width;
         Some((
-            size.0 + (pad.left + pad.right + extra) as u32,
-            size.1 + (pad.top + pad.bottom + extra) as u32,
+            size.0 + (pad.left + pad.right + extra + room.left + room.right) as u32,
+            size.1 + (pad.top + pad.bottom + extra + room.top + room.bottom) as u32,
         ))
+    }
+
+    /// The room around a popup's box for its shadow.
+    fn popup_room(&self) -> iced::Padding {
+        self.theme.shadow_room(&Node::root("popup"))
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -833,7 +841,8 @@ impl AriaShell {
                 // asked (a tray menu loads faster than that): size the
                 // surface from the state now, not from `OpenPopup`'s.
                 let size = self.popup_surface_size(panel, popup).unwrap_or(size);
-                let settings = panel::popup_settings(panel, position, anchor, size);
+                let settings =
+                    panel::popup_settings(panel, position, anchor, size, self.popup_room());
                 self.popups.insert(
                     popup,
                     OpenPopup {
@@ -886,7 +895,7 @@ impl AriaShell {
             if let Some(&(_, _, output, bar)) = list.iter().find(|(p, ..)| *p == open.panel)
                 && let Some(position) = self.panels.get(&open.panel).map(Panel::position)
             {
-                let rect = open.estimate(position);
+                let rect = open.estimate(position, self.popup_room());
                 list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
             }
         }
@@ -1243,21 +1252,34 @@ impl AriaShell {
                 &self.icons,
                 &toast::Extras::default(),
             );
+            // The surface is the box plus the room for its shadow; the
+            // boxes are stacked, their shadows overlap the gaps.
+            let room = self.theme.shadow_room(&node);
             let offset = offsets.entry(self.toasts[i].output).or_insert(0);
             let along = *offset;
             *offset += size.1 as i32 + gap;
+            let size = (
+                size.0 + (room.left + room.right) as u32,
+                size.1 + (room.top + room.bottom) as u32,
+            );
+            let (top, right, bottom, left) = (
+                room.top as i32,
+                room.right as i32,
+                room.bottom as i32,
+                room.left as i32,
+            );
             let margin = match position {
                 p if p.is_top() => (
-                    edge.top as i32 + along,
-                    edge.right as i32,
+                    edge.top as i32 + along - top,
+                    edge.right as i32 - right,
                     0,
-                    edge.left as i32,
+                    edge.left as i32 - left,
                 ),
                 _ => (
                     0,
-                    edge.right as i32,
-                    edge.bottom as i32 + along,
-                    edge.left as i32,
+                    edge.right as i32 - right,
+                    edge.bottom as i32 + along - bottom,
+                    edge.left as i32 - left,
                 ),
             };
             let toast = &mut self.toasts[i];
@@ -1356,10 +1378,12 @@ impl AriaShell {
         self.resolve_icons();
         let size = self.osd.size(&self.theme);
         let config = self.osd.config().clone();
+        // The box `margin` from the edge, its shadow's room nearer.
+        let room = self.osd.room(&self.theme);
         let margin = match config.position {
-            osd::Position::Top => (config.margin, 0, 0, 0),
+            osd::Position::Top => (config.margin - room.top as i32, 0, 0, 0),
             osd::Position::Center => (0, 0, 0, 0),
-            osd::Position::Bottom => (0, 0, config.margin, 0),
+            osd::Position::Bottom => (0, 0, config.margin - room.bottom as i32, 0),
         };
         let mut tasks = Vec::new();
         for (&output, info) in &self.outputs {
@@ -1412,6 +1436,7 @@ impl AriaShell {
         let (w, h) = self.osd.size(&self.theme);
         let (w, h) = (w as f32, h as f32);
         let config = self.osd.config();
+        let room = self.osd.room(&self.theme);
         let reserved = |wanted: panel::Position| -> f32 {
             self.panels
                 .values()
@@ -1421,10 +1446,14 @@ impl AriaShell {
         };
         let x = out.x + (out.width - w) / 2.0;
         let y = match config.position {
-            osd::Position::Top => out.y + reserved(panel::Position::Top) + config.margin as f32,
+            osd::Position::Top => {
+                out.y + reserved(panel::Position::Top) + config.margin as f32 - room.top
+            }
             osd::Position::Center => out.y + (out.height - h) / 2.0,
             osd::Position::Bottom => {
-                out.y + out.height - reserved(panel::Position::Bottom) - config.margin as f32 - h
+                out.y + out.height - reserved(panel::Position::Bottom) - config.margin as f32
+                    + room.bottom
+                    - h
             }
         };
         Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
@@ -1443,7 +1472,10 @@ impl AriaShell {
             Some(theme::Length::Px(px)) => px.max(1.0) as u32,
             _ => default as u32,
         };
-        let size = (px(style.width, 500.0), px(style.height, 400.0));
+        let size = grown(
+            (px(style.width, 500.0), px(style.height, 400.0)),
+            self.theme.shadow_room(&Node::root("launcher")),
+        );
         let launcher = Launcher::new(
             self.config.section(None),
             self.config.section(None),
@@ -1467,7 +1499,10 @@ impl AriaShell {
             log::warn!("no output to show the exiter on");
             return Task::none();
         };
-        let size = exiter.size(&self.theme, &self.locale);
+        let size = grown(
+            exiter.size(&self.theme, &self.locale),
+            self.theme.shadow_room(&Node::root("exiter")),
+        );
         let (dialog, surfaces) =
             Dialog::open("aria-exiter", &output, size, self.outputs.values().cloned());
         self.exiter = Some((dialog, exiter));
@@ -1488,7 +1523,10 @@ impl AriaShell {
         let Some((dialog, exiter)) = &mut self.exiter else {
             return Task::none();
         };
-        let size = exiter.size(&self.theme, &self.locale);
+        let size = grown(
+            exiter.size(&self.theme, &self.locale),
+            self.theme.shadow_room(&Node::root("exiter")),
+        );
         if size == dialog.size {
             return Task::none();
         }
@@ -1850,22 +1888,28 @@ impl AriaShell {
         if let Some((dialog, launcher)) = &self.launcher
             && dialog.is_window(window)
         {
+            let node = Node::root("launcher");
             let root = self
                 .theme
-                .container(&Node::root("launcher"), launcher.view(shared))
+                .container(&node, launcher.view(shared))
                 .width(Length::Fill)
                 .height(Length::Fill);
-            return dialog::content(root, launcher::Message::Nothing).map(Message::Launcher);
+            // The shadow's room outside what takes clicks: a press there
+            // is outside the launcher.
+            let content = dialog::content(root, launcher::Message::Nothing);
+            return Element::from(self.theme.surface(&node, content)).map(Message::Launcher);
         }
         if let Some((dialog, exiter)) = &self.exiter
             && dialog.is_window(window)
         {
+            let node = Node::root("exiter");
             let root = self
                 .theme
-                .container(&Node::root("exiter"), exiter.view(shared))
+                .container(&node, exiter.view(shared))
                 .width(Length::Fill)
                 .height(Length::Fill);
-            return dialog::content(root, exiter::Message::Nothing).map(Message::Exiter);
+            let content = dialog::content(root, exiter::Message::Nothing);
+            return Element::from(self.theme.surface(&node, content)).map(Message::Exiter);
         }
         if self
             .launcher
@@ -1906,12 +1950,12 @@ impl AriaShell {
                 &self.icons,
                 toast::Extras::default(),
             );
-            let root: Element<'_, toast::Message> = self
+            let root = self
                 .theme
                 .container(&node, content)
                 .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
+                .height(Length::Fill);
+            let root: Element<'_, toast::Message> = self.theme.surface(&node, root).into();
             return root.map(Message::Toast);
         }
         if let Some(output) = self.osd.output_of(window) {
@@ -2007,6 +2051,14 @@ impl AriaShell {
             .chain(locker),
         )
     }
+}
+
+/// A surface's size: its box's, plus the room for the box's shadow.
+fn grown(size: (u32, u32), room: iced::Padding) -> (u32, u32) {
+    (
+        size.0 + (room.left + room.right) as u32,
+        size.1 + (room.top + room.bottom) as u32,
+    )
 }
 
 /// The layer-shell anchor of the OSD: none centres it.

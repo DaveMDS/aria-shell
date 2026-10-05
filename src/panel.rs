@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{Space, container, row};
-use iced::{Element, Length, Rectangle, Subscription, Task, widget, window};
+use iced::{Element, Length, Padding, Rectangle, Subscription, Task, widget, window};
 use iced_exwlshell::actions::IcedNewPopupSettings;
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
@@ -73,13 +73,17 @@ impl Section for PanelConfig {
 
 /// Placement of a popup hanging off a widget with `anchor` bounds in the
 /// surface of a bar at `position`: centred on the widget, on the side
-/// away from the screen edge.
+/// away from the screen edge. `room` is the part of the surface around
+/// the popup's box kept for its shadow: the box, not the surface, meets
+/// the widget.
 pub fn popup_settings(
     parent: window::Id,
     position: Position,
     anchor: Rectangle,
     size: (u32, u32),
+    room: Padding,
 ) -> IcedNewPopupSettings {
+    let anchor = shadow_anchor(position, anchor, room);
     let (edge, gravity) = match position {
         Position::Top => (PopupAnchor::Bottom, PopupGravity::Bottom),
         Position::Bottom => (PopupAnchor::Top, PopupGravity::Top),
@@ -112,7 +116,13 @@ pub fn presses_outside() -> Subscription<window::Id> {
 /// Where [`popup_settings`] asks the popup to go, relative to the
 /// panel surface, before the compositor slides it on screen: for
 /// `debug surfaces`.
-pub fn popup_estimate(position: Position, anchor: Rectangle, size: (u32, u32)) -> Rectangle {
+pub fn popup_estimate(
+    position: Position,
+    anchor: Rectangle,
+    size: (u32, u32),
+    room: Padding,
+) -> Rectangle {
+    let anchor = shadow_anchor(position, anchor, room);
     let (w, h) = (size.0 as f32, size.1 as f32);
     let x = anchor.x + (anchor.width - w) / 2.0;
     let y = match position {
@@ -120,6 +130,31 @@ pub fn popup_estimate(position: Position, anchor: Rectangle, size: (u32, u32)) -
         Position::Bottom => anchor.y - h,
     };
     Rectangle::new(iced::Point::new(x, y), iced::Size::new(w, h))
+}
+
+/// The anchor rectangle that puts a popup's box, not its surface, on
+/// the widget: shortened on the side the popup hangs from by the room
+/// there (xdg-shell has no offset; a shorter rectangle stays inside the
+/// bar, a moved one might not), moved sideways when the shadow isn't
+/// centred.
+fn shadow_anchor(position: Position, anchor: Rectangle, room: Padding) -> Rectangle {
+    let x = anchor.x + (room.right - room.left) / 2.0;
+    match position {
+        Position::Top => Rectangle {
+            x,
+            height: (anchor.height - room.top).max(1.0),
+            ..anchor
+        },
+        Position::Bottom => {
+            let cut = room.bottom.min(anchor.height - 1.0).max(0.0);
+            Rectangle {
+                x,
+                y: anchor.y + cut,
+                height: anchor.height - cut,
+                ..anchor
+            }
+        }
+    }
 }
 
 impl PanelConfig {
@@ -522,12 +557,12 @@ impl Panel {
             .parent()
             .cloned()
             .unwrap_or_else(|| Node::root("popup"));
-        shared
+        let content = shared
             .theme
             .container(&root, content)
             .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill);
+        shared.theme.surface(&root, content).into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

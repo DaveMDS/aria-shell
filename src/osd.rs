@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use iced::widget::{Space, row};
 use iced::window::Id;
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Padding};
 use iced_wayland_subscriber::OutputId;
 
 use crate::audio::{Audio, Kind as Channel};
@@ -387,14 +387,25 @@ impl Osd {
         self.content.iter().filter_map(|c| c.icon.as_deref())
     }
 
-    /// The surface size: the theme's `osd { width; height }`.
+    /// The surface size: the theme's `osd { width; height }`, plus the
+    /// room for its shadow ([`Osd::room`]).
     pub fn size(&self, theme: &Theme) -> (u32, u32) {
-        let s = theme.resolve(&Node::root("osd"));
+        let root = Node::root("osd");
+        let s = theme.resolve(&root);
         let px = |l: Option<theme::Length>, default: f32| match l {
-            Some(theme::Length::Px(px)) => px.max(1.0) as u32,
-            _ => default as u32,
+            Some(theme::Length::Px(px)) => px.max(1.0),
+            _ => default,
         };
-        (px(s.width, DEFAULT_SIZE.0), px(s.height, DEFAULT_SIZE.1))
+        let room = theme.shadow_room(&root);
+        (
+            (px(s.width, DEFAULT_SIZE.0) + room.left + room.right) as u32,
+            (px(s.height, DEFAULT_SIZE.1) + room.top + room.bottom) as u32,
+        )
+    }
+
+    /// The room around the box for its shadow, inside the surface.
+    pub fn room(&self, theme: &Theme) -> Padding {
+        theme.shadow_room(&Node::root("osd"))
     }
 
     /// The content on the surface of output `output`.
@@ -449,7 +460,7 @@ impl Osd {
                     .into(),
             );
         }
-        theme
+        let pill = theme
             .container(
                 &node,
                 row(parts)
@@ -458,8 +469,8 @@ impl Osd {
                     .width(Length::Fill),
             )
             .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill);
+        theme.surface(&Node::root("osd"), pill).into()
     }
 }
 

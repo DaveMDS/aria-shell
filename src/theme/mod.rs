@@ -580,6 +580,36 @@ impl Theme {
         container(toggle).id(id)
     }
 
+    /// The room a surface needs around its root box `node` for the
+    /// box's `box-shadow` to show: a surface is only drawn inside its own
+    /// bounds, so one the size of the box cuts the shadow off (iced draws
+    /// it `blur` past the box moved by the offset). Zero without one.
+    pub fn shadow_room(&self, node: &Node) -> Padding {
+        let Some(shadow) = self.resolve(node).shadow.filter(|s| s.color.a > 0.0) else {
+            return Padding::ZERO;
+        };
+        let side = |offset: f32| (shadow.blur_radius + offset).max(0.0).ceil();
+        Padding {
+            top: side(-shadow.offset.y),
+            right: side(shadow.offset.x),
+            bottom: side(shadow.offset.y),
+            left: side(-shadow.offset.x),
+        }
+    }
+
+    /// The content of a surface whose root box is `node`: inset by its
+    /// [`Theme::shadow_room`], which the surface's size includes.
+    pub fn surface<'a, M: 'a>(
+        &self,
+        node: &Node,
+        content: impl Into<Element<'a, M>>,
+    ) -> Container<'a, M> {
+        container(content)
+            .padding(self.shadow_room(node))
+            .width(IcedLength::Fill)
+            .height(IcedLength::Fill)
+    }
+
     /// The size `text` takes as a [`Theme::text`] of `node` (font and
     /// size from the theme; iced's default 16px and 1.3 line height
     /// otherwise), for surfaces that must be sized before layout.
@@ -1133,6 +1163,36 @@ mod tests {
         assert_eq!(s.font(), None);
         assert_eq!(s.button(red()).text_color, red());
         assert_eq!(s.container().border.color, Color::TRANSPARENT);
+    }
+
+    #[test]
+    fn room_for_the_shadow() {
+        let t = theme(
+            "a { box-shadow: 0 2px 8px black } b { box-shadow: -3 0 2.5 black } \
+             c { box-shadow: 0 2px 8px transparent } d { box-shadow: none }",
+        );
+        let room = |name| t.shadow_room(&Node::root(name));
+        assert_eq!(
+            room("a"),
+            Padding {
+                top: 6.0,
+                right: 8.0,
+                bottom: 10.0,
+                left: 8.0
+            }
+        );
+        assert_eq!(
+            room("b"),
+            Padding {
+                top: 3.0,
+                right: 0.0,
+                bottom: 3.0,
+                left: 6.0
+            }
+        );
+        assert_eq!(room("c"), Padding::ZERO);
+        assert_eq!(room("d"), Padding::ZERO);
+        assert_eq!(room("none"), Padding::ZERO);
     }
 
     #[test]

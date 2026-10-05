@@ -29,7 +29,14 @@
  *   background                  colour | transparent | none
  *   border                      <width> solid <colour> | none
  *   border-width, border-color, border-radius (1 or 4 values)
- *   box-shadow                  <x> <y> [blur] <colour> | none
+ *   box-shadow                  <x> <y> [blur] <colour> | none; on a surface's root (popup,
+ *                               notification, osd, launcher, exiter) the surface grows around
+ *                               the box to show it, the box stays where it was
+ *
+ *   For now what shows through a surface (a shadow, the corners a surface's root
+ *   rounds, an rgba background) has only 4 levels of transparency: the shadows
+ *   come out as hard bands, rounded corners jagged. This file uses neither on
+ *   the surfaces until iced fixes it (see ARCHITECTURE.md, known risks).
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill (content is centred on a sized axis);
@@ -322,9 +329,6 @@
  *      ╰─ text                                                `height`, and its title
  */
 
-:root {
-  --aria-shadow: rgba(0, 0, 0, 0.4);
-}
 :root.light {
   --aria-bg: #eff1f5;
   --aria-fg: #4c4f69;
@@ -364,8 +368,6 @@ popup {
   color: var(--aria-fg);
   font-size: 14px;
   border: 1px solid var(--aria-border);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px var(--aria-shadow);
 }
 
 slot {
@@ -382,7 +384,6 @@ launcher {
   color: var(--aria-fg);
   font-size: 14px;
   border: 1px solid var(--aria-border);
-  border-radius: 8px;
 }
 launcher actions {
   gap: 4px;
@@ -456,7 +457,6 @@ exiter {
   color: var(--aria-fg);
   font-size: 14px;
   border: 1px solid var(--aria-border);
-  border-radius: 12px;
 }
 exiter button {
   padding: 12px 16px;
@@ -577,8 +577,6 @@ osd {
   color: var(--aria-fg);
   font-size: 15px;
   border: 1px solid var(--aria-border);
-  border-radius: 28px;
-  box-shadow: 0 2px 8px var(--aria-shadow);
 }
 osd icon {
   height: 24px;
@@ -611,8 +609,6 @@ notification {
   color: var(--aria-fg);
   font-size: 14px;
   border: 1px solid var(--aria-border);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px var(--aria-shadow);
 }
 notification.critical {
   border-color: var(--aria-urgent);
@@ -897,11 +893,9 @@ gadget.notifications empty {
   padding: 12px;
   color: var(--aria-muted);
 }
-/* The rows: the desktop `notification` rules, without the shadow, as
-   wide as the list. */
+/* The rows: the desktop `notification` rules, as wide as the list. */
 gadget.notifications list notification {
   width: fill;
-  box-shadow: none;
 }
 gadget.notifications list notification.unseen summary {
   color: var(--aria-accent);

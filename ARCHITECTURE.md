@@ -39,6 +39,20 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
   when drawn, a fraction of the CPU with the pointer moving) waits for
   the 0.21 release: merge it then, adapting to the API changes made
   after the rc.
+- Transparency has 2 bits: `iced_wgpu` 0.14.0 takes the first non-sRGB
+  surface format needing no feature, and Mesa's Vulkan on Wayland lists
+  `Rgb10a2Unorm` before `Bgra8Unorm` (the log says `Selected format:
+  Rgb10a2Unorm`), so what shows through a surface has 4 levels: a
+  shadow is a hard band, the antialiased edge of a rounded surface
+  jagged, an `rgba` bar banded. Measured with a red `0 0 30px` shadow:
+  the colour fades, the alpha steps from 0.33 to 0. iced master excludes
+  `Rgb10a2Unorm`/`Rgb10a2Uint` (a `BLACKLIST` in
+  `wgpu/src/window/compositor.rs`), not in any 0.14 release, and
+  `iced_exwlshell` 0.21 stays on iced 0.14. Chosen: wait for the
+  release, no vendored copy; until then `base.css` gives the surfaces'
+  roots neither shadows nor rounded corners (inner widgets round fine,
+  on an opaque background). The room for a shadow (`Theme::shadow_room`)
+  is already there for when it renders.
 
 ## Structure
 
@@ -743,6 +757,17 @@ Two things flow between the daemon and the gadgets besides messages:
   overlay toast still sits under a `top`-layer bar). That's how the
   notifications stack: one surface each, the daemon recomputes the
   margins on every change.
+- A surface is only drawn inside its bounds: one the size of its box
+  cut the box's `box-shadow` flat (and transparency has 2 bits for now,
+  see the known risks) (iced draws it `blur` past the box
+  moved by the offset, `quad/solid.wgsl`). So the boxed surfaces
+  (popups, toasts, the OSD, the dialogs) are their box plus
+  `Theme::shadow_room(root)`, the box drawn inside it
+  (`Theme::surface`), and placed so the box stays put: margins less the
+  room, a popup's anchor rectangle shortened on the bar's side
+  (xdg-shell has no offset; a moved rectangle could leave the bar). A
+  click on the shadow is the surface's: lost on a popup or a toast,
+  "outside" on a dialog (the room is outside its `mouse_area`).
 - iced's `container` and `button` lay their content out inside the
   padding only: the border is drawn over it and takes no room, so a
   surface measured for its content adds padding, not `border-width`.

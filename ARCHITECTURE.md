@@ -396,8 +396,9 @@ Two things flow between the daemon and the gadgets besides messages:
   it in the gadget's `Popup`. The daemon keeps `popup -> (panel, anchor
   rect, size)`, asks the widget tree for the anchor's bounds with a
   custom `Operation` (`widget_bounds` in `main.rs`) and sends `NewPopUp`
-  placed by `panel::popup_settings` (centred on the anchor, below a top
-  bar / above a bottom one). `view(popup_id)` routes to
+  placed by `panel::popup_settings` (centred on the anchor, its box
+  meeting the bar's edge whatever the anchor's height: the anchor rect
+  is stretched to the bar's whole thickness). `view(popup_id)` routes to
   `Panel::popup_view` -> `Gadget::popup_view`. Whoever closes it (the
   gadget, or the compositor on a click outside), it ends in
   `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's

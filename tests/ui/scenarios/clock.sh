@@ -16,13 +16,18 @@ for output in HEADLESS-1 HEADLESS-2; do
     assert_eq "$(count_widgets 'calendar > day.today')" 1 "today is shown"
     assert_eq "$(count_widgets 'calendar > weekday')" 7 "seven weekday headers"
 
-    # The popup sits below the bar, centred on the clock.
+    # The popup sits right below the bar (not the button), centred on
+    # the clock.
     set -- $(widget "panel[output=\"$output\"] slot.center gadget.clock > button")
     clock_cx=$(($1 + $3 / 2))
     set -- $(widget "popup[output=\"$output\"] calendar")
     popup_cx=$(($1 + $3 / 2))
     [ $((popup_cx - clock_cx)) -le 2 ] && [ $((clock_cx - popup_cx)) -le 2 ] \
         || { echo "popup centre $popup_cx, clock centre $clock_cx"; exit 1; }
+    set -- $(widget "panel[output=\"$output\"]")
+    bar_bottom=$(($2 + $4))
+    set -- $(widget "popup[output=\"$output\"]")
+    assert_eq "$2" "$bar_bottom" "popup top at the bar's bottom"
 
     click_widget 'calendar > header > button.next'
     assert_eq "$(count_widgets 'calendar > day.today')" 0 "next month has no today"

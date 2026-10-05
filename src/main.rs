@@ -241,8 +241,9 @@ struct Wallpaper {
     config: WallpaperConfig,
 }
 
-/// A popup surface: the panel it hangs off, the anchor widget's bounds
-/// in that panel's surface, and the surface size it was last given
+/// A popup surface: the panel it hangs off, its anchor in that panel's
+/// surface (the widget's width, the bar's whole height), and the
+/// surface size it was last given
 /// (content plus the `popup` root's chrome).
 struct OpenPopup {
     panel: Id,
@@ -835,8 +836,16 @@ impl AriaShell {
                 anchor,
                 size,
             } => {
-                let Some(position) = self.panels.get(&panel).map(Panel::position) else {
+                let Some(bar) = self.panels.get(&panel) else {
                     return Task::none();
+                };
+                let position = bar.position();
+                // The widget gives the x, the bar the y: the popup meets
+                // the bar's edge, however short the button is.
+                let anchor = Rectangle {
+                    y: 0.0,
+                    height: bar.height() as f32,
+                    ..anchor
                 };
                 // The state may have moved on while the widget tree was
                 // asked (a tray menu loads faster than that): size the

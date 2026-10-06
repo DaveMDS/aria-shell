@@ -30,7 +30,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use audio::Audio;
 use brightness::Brightness;
 use commands::{Command, OpenCommand, Reply, ToggleCommand};
-use components::{dialog, exiter, launcher, locker, osd, panel, wallpaper};
+use components::{Surfaces, dialog, exiter, launcher, locker, osd, panel, wallpaper};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use dialog::Dialog;
@@ -460,7 +460,7 @@ impl AriaShell {
                     .flat_map(|l| l.windows().map(|(id, _)| id)),
             )
             .chain(self.toasts.iter().map(|t| t.window))
-            .chain(self.osd.windows.values().copied());
+            .chain(self.osd.windows().map(|(_, id)| id));
         Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
     }
 
@@ -610,13 +610,7 @@ impl AriaShell {
                 Task::batch([follow_up, osd, self.sync_popups(), self.redraw_shared()])
             }
             Message::Command(Command::Osd(content)) => self.show_osd(content),
-            Message::OsdExpired(serial) => {
-                if self.osd.expired(serial) {
-                    self.close_osd()
-                } else {
-                    Task::none()
-                }
-            }
+            Message::OsdExpired(serial) => surface_tasks(self.osd.expired(serial)),
             Message::Toast(m) => {
                 let signals = self
                     .notifications
@@ -720,7 +714,7 @@ impl AriaShell {
                 let (task, surfaces) =
                     self.screenshot
                         .apply(event, &self.outputs, &self.compositor);
-                Task::batch([task.map(Message::Screenshot), screenshot_surfaces(surfaces)])
+                Task::batch([task.map(Message::Screenshot), surface_tasks(surfaces)])
             }
             Message::Command(Command::Brightness(cmd)) => {
                 if self.brightness.run(cmd) {
@@ -952,7 +946,7 @@ impl AriaShell {
         );
         tasks.push(self.sync_toasts());
         // The position may have changed.
-        tasks.push(self.close_osd());
+        tasks.push(surface_tasks(self.osd.close()));
         Task::batch(tasks)
     }
 
@@ -976,15 +970,7 @@ impl AriaShell {
         }
         tasks.push(self.sync_popups());
         tasks.push(self.sync_toasts());
-        let size = self.osd.size(&self.theme);
-        let anchor = osd_anchor(self.osd.config().position);
-        tasks.extend(self.osd.windows.values().map(|&id| {
-            Task::done(Message::LayoutChange {
-                id,
-                anchor,
-                size: LayerSize::px(size.0, size.1),
-            })
-        }));
+        tasks.push(surface_tasks(self.osd.relayout(&self.theme)));
         Task::batch(tasks)
     }
 
@@ -1266,116 +1252,13 @@ impl AriaShell {
         }
     }
 
-    /// Show `content` on every output it's for (every one, unless it
-    /// names some): a surface for those without one, a new frame for
-    /// the others, and the timer that closes them; the surfaces on
-    /// other outputs go.
+    /// Show `content` on the outputs it's for, until its timer runs
+    /// out.
     fn show_osd(&mut self, content: osd::Content) -> Task<Message> {
         log::debug!("osd: {content:?}");
-        let names: Vec<&str> = self
-            .outputs
-            .values()
-            .filter_map(|o| o.name.as_deref())
-            .collect();
-        let shown_on = content.shown_on(&names);
-        let serial = self.osd.show(content);
-        let mut tasks = Vec::new();
-        let elsewhere: Vec<OutputId> = self
-            .osd
-            .windows
-            .keys()
-            .filter(|o| !shown_on(self.output_name(**o)))
-            .copied()
-            .collect();
-        for output in elsewhere {
-            if let Some(id) = self.osd.windows.remove(&output) {
-                tasks.push(Task::done(Message::RemoveWindow(id)));
-            }
-        }
+        let (surfaces, expiry) = self.osd.show(content, &self.outputs, &self.theme);
         self.resolve_icons();
-        let size = self.osd.size(&self.theme);
-        let config = self.osd.config().clone();
-        // The box `margin` from the edge, its shadow's room nearer.
-        let room = self.osd.room(&self.theme);
-        let margin = match config.position {
-            osd::Position::Top => (config.margin - room.top as i32, 0, 0, 0),
-            osd::Position::Center => (0, 0, 0, 0),
-            osd::Position::Bottom => (0, 0, config.margin - room.bottom as i32, 0),
-        };
-        for (&output, info) in &self.outputs {
-            if !shown_on(info.name.as_deref().unwrap_or_default()) {
-                continue;
-            }
-            if let Some(&id) = self.osd.windows.get(&output) {
-                tasks.push(Task::done(Message::Redraw(Some(id))));
-                continue;
-            }
-            let id = Id::unique();
-            self.osd.windows.insert(output, id);
-            tasks.push(Task::done(Message::NewLayerShell {
-                settings: NewLayerShellSettings {
-                    anchor: osd_anchor(config.position),
-                    size: LayerSize::px(size.0, size.1),
-                    layer: Layer::Overlay,
-                    exclusive_zone: None,
-                    margin: Some(margin),
-                    keyboard_interactivity: KeyboardInteractivity::None,
-                    output_option: OutputOption::GlobalName(info.id),
-                    // Shown over whatever is under the pointer: it must
-                    // not take its clicks.
-                    events_transparent: true,
-                    namespace: Some("aria-osd".to_owned()),
-                    ..Default::default()
-                },
-                id,
-            }));
-        }
-        let duration = config.duration;
-        tasks.push(Task::future(async move {
-            tokio::time::sleep(duration).await;
-            Message::OsdExpired(serial)
-        }));
-        Task::batch(tasks)
-    }
-
-    fn close_osd(&mut self) -> Task<Message> {
-        let windows: Vec<Id> = self.osd.windows.values().copied().collect();
-        self.osd.hide();
-        Task::batch(
-            windows
-                .into_iter()
-                .map(|id| Task::done(Message::RemoveWindow(id))),
-        )
-    }
-
-    /// Where the OSD is on `output`, as asked: centred, from its edge
-    /// past a bar's exclusive zone there, by the margin.
-    fn osd_rect(&self, output: OutputId) -> Option<Rectangle> {
-        let out = self.output_rect(output)?;
-        let (w, h) = self.osd.size(&self.theme);
-        let (w, h) = (w as f32, h as f32);
-        let config = self.osd.config();
-        let room = self.osd.room(&self.theme);
-        let reserved = |wanted: panel::Position| -> f32 {
-            self.panels
-                .values()
-                .filter(|p| p.output == output && p.position() == wanted)
-                .map(|p| p.height() as f32)
-                .fold(0.0, f32::max)
-        };
-        let x = out.x + (out.width - w) / 2.0;
-        let y = match config.position {
-            osd::Position::Top => {
-                out.y + reserved(panel::Position::Top) + config.margin as f32 - room.top
-            }
-            osd::Position::Center => out.y + (out.height - h) / 2.0,
-            osd::Position::Bottom => {
-                out.y + out.height - reserved(panel::Position::Bottom) - config.margin as f32
-                    + room.bottom
-                    - h
-            }
-        };
-        Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
+        Task::batch([surface_tasks(surfaces), expiry.map(Message::OsdExpired)])
     }
 
     /// Show the launcher on the focused output (the first one if the
@@ -1666,7 +1549,7 @@ impl AriaShell {
                     .is_none()
                 {
                     self.brightness.outputs_changed();
-                    tasks.push(screenshot_surfaces(self.screenshot.outputs_changed()));
+                    tasks.push(surface_tasks(self.screenshot.outputs_changed()));
                 }
                 tasks.extend([self.open_panels(&output), self.open_wallpaper(&output)]);
                 Task::batch(tasks)
@@ -1688,7 +1571,7 @@ impl AriaShell {
                 let moved = place(known) != place(&output);
                 *known = output;
                 if moved {
-                    screenshot_surfaces(self.screenshot.outputs_changed())
+                    surface_tasks(self.screenshot.outputs_changed())
                 } else {
                     Task::none()
                 }
@@ -1698,7 +1581,7 @@ impl AriaShell {
                 let mut closing = Task::none();
                 if self.outputs.remove(&gone).is_some() {
                     self.brightness.outputs_changed();
-                    closing = screenshot_surfaces(self.screenshot.outputs_changed());
+                    closing = surface_tasks(self.screenshot.outputs_changed());
                 }
                 let ids: Vec<Id> = self
                     .panels
@@ -1738,15 +1621,15 @@ impl AriaShell {
                         .map(|t| Task::done(Message::RemoveWindow(t.window))),
                 );
                 tasks.push(self.sync_toasts());
-                if let Some(id) = self.osd.windows.remove(&OutputId::from(&output)) {
-                    tasks.push(Task::done(Message::RemoveWindow(id)));
-                }
+                tasks.push(surface_tasks(
+                    self.osd.output_removed(OutputId::from(&output)),
+                ));
                 tasks.push(closing);
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
                 if self.screenshot.picker_surfaces().any(|(w, _)| w == id) {
-                    return screenshot_surfaces(self.screenshot.surface_closed(id));
+                    return surface_tasks(self.screenshot.surface_closed(id));
                 }
                 if let Some(locker) = &mut self.locker
                     && locker.remove_window(id)
@@ -1782,8 +1665,7 @@ impl AriaShell {
                 if self.wallpapers.remove(&id).is_some() {
                     return Task::none();
                 }
-                if let Some(output) = self.osd.output_of(id) {
-                    self.osd.windows.remove(&output);
+                if self.osd.closed(id) {
                     return Task::none();
                 }
                 if self.panels.remove(&id).is_some() {
@@ -2080,14 +1962,6 @@ fn grown(size: (u32, u32), room: iced::Padding) -> (u32, u32) {
 }
 
 /// The layer-shell anchor of the OSD: none centres it.
-fn osd_anchor(position: osd::Position) -> Anchor {
-    match position {
-        osd::Position::Top => Anchor::Top,
-        osd::Position::Center => Anchor::empty(),
-        osd::Position::Bottom => Anchor::Bottom,
-    }
-}
-
 /// The layer-shell anchor of a notification corner.
 fn toast_anchor(position: notifications::Position) -> Anchor {
     use notifications::Position::*;
@@ -2110,12 +1984,16 @@ fn open_surfaces(surfaces: Vec<(Id, NewLayerShellSettings)>) -> Task<Message> {
     )
 }
 
-/// Open, close and redraw what the screenshot picker asks.
-fn screenshot_surfaces(surfaces: screenshot::Surfaces) -> Task<Message> {
+/// Open, close, resize and redraw the surfaces a component asks for.
+fn surface_tasks(surfaces: Surfaces) -> Task<Message> {
     let close = surfaces
         .close
         .into_iter()
         .map(|id| Task::done(Message::RemoveWindow(id)));
+    let resize = surfaces
+        .resize
+        .into_iter()
+        .map(|(id, anchor, size)| Task::done(Message::LayoutChange { id, anchor, size }));
     let redraw = surfaces
         .redraw
         .into_iter()
@@ -2123,6 +2001,7 @@ fn screenshot_surfaces(surfaces: screenshot::Surfaces) -> Task<Message> {
     Task::batch(
         std::iter::once(open_surfaces(surfaces.open))
             .chain(close)
+            .chain(resize)
             .chain(redraw),
     )
 }

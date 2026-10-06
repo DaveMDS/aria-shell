@@ -122,9 +122,13 @@ impl AriaShell {
                 list.push((toast.window, "notification", toast.output, rect));
             }
         }
-        for (&output, &id) in &self.osd.windows {
-            if let Some(rect) = self.osd_rect(output) {
-                list.push((id, "osd", output, rect));
+        for (output, id) in self.osd.windows() {
+            if let Some(out) = self.output_rect(output) {
+                let bars = (
+                    self.bar_height(output, panel::Position::Top),
+                    self.bar_height(output, panel::Position::Bottom),
+                );
+                list.push((id, "osd", output, self.osd.rect(&self.theme, out, bars)));
             }
         }
         for (id, output) in self.screenshot.picker_surfaces() {
@@ -247,6 +251,16 @@ impl AriaShell {
             ),
             None => "unknown".to_owned(),
         }
+    }
+
+    /// The thickest bar at `position` on `output`: the exclusive zone
+    /// a surface anchored to that edge is pushed past.
+    fn bar_height(&self, output: OutputId, position: panel::Position) -> f32 {
+        self.panels
+            .values()
+            .filter(|p| p.output == output && p.position() == position)
+            .map(|p| p.height() as f32)
+            .fold(0.0, f32::max)
     }
 }
 

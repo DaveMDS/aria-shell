@@ -10,8 +10,9 @@
 //! The daemon owns one [`Osd`]: after every change of the shared
 //! state it calls [`Osd::observe`], which compares what it watches
 //! with the last reading ([`change`], a pure function) and says what
-//! to show. The daemon opens one overlay surface per output, draws
-//! [`Osd::view`] on each, and closes them all when the last change is
+//! to show. [`Osd::show`] asks for one overlay surface per output
+//! ([`Surfaces`], which the daemon opens), the daemon draws
+//! [`Osd::view`] on each, and they all close when the last change is
 //! `duration` old (a serial-checked timer, so a held volume key keeps
 //! the bar up and updates it in place). A brightness change shows on
 //! the screens it happened on, each with its own level.
@@ -29,9 +30,13 @@ use std::time::Duration;
 
 use iced::widget::{Space, row};
 use iced::window::Id;
-use iced::{Alignment, Element, Length, Padding};
-use iced_wayland_subscriber::OutputId;
+use iced::{Alignment, Element, Length, Padding, Point, Rectangle, Size, Task};
+use iced_exwlshell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+};
+use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use crate::components::Surfaces;
 use crate::config::{RawSection, Section};
 use crate::gadgets;
 use crate::locale::Locale;
@@ -613,7 +618,7 @@ pub struct Osd {
     /// closes the surfaces.
     serial: u64,
     /// One surface per output while shown.
-    pub windows: BTreeMap<OutputId, Id>,
+    windows: BTreeMap<OutputId, Id>,
 }
 
 impl Osd {
@@ -625,10 +630,6 @@ impl Osd {
             serial: 0,
             windows: BTreeMap::new(),
         }
-    }
-
-    pub fn config(&self) -> &OsdConfig {
-        &self.config
     }
 
     /// A new config; the last reading stays, so a reload isn't a change.
@@ -656,28 +657,128 @@ impl Osd {
         shown
     }
 
-    /// Show `content` (in place of what's shown); the serial its timer
-    /// must carry.
-    pub fn show(&mut self, content: Content) -> u64 {
+    /// Show `content` (in place of what's shown) on every output it's
+    /// for (every one, unless it names some): a surface for those
+    /// without one, a new frame for the others; the surfaces on other
+    /// outputs go. With the timer that closes them, yielding the serial
+    /// [`Osd::expired`] wants back.
+    pub fn show(
+        &mut self,
+        content: Content,
+        outputs: &BTreeMap<OutputId, OutputInfo>,
+        theme: &Theme,
+    ) -> (Surfaces, Task<u64>) {
+        let names: Vec<&str> = outputs.values().filter_map(|o| o.name.as_deref()).collect();
+        let shown_on = content.shown_on(&names);
         self.content = Some(content);
         self.serial += 1;
-        self.serial
-    }
-
-    /// The timer of show `serial` ran out: whether it was the last show
-    /// (then the surfaces go).
-    pub fn expired(&mut self, serial: u64) -> bool {
-        if serial != self.serial {
-            return false;
+        let mut surfaces = Surfaces::default();
+        self.windows.retain(|output, id| {
+            let name = outputs.get(output).and_then(|o| o.name.as_deref());
+            let keep = shown_on(name.unwrap_or("?"));
+            if !keep {
+                surfaces.close.push(*id);
+            }
+            keep
+        });
+        let size = self.size(theme);
+        // The box `margin` from the edge, its shadow's room nearer.
+        let room = self.room(theme);
+        let margin = match self.config.position {
+            Position::Top => (self.config.margin - room.top as i32, 0, 0, 0),
+            Position::Center => (0, 0, 0, 0),
+            Position::Bottom => (0, 0, self.config.margin - room.bottom as i32, 0),
+        };
+        for (&output, info) in outputs {
+            if !shown_on(info.name.as_deref().unwrap_or_default()) {
+                continue;
+            }
+            if let Some(&id) = self.windows.get(&output) {
+                surfaces.redraw.push(id);
+                continue;
+            }
+            let id = Id::unique();
+            self.windows.insert(output, id);
+            surfaces.open.push((
+                id,
+                NewLayerShellSettings {
+                    anchor: anchor(self.config.position),
+                    size: LayerSize::px(size.0, size.1),
+                    layer: Layer::Overlay,
+                    exclusive_zone: None,
+                    margin: Some(margin),
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    output_option: OutputOption::GlobalName(info.id),
+                    // Shown over whatever is under the pointer: it must
+                    // not take its clicks.
+                    events_transparent: true,
+                    namespace: Some("aria-osd".to_owned()),
+                    ..Default::default()
+                },
+            ));
         }
-        self.content = None;
-        true
+        let (serial, duration) = (self.serial, self.config.duration);
+        let expiry = Task::future(async move {
+            tokio::time::sleep(duration).await;
+            serial
+        });
+        (surfaces, expiry)
     }
 
-    /// Forget what's shown (the surfaces are going).
-    pub fn hide(&mut self) {
+    /// The timer of show `serial` ran out: if it was the last show, the
+    /// surfaces go.
+    pub fn expired(&mut self, serial: u64) -> Surfaces {
+        if serial != self.serial {
+            return Surfaces::default();
+        }
+        self.close()
+    }
+
+    /// Take it off every output now.
+    pub fn close(&mut self) -> Surfaces {
         self.content = None;
-        self.windows.clear();
+        Surfaces {
+            close: std::mem::take(&mut self.windows).into_values().collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// Output `output` went away: its surface goes.
+    pub fn output_removed(&mut self, output: OutputId) -> Surfaces {
+        Surfaces {
+            close: self.windows.remove(&output).into_iter().collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// Surface `window` was closed: whether it was one of ours.
+    pub fn closed(&mut self, window: Id) -> bool {
+        match self.output_of(window) {
+            Some(output) => {
+                self.windows.remove(&output);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The theme changed: the surfaces take its size.
+    pub fn relayout(&self, theme: &Theme) -> Surfaces {
+        let (w, h) = self.size(theme);
+        let anchor = anchor(self.config.position);
+        Surfaces {
+            resize: self
+                .windows
+                .values()
+                .map(|&id| (id, anchor, LayerSize::px(w, h)))
+                .collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// The open surfaces, with their output.
+    pub fn windows(&self) -> impl Iterator<Item = (OutputId, Id)> + '_ {
+        self.windows.iter().map(|(&o, &id)| (o, id))
     }
 
     pub fn output_of(&self, window: Id) -> Option<OutputId> {
@@ -685,6 +786,24 @@ impl Osd {
             .iter()
             .find(|(_, w)| **w == window)
             .map(|(o, _)| *o)
+    }
+
+    /// Where the surface is on an output with rectangle `output`, as
+    /// asked: centred, from its edge past the bars' exclusive zones
+    /// there (`bars`: the top one's height, the bottom one's), by the
+    /// margin.
+    pub fn rect(&self, theme: &Theme, output: Rectangle, bars: (f32, f32)) -> Rectangle {
+        let (w, h) = self.size(theme);
+        let (w, h) = (w as f32, h as f32);
+        let room = self.room(theme);
+        let margin = self.config.margin as f32;
+        let x = output.x + (output.width - w) / 2.0;
+        let y = match self.config.position {
+            Position::Top => output.y + bars.0 + margin - room.top,
+            Position::Center => output.y + (output.height - h) / 2.0,
+            Position::Bottom => output.y + output.height - bars.1 - margin + room.bottom - h,
+        };
+        Rectangle::new(Point::new(x, y), Size::new(w, h))
     }
 
     pub fn icon_names(&self) -> impl Iterator<Item = &str> {
@@ -776,6 +895,14 @@ impl Osd {
             .width(Length::Fill)
             .height(Length::Fill);
         theme.surface(&Node::root("osd"), pill).into()
+    }
+}
+
+fn anchor(position: Position) -> Anchor {
+    match position {
+        Position::Top => Anchor::Top,
+        Position::Center => Anchor::empty(),
+        Position::Bottom => Anchor::Bottom,
     }
 }
 

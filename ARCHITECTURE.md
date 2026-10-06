@@ -67,7 +67,11 @@ state fed by one stream (`subscription()` -> `apply(Event)`), changed by
 but the screenshot picker's surfaces and the notifications' toasts.
 `components/` holds the surfaces the daemon opens and routes to, each a
 full Elm component: panel, dialog, launcher, exiter, locker, osd,
-wallpaper. Gadgets, widgets, the theme and the plumbing (config,
+wallpaper. A component keeps its surfaces' ids and says what to do with
+them as a `components::Surfaces` (open with these settings, close,
+resize, redraw), which the daemon turns into the runtime's messages
+(`surface_tasks`): only the daemon talks to the runtime, only the
+component knows where its surfaces go. Gadgets, widgets, the theme and the plumbing (config,
 commands, process, locale, ...) stay at the top. The paths in the
 diagram below leave out the `services/` / `components/` prefix.
 
@@ -303,7 +307,7 @@ Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory,
                             buffer read back; `ext-data-control-v1` for the clipboard (a source offering
                             `image/png` until `cancelled`, each `send` written from a thread, other clients'
                             offers destroyed at once); plus the picker's events while it's open
-  apply(Event, outputs, &Compositor) -> (Task, Surfaces)   `Surfaces { open, close, redraw }`: the daemon opens
+  apply(Event, outputs, &Compositor) -> (Task, Surfaces)   `components::Surfaces`: the daemon opens
                             and closes the picker's layer surfaces and redraws those it names
                             (`Message::Screenshot` is `Scope::None`)
   picker.rs                 Pick: every output and the shown windows asked together, the frames made upright
@@ -467,9 +471,9 @@ Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what t
                             a source coming back shows nothing; "connecting" keeps the last reading) and
                             `change(old, new)` (pure, unit-tested) says what to show, the first that changed
                             in `Watch`'s order (Wi‑Fi turned off before the disconnection it brings). Whoever
-                            made the change (a keybind, a gadget, another app) is not its business. `show(Content)` from there or from
-                            `Command::Osd` (`aria-shell osd show`); the daemon opens one `Layer::Overlay`
-                            surface per output (`Content::outputs`: only those, each with its own percent, the
+                            made the change (a keybind, a gadget, another app) is not its business.
+                            `show(Content, outputs, theme) -> (Surfaces, Task<serial>)` from there or from
+                            `Command::Osd` (`aria-shell osd show`): one `Layer::Overlay` surface per output (`Content::outputs`: only those, each with its own percent, the
                             others' surfaces closed: a brightness change shows on the screens that changed;
                             `events_transparent`, sized by the theme's `osd`, anchored by
                             `position`), redraws the open ones, and a timer per show sends `OsdExpired(serial)`:

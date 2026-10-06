@@ -23,9 +23,9 @@ use std::sync::Arc;
 
 use iced::window::Id;
 use iced::{Element, Subscription, Task};
-use iced_exwlshell::reexport::NewLayerShellSettings;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use crate::components::Surfaces;
 use crate::config::{Config, RawSection, Section};
 use crate::locale::Locale;
 use crate::process;
@@ -140,15 +140,6 @@ impl std::fmt::Debug for Shots {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Shots({})", self.0.len())
     }
-}
-
-/// What the daemon does to surfaces after an event: the picker's to
-/// open or close, those showing something else.
-#[derive(Default)]
-pub struct Surfaces {
-    pub open: Vec<(Id, NewLayerShellSettings)>,
-    pub close: Vec<Id>,
-    pub redraw: Vec<Id>,
 }
 
 /// A picture encoded, for the clipboard.

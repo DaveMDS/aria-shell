@@ -38,14 +38,13 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::components::Surfaces;
 use crate::config::{RawSection, Section};
-use crate::gadgets;
 use crate::locale::Locale;
 use crate::services::audio::{Audio, Kind as Channel};
 use crate::services::brightness::Brightness;
 use crate::services::icons::Icons;
 use crate::services::idle::Idle;
 use crate::services::network::{DeviceKind, Network, Summary};
-use crate::services::power::Power;
+use crate::services::power::{self, Power};
 use crate::ui::graph;
 use crate::ui::theme::{self, Node, Theme};
 
@@ -277,7 +276,7 @@ impl Level {
             device: c.name.clone(),
             percent: (c.volume * 100.0).round() as u32,
             muted: c.muted,
-            icon: gadgets::audio::level_icon(c),
+            icon: c.icon_name(),
         })
     }
 
@@ -395,7 +394,7 @@ impl Watched {
         let charger = power.battery().map(|b| Charger {
             plugged: !power.on_battery(),
             percent: b.percentage.round() as u32,
-            icon: gadgets::power::battery_icon(b).to_owned(),
+            icon: b.icon_name().to_owned(),
         });
         let profile = power.profiles().map(|p| p.active.clone());
         let held = idle.inhibited();
@@ -420,7 +419,7 @@ impl Watched {
                     connected: true,
                     label: s.label.clone(),
                     kind: s.kind,
-                    icon: gadgets::network::bar_icon(&s, true, wireless),
+                    icon: s.icon_name(true, wireless),
                 })
             } else {
                 // The kind that went down, not the device NetworkManager
@@ -434,7 +433,7 @@ impl Watched {
                     connected: false,
                     label: String::new(),
                     kind,
-                    icon: gadgets::network::bar_icon(&down, true, wireless),
+                    icon: down.icon_name(true, wireless),
                 })
             }
         };
@@ -549,10 +548,10 @@ pub fn change(old: &Watched, new: &Watched, show: &[Watch], locale: &Locale) -> 
         && let (Some(was), Some(now)) = (&old.profile, &new.profile)
         && was != now
     {
-        let name = gadgets::power::profile_label(locale, now);
+        let name = power::profile_label(locale, now);
         return Some(notice(
             Kind::Profile,
-            &gadgets::power::profile_icon(now),
+            &power::profile_icon(now),
             &locale.fmt("osd.profile", &[("name", &name)]),
         ));
     }

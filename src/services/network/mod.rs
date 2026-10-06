@@ -389,6 +389,36 @@ pub enum Command {
     },
 }
 
+/// The icons of a connection's state ([`Summary::icon_name`]), for
+/// whatever shows it.
+pub const ICON_WIFI_NONE: &str = "network-wireless-signal-none-symbolic";
+
+pub const ICON_WIFI_WEAK: &str = "network-wireless-signal-weak-symbolic";
+
+pub const ICON_WIFI_OK: &str = "network-wireless-signal-ok-symbolic";
+
+pub const ICON_WIFI_GOOD: &str = "network-wireless-signal-good-symbolic";
+
+pub const ICON_WIFI_EXCELLENT: &str = "network-wireless-signal-excellent-symbolic";
+
+pub const ICON_WIFI_ACQUIRING: &str = "network-wireless-acquiring-symbolic";
+
+pub const ICON_WIFI_NO_ROUTE: &str = "network-wireless-no-route-symbolic";
+
+pub const ICON_WIFI_OFF: &str = "network-wireless-disabled-symbolic";
+
+pub const ICON_WIFI_OFFLINE: &str = "network-wireless-offline-symbolic";
+
+pub const ICON_WIRED: &str = "network-wired-symbolic";
+
+pub const ICON_WIRED_ACQUIRING: &str = "network-wired-acquiring-symbolic";
+
+pub const ICON_WIRED_NO_ROUTE: &str = "network-wired-no-route-symbolic";
+
+pub const ICON_WIRED_OFFLINE: &str = "network-wired-disconnected-symbolic";
+
+pub const ICON_OFFLINE: &str = "network-offline-symbolic";
+
 /// The bar's summary of the primary connection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Summary {
@@ -404,6 +434,58 @@ pub struct Summary {
     /// Wi‑Fi strength, 0..=100.
     pub strength: u8,
     pub vpn: bool,
+}
+
+impl Summary {
+    /// Its icon: the primary connection's state (`running`: whether
+    /// NetworkManager is; `wireless`: whether Wi‑Fi is on).
+    pub fn icon_name(&self, running: bool, wireless: bool) -> &'static str {
+        if !running {
+            return ICON_OFFLINE;
+        }
+        match self.kind {
+            Some(DeviceKind::Wifi) => {
+                if self.connected {
+                    if self.limited {
+                        ICON_WIFI_NO_ROUTE
+                    } else {
+                        strength_icon(self.strength)
+                    }
+                } else if self.connecting {
+                    ICON_WIFI_ACQUIRING
+                } else if !wireless {
+                    ICON_WIFI_OFF
+                } else {
+                    ICON_WIFI_OFFLINE
+                }
+            }
+            Some(DeviceKind::Wired) => {
+                if self.connected {
+                    if self.limited {
+                        ICON_WIRED_NO_ROUTE
+                    } else {
+                        ICON_WIRED
+                    }
+                } else if self.connecting {
+                    ICON_WIRED_ACQUIRING
+                } else {
+                    ICON_WIRED_OFFLINE
+                }
+            }
+            None => ICON_OFFLINE,
+        }
+    }
+}
+
+/// The signal bars for a strength (0..=100).
+pub fn strength_icon(strength: u8) -> &'static str {
+    match strength {
+        0..20 => ICON_WIFI_NONE,
+        20..40 => ICON_WIFI_WEAK,
+        40..60 => ICON_WIFI_OK,
+        60..80 => ICON_WIFI_GOOD,
+        _ => ICON_WIFI_EXCELLENT,
+    }
 }
 
 #[derive(Default)]
@@ -989,6 +1071,65 @@ fn attempted(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn icons_by_state() {
+        let wifi = |connected, connecting, limited, strength| Summary {
+            kind: Some(DeviceKind::Wifi),
+            connected,
+            connecting,
+            limited,
+            strength,
+            ..Summary::default()
+        };
+        assert_eq!(
+            wifi(true, false, false, 90).icon_name(true, true),
+            ICON_WIFI_EXCELLENT
+        );
+        assert_eq!(
+            wifi(true, false, false, 65).icon_name(true, true),
+            ICON_WIFI_GOOD
+        );
+        assert_eq!(
+            wifi(true, false, false, 45).icon_name(true, true),
+            ICON_WIFI_OK
+        );
+        assert_eq!(
+            wifi(true, false, false, 25).icon_name(true, true),
+            ICON_WIFI_WEAK
+        );
+        assert_eq!(
+            wifi(true, false, false, 5).icon_name(true, true),
+            ICON_WIFI_NONE
+        );
+        assert_eq!(
+            wifi(true, false, true, 90).icon_name(true, true),
+            ICON_WIFI_NO_ROUTE
+        );
+        assert_eq!(
+            wifi(false, true, false, 0).icon_name(true, true),
+            ICON_WIFI_ACQUIRING
+        );
+        assert_eq!(
+            wifi(false, false, false, 0).icon_name(true, true),
+            ICON_WIFI_OFFLINE
+        );
+        assert_eq!(
+            wifi(false, false, false, 0).icon_name(true, false),
+            ICON_WIFI_OFF
+        );
+        assert_eq!(
+            wifi(true, false, false, 90).icon_name(false, true),
+            ICON_OFFLINE
+        );
+        let wired = Summary {
+            kind: Some(DeviceKind::Wired),
+            connected: true,
+            ..Summary::default()
+        };
+        assert_eq!(wired.icon_name(true, true), ICON_WIRED);
+        assert_eq!(Summary::default().icon_name(true, true), ICON_OFFLINE);
+    }
 
     fn wifi_device(state: DeviceState, active_ap: Option<&str>) -> Device {
         Device {

@@ -6,6 +6,7 @@ mod gadgets;
 mod locale;
 mod process;
 mod services;
+mod shared;
 mod time;
 mod ui;
 mod watch;
@@ -33,7 +34,6 @@ use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use dialog::Dialog;
 use exiter::{Exiter, ExiterConfig};
-use gadgets::Shared;
 use icons::Icons;
 use idle::Idle;
 use launcher::Launcher;
@@ -51,6 +51,7 @@ use services::{
     audio, brightness, compositor, icons, idle, network, notifications, places, power, screenshot,
     scripts, sysmon, tray,
 };
+use shared::Shared;
 use sysmon::SysMon;
 use tray::Tray;
 use ui::theme::{self, Node, Theme};
@@ -1207,10 +1208,7 @@ impl AriaShell {
                 "power.low_body_time",
                 &[
                     ("n", &percent),
-                    (
-                        "time",
-                        &gadgets::power::duration(&self.locale, low.time_to_empty),
-                    ),
+                    ("time", &power::duration(&self.locale, low.time_to_empty)),
                 ],
             )
         } else {
@@ -1226,10 +1224,7 @@ impl AriaShell {
     /// the password, usually).
     fn notify_places(&self, failure: places::Failure) -> Task<Message> {
         let (name, icon) = match &failure.volume {
-            places::Volume::Device(d) => (
-                gadgets::places::device_name(&self.locale, d),
-                "drive-harddisk-symbolic",
-            ),
+            places::Volume::Device(d) => (d.name(&self.locale), "drive-harddisk-symbolic"),
             places::Volume::Mount(s) => (s.label.clone(), "folder-remote-symbolic"),
         };
         let key = match (&failure.volume, failure.eject) {

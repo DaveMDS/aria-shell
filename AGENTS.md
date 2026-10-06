@@ -98,7 +98,11 @@ gadgets, their contract in its `mod.rs`; `ui/` the building blocks of
 every surface: the theme (`ui/theme/`), the reusable pieces (the
 menu, the calendar, the graphs) and the shapes things are shown in (a
 gadget's popup, a notification's toast). The plumbing (`config.rs`,
-`commands.rs`, `process.rs`, `locale.rs`, ...) stays at the top.
+`commands.rs`, `process.rs`, `locale.rs`, `shared.rs`: what every view
+reads, ...) stays at the top. The arrows go one way: gadgets and
+components use services and `ui/`, never each other's helpers; a
+service's value in words or as an icon (`Battery::icon_name`,
+`power::duration`) is the service's own.
 
 Styling lives in `ui/theme/`: a CSS-like file (`assets/base.css` always,
 plus `[general] style`), loaded for a light or dark scheme

@@ -30,6 +30,20 @@ pub enum Kind {
     Stream,
 }
 
+/// The icons of a channel's level ([`Channel::icon_name`]), for
+/// whatever shows it.
+pub const ICON_MUTED: &str = "audio-volume-muted-symbolic";
+
+pub const ICON_LOW: &str = "audio-volume-low-symbolic";
+
+pub const ICON_MEDIUM: &str = "audio-volume-medium-symbolic";
+
+pub const ICON_HIGH: &str = "audio-volume-high-symbolic";
+
+pub const ICON_INPUT: &str = "audio-input-microphone-symbolic";
+
+pub const ICON_INPUT_MUTED: &str = "microphone-sensitivity-muted-symbolic";
+
 /// A mixer channel, as last reported. Sinks, sources and streams are
 /// numbered apart: `(kind, index)` is the identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +69,27 @@ pub struct Channel {
     pub has_volume: bool,
     /// The default device of its kind.
     pub default: bool,
+}
+
+impl Channel {
+    /// Its icon: the volume's level; the microphone for an input.
+    pub fn icon_name(&self) -> &'static str {
+        if self.kind == Kind::Input {
+            if self.muted {
+                ICON_INPUT_MUTED
+            } else {
+                ICON_INPUT
+            }
+        } else if self.muted || self.volume <= 0.0 {
+            ICON_MUTED
+        } else if self.volume < 0.34 {
+            ICON_LOW
+        } else if self.volume < 0.67 {
+            ICON_MEDIUM
+        } else {
+            ICON_HIGH
+        }
+    }
 }
 
 /// An application recording from a source (a source output), as last

@@ -20,8 +20,11 @@ use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::network::{
-    AccessPoint, Command, Device, DeviceKind, DeviceState, FailKey, FailReason, IpConfig, Profile,
-    Security, Summary,
+    AccessPoint, Command, Device, DeviceKind, DeviceState, FailKey, FailReason, ICON_OFFLINE,
+    ICON_WIFI_ACQUIRING, ICON_WIFI_EXCELLENT, ICON_WIFI_GOOD, ICON_WIFI_NO_ROUTE, ICON_WIFI_NONE,
+    ICON_WIFI_OFF, ICON_WIFI_OFFLINE, ICON_WIFI_OK, ICON_WIFI_WEAK, ICON_WIRED,
+    ICON_WIRED_ACQUIRING, ICON_WIRED_NO_ROUTE, ICON_WIRED_OFFLINE, IpConfig, Profile, Security,
+    strength_icon,
 };
 use crate::ui::theme::{self, Node};
 
@@ -33,20 +36,6 @@ const DEFAULT_LIST_HEIGHT: f32 = 600.0;
 /// Seconds between scans while the popup is open.
 const SCAN_STEP: u32 = 10;
 
-const ICON_WIFI_NONE: &str = "network-wireless-signal-none-symbolic";
-const ICON_WIFI_WEAK: &str = "network-wireless-signal-weak-symbolic";
-const ICON_WIFI_OK: &str = "network-wireless-signal-ok-symbolic";
-const ICON_WIFI_GOOD: &str = "network-wireless-signal-good-symbolic";
-const ICON_WIFI_EXCELLENT: &str = "network-wireless-signal-excellent-symbolic";
-const ICON_WIFI_ACQUIRING: &str = "network-wireless-acquiring-symbolic";
-const ICON_WIFI_NO_ROUTE: &str = "network-wireless-no-route-symbolic";
-const ICON_WIFI_OFF: &str = "network-wireless-disabled-symbolic";
-const ICON_WIFI_OFFLINE: &str = "network-wireless-offline-symbolic";
-const ICON_WIRED: &str = "network-wired-symbolic";
-const ICON_WIRED_ACQUIRING: &str = "network-wired-acquiring-symbolic";
-const ICON_WIRED_NO_ROUTE: &str = "network-wired-no-route-symbolic";
-const ICON_WIRED_OFFLINE: &str = "network-wired-disconnected-symbolic";
-const ICON_OFFLINE: &str = "network-offline-symbolic";
 const ICON_VPN: &str = "network-vpn-symbolic";
 const ICON_SECURED: &str = "channel-secure-symbolic";
 const ICON_SCAN: &str = "view-refresh-symbolic";
@@ -259,7 +248,7 @@ impl Gadget for NetworkGadget {
             .class_if("limited", summary.limited)
             .class_if("vpn", summary.vpn && self.config.show_vpn)
             .class_if("off", running && !wireless);
-        let name = bar_icon(&summary, running, wireless);
+        let name = summary.icon_name(running, wireless);
         let mut parts: Vec<Element<'a, Message>> =
             vec![self.icon(&ctx, &button.child("icon"), name)];
         if summary.vpn && self.config.show_vpn {
@@ -367,55 +356,6 @@ impl Gadget for NetworkGadget {
             })
         })
         .map(|()| Message::Tick)
-    }
-}
-
-/// The bar's icon for the primary connection.
-pub(crate) fn bar_icon(s: &Summary, running: bool, wireless: bool) -> &'static str {
-    if !running {
-        return ICON_OFFLINE;
-    }
-    match s.kind {
-        Some(DeviceKind::Wifi) => {
-            if s.connected {
-                if s.limited {
-                    ICON_WIFI_NO_ROUTE
-                } else {
-                    strength_icon(s.strength)
-                }
-            } else if s.connecting {
-                ICON_WIFI_ACQUIRING
-            } else if !wireless {
-                ICON_WIFI_OFF
-            } else {
-                ICON_WIFI_OFFLINE
-            }
-        }
-        Some(DeviceKind::Wired) => {
-            if s.connected {
-                if s.limited {
-                    ICON_WIRED_NO_ROUTE
-                } else {
-                    ICON_WIRED
-                }
-            } else if s.connecting {
-                ICON_WIRED_ACQUIRING
-            } else {
-                ICON_WIRED_OFFLINE
-            }
-        }
-        None => ICON_OFFLINE,
-    }
-}
-
-/// The signal bars for a strength (0..=100).
-fn strength_icon(strength: u8) -> &'static str {
-    match strength {
-        0..20 => ICON_WIFI_NONE,
-        20..40 => ICON_WIFI_WEAK,
-        40..60 => ICON_WIFI_OK,
-        60..80 => ICON_WIFI_GOOD,
-        _ => ICON_WIFI_EXCELLENT,
     }
 }
 
@@ -1225,65 +1165,6 @@ mod tests {
         assert_eq!(c.settings_command, "");
         assert!(!c.show_label);
         assert!(c.show_vpn);
-    }
-
-    #[test]
-    fn icons_by_state() {
-        let wifi = |connected, connecting, limited, strength| Summary {
-            kind: Some(DeviceKind::Wifi),
-            connected,
-            connecting,
-            limited,
-            strength,
-            ..Summary::default()
-        };
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 90), true, true),
-            ICON_WIFI_EXCELLENT
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 65), true, true),
-            ICON_WIFI_GOOD
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 45), true, true),
-            ICON_WIFI_OK
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 25), true, true),
-            ICON_WIFI_WEAK
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 5), true, true),
-            ICON_WIFI_NONE
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, true, 90), true, true),
-            ICON_WIFI_NO_ROUTE
-        );
-        assert_eq!(
-            bar_icon(&wifi(false, true, false, 0), true, true),
-            ICON_WIFI_ACQUIRING
-        );
-        assert_eq!(
-            bar_icon(&wifi(false, false, false, 0), true, true),
-            ICON_WIFI_OFFLINE
-        );
-        assert_eq!(
-            bar_icon(&wifi(false, false, false, 0), true, false),
-            ICON_WIFI_OFF
-        );
-        assert_eq!(
-            bar_icon(&wifi(true, false, false, 90), false, true),
-            ICON_OFFLINE
-        );
-        let wired = Summary {
-            kind: Some(DeviceKind::Wired),
-            connected: true,
-            ..Summary::default()
-        };
-        assert_eq!(bar_icon(&wired, true, true), ICON_WIRED);
-        assert_eq!(bar_icon(&Summary::default(), true, true), ICON_OFFLINE);
     }
 
     #[test]

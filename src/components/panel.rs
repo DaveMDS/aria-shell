@@ -15,8 +15,9 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use crate::components::Surfaces;
 
 use crate::config::{Config, RawSection, Section};
-use crate::gadgets::{self, AnyGadget, Context, Shared};
+use crate::gadgets::{self, AnyGadget, Context};
 use crate::services::scripts;
+use crate::shared::Shared;
 use crate::ui::popup::{self, Side};
 use crate::ui::theme::{self, Node, Theme};
 

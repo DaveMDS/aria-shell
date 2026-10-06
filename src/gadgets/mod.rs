@@ -34,9 +34,9 @@ use iced::{Element, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{Config, Section};
-use crate::services::compositor::{self, Compositor};
-use crate::services::icons::Icons;
-use crate::ui::theme::{Node, Theme};
+use crate::services::compositor;
+use crate::shared::Shared;
+use crate::ui::theme::Node;
 use audio::AudioGadget;
 use brightness::BrightnessGadget;
 use clock::Clock;
@@ -50,25 +50,6 @@ use system_monitor::SystemMonitor;
 use themes::Themes;
 use tray::TrayGadget;
 use workspaces::Workspaces;
-
-/// Daemon-owned state a gadget can read while building its view.
-#[derive(Clone, Copy)]
-pub struct Shared<'a> {
-    pub compositor: &'a Compositor,
-    pub theme: &'a Theme,
-    pub locale: &'a crate::locale::Locale,
-    pub icons: &'a Icons,
-    pub tray: &'a crate::services::tray::Tray,
-    pub notifications: &'a crate::services::notifications::Notifications,
-    pub sysmon: &'a crate::services::sysmon::SysMon,
-    pub audio: &'a crate::services::audio::Audio,
-    pub network: &'a crate::services::network::Network,
-    pub idle: &'a crate::services::idle::Idle,
-    pub power: &'a crate::services::power::Power,
-    pub brightness: &'a crate::services::brightness::Brightness,
-    pub places: &'a crate::services::places::Places,
-    pub scripts: &'a crate::services::scripts::Scripts,
-}
 
 /// What a gadget gets in `view`: the shared state plus its own place in
 /// the element tree, to derive the nodes of its widgets from

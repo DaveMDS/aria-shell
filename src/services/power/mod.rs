@@ -15,6 +15,7 @@ use iced::{Subscription, Task};
 use zbus::Connection;
 
 use crate::config::{RawSection, Section};
+use crate::locale::Locale;
 
 /// `[Power]` section: the daemon's key and the gadget's.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +122,47 @@ pub struct Battery {
     pub icon: String,
     /// Health: the full charge against the design one, percent.
     pub capacity: Option<f64>,
+}
+
+/// The icon of a battery UPower gives none for.
+pub const ICON_BATTERY: &str = "battery-missing-symbolic";
+
+impl Battery {
+    /// Its icon: UPower's, else [`ICON_BATTERY`].
+    pub fn icon_name(&self) -> &str {
+        if self.icon.is_empty() {
+            ICON_BATTERY
+        } else {
+            &self.icon
+        }
+    }
+}
+
+/// The icon of power profile `profile`.
+pub fn profile_icon(profile: &str) -> String {
+    format!("power-profile-{profile}-symbolic")
+}
+
+/// Power profile `profile`, in words: a known one translated, another
+/// by its name.
+pub fn profile_label(locale: &Locale, profile: &str) -> String {
+    match profile {
+        "power-saver" => locale.tr("power.profile.power_saver").to_owned(),
+        "balanced" => locale.tr("power.profile.balanced").to_owned(),
+        "performance" => locale.tr("power.profile.performance").to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// A time UPower estimates, in words: `1 h 20 min`, `45 min`.
+pub fn duration(locale: &Locale, secs: u64) -> String {
+    let minutes = secs.div_ceil(60);
+    let (h, m) = (minutes / 60, minutes % 60);
+    if h == 0 {
+        locale.fmt("power.minutes", &[("m", &m)])
+    } else {
+        locale.fmt("power.hours_minutes", &[("h", &h), ("m", &m)])
+    }
 }
 
 /// A peripheral with a battery: a mouse, a keyboard, a headset...

@@ -73,7 +73,11 @@ resize, redraw), which the daemon turns into the runtime's messages
 component knows where its surfaces go. `gadgets/` holds the bar's
 gadgets (the contract in `gadgets/mod.rs`), `ui/` the building blocks
 of every surface: the theme and the reusable widgets. The plumbing
-(config, commands, process, locale, ...) stays at the top. The paths
+(config, commands, process, locale, `shared.rs`, ...) stays at the
+top. Gadgets and components use services and `ui/`, not each other: a
+service's value in words or as an icon (`Channel::icon_name`,
+`Summary::icon_name`, `power::profile_label`, `Device::name`) is in the
+service, where the gadget and the OSD both find it. The paths
 in the diagram below leave out the `services/` / `components/` / `ui/`
 prefix.
 
@@ -518,7 +522,7 @@ watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, 
 Two things flow between the daemon and the gadgets besides messages:
 
 - **`gadgets::Context`** goes *down*, into `view`. It holds
-  `gadgets::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`,
+  `Shared` (`shared.rs`: `&Compositor`, `&Theme`, `&Icons`, `&Tray`,
   `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.

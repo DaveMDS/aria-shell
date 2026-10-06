@@ -18,7 +18,10 @@ use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::idle;
-use crate::services::power::{Battery, Command, PowerConfig, State, Warning};
+use crate::services::power::{
+    Battery, Command, ICON_BATTERY, PowerConfig, State, Warning, duration, profile_icon,
+    profile_label,
+};
 use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
@@ -27,7 +30,6 @@ const DEFAULT_ICON_SIZE: f32 = 16.0;
 const DEFAULT_LIST_WIDTH: f32 = 320.0;
 
 /// When UPower names no icon.
-const ICON_BATTERY: &str = "battery-missing-symbolic";
 
 pub struct PowerGadget {
     config: PowerConfig,
@@ -112,7 +114,7 @@ impl Gadget for PowerGadget {
                 content.push(icon(
                     &ctx,
                     &button.child("icon").class("battery"),
-                    battery_icon(b),
+                    b.icon_name(),
                 ));
                 if self.config.show_percent {
                     let t = button.child("text");
@@ -196,10 +198,6 @@ impl Gadget for PowerGadget {
 /// The profiles power-profiles-daemon knows, in the picker's order.
 const PROFILES: [&str; 3] = ["power-saver", "balanced", "performance"];
 
-pub(crate) fn profile_icon(profile: &str) -> String {
-    format!("power-profile-{profile}-symbolic")
-}
-
 /// The class for a profile: its name when it's a known one.
 fn profile_class(profile: &str) -> &'static str {
     PROFILES
@@ -207,34 +205,6 @@ fn profile_class(profile: &str) -> &'static str {
         .find(|p| **p == profile)
         .copied()
         .unwrap_or("other")
-}
-
-pub(crate) fn profile_label(locale: &Locale, profile: &str) -> String {
-    match profile {
-        "power-saver" => locale.tr("power.profile.power_saver").to_owned(),
-        "balanced" => locale.tr("power.profile.balanced").to_owned(),
-        "performance" => locale.tr("power.profile.performance").to_owned(),
-        other => other.to_owned(),
-    }
-}
-
-pub(crate) fn battery_icon(b: &Battery) -> &str {
-    if b.icon.is_empty() {
-        ICON_BATTERY
-    } else {
-        &b.icon
-    }
-}
-
-/// `1 h 20 min`, `45 min`.
-pub fn duration(locale: &Locale, secs: u64) -> String {
-    let minutes = secs.div_ceil(60);
-    let (h, m) = (minutes / 60, minutes % 60);
-    if h == 0 {
-        locale.fmt("power.minutes", &[("m", &m)])
-    } else {
-        locale.fmt("power.hours_minutes", &[("h", &h), ("m", &m)])
-    }
 }
 
 /// What the battery is doing, in words.
@@ -386,7 +356,7 @@ impl PowerGadget {
             .max(line(ctx, &pct))
             .max(line(ctx, &st));
         let content = row![
-            icon(ctx, &i, battery_icon(b)),
+            icon(ctx, &i, b.icon_name()),
             theme.container(&pct, theme.text(&pct, format!("{:.0}%", b.percentage))),
             Space::new().width(Length::Fill),
             theme.container(&st, theme.text(&st, battery_status(ctx.locale, b))),

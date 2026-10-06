@@ -26,7 +26,9 @@ use iced::{Subscription, Task};
 use zbus::Connection;
 
 use crate::config::{RawSection, Section};
+use crate::locale::Locale;
 use crate::process;
+use crate::services::sysmon::format;
 
 /// `[Places]` section: the gadget's keys (the daemon has none).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,6 +211,20 @@ pub struct Device {
     pub crypto_backing: Option<String>,
     /// The fraction used, read with `statvfs` while mounted.
     pub usage: Option<f32>,
+}
+
+impl Device {
+    /// What it's called: its label, else its size ("32 GB volume").
+    pub fn name(&self, locale: &Locale) -> String {
+        if self.label.is_empty() {
+            locale.fmt(
+                "places.volume",
+                &[("size", &format::bytes(locale, self.size))],
+            )
+        } else {
+            self.label.clone()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

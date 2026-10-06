@@ -21,7 +21,10 @@ use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::locale::Locale;
 use crate::process;
-use crate::services::audio::{Channel, Command, Kind, PlaybackStatus, Player};
+use crate::services::audio::{
+    Channel, Command, ICON_HIGH, ICON_INPUT, ICON_INPUT_MUTED, ICON_LOW, ICON_MEDIUM, ICON_MUTED,
+    Kind, PlaybackStatus, Player,
+};
 use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
@@ -32,12 +35,6 @@ const DEFAULT_COVER_SIZE: f32 = 64.0;
 const DEFAULT_LIST_WIDTH: f32 = 380.0;
 const DEFAULT_LIST_HEIGHT: f32 = 600.0;
 
-const ICON_MUTED: &str = "audio-volume-muted-symbolic";
-const ICON_LOW: &str = "audio-volume-low-symbolic";
-const ICON_MEDIUM: &str = "audio-volume-medium-symbolic";
-const ICON_HIGH: &str = "audio-volume-high-symbolic";
-const ICON_INPUT: &str = "audio-input-microphone-symbolic";
-const ICON_INPUT_MUTED: &str = "microphone-sensitivity-muted-symbolic";
 const ICON_STREAM: &str = "multimedia-player-symbolic";
 const ICON_PREVIOUS: &str = "media-skip-backward-symbolic";
 const ICON_PLAY: &str = "media-playback-start-symbolic";
@@ -253,25 +250,6 @@ fn anchor(kind: Kind) -> usize {
     }
 }
 
-/// The volume icon for a channel's level; the microphone for an input.
-pub(crate) fn level_icon(c: &Channel) -> &'static str {
-    if c.kind == Kind::Input {
-        if c.muted {
-            ICON_INPUT_MUTED
-        } else {
-            ICON_INPUT
-        }
-    } else if c.muted || c.volume <= 0.0 {
-        ICON_MUTED
-    } else if c.volume < 0.34 {
-        ICON_LOW
-    } else if c.volume < 0.67 {
-        ICON_MEDIUM
-    } else {
-        ICON_HIGH
-    }
-}
-
 fn kind_class(kind: Kind) -> &'static str {
     match kind {
         Kind::Output => "output",
@@ -299,7 +277,7 @@ impl AudioGadget {
             .class_if("muted", muted)
             .class_if("none", device.is_none());
         let name = match device {
-            Some(c) => level_icon(c),
+            Some(c) => c.icon_name(),
             None if kind == Kind::Input => ICON_INPUT_MUTED,
             None => ICON_MUTED,
         };
@@ -363,7 +341,7 @@ impl AudioGadget {
         let style = ctx.theme.resolve(node);
         let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
         let icon = match c.kind {
-            Kind::Output | Kind::Input => ctx.icons.get_name(level_icon(c), None),
+            Kind::Output | Kind::Input => ctx.icons.get_name(c.icon_name(), None),
             Kind::Stream => c
                 .app
                 .as_deref()

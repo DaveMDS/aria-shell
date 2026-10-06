@@ -25,7 +25,7 @@ use iced::{Alignment, ContentFit, Element, Event, Length, Subscription, Task, wi
 use iced_wayland_subscriber::OutputId;
 
 use crate::config::{RawSection, Section};
-use crate::gadgets::Shared;
+use crate::shared::Shared;
 use crate::time;
 use crate::ui::theme::{self, Node};
 

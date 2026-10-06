@@ -16,11 +16,9 @@ use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
-use crate::locale::Locale;
 use crate::services::places::{
     Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target,
 };
-use crate::services::sysmon::format;
 use crate::ui::graph;
 use crate::ui::theme::{self, Node};
 
@@ -300,7 +298,7 @@ impl PlacesGadget {
                     .class_if("locked", d.locked)
                     .class_if("busy", busy),
                 icons: self.device_icons(d.kind),
-                name: device_name(ctx.locale, d),
+                name: d.name(ctx.locale),
                 usage: d.usage,
                 open: (!busy && !d.locked).then_some(open),
                 eject,
@@ -466,15 +464,6 @@ struct Volume {
     open: Option<Message>,
     /// ⏏: `None` not there, `Some(None)` disabled.
     eject: Option<Option<Message>>,
-}
-
-/// What a device is called: its label, else its size ("32 GB volume").
-pub fn device_name(locale: &Locale, d: &Device) -> String {
-    if d.label.is_empty() {
-        locale.fmt("places.volume", &[("size", &format::bytes(locale, d.size))])
-    } else {
-        d.label.clone()
-    }
 }
 
 /// `node` as a disabled button, when it is one.

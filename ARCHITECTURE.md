@@ -61,32 +61,40 @@ Plain Elm architecture as iced defines it, nested once per layer. Every
 layer is a struct with its own `Message`, `update`, `view` and
 `subscription`; the parent routes by key and `.map()`s messages up.
 
-`src/` follows that shape. `services/` holds the daemon-owned sources:
-state fed by one stream (`subscription()` -> `apply(Event)`), changed by
-`run(Command)`, read by gadgets through `Context`; no view of their own.
-`components/` holds the surfaces the
-daemon opens and routes to, each a full Elm component: panel, dialog,
-launcher, exiter, locker, osd, wallpaper, the screenshot picker. A
-component keeps its surfaces' ids and says what to do with them as a
-`ui::Surfaces` (open with these settings, or a popup; close, resize,
-move, redraw, the keyboard), which the daemon turns into the runtime's
-messages (`surface_tasks`): only the daemon talks to the runtime, only
-the owner of a surface knows where it goes. The panel answers so for
-its popups, `ui::toast::Toasts` for the toasts. `gadgets/` holds the bar's
-gadgets (the contract in `gadgets/mod.rs`), `ui/` the building blocks
-of every surface: the theme and the reusable widgets. The plumbing
-(config, commands, process, locale, `shared.rs`, ...) stays at the
-top. Gadgets and components use services and `ui/`, not each other: a
-service's value in words or as an icon (`Channel::icon_name`,
-`Summary::icon_name`, `power::profile_label`, `Device::name`) is in the
-service, where the gadget and the OSD both find it. The daemon itself
-is `main.rs` (`Message`, the struct, the router `update`, `perform`)
-and `daemon/`, more `impl AriaShell` blocks by subject: `outputs.rs`
-(monitors coming and going, config and theme reloads), `surfaces.rs`
-(syncing what's on screen with the state, `surface_tasks`), `view.rs`
-(`view`, `subscription`), `debug.rs` (`aria-shell debug`). The paths
-in the diagram below leave out the `services/` / `components/` / `ui/`
-prefix.
+`src/` follows that shape:
+
+- `services/`: the daemon-owned sources, state fed by one stream
+  (`subscription()` -> `apply(Event)`), changed by `run(Command)`, read
+  by gadgets through `Context`; no view of their own. A service's value
+  in words or as an icon (`Channel::icon_name`, `Summary::icon_name`,
+  `power::profile_label`, `Device::name`) is in the service, where the
+  gadget and the OSD both find it.
+- `components/`: the surfaces the daemon opens and routes to, each a
+  full Elm component: panel, dialog, launcher, exiter, locker, osd,
+  wallpaper, the screenshot picker.
+- `gadgets/`: the bar's gadgets, the contract in `gadgets/mod.rs`.
+- `ui/`: the building blocks of every surface: the theme, the reusable
+  widgets (menu, calendar, graphs), the shapes things are shown in (a
+  gadget's popup, a notification's toast) and `Surfaces`.
+- the daemon: `main.rs` (`Message`, the struct, the router `update`,
+  `perform`) and `daemon/`, more `impl AriaShell` blocks by subject:
+  `outputs.rs` (monitors coming and going, config and theme reloads),
+  `surfaces.rs` (syncing what's on screen with the state,
+  `surface_tasks`), `view.rs` (`view`, `subscription`), `debug.rs`
+  (`aria-shell debug`).
+- the plumbing at the top: config, commands, process, locale,
+  `shared.rs` (what every view reads), ...
+
+Gadgets and components use services and `ui/`, not each other.
+Whoever owns surfaces (a component; the panel for its popups,
+`ui::toast::Toasts` for the toasts) keeps their ids and says what to do
+with them as a `ui::Surfaces` (open with these settings, or a popup;
+close, resize, move, redraw, the keyboard), which the daemon turns into
+the runtime's messages (`surface_tasks`): only the daemon talks to the
+runtime, only the owner of a surface knows where it goes.
+
+The paths in the diagram below leave out the `services/` /
+`components/` / `ui/` prefix.
 
 ```
 AriaShell  (main.rs, daemon/) daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
@@ -126,6 +134,15 @@ Menu       (menu.rs)        reusable component: Item tree (labels, toggles, sepa
                             place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
 
 Calendar   (calendar.rs)    reusable component, not a gadget: state + Message + update + view(today, theme, node)
+
+Popup      (popup.rs)       a gadget's popup's shape: `Side` (below a top bar's widget, above a bottom bar's),
+                            `surface_size` (content + the `popup` root's chrome + shadow room), `settings` /
+                            `estimate` (the xdg popup, its box on the widget), `presses_outside`; the panel
+                            keeps the popups of its gadgets
+
+Surfaces   (ui/mod.rs)      what an owner of surfaces asks after a change: keyboard / open / popup / close /
+                            resize / margin / reposition / redraw, turned into the runtime's messages by the
+                            daemon (`surface_tasks`, daemon/surfaces.rs); `and` merges two
 
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
   subscription()            the single IPC stream (compositor/hyprland.rs or sway.rs), yields `Event`s

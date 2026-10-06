@@ -70,40 +70,45 @@ players, ...) is owned by the daemon: the services, in `src/services/`
 `network/`, `Idle` in `idle/`, `Power` in `power/`, `Brightness` in
 `brightness/`, `Screenshot` in `screenshot/`, `Places` in `places/`).
 It reaches gadgets read-only through `gadgets::Context` in `view`, and
-is changed by returning
-`gadgets::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
-`Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
-`Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` /
-`Action::Screenshot(cmd)` / `Action::Places(cmd)` from `update`. Gadgets never open their own IPC
+is changed by returning `gadgets::Action::Compositor(cmd)` /
+`Action::Tray(cmd)` / `Action::Script(cmd)` / `Action::Audio(cmd)` /
+`Action::Network(cmd)` / `Action::Idle(cmd)` / `Action::Power(cmd)` /
+`Action::Brightness(cmd)` / `Action::Screenshot(cmd)` /
+`Action::Places(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
 quoting and run directly, no implicit shell, `aria-shell` meaning this
-binary. A popup's
-size is `Gadget::popup_size(ctx)`, a function of the state, re-asked
-after every update. Only the surfaces `Message::redraw_scope` names
-get a new frame: a new top-level message, or a change that reaches
-another surface, needs its scope (or a `Message::Redraw`) — see
-ARCHITECTURE.md's facts about the crates. See ARCHITECTURE.md's
-"Structure" section before changing the shape of any of these.
+binary. A popup's size is `Gadget::popup_size(ctx)`, a function of the
+state, re-asked after every update. Only the surfaces
+`Message::redraw_scope` names get a new frame: a new top-level message,
+or a change that reaches another surface, needs its scope (or a
+`Message::Redraw`) — see ARCHITECTURE.md's facts about the crates. See
+ARCHITECTURE.md's "Structure" section before changing the shape of any
+of these.
 
-`src/` is split by that shape: `services/` holds the daemon-owned
-sources above (a `subscription()` feeding `apply(Event)`, a
-`run(Command)`; no view of their own),
-`components/` the surfaces the daemon opens and routes to, each a full
-Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
-`Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
-its surfaces as a `ui::Surfaces`. `gadgets/` holds the bar's
-gadgets, their contract in its `mod.rs`; `ui/` the building blocks of
-every surface: the theme (`ui/theme/`), the reusable pieces (the
-menu, the calendar, the graphs) and the shapes things are shown in (a
-gadget's popup, a notification's toast). The plumbing (`config.rs`,
-`commands.rs`, `process.rs`, `locale.rs`, `shared.rs`: what every view
-reads, ...) stays at the top, the daemon in `main.rs` (its router) and
-`daemon/` (the rest of `AriaShell`, by subject). The arrows go one way: gadgets and
-components use services and `ui/`, never each other's helpers; a
-service's value in words or as an icon (`Battery::icon_name`,
-`power::duration`) is the service's own.
+`src/` is split by that shape:
+
+- `services/`: the daemon-owned sources above (a `subscription()`
+  feeding `apply(Event)`, a `run(Command)`); no view of their own. A
+  service's value in words or as an icon (`Battery::icon_name`,
+  `power::duration`) is the service's own.
+- `components/`: the surfaces the daemon opens and routes to, each a
+  full Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`,
+  `Locker`, `Osd`, `Wallpapers`, the screenshot `Picker`). Whoever owns
+  surfaces says what to do with them as a `ui::Surfaces`; only the
+  daemon turns that into the runtime's messages.
+- `gadgets/`: the bar's gadgets, their contract in `gadgets/mod.rs`.
+- `ui/`: the building blocks of every surface: the theme (`ui/theme/`),
+  the reusable pieces (the menu, the calendar, the graphs) and the
+  shapes things are shown in (a gadget's popup, a notification's toast).
+- the daemon: `main.rs` (`Message`, the router `update`) and `daemon/`
+  (the rest of `AriaShell`, by subject).
+- the plumbing at the top: `config.rs`, `commands.rs`, `process.rs`,
+  `locale.rs`, `shared.rs` (what every view reads), ...
+
+The arrows go one way: gadgets and components use services and `ui/`,
+never each other's helpers.
 
 Styling lives in `ui/theme/`: a CSS-like file (`assets/base.css` always,
 plus `[general] style`), loaded for a light or dark scheme

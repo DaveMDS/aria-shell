@@ -351,12 +351,12 @@ ScreenshotGadget (gadgets/screenshot.rs)  impl Gadget: an icon button; left clic
   Message::Pick | OpenMenu | Menu  -> Action::Screenshot (with the popup's close: the daemon waits 150 ms
                             before capturing, so the menu is off the screen)
 
-Places     (places/)        daemon-owned places of a file manager's sidebar: `places()` (the home, the XDG
-                            folders of `user-dirs.dirs` that exist, the trash), `bookmarks()` (GTK's
+Places     (places/)        daemon-owned places of a file manager's sidebar: `places()` (bookmarks.rs: the
+                            home, the XDG folders of `user-dirs.dirs` that exist, the trash), `bookmarks()` (GTK's
                             `gtk-3.0/bookmarks`, then KDE's `user-places.xbel` without Dolphin's system,
                             hidden and device entries; no duplicates, no local folder that's gone; a
                             `file://` one a `Target::Path`, any other scheme a `Target::Uri`), `trash_full()`,
-                            `devices()` (UDisks2's volumes as GVfs chooses them: not `HintIgnore`, not swap; a
+                            `devices()` (devices.rs: UDisks2's volumes as GVfs chooses them: not `HintIgnore`, not swap; a
                             `HintSystem` one only mounted or in fstab under /media, /run/media, /mnt or the
                             home, or `x-gvfs-show`, or mounted at `/`; `x-gvfs-hide` hides any. Kind (icons
                             best first, as libudisks names them), mount point (`/` for the root's btrfs
@@ -373,8 +373,9 @@ Places     (places/)        daemon-owned places of a file manager's sidebar: `pl
                             /org/freedesktop/UDisks2, debounced 200 ms -> `GetManagedObjects` read into plain
                             `Block`s and `Drive`s -> `Event::Objects`
   apply(Event, file_manager) -> (changed, Option<Failure>)   the devices filtered; `Mounted` opens the
-                            mount point; `Failed` goes back to the daemon, which notifies it
-                            (`notifications::client`, as any app; polkit's refusal worded: no agent)
+                            mount point; `Failed` goes back to the daemon, which has it notified
+                            (`Failure::notify`: `notifications::client`, as any app; polkit's refusal
+                            worded: no agent)
   run(Command, file_manager) -> Task   Refresh (everything read again: a few small files, no watcher;
                             the usage) | Open(target): `[general] file_manager` on the path or the URI
                             (`trash:///`) | Mount(path) | Eject(path): unmount, lock a LUKS volume, then

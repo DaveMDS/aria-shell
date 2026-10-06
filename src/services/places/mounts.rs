@@ -193,7 +193,7 @@ fn unescape(field: &str) -> OsString {
 /// by hand in such a place. Named by `x-gvfs-name`, else the folder;
 /// `x-gvfs-icon` / `x-gvfs-symbolic-icon` kept.
 pub fn mounts(fstab: &[Entry], mounted: &[Entry], home: &Path) -> Vec<Mount> {
-    let visible = |dir: &Path| super::user_visible(dir, home);
+    let visible = |dir: &Path| super::devices::user_visible(dir, home);
     let is_mounted = |dir: &Path| mounted.iter().any(|m| m.dir == dir);
     let mut mounts: Vec<Mount> = fstab
         .iter()
@@ -212,7 +212,11 @@ pub fn mounts(fstab: &[Entry], mounted: &[Entry], home: &Path) -> Vec<Mount> {
 fn mount_of(e: &Entry, mounted: bool, in_fstab: bool) -> Mount {
     let label = e
         .option("x-gvfs-name")
-        .map(|n| super::percent_decode(n).to_string_lossy().into_owned())
+        .map(|n| {
+            super::bookmarks::percent_decode(n)
+                .to_string_lossy()
+                .into_owned()
+        })
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| super::base_name(&e.dir));
     Mount {

@@ -120,7 +120,8 @@ private session bus from `dbus-run-session`), media players through
 `tests/ui/mpris` (a fake MPRIS player on the same bus), NetworkManager
 through `tests/ui/nm` (a fake one on the same bus, which the shell takes
 for the system bus: `DBUS_SYSTEM_BUS_ADDRESS`), UPower and the power
-profiles through `tests/ui/upower` (the same way), the monitors' DDC/CI
+profiles through `tests/ui/upower` (the same way), UDisks2 through
+`tests/ui/udisks` (the same way), the monitors' DDC/CI
 through `tests/ui/bin/ddcutil` (a fake `ddcutil`, first on every
 scenario's PATH), the clipboard through `wl-paste`, so nothing
 depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`

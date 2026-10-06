@@ -202,6 +202,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aria-udisks"
+version = "0.0.1"
+dependencies = [
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "aria-upower"
 version = "0.0.1"
 dependencies = [

@@ -1,0 +1,9 @@
+[package]
+name = "aria-udisks"
+version = "0.0.1"
+edition = "2024"
+description = "A fake UDisks2, for the UI scenarios (tests/ui)"
+
+[dependencies]
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["rt", "macros", "io-std", "io-util"] }

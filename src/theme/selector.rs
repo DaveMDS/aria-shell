@@ -295,6 +295,11 @@ pub fn node_from_path(path: &str) -> Result<Node, String> {
             let last = c.pseudo.contains(&Pseudo::LastChild);
             n = n.nth(index, if last { index + 1 } else { usize::MAX });
         }
+        // A button disabled already in `view` (its icon greyed with it)
+        // carries the state in its path.
+        if c.pseudo.contains(&Pseudo::Disabled) {
+            n = n.status(iced::widget::button::Status::Disabled);
+        }
         node = Some(n);
     }
     node.ok_or_else(|| "empty path".to_owned())
@@ -314,6 +319,15 @@ fn intern_attr(name: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disabled_in_paths() {
+        let path = "popup > list > device > button.eject:disabled";
+        let node = node_from_path(path).unwrap();
+        assert_eq!(format!("{node:?}"), path);
+        assert!(sel("button.eject:disabled").matches(&node));
+        assert!(!sel("button.eject:hover").matches(&node));
+    }
 
     #[test]
     fn nth_child_and_paths() {

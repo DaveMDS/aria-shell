@@ -360,3 +360,128 @@ fn fstab(p: &Props) -> Vec<(PathBuf, String)> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zbus::names::OwnedInterfaceName;
+    use zbus::zvariant::OwnedObjectPath;
+
+    fn v<'a>(value: impl Into<Value<'a>>) -> OwnedValue {
+        OwnedValue::try_from(value.into()).unwrap()
+    }
+
+    fn object(ifaces: Vec<(&str, Vec<(&str, OwnedValue)>)>) -> HashMap<OwnedInterfaceName, Props> {
+        ifaces
+            .into_iter()
+            .map(|(name, props)| {
+                (
+                    OwnedInterfaceName::try_from(name).unwrap(),
+                    props.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reads_blocks_and_drives() {
+        let drive = "/org/freedesktop/UDisks2/drives/Stick";
+        let fstab: HashMap<String, Value> = HashMap::from([
+            ("dir".to_owned(), Value::from(b"/mnt/data\0".to_vec())),
+            (
+                "opts".to_owned(),
+                Value::from(b"noauto,x-gvfs-show\0".to_vec()),
+            ),
+        ]);
+        let objects: ManagedObjects = HashMap::from([
+            (
+                OwnedObjectPath::try_from("/org/freedesktop/UDisks2/block_devices/sdb1").unwrap(),
+                object(vec![
+                    (
+                        IFACE_BLOCK,
+                        vec![
+                            ("Device", v(b"/dev/sdb1\0".to_vec())),
+                            ("PreferredDevice", v(b"\0".to_vec())),
+                            ("Size", v(32_000u64)),
+                            ("IdUsage", v("filesystem")),
+                            ("IdType", v("vfat")),
+                            ("IdLabel", v("STICK")),
+                            ("HintSystem", v(false)),
+                            ("Drive", v(OwnedObjectPath::try_from(drive).unwrap())),
+                            (
+                                "CryptoBackingDevice",
+                                v(OwnedObjectPath::try_from("/").unwrap()),
+                            ),
+                            ("Configuration", v(vec![("fstab".to_owned(), fstab)])),
+                        ],
+                    ),
+                    (
+                        IFACE_FILESYSTEM,
+                        vec![("MountPoints", v(vec![b"/run/media/u/STICK\0".to_vec()]))],
+                    ),
+                ]),
+            ),
+            (
+                OwnedObjectPath::try_from("/org/freedesktop/UDisks2/block_devices/sdc1").unwrap(),
+                object(vec![
+                    (
+                        IFACE_BLOCK,
+                        vec![
+                            ("Device", v(b"/dev/sdc1\0".to_vec())),
+                            ("IdUsage", v("crypto")),
+                        ],
+                    ),
+                    (
+                        IFACE_ENCRYPTED,
+                        vec![(
+                            "CleartextDevice",
+                            v(OwnedObjectPath::try_from("/").unwrap()),
+                        )],
+                    ),
+                ]),
+            ),
+            (
+                OwnedObjectPath::try_from(drive).unwrap(),
+                object(vec![(
+                    IFACE_DRIVE,
+                    vec![
+                        ("Removable", v(true)),
+                        ("CanPowerOff", v(true)),
+                        ("ConnectionBus", v("usb")),
+                        ("Media", v("thumb")),
+                    ],
+                )]),
+            ),
+        ]);
+        let (mut blocks, drives) = read(&objects);
+        blocks.sort_by(|a, b| a.path.cmp(&b.path));
+        let stick = &blocks[0];
+        assert_eq!(
+            stick.device,
+            PathBuf::from("/dev/sdb1"),
+            "Device, PreferredDevice empty"
+        );
+        assert_eq!(stick.size, 32_000);
+        assert_eq!(stick.id_label, "STICK");
+        assert_eq!(stick.drive, drive);
+        assert_eq!(stick.crypto_backing, "", "`/` is none");
+        assert_eq!(
+            stick.fstab,
+            vec![(PathBuf::from("/mnt/data"), "noauto,x-gvfs-show".to_owned())]
+        );
+        assert_eq!(
+            stick.mount_points,
+            Some(vec![PathBuf::from("/run/media/u/STICK")])
+        );
+        assert_eq!(stick.cleartext, None);
+        let luks = &blocks[1];
+        assert_eq!(luks.mount_points, None, "no filesystem");
+        assert_eq!(luks.cleartext.as_deref(), Some(""), "locked");
+        let d = &drives[drive];
+        assert!(d.removable && d.can_power_off && !d.ejectable);
+        assert_eq!(
+            (d.connection_bus.as_str(), d.media.as_str()),
+            ("usb", "thumb")
+        );
+    }
+}

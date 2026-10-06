@@ -1058,4 +1058,193 @@ XDG_PICTURES_DIR="$HOME/Scaricati"
         );
         assert_eq!(bookmark("no-scheme", None), None);
     }
+
+    /// A partition with a filesystem on drive `drive`.
+    fn fs(name: &str, label: &str, drive: &str, mounts: &[&str]) -> Block {
+        Block {
+            path: format!("/b/{name}"),
+            device: PathBuf::from(format!("/dev/{name}")),
+            size: 1000,
+            id_usage: "filesystem".to_owned(),
+            id_type: "ext4".to_owned(),
+            id_label: label.to_owned(),
+            drive: drive.to_owned(),
+            mount_points: Some(mounts.iter().map(PathBuf::from).collect()),
+            ..Block::default()
+        }
+    }
+
+    fn system(b: Block) -> Block {
+        Block {
+            hint_system: true,
+            ..b
+        }
+    }
+
+    fn labels(devices: &[Device]) -> Vec<&str> {
+        devices.iter().map(|d| d.label.as_str()).collect()
+    }
+
+    #[test]
+    fn devices_as_gvfs_chooses() {
+        let home = Path::new("/home/u");
+        let blocks = vec![
+            system(fs(
+                "nvme0n1p7",
+                "Root",
+                "/d/nvme",
+                &["/var/log", "/", "/home"],
+            )),
+            system(fs("nvme0n1p5", "Boot", "/d/nvme", &["/boot"])),
+            system(fs("nvme0n1p3", "Windows", "/d/nvme", &[])),
+            system(fs("sda1", "Data", "/d/sda", &["/media/Data"])),
+            system(Block {
+                fstab: vec![(PathBuf::from("/mnt/Backup"), "noauto,users".to_owned())],
+                ..fs("sda2", "Backup", "/d/sda", &[])
+            }),
+            system(Block {
+                fstab: vec![(PathBuf::from("/srv"), "defaults,x-gvfs-show".to_owned())],
+                ..fs("sda3", "Shown", "/d/sda", &[])
+            }),
+            Block {
+                fstab: vec![(PathBuf::from("/x"), "x-gvfs-hide".to_owned())],
+                ..fs("sdb1", "Hidden", "/d/usb", &[])
+            },
+            Block {
+                hint_ignore: true,
+                ..fs("sdb2", "Ignored", "/d/usb", &[])
+            },
+            Block {
+                id_type: "swap".to_owned(),
+                id_usage: "other".to_owned(),
+                mount_points: None,
+                ..fs("sdb3", "Swap", "/d/usb", &[])
+            },
+            fs("sdb4", "Stick", "/d/usb", &[]),
+            // A whole disk with a partition table: nothing to mount.
+            Block {
+                mount_points: None,
+                ..fs("sdb", "", "/d/usb", &[])
+            },
+        ];
+        let drives = HashMap::from([(
+            "/d/usb".to_owned(),
+            Drive {
+                removable: true,
+                can_power_off: true,
+                connection_bus: "usb".to_owned(),
+                media: "thumb".to_owned(),
+                ..Drive::default()
+            },
+        )]);
+        let devices = devices(&blocks, &drives, home);
+        assert_eq!(
+            labels(&devices),
+            vec!["Root", "Data", "Backup", "Shown", "Stick"],
+            "the root, mounted or set in fstab where a user looks, x-gvfs-show, \
+             anything not a system disk; internal ones first"
+        );
+        assert_eq!(
+            devices[0].mount_point,
+            Some(PathBuf::from("/")),
+            "the root opens at /"
+        );
+        assert_eq!(devices[0].kind, DeviceKind::HardDisk);
+        let stick = &devices[4];
+        assert!(stick.removable);
+        assert_eq!(stick.kind, DeviceKind::Thumb);
+        assert_eq!(stick.drive_action, Some(DriveAction::PowerOff));
+        assert_eq!(stick.mount_point, None);
+    }
+
+    #[test]
+    fn luks_volumes() {
+        let home = Path::new("/home/u");
+        let locked = Block {
+            id_usage: "crypto".to_owned(),
+            id_type: "crypto_LUKS".to_owned(),
+            mount_points: None,
+            cleartext: Some(String::new()),
+            ..fs("sdc1", "", "/d/ext", &[])
+        };
+        let container = Block {
+            cleartext: Some("/b/dm-0".to_owned()),
+            ..locked.clone()
+        };
+        // The cleartext volume is on no drive of its own.
+        let cleartext = Block {
+            crypto_backing: container.path.clone(),
+            ..fs("dm-0", "Vault", "", &["/run/media/u/Vault"])
+        };
+        let drives = HashMap::from([(
+            "/d/ext".to_owned(),
+            Drive {
+                removable: true,
+                can_power_off: true,
+                connection_bus: "usb".to_owned(),
+                ..Drive::default()
+            },
+        )]);
+        let devices1 = devices(&[locked], &drives, home);
+        assert_eq!(devices1.len(), 1);
+        assert!(devices1[0].locked, "locked: listed, can't be opened");
+        assert_eq!(devices1[0].kind, DeviceKind::UsbDisk);
+
+        let devices2 = devices(&[container.clone(), cleartext], &drives, home);
+        assert_eq!(
+            labels(&devices2),
+            vec!["Vault"],
+            "the cleartext volume, not its container"
+        );
+        let vault = &devices2[0];
+        assert!(!vault.locked);
+        assert_eq!(vault.drive, "/d/ext", "its container's drive");
+        assert!(vault.removable);
+        assert_eq!(
+            vault.crypto_backing.as_deref(),
+            Some(container.path.as_str())
+        );
+    }
+
+    #[test]
+    fn eject_plans() {
+        let device = |path: &str, mount: Option<&str>| Device {
+            path: path.to_owned(),
+            device: PathBuf::new(),
+            label: String::new(),
+            size: 0,
+            kind: DeviceKind::Thumb,
+            mount_point: mount.map(PathBuf::from),
+            locked: false,
+            removable: true,
+            drive: "/d/usb".to_owned(),
+            drive_action: Some(DriveAction::PowerOff),
+            crypto_backing: None,
+            usage: None,
+        };
+        let places = Places {
+            devices: Some(vec![
+                device("/b/sdb1", Some("/run/media/u/A")),
+                device("/b/sdb2", None),
+            ]),
+            ..Places::default()
+        };
+        let a = places.device("/b/sdb1").unwrap().clone();
+        assert_eq!(
+            places.eject_plan(&a),
+            udisks::Eject {
+                unmount: Some("/b/sdb1".to_owned()),
+                lock: None,
+                drive: Some(("/d/usb".to_owned(), DriveAction::PowerOff)),
+            },
+            "unmounted, then the drive off"
+        );
+        let b = places.device("/b/sdb2").unwrap().clone();
+        assert_eq!(
+            places.eject_plan(&b).drive,
+            None,
+            "the other partition is still mounted: the drive stays on"
+        );
+        assert_eq!(places.eject_plan(&b).unmount, None, "nothing to unmount");
+    }
 }

@@ -410,6 +410,48 @@ upower_event() {
     fi
 }
 
+# --- UDisks2 -----------------------------------------------------------------
+# `aria-udisks` (tests/ui/udisks) is UDisks2 on the scenario's private
+# bus: commands in (`internal`, `stick`, `luks`, `remove`, `busy`,
+# `deny`, answered `ok`), what the shell asked of it out (`mount <name>`,
+# `unmount <name>`, `unmount-busy <name>`, `power-off <name>`). On
+# descriptors 5/6, as UPower's (a scenario uses one or the other).
+
+udisks_start() {
+    udisks_dir=$(mktemp -d)
+    mkfifo "$udisks_dir/in" "$udisks_dir/out"
+    "$ARIA_UI_ROOT/target/debug/aria-udisks" < "$udisks_dir/in" > "$udisks_dir/out" 2> "$ARIA_UI_OUT/udisks.log" &
+    udisks_pid=$!
+    exec 5> "$udisks_dir/in" 6< "$udisks_dir/out"
+    line=$(udisks_event)
+    [ "$line" = ready ] || { echo "UDisks2 didn't start: $line"; return 1; }
+}
+
+udisks_stop() {
+    exec 5>&- 6<&-
+    kill "$udisks_pid" 2> /dev/null
+    rm -rf "$udisks_dir"
+}
+
+# One command to UDisks2; fails unless answered `ok`. The shell re-reads
+# after a pause in the signals: give it that.
+udisks_send() {
+    echo "$1" >&5
+    read -r reply <&6
+    [ "$reply" = ok ] || { echo "udisks '$1': $reply"; return 1; }
+    settle 0.5
+}
+
+# The next line UDisks2 reported (within 5s), else fails.
+udisks_event() {
+    if read -r -t 5 line <&6; then
+        echo "$line"
+    else
+        echo "no event from UDisks2"
+        return 1
+    fi
+}
+
 scroll() {
     inject "scroll $1"
     settle

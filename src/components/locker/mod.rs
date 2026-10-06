@@ -21,7 +21,7 @@ use chrono::{DateTime, Local};
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::{Space, column, image, operation};
-use iced::{Alignment, ContentFit, Element, Event, Subscription, Task, widget, window};
+use iced::{Alignment, ContentFit, Element, Event, Length, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputId;
 
 use crate::config::{RawSection, Section};
@@ -253,9 +253,26 @@ impl Locker {
         }
     }
 
-    /// The content of one lock surface: the daemon centres it in the
-    /// `locker` root container of that output.
-    pub fn view<'a>(&'a self, shared: Shared<'a>, root: &Node) -> Element<'a, Message> {
+    /// The output lock surface `id` is on, once the runtime said.
+    pub fn output_of(&self, id: window::Id) -> Option<OutputId> {
+        self.windows.get(&id).copied().flatten()
+    }
+
+    /// A lock surface, on output `output` (its name): the box centred
+    /// in that output's `locker` root container.
+    pub fn view<'a>(&'a self, shared: Shared<'a>, output: &str) -> Element<'a, Message> {
+        let root = Node::root("locker").attr("output", output.to_owned());
+        shared
+            .theme
+            .container(&root, self.content(shared, &root))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
+            .into()
+    }
+
+    fn content<'a>(&'a self, shared: Shared<'a>, root: &Node) -> Element<'a, Message> {
         let theme = shared.theme;
         let node = root.child("box");
         let px = |l: Option<theme::Length>| match l {

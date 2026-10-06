@@ -1675,21 +1675,8 @@ impl AriaShell {
         if let Some(locker) = &self.locker
             && locker.has_window(window)
         {
-            let output = locker
-                .windows()
-                .find(|(id, _)| *id == window)
-                .map(|(_, o)| self.output_name(o).to_owned())
-                .unwrap_or_default();
-            let root = Node::root("locker").attr("output", output);
-            let content: Element<'_, locker::Message> = self
-                .theme
-                .container(&root, locker.view(shared, &root))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(iced::Alignment::Center)
-                .align_y(iced::Alignment::Center)
-                .into();
-            return content.map(Message::Locker);
+            let output = locker.output_of(window).map_or("", |o| self.output_name(o));
+            return locker.view(shared, output).map(Message::Locker);
         }
         if let Some(picker) = self.screenshot.view(window, &self.theme, &self.locale) {
             return picker.map(Message::Screenshot);

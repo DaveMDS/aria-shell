@@ -27,7 +27,7 @@ use iced::{Element, Event, Length, Padding, Rectangle, Subscription, Task, widge
 use crate::components::dialog;
 use crate::components::exiter::{self, ExiterConfig};
 use crate::config::{self, RawSection, Section};
-use crate::gadget::Shared;
+use crate::gadgets::Shared;
 use crate::services::icons::Index;
 use crate::services::icons::desktop::{self, DesktopAction, DesktopEntry};
 use crate::theme::{self, Node, Theme};

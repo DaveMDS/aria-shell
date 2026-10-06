@@ -13,7 +13,7 @@ use iced_exwlshell::reexport::{
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::config::{Config, RawSection, Section};
-use crate::gadget::{self, AnyGadget, Context, Shared};
+use crate::gadgets::{self, AnyGadget, Context, Shared};
 use crate::services::compositor;
 use crate::services::scripts;
 use crate::services::tray;
@@ -237,13 +237,13 @@ struct Entry {
 #[derive(Clone, Debug)]
 pub enum Message {
     /// Index into `gadgets`, then the gadget's own message.
-    Gadget(usize, gadget::Message),
+    Gadget(usize, gadgets::Message),
     /// A key the compositor sent to the bar's surface, for the open
     /// popup that wants the keyboard (see [`Panel::wants_keyboard`]).
     Key(iced::keyboard::Event),
 }
 
-/// What `update` asks the daemon to do; [`gadget::Action`] with the
+/// What `update` asks the daemon to do; [`gadgets::Action`] with the
 /// popup bookkeeping the panel already did.
 pub enum Action {
     None,
@@ -436,24 +436,24 @@ impl Panel {
 
     /// A gadget's action as the daemon sees it: messages routed back to
     /// gadget `i`, popups given their window id.
-    fn lift(&mut self, i: usize, action: gadget::Action<gadget::Message>) -> Action {
+    fn lift(&mut self, i: usize, action: gadgets::Action<gadgets::Message>) -> Action {
         match action {
-            gadget::Action::None => Action::None,
-            gadget::Action::Run(task) => Action::Run(task.map(move |m| Message::Gadget(i, m))),
-            gadget::Action::Compositor(cmd) => Action::Compositor(cmd),
-            gadget::Action::Tray(cmd) => Action::Tray(cmd),
-            gadget::Action::Theme(cmd) => Action::Theme(cmd),
-            gadget::Action::Script(cmd) => Action::Script(cmd),
-            gadget::Action::Notifications(cmd) => Action::Notifications(cmd),
-            gadget::Action::SysMon(cmd) => Action::SysMon(cmd),
-            gadget::Action::Audio(cmd) => Action::Audio(cmd),
-            gadget::Action::Network(cmd) => Action::Network(cmd),
-            gadget::Action::Idle(cmd) => Action::Idle(cmd),
-            gadget::Action::Power(cmd) => Action::Power(cmd),
-            gadget::Action::Brightness(cmd) => Action::Brightness(cmd),
-            gadget::Action::Screenshot(cmd) => Action::Screenshot(cmd),
-            gadget::Action::Places(cmd) => Action::Places(cmd),
-            gadget::Action::OpenPopup { anchor } => {
+            gadgets::Action::None => Action::None,
+            gadgets::Action::Run(task) => Action::Run(task.map(move |m| Message::Gadget(i, m))),
+            gadgets::Action::Compositor(cmd) => Action::Compositor(cmd),
+            gadgets::Action::Tray(cmd) => Action::Tray(cmd),
+            gadgets::Action::Theme(cmd) => Action::Theme(cmd),
+            gadgets::Action::Script(cmd) => Action::Script(cmd),
+            gadgets::Action::Notifications(cmd) => Action::Notifications(cmd),
+            gadgets::Action::SysMon(cmd) => Action::SysMon(cmd),
+            gadgets::Action::Audio(cmd) => Action::Audio(cmd),
+            gadgets::Action::Network(cmd) => Action::Network(cmd),
+            gadgets::Action::Idle(cmd) => Action::Idle(cmd),
+            gadgets::Action::Power(cmd) => Action::Power(cmd),
+            gadgets::Action::Brightness(cmd) => Action::Brightness(cmd),
+            gadgets::Action::Screenshot(cmd) => Action::Screenshot(cmd),
+            gadgets::Action::Places(cmd) => Action::Places(cmd),
+            gadgets::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
                 self.popups.insert(id, i);
                 if let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) {
@@ -461,11 +461,11 @@ impl Panel {
                 }
                 Action::OpenPopup { id, anchor }
             }
-            gadget::Action::ClosePopup(id) => {
+            gadgets::Action::ClosePopup(id) => {
                 self.popups.remove(&id);
                 Action::ClosePopup(id)
             }
-            gadget::Action::Many(actions) => {
+            gadgets::Action::Many(actions) => {
                 Action::Many(actions.into_iter().map(|a| self.lift(i, a)).collect())
             }
         }

@@ -16,7 +16,7 @@ use iced::{Alignment, Element, Length, Subscription, Task, keyboard, widget};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::network::{

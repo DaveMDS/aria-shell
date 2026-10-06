@@ -15,7 +15,7 @@ use iced::widget::{Space, mouse_area, row, scrollable};
 use iced::{Alignment, Element, Length, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::services::notifications::{Command, NotificationsConfig, toast};
 use crate::theme::{self, Node};
 use crate::time::aligned_ticks;

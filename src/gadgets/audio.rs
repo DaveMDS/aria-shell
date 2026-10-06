@@ -18,7 +18,7 @@ use iced::{Alignment, Element, Length};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Axis, Context, Gadget, Popup, Wheel};
+use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::audio::{Channel, Command, Kind, PlaybackStatus, Player};

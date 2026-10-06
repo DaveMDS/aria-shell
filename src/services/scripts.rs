@@ -4,7 +4,7 @@
 //! however many panels show it (two monitors don't run `checkupdates`
 //! twice, which it doesn't even tolerate), keeps the last [`Output`]
 //! per spec, and hands them to gadgets read-only through
-//! `gadget::Context`. A gadget wanting a fresh run now returns
+//! `gadgets::Context`. A gadget wanting a fresh run now returns
 //! `Action::Script(Command::Refresh(spec))`.
 //!
 //! Programs are run as written, without a shell (see

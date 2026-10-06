@@ -6,7 +6,7 @@ use iced::{Element, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::time;
 use crate::widgets::calendar::{self, Calendar};
 

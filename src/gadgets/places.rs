@@ -15,7 +15,7 @@ use iced::widget::{Space, button, row};
 use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::services::places::{
     Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target,

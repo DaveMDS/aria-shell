@@ -89,9 +89,9 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   + variants injected by #[to_exwlshell_message] (NewLayerShell, RemoveWindow, Lock, UnLock, ...)
 
 Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
-  Message::Gadget(index, gadget::Message) | Key(keyboard::Event)   (the latter for the popup wanting the keyboard)
+  Message::Gadget(index, gadgets::Message) | Key(keyboard::Event)   (the latter for the popup wanting the keyboard)
 
-AnyGadget  (gadget.rs)      closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
+AnyGadget  (gadgets/mod.rs) closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
   Message::Clock(clock::Message) | Message::Workspaces(..) | ...
 
 Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / popup_size(ctx) / subscription
@@ -398,7 +398,7 @@ Locale     (locale.rs)      daemon-owned UI language, in `Shared` as `ctx.locale
 
 time       (time.rs)        `aligned_ticks(step)` (a wall-clock-aligned tick stream) and `shows_seconds(format)`,
                             for the Clock, the locker, the notifications' ages, the sysmon sampler; nothing
-                            is imported from `gadgets/` by anything but `gadget.rs`
+                            is imported from a gadget's file by anything but `gadgets/mod.rs`
 
 process    (process.rs)     split_words (shell-like quoting, no shell), command(line), spawn_detached, run(line):
                             the config's command lines and the launcher's desktop entries; `aria-shell` as
@@ -509,12 +509,12 @@ watch::watch(paths)         (watch.rs) one `notify` subscription for aria.conf, 
 
 Two things flow between the daemon and the gadgets besides messages:
 
-- **`gadget::Context`** goes *down*, into `view`. It holds
-  `gadget::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`,
+- **`gadgets::Context`** goes *down*, into `view`. It holds
+  `gadgets::Shared` (`&Compositor`, `&Theme`, `&Icons`, `&Tray`,
   `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.
-- **`gadget::Action`** comes *up*, out of `update`, in place of a bare
+- **`gadgets::Action`** comes *up*, out of `update`, in place of a bare
   `Task`: `Action::Run(Task)` for the gadget's own async work,
   `Action::Compositor(Command)` / `Action::Tray(Command)` (and later
   `Action::Audio(..)`, ...) for things only the daemon can do,
@@ -524,7 +524,7 @@ Two things flow between the daemon and the gadgets besides messages:
   `AriaShell::perform` into a `Task`. Gadgets never hold an IPC handle.
 
 - **Popups** are xdg popups parented to the panel's layer surface. A
-  gadget with one keeps a `gadget::Popup` field, exposes it through
+  gadget with one keeps a `gadgets::Popup` field, exposes it through
   `Gadget::popup()`, wraps the widget the popup hangs from in
   `popup.anchor(..)` (a `container` tagged with a `widget::Id` unique to
   the `Popup`; `anchor_nth(n, ..)` / `toggle_nth(n)` when several widgets
@@ -853,8 +853,8 @@ Two things flow between the daemon and the gadgets besides messages:
   in `Panel`, `window::Id` in `AriaShell`) so two identical gadgets on two
   outputs keep separate streams.
 - **Closed gadget set.** No plugins, no `dyn`. Adding a gadget: one file
-  under `gadgets/`, one variant in `AnyGadget` and `gadget::Message`, one
-  arm in each `match` in `gadget.rs`.
+  under `gadgets/`, one variant in `AnyGadget` and `gadgets::Message`, one
+  arm in each `match` in `gadgets/mod.rs`.
 - **Reusable widgets live in `widgets/`** (`Calendar` so far), as plain
   Elm components: a host embeds one as a field, calls `update` with the
   widget's `Message` and `.map()`s its `view`. Nothing in iced or a

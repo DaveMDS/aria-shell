@@ -1,6 +1,6 @@
 //! State the daemon owns and shares: each service is fed by an external
 //! source (`subscription()` → `apply(Event)`), reaches gadgets read-only
-//! through `gadget::Context` and is changed by `run(Command)`, from a
+//! through `gadgets::Context` and is changed by `run(Command)`, from a
 //! gadget's `Action`. No view of its own, but for the notifications'
 //! toasts.
 

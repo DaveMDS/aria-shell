@@ -7,7 +7,7 @@ use iced::Element;
 use iced::widget::{Space, mouse_area};
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::gadget::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::services::screenshot::{Command, Destination, ScreenshotConfig, Target};
 use crate::theme;

@@ -69,9 +69,9 @@ players, ...) is owned by the daemon: the services, in `src/services/`
 `Scripts` in `scripts.rs`, `Audio` in `audio/`, `Network` in
 `network/`, `Idle` in `idle/`, `Power` in `power/`, `Brightness` in
 `brightness/`, `Screenshot` in `screenshot/`, `Places` in `places/`).
-It reaches gadgets read-only through `gadget::Context` in `view`, and
+It reaches gadgets read-only through `gadgets::Context` in `view`, and
 is changed by returning
-`gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
+`gadgets::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
 `Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
 `Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` /
 `Action::Screenshot(cmd)` / `Action::Places(cmd)` from `update`. Gadgets never open their own IPC
@@ -93,8 +93,8 @@ sources above (a `subscription()` feeding `apply(Event)`, a
 `components/` the surfaces the daemon opens and routes to, each a full
 Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
 `Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
-its surfaces as a `components::Surfaces`. Gadgets (`gadget.rs`,
-`gadgets/`), reusable widgets (`widgets/`), the theme and the plumbing
+its surfaces as a `components::Surfaces`. Gadgets (`gadgets/`, the
+contract in its `mod.rs`), reusable widgets (`widgets/`), the theme and the plumbing
 (`config.rs`, `commands.rs`, `process.rs`, `locale.rs`, ...) stay at
 the top.
 

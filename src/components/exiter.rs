@@ -19,7 +19,7 @@ use iced::{Alignment, Element, Event, Length, Subscription, Task, window};
 
 use crate::components::dialog;
 use crate::config::{RawSection, Section};
-use crate::gadget::Shared;
+use crate::gadgets::Shared;
 use crate::locale::Locale;
 use crate::theme::{self, Node, Theme};
 use crate::time;

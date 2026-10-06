@@ -16,7 +16,7 @@ use iced::widget::{Space, mouse_area};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
-use crate::gadget::{Action, Axis, Context, Gadget, Popup, Wheel};
+use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::services::tray::{Command, Orientation, Status};
 use crate::theme;
 use crate::widgets::menu::{self, Menu};

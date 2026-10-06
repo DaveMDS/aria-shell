@@ -481,9 +481,9 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
                             container (the theme's background shows around a `contain`ed image)
 
-Osd        (osd.rs)         daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
+Osd        (osd/)           daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
                             margin); `observe(&Audio, &Network, &Power, &Idle, &Brightness)` after every change of
-                            those (and of the user's hold on idle) reads a `Watched` (the default output's and
+                            those (and of the user's hold on idle) reads a `Watched` (`osd/watch.rs`: the default output's and
                             input's device/percent/mute, each screen's brightness, whether some app records,
                             Wi‑Fi enabled, the network
                             connected + label, the VPN up, the charger plugged with a battery, the power

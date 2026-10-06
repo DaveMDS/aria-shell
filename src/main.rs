@@ -1259,15 +1259,7 @@ impl AriaShell {
             log::warn!("no output to show the launcher on");
             return Task::none();
         };
-        let style = self.theme.resolve(&Node::root("launcher"));
-        let px = |l: Option<theme::Length>, default: f32| match l {
-            Some(theme::Length::Px(px)) => px.max(1.0) as u32,
-            _ => default as u32,
-        };
-        let size = grown(
-            (px(style.width, 500.0), px(style.height, 400.0)),
-            self.theme.shadow_room(&Node::root("launcher")),
-        );
+        let size = Launcher::size(&self.theme);
         let launcher = Launcher::new(
             self.config.section(None),
             self.config.section(None),
@@ -1282,7 +1274,7 @@ impl AriaShell {
         );
         self.launcher = Some((dialog, launcher));
         self.resolve_icons();
-        Task::batch([self.close_exiter(), open_surfaces(surfaces)])
+        Task::batch([self.close_exiter(), surface_tasks(surfaces)])
     }
 
     /// Show the exit menu on the focused output, sized from its
@@ -1292,20 +1284,17 @@ impl AriaShell {
             log::warn!("no output to show the exiter on");
             return Task::none();
         };
-        let size = grown(
-            exiter.size(&self.theme, &self.locale),
-            self.theme.shadow_room(&Node::root("exiter")),
-        );
+        let size = exiter.size(&self.theme, &self.locale);
         let (dialog, surfaces) =
             Dialog::open("aria-exiter", &output, size, self.outputs.values().cloned());
         self.exiter = Some((dialog, exiter));
         self.resolve_icons();
-        Task::batch([self.close_launcher(), open_surfaces(surfaces)])
+        Task::batch([self.close_launcher(), surface_tasks(surfaces)])
     }
 
     fn close_exiter(&mut self) -> Task<Message> {
         match self.exiter.take() {
-            Some((dialog, _)) => close_surfaces(&dialog),
+            Some((dialog, _)) => surface_tasks(dialog.close()),
             None => Task::none(),
         }
     }
@@ -1316,19 +1305,7 @@ impl AriaShell {
         let Some((dialog, exiter)) = &mut self.exiter else {
             return Task::none();
         };
-        let size = grown(
-            exiter.size(&self.theme, &self.locale),
-            self.theme.shadow_room(&Node::root("exiter")),
-        );
-        if size == dialog.size {
-            return Task::none();
-        }
-        let (anchor, size) = dialog.resize(size);
-        Task::done(Message::LayoutChange {
-            id: dialog.window,
-            anchor,
-            size,
-        })
+        surface_tasks(dialog.resize(exiter.size(&self.theme, &self.locale)))
     }
 
     /// Carry out an exit menu action: a program, or the compositor's
@@ -1447,7 +1424,7 @@ impl AriaShell {
 
     fn close_launcher(&mut self) -> Task<Message> {
         match self.launcher.take() {
-            Some((dialog, _)) => close_surfaces(&dialog),
+            Some((dialog, _)) => surface_tasks(dialog.close()),
             None => Task::none(),
         }
     }
@@ -1617,25 +1594,21 @@ impl AriaShell {
                 {
                     return Task::none();
                 }
-                if let Some((dialog, _)) = &mut self.launcher
+                if let Some((dialog, _)) = &self.launcher
                     && dialog.owns(id)
                 {
                     // One of the launcher's surfaces went away (on our
                     // request, or not): the rest follows.
-                    dialog.grabs.retain(|(g, _)| *g != id);
-                    if dialog.is_window(id) {
-                        self.launcher = None;
-                    }
-                    return self.close_launcher();
+                    let rest = dialog.closed(id);
+                    self.launcher = None;
+                    return surface_tasks(rest);
                 }
-                if let Some((dialog, _)) = &mut self.exiter
+                if let Some((dialog, _)) = &self.exiter
                     && dialog.owns(id)
                 {
-                    dialog.grabs.retain(|(g, _)| *g != id);
-                    if dialog.is_window(id) {
-                        self.exiter = None;
-                    }
-                    return self.close_exiter();
+                    let rest = dialog.closed(id);
+                    self.exiter = None;
+                    return surface_tasks(rest);
                 }
                 if let Some(i) = self.toasts.iter().position(|t| t.window == id) {
                     // Gone with its output, or on our request: if the
@@ -1879,15 +1852,6 @@ impl AriaShell {
     }
 }
 
-/// A surface's size: its box's, plus the room for the box's shadow.
-fn grown(size: (u32, u32), room: iced::Padding) -> (u32, u32) {
-    (
-        size.0 + (room.left + room.right) as u32,
-        size.1 + (room.top + room.bottom) as u32,
-    )
-}
-
-/// The layer-shell anchor of the OSD: none centres it.
 /// The layer-shell anchor of a notification corner.
 fn toast_anchor(position: notifications::Position) -> Anchor {
     use notifications::Position::*;
@@ -1929,15 +1893,6 @@ fn surface_tasks(surfaces: Surfaces) -> Task<Message> {
             .chain(close)
             .chain(resize)
             .chain(redraw),
-    )
-}
-
-/// Remove every surface of a [`Dialog`].
-fn close_surfaces(dialog: &Dialog) -> Task<Message> {
-    Task::batch(
-        dialog
-            .windows()
-            .map(|id| Task::done(Message::RemoveWindow(id))),
     )
 }
 

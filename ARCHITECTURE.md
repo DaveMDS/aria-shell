@@ -421,14 +421,17 @@ Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced
 
 Dialog     (dialog.rs)      the modal surface the launcher and the exit menu share: one Overlay layer surface
                             centred on the focused output with the keyboard, a transparent grab surface per
-                            output under it; `open(namespace, output, size, outputs)` -> the surfaces to
-                            create, `resize`, `windows()`, `rect(output)`; `pointer(window, event)` says when
+                            output under it; `open(namespace, output, size, outputs)`, `close()`,
+                            `resize(size)`, `closed(window)` (any of its surfaces gone, the compositor's doing
+                            or ours: the rest go too, a grab left behind would swallow its output's clicks)
+                            each answer `Surfaces`; `rect(output)`; `pointer(window, event)` says when
                             a click outside happened (a press *ignored* by the widget tree on any of its
                             windows, then its release: `dialog::content` wraps the content in a `mouse_area`
                             so every press inside is captured); `pointer_events()` the subscription
 
 Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: Option<(Dialog, Launcher)>`
-  Message / update -> Action { Run(Task) | Close | Exit(name) }, view(Shared), subscription() for Up/Down/Esc
+  Message / update -> Action { Run(Task) | Close | Exit(name) }, view(Shared), subscription() for Up/Down/Esc;
+                            `size(theme)`: the theme's `launcher` box plus its shadow's room
   actions                   `[launcher] actions = all | none | names`: the exit menu's buttons as a row of icons
                             above the search field; a click goes through the exit menu's flow (Exit(name))
 

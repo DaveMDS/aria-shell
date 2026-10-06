@@ -24,6 +24,7 @@ use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Space, column, operation, scrollable};
 use iced::{Element, Event, Length, Padding, Rectangle, Subscription, Task, widget, window};
 
+use crate::components::dialog;
 use crate::components::exiter::{self, ExiterConfig};
 use crate::config::{self, RawSection, Section};
 use crate::gadget::Shared;
@@ -223,6 +224,21 @@ pub enum Action {
 }
 
 impl Launcher {
+    /// The surface size: the theme's `launcher { width; height }`, plus
+    /// the room for its shadow.
+    pub fn size(theme: &Theme) -> (u32, u32) {
+        let root = Node::root("launcher");
+        let style = theme.resolve(&root);
+        let px = |l: Option<theme::Length>, default: f32| match l {
+            Some(theme::Length::Px(px)) => px.max(1.0) as u32,
+            _ => default as u32,
+        };
+        dialog::grown(
+            (px(style.width, 500.0), px(style.height, 400.0)),
+            theme.shadow_room(&root),
+        )
+    }
+
     pub fn new(
         config: LauncherConfig,
         exiter: ExiterConfig,

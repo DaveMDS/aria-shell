@@ -3,8 +3,9 @@
 //! (`Exclusive`), and a transparent full-screen surface on every
 //! output under it (`Layer::Top`, above the bars) so a click anywhere
 //! else closes it and is swallowed, as a compositor does for a popup's.
-//! The daemon opens the surfaces this asks for, routes `Closed` and
-//! the clicks back, and draws the content; one dialog at a time.
+//! The daemon opens and closes the surfaces this asks for
+//! ([`Surfaces`]), routes `Closed` and the clicks back, and draws the
+//! content; one dialog at a time.
 //!
 //! Learned on the launcher (see ARCHITECTURE.md): Hyprland routes every
 //! pointer event to an exclusive-keyboard layer while it's mapped, so
@@ -23,11 +24,13 @@
 use iced::event::Status;
 use iced::widget::{Space, mouse_area};
 use iced::window::Id;
-use iced::{Element, Event, Point, Rectangle, Size, Subscription};
+use iced::{Element, Event, Padding, Point, Rectangle, Size, Subscription};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
+
+use crate::components::Surfaces;
 
 pub struct Dialog {
     pub window: Id,
@@ -48,7 +51,7 @@ impl Dialog {
         output: &OutputInfo,
         size: (u32, u32),
         outputs: impl IntoIterator<Item = OutputInfo>,
-    ) -> (Self, Vec<(Id, NewLayerShellSettings)>) {
+    ) -> (Self, Surfaces) {
         let mut surfaces = Vec::new();
         let mut grabs = Vec::new();
         for o in outputs {
@@ -82,6 +85,10 @@ impl Dialog {
             grabs,
             pressed_outside: false,
         };
+        let surfaces = Surfaces {
+            open: surfaces,
+            ..Surfaces::default()
+        };
         (dialog, surfaces)
     }
 
@@ -99,16 +106,44 @@ impl Dialog {
         }
     }
 
-    /// Every window of the dialog, to remove.
-    pub fn windows(&self) -> impl Iterator<Item = Id> + '_ {
+    fn windows(&self) -> impl Iterator<Item = Id> + '_ {
         std::iter::once(self.window).chain(self.grabs.iter().map(|(id, _)| *id))
     }
 
-    /// The anchor and size for a `LayoutChange` after the content
-    /// changed size.
-    pub fn resize(&mut self, size: (u32, u32)) -> (Anchor, LayerSize) {
+    /// Take the dialog down: every surface goes.
+    pub fn close(&self) -> Surfaces {
+        Surfaces {
+            close: self.windows().collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// Surface `window` of the dialog went away, on our request or not
+    /// (the compositor closes those on an output that goes): the dialog
+    /// is over, the surfaces left go too. A grab left behind would
+    /// swallow every click on its output.
+    pub fn closed(&self, window: Id) -> Surfaces {
+        Surfaces {
+            close: self.windows().filter(|&id| id != window).collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// The content wants surface size `size`: the dialog's surface
+    /// takes it, if it's another.
+    pub fn resize(&mut self, size: (u32, u32)) -> Surfaces {
+        if size == self.size {
+            return Surfaces::default();
+        }
         self.size = size;
-        (Anchor::empty(), LayerSize::px(size.0.max(1), size.1.max(1)))
+        Surfaces {
+            resize: vec![(
+                self.window,
+                Anchor::empty(),
+                LayerSize::px(size.0.max(1), size.1.max(1)),
+            )],
+            ..Surfaces::default()
+        }
     }
 
     pub fn is_window(&self, id: Id) -> bool {
@@ -152,6 +187,14 @@ impl Dialog {
             Size::new(w, h),
         )
     }
+}
+
+/// A surface's size: its box's, plus the room for the box's shadow.
+pub fn grown(size: (u32, u32), room: Padding) -> (u32, u32) {
+    (
+        size.0 + (room.left + room.right) as u32,
+        size.1 + (room.top + room.bottom) as u32,
+    )
 }
 
 /// The content of a grab surface: transparent, nothing takes a click

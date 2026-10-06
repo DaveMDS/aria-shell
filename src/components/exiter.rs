@@ -17,6 +17,7 @@ use iced::keyboard::{self, Key};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Event, Length, Subscription, Task, window};
 
+use crate::components::dialog;
 use crate::config::{RawSection, Section};
 use crate::gadget::Shared;
 use crate::locale::Locale;
@@ -393,9 +394,15 @@ impl Exiter {
         Some((question, countdown, button))
     }
 
-    /// The surface size for the current content, the root's padding
-    /// and border included.
+    /// The surface size for the current content: the root's padding
+    /// and border included, and the room for its shadow.
     pub fn size(&self, theme: &Theme, locale: &Locale) -> (u32, u32) {
+        dialog::grown(self.box_size(theme, locale), theme.shadow_room(&self.node))
+    }
+
+    /// The box's size for the current content, the root's padding and
+    /// border included.
+    fn box_size(&self, theme: &Theme, locale: &Locale) -> (u32, u32) {
         let s = theme.resolve(&self.node);
         let chrome_w = s.padding.left + s.padding.right + 2.0 * s.border_width;
         let chrome_h = s.padding.top + s.padding.bottom + 2.0 * s.border_width;

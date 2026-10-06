@@ -44,6 +44,22 @@ wait_count wallpaper HEADLESS-2 1 "the wallpaper came back with its output"
 assert_eq "$(count panel)" 2 "still a panel per output"
 assert_eq "$(count wallpaper)" 2 "still a wallpaper per output"
 
+# The launcher on the output that goes: it closes, and its grabs on the
+# other outputs with it, or they'd swallow every click there.
+swaymsg focus output HEADLESS-2 > /dev/null
+aria launcher show; settle 0.8
+assert_contains "$(surfaces)" "launcher HEADLESS-2"
+swaymsg output HEADLESS-2 disable > /dev/null
+wait_count launcher "" 0 "the launcher closed with its output"
+assert_eq "$(count grab)" 0 "its grabs closed"
+# The pointer's space is HEADLESS-1 alone now.
+inject "layout 1920 1080"
+click_widget 'panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+assert_surface popup "a click reaches the other output's bar"
+swaymsg output HEADLESS-2 enable > /dev/null
+inject "layout 3840 1080"
+wait_count panel HEADLESS-2 1 "the panel came back again"
+
 # A config change: everything reopens (the OSD closes, its position may
 # have changed).
 echo "# touched" >> "$config/aria-shell/aria.conf"

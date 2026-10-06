@@ -141,9 +141,9 @@ impl AriaShell {
                 list.push((id, "locker", output, out));
             }
         }
-        for (&id, w) in &self.wallpapers {
-            if let Some(out) = self.output_rect(w.output) {
-                list.push((id, "wallpaper", w.output, out));
+        for (id, output) in self.wallpapers.windows() {
+            if let Some(out) = self.output_rect(output) {
+                list.push((id, "wallpaper", output, out));
             }
         }
         list

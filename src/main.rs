@@ -55,7 +55,7 @@ use services::{
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;
-use wallpaper::{WallpaperConfig, Wallpapers};
+use wallpaper::Wallpapers;
 
 /// Top-level message. `#[to_exwlshell_message]` adds the variants the
 /// runtime needs to open/close/reconfigure surfaces (`NewLayerShell`,
@@ -210,10 +210,8 @@ struct AriaShell {
     outputs: BTreeMap<OutputId, OutputInfo>,
     /// One entry per open layer surface.
     panels: BTreeMap<Id, Panel>,
-    /// One background surface per output with a wallpaper configured.
-    wallpapers: BTreeMap<Id, Wallpaper>,
-    /// The decoded wallpaper images, shared by path.
-    images: Wallpapers,
+    /// The background surfaces.
+    wallpapers: Wallpapers,
     /// Open popup surfaces.
     popups: BTreeMap<Id, OpenPopup>,
     /// The launcher, while shown, on its dialog surface.
@@ -240,12 +238,6 @@ struct Toast {
     size: (u32, u32),
     /// (top, right, bottom, left)
     margin: (i32, i32, i32, i32),
-}
-
-/// A wallpaper surface: its output and what it shows.
-struct Wallpaper {
-    output: OutputId,
-    config: WallpaperConfig,
 }
 
 /// A popup surface: the panel it hangs off, its anchor in that panel's
@@ -307,8 +299,7 @@ impl AriaShell {
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
-            wallpapers: BTreeMap::new(),
-            images: Wallpapers::default(),
+            wallpapers: Wallpapers::default(),
             popups: BTreeMap::new(),
             launcher: None,
             exiter: None,
@@ -652,7 +643,7 @@ impl AriaShell {
                 }
             }
             Message::Wallpaper(event) => {
-                self.images.apply(event);
+                self.wallpapers.apply(event);
                 Task::none()
             }
             Message::Command(Command::Lock) => self.lock(),
@@ -816,7 +807,7 @@ impl AriaShell {
                     .is_some_and(|p| paths.contains(&p.to_path_buf()));
                 let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
                 let wallpapers: Vec<PathBuf> = self
-                    .images
+                    .wallpapers
                     .files()
                     .filter(|f| paths.contains(f))
                     .cloned()
@@ -831,7 +822,7 @@ impl AriaShell {
                     Task::batch(
                         wallpapers
                             .into_iter()
-                            .map(|p| self.images.load(p).map(Message::Wallpaper)),
+                            .map(|p| self.wallpapers.load(p).map(Message::Wallpaper)),
                     )
                 } else {
                     // An icon or applications directory: something was
@@ -925,12 +916,11 @@ impl AriaShell {
             .popups
             .keys()
             .chain(self.panels.keys())
-            .chain(self.wallpapers.keys())
             .map(|&id| Task::done(Message::RemoveWindow(id)))
             .collect();
         self.popups.clear();
         self.panels.clear();
-        self.wallpapers.clear();
+        tasks.push(surface_tasks(self.wallpapers.close()));
         tasks.push(self.close_launcher());
         tasks.push(self.close_exiter());
         self.cursor = None;
@@ -1601,16 +1591,7 @@ impl AriaShell {
                         Task::done(Message::RemoveWindow(id))
                     })
                     .collect();
-                let walls: Vec<Id> = self
-                    .wallpapers
-                    .iter()
-                    .filter(|(_, w)| w.output == gone)
-                    .map(|(id, _)| *id)
-                    .collect();
-                for id in walls {
-                    self.wallpapers.remove(&id);
-                    tasks.push(Task::done(Message::RemoveWindow(id)));
-                }
+                tasks.push(surface_tasks(self.wallpapers.output_removed(gone)));
                 // Its toasts move to another output.
                 let (gone, kept): (Vec<Toast>, Vec<Toast>) = std::mem::take(&mut self.toasts)
                     .into_iter()
@@ -1662,7 +1643,7 @@ impl AriaShell {
                     self.toasts.remove(i);
                     return self.sync_toasts();
                 }
-                if self.wallpapers.remove(&id).is_some() {
+                if self.wallpapers.closed(id) {
                     return Task::none();
                 }
                 if self.osd.closed(id) {
@@ -1710,52 +1691,10 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
-    /// The wallpaper this output is configured for, unless it has one
-    /// already (outputs get announced more than once).
+    /// The wallpaper this output is configured for, unless it has one.
     fn open_wallpaper(&mut self, output: &OutputInfo) -> Task<Message> {
-        let output_id = OutputId::from(output);
-        if self.wallpapers.values().any(|w| w.output == output_id) {
-            return Task::none();
-        }
-        let name = output.name.clone().unwrap_or_default();
-        let Some(config) = WallpaperConfig::for_output(&self.config, &name) else {
-            return Task::none();
-        };
-        let Some(path) = config.source.clone() else {
-            return Task::none();
-        };
-        log::info!("wallpaper {} on output {name:?}", path.display());
-        let mut tasks = Vec::new();
-        if !self.images.has(&path) {
-            tasks.push(self.images.load(path).map(Message::Wallpaper));
-        }
-        let id = Id::unique();
-        tasks.push(Task::done(Message::NewLayerShell {
-            settings: NewLayerShellSettings {
-                anchor: Anchor::all(),
-                size: LayerSize::FILL,
-                layer: Layer::Background,
-                exclusive_zone: Some(-1),
-                margin: None,
-                keyboard_interactivity: KeyboardInteractivity::None,
-                output_option: OutputOption::GlobalName(output.id),
-                // Nothing to point at: the pointer over the desktop would
-                // only be messages, each a rebuild of every surface and a
-                // frame of this one (`Message::redraw_scope`).
-                events_transparent: true,
-                namespace: Some("aria-wallpaper".to_owned()),
-                ..Default::default()
-            },
-            id,
-        }));
-        self.wallpapers.insert(
-            id,
-            Wallpaper {
-                output: output_id,
-                config,
-            },
-        );
-        Task::batch(tasks)
+        let (surfaces, load) = self.wallpapers.open(&self.config, output);
+        Task::batch([surface_tasks(surfaces), load.map(Message::Wallpaper)])
     }
 
     fn view(&self, window: Id) -> Element<'_, Message> {
@@ -1817,23 +1756,10 @@ impl AriaShell {
         {
             return dialog::grab_view();
         }
-        if let Some(w) = self.wallpapers.get(&window) {
-            let root = Node::root("wallpaper").attr("output", self.output_name(w.output));
-            let picture: Element<'_, Message> =
-                match w.config.source.as_deref().and_then(|p| self.images.get(p)) {
-                    Some(handle) => widget::image(handle.clone())
-                        .content_fit(w.config.fit.content_fit())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .into(),
-                    None => widget::Space::new().into(),
-                };
+        if let Some(output) = self.wallpapers.output_of(window) {
             return self
-                .theme
-                .container(&root, picture)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
+                .wallpapers
+                .view(window, &self.theme, self.output_name(output));
         }
         if let Some(t) = self.toasts.iter().find(|t| t.window == window)
             && let Some(n) = self.notifications.get(t.id)
@@ -1888,7 +1814,7 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs().iter().cloned());
-        files.extend(self.images.files().cloned());
+        files.extend(self.wallpapers.files().cloned());
         let popups = (!self.popups.is_empty())
             .then(|| panel::presses_outside().map(Message::PressedOutside));
         let launcher = self.launcher.iter().flat_map(|(_, launcher)| {

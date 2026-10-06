@@ -454,9 +454,9 @@ Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output
                             `[wallpaper:<connector>]` (with a source) over `[wallpaper]`; `source` through
                             `Config::resolve_path` (`~`, absolute, else relative to aria.conf's dir), `fit` =
                             CSS object-fit (cover default, contain, fill, none, scale-down -> iced ContentFit);
-                            the daemon opens one `Layer::Background` surface per output (`wallpapers:
-                            BTreeMap<Id, Wallpaper>`, with the panels, closed with the output); `images:
-                            Wallpapers` decodes each file once off-thread (`load` -> `Event::Loaded`, by
+                            `Wallpapers::open(config, output) -> (Surfaces, Task)` asks for one
+                            `Layer::Background` surface per output (with the panels, closed with the output)
+                            and decodes each file once off-thread (`load` -> `Event::Loaded`, by
                             content like the avatar), shared by path, reloaded when the watcher sees the
                             file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
                             container (the theme's background shows around a `contain`ed image)

@@ -79,12 +79,17 @@ of every surface: the theme and the reusable widgets. The plumbing
 top. Gadgets and components use services and `ui/`, not each other: a
 service's value in words or as an icon (`Channel::icon_name`,
 `Summary::icon_name`, `power::profile_label`, `Device::name`) is in the
-service, where the gadget and the OSD both find it. The paths
+service, where the gadget and the OSD both find it. The daemon itself
+is `main.rs` (`Message`, the struct, the router `update`, `perform`)
+and `daemon/`, more `impl AriaShell` blocks by subject: `outputs.rs`
+(monitors coming and going, config and theme reloads), `surfaces.rs`
+(syncing what's on screen with the state, `surface_tasks`), `view.rs`
+(`view`, `subscription`), `debug.rs` (`aria-shell debug`). The paths
 in the diagram below leave out the `services/` / `components/` / `ui/`
 prefix.
 
 ```
-AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
+AriaShell  (main.rs, daemon/) daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
   Message::Shell(ShellEvent)          monitors and surfaces appearing/disappearing
   Message::Panel(window::Id, panel::Message)
   Message::Compositor(compositor::Event)   workspaces/windows changes, applied to `Compositor`

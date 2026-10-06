@@ -17,7 +17,7 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::places::{Command, Device, DeviceKind, Group, Kind, Place, PlacesConfig, Share, Target};
+use crate::places::{Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target};
 use crate::sysmon::format;
 use crate::theme::{self, Node};
 use crate::widgets::graph;
@@ -38,8 +38,8 @@ pub enum Message {
     Mount(String),
     Eject(String),
     /// Mount a share (by its mount point), then open it.
-    MountShare(PathBuf),
-    UnmountShare(PathBuf),
+    MountDir(PathBuf),
+    UnmountDir(PathBuf),
 }
 
 /// A themed part of the popup and its size, built together so the
@@ -74,13 +74,13 @@ impl Gadget for PlacesGadget {
                 self.popup.close(),
                 Action::Places(Command::Mount(path)),
             ]),
-            Message::MountShare(dir) => Action::Many(vec![
+            Message::MountDir(dir) => Action::Many(vec![
                 self.popup.close(),
-                Action::Places(Command::MountShare(dir)),
+                Action::Places(Command::MountDir(dir)),
             ]),
             // The popup stays: the device leaves it, or shows why not.
             Message::Eject(path) => Action::Places(Command::Eject(path)),
-            Message::UnmountShare(dir) => Action::Places(Command::UnmountShare(dir)),
+            Message::UnmountDir(dir) => Action::Places(Command::UnmountDir(dir)),
         }
     }
 
@@ -91,6 +91,7 @@ impl Gadget for PlacesGadget {
         names.extend(DeviceKind::ALL.iter().flat_map(|k| self.device_icons(*k)));
         names.push(self.symbolic(EJECT_ICON));
         names.push(self.symbolic(SHARE_ICON));
+        names.extend(ENCRYPTED_ICONS.iter().map(|n| self.symbolic(n)));
         names
     }
 
@@ -168,17 +169,19 @@ impl PlacesGadget {
         for &group in &self.config.show {
             let entries: Vec<Block<'a>> = match group {
                 Group::Places => places.iter().map(|p| self.item(ctx, &list, p)).collect(),
-                Group::Devices => ctx
-                    .places
-                    .devices()
-                    .iter()
-                    .map(|d| self.device(ctx, &list, d))
-                    .collect(),
+                Group::Devices => {
+                    let devices = ctx
+                        .places
+                        .devices()
+                        .iter()
+                        .map(|d| self.device(ctx, &list, d));
+                    let mounts = ctx.places.local_mounts().map(|m| self.mount(ctx, &list, m));
+                    devices.chain(mounts).collect()
+                }
                 Group::Network => ctx
                     .places
                     .shares()
-                    .iter()
-                    .map(|s| self.share(ctx, &list, s))
+                    .map(|s| self.mount(ctx, &list, s))
                     .collect(),
                 // A bookmark of a place listed above isn't repeated
                 // (GTK's file managers bookmark the home, often).
@@ -303,16 +306,17 @@ impl PlacesGadget {
         )
     }
 
-    /// A network share: its icon and its name (no usage: `statvfs` would
-    /// wait on the server), ⏏ while mounted.
-    fn share<'a>(&'a self, ctx: &Context<'a>, list: &Node, share: &Share) -> Block<'a> {
+    /// A mount UDisks2 doesn't know: a network share (`share`, no usage:
+    /// `statvfs` would wait on the server) or a local FUSE or bind mount
+    /// (with the devices, as a `device`); ⏏ while mounted.
+    fn mount<'a>(&'a self, ctx: &Context<'a>, list: &Node, share: &Mount) -> Block<'a> {
         let busy = ctx.places.busy(&share.key());
         let dir = share.mount_point.clone();
         let open = if share.mounted {
             Some(Message::Open(Target::Path(dir.clone())))
         } else {
             // One mounted by hand, gone: nothing to mount it again with.
-            share.in_fstab.then(|| Message::MountShare(dir.clone()))
+            share.in_fstab.then(|| Message::MountDir(dir.clone()))
         };
         let custom = if self.config.symbolic_icons {
             &share.symbolic_icon
@@ -320,22 +324,29 @@ impl PlacesGadget {
             &share.icon
         };
         let mut icons: Vec<String> = custom.iter().cloned().collect();
-        icons.push(self.symbolic(SHARE_ICON));
+        let fallback: &[&str] = if share.network {
+            &[SHARE_ICON]
+        } else if share.encrypted() {
+            ENCRYPTED_ICONS
+        } else {
+            &["folder"]
+        };
+        icons.extend(fallback.iter().map(|n| self.symbolic(n)));
         self.volume(
             ctx,
             Volume {
                 node: list
-                    .child("share")
+                    .child(if share.network { "share" } else { "device" })
                     .class(share.family())
                     .class_if("mounted", share.mounted)
                     .class_if("busy", busy),
                 icons,
                 name: share.label.clone(),
-                usage: None,
+                usage: share.usage,
                 open: open.filter(|_| !busy),
                 eject: share
                     .mounted
-                    .then(|| (!busy).then(|| Message::UnmountShare(dir))),
+                    .then(|| (!busy).then(|| Message::UnmountDir(dir))),
             },
         )
     }
@@ -433,6 +444,14 @@ impl PlacesGadget {
 const EJECT_ICON: &str = "media-eject";
 /// A share's icon, when its fstab entry names none.
 const SHARE_ICON: &str = "folder-remote";
+/// An encrypted folder's (encfs, gocryptfs, ...), best first.
+const ENCRYPTED_ICONS: &[&str] = &[
+    "folder-encrypted",
+    "folder-locked",
+    "channel-secure",
+    "security-high",
+    "folder",
+];
 
 /// What [`PlacesGadget::volume`] draws.
 struct Volume {

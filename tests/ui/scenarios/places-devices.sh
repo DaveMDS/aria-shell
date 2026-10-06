@@ -6,8 +6,13 @@
 # notified.
 
 export HOME=$ARIA_UI_OUT/home
+# No mounts but UDisks2's: the desktop's (an encfs, a share) stay out.
+export ARIA_SHELL_FSTAB=$ARIA_UI_OUT/fstab
+export ARIA_SHELL_MOUNTINFO=$ARIA_UI_OUT/mountinfo
 config=$ARIA_UI_OUT/config
 mkdir -p "$HOME" "$config/aria-shell"
+: > "$ARIA_SHELL_FSTAB"
+: > "$ARIA_SHELL_MOUNTINFO"
 
 # In the middle of the bar: at an edge the compositor slides the popup
 # onto the screen, where `debug surfaces` doesn't know it is.

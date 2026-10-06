@@ -1,11 +1,13 @@
-# The Places gadget's network shares, on the scenario's own fstab and
+# The Places gadget's network shares and the local mounts UDisks2
+# doesn't know, on the scenario's own fstab and
 # mountinfo (ARIA_SHELL_FSTAB, ARIA_SHELL_MOUNTINFO) and the fake mount
 # / umount / fusermount3 of tests/ui/bin: fstab's network entries with
 # x-gvfs-show or under the home listed (x-gvfs-name, x-gvfs-hide, a
 # local filesystem and a folder nobody looks in left out), plus an
 # sshfs mounted by hand; a click mounts a share and opens it, an
 # unreachable server and a share in use are notified, ⏏ unmounts (the
-# one mounted by hand with fusermount3, and it's gone).
+# one mounted by hand with fusermount3, and it's gone); an encfs mounted
+# by hand is listed with the devices, encrypted, and unmounted alike.
 
 export HOME=$ARIA_UI_OUT/home
 export ARIA_SHELL_FSTAB=$ARIA_UI_OUT/fstab
@@ -27,6 +29,8 @@ cat > "$ARIA_SHELL_MOUNTINFO" << EOF
 22 1 0:21 / / rw,relatime shared:1 - btrfs /dev/nvme0n1p7 rw
 90 22 0:90 / $escaped_home/remote\\040box rw,nosuid,nodev,relatime shared:9 - fuse.sshfs dave@box:/ rw
 91 22 0:91 / /srv/x rw,relatime shared:10 - nfs4 nas:/x rw
+92 22 0:92 / /media/Vault rw,nosuid,nodev,relatime shared:11 - fuse.encfs encfs rw
+93 22 0:93 / /media/scratch rw,relatime shared:12 - tmpfs tmpfs rw
 EOF
 
 # In the middle of the bar: at an edge the compositor slides the popup
@@ -41,7 +45,7 @@ outputs = all
 items_center = Places
 
 [Places]
-show = network
+show = devices network
 EOF
 
 restart_shell "$config"
@@ -59,6 +63,9 @@ assert_contains "$(aria debug places)" 'label="My Docs" type=cifs mounted=false 
 assert_contains "$(aria debug places)" "share $HOME/remote box \"dave@box:/\" label=\"remote box\" type=fuse.sshfs mounted=true fstab=false"
 assert_not_contains "$(aria debug places)" "Hidden" "x-gvfs-hide"
 assert_not_contains "$(aria debug places)" "/srv" "where nobody looks"
+assert_eq "$(count_widgets 'device')" 1 "the encfs, with the devices (not the tmpfs)"
+assert_eq "$(count_widgets 'device.encrypted.mounted')" 1 "encrypted, mounted"
+assert_contains "$(aria debug places)" 'mount /media/Vault "encfs" label="Vault" type=fuse.encfs mounted=true fstab=false'
 
 # Mounted, then opened.
 click_widget 'share.nfs button.open'
@@ -99,3 +106,9 @@ settle 0.5
 assert_logged 'remote box unmounted'
 assert_contains "$(cat "$ARIA_UI_OUT/mount.log")" "fusermount3 -u $HOME/remote box"
 assert_eq "$(count_widgets 'share.ssh')" 0 "gone: nothing to mount it again with"
+
+# The encfs: unmounted with fusermount3, and gone.
+click_widget 'device.encrypted button.eject'
+settle 0.5
+assert_contains "$(cat "$ARIA_UI_OUT/mount.log")" "fusermount3 -u /media/Vault"
+assert_eq "$(count_widgets 'device')" 0 "gone: nothing to mount it again with"

@@ -1751,12 +1751,12 @@ impl AriaShell {
                 gadgets::places::device_name(&self.locale, d),
                 "drive-harddisk-symbolic",
             ),
-            places::Volume::Share(s) => (s.label.clone(), "folder-remote-symbolic"),
+            places::Volume::Mount(s) => (s.label.clone(), "folder-remote-symbolic"),
         };
         let key = match (&failure.volume, failure.eject) {
             (_, false) => "places.mount_failed",
             (places::Volume::Device(_), true) => "places.eject_failed",
-            (places::Volume::Share(_), true) => "places.unmount_failed",
+            (places::Volume::Mount(_), true) => "places.unmount_failed",
         };
         let summary = self.locale.fmt(key, &[("name", &name)]);
         let body = if failure.not_authorized {

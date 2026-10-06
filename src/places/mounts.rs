@@ -1,18 +1,19 @@
-//! Network shares: the fstab entries of network filesystems (NFS, SMB,
-//! sshfs, WebDAV, ...) and the ones mounted by hand, as GVfs lists them
-//! for Nautilus and Nemo; mounted and unmounted with `mount <dir>` /
-//! `umount <dir>` (fstab's `user`/`users` lets a user do it, the setuid
-//! `mount` does the rest), never through UDisks2, which only knows block
-//! devices. Read from `/etc/fstab` and `/proc/self/mountinfo`: local
-//! files, nothing here waits on the network (no `statvfs`: a slow or
-//! dead server would hang it).
+//! The mounts UDisks2 doesn't know, which only knows block devices:
+//! network shares (NFS, SMB, sshfs, WebDAV, ...) and local FUSE or bind
+//! mounts (encfs, gocryptfs, bindfs, ...), the fstab entries and the
+//! ones mounted by hand, as GVfs lists them for Nautilus and Nemo;
+//! mounted and unmounted with `mount <dir>` / `umount <dir>` (fstab's
+//! `user`/`users` lets a user do it, the setuid `mount` does the rest).
+//! Read from `/etc/fstab` and `/proc/self/mountinfo`: local files,
+//! nothing here waits on the network (no `statvfs`: a slow or dead
+//! server would hang it).
 
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-use super::Share;
+use super::Mount;
 
 /// The system's fstab, unless `ARIA_SHELL_FSTAB` names another (the
 /// UI scenarios', tests/ui: they can't mount a share for real).
@@ -46,6 +47,37 @@ const NETWORK_TYPES: &[&str] = &[
     "fuse.rclone",
 ];
 
+/// Filesystem types never listed: the kernel's own, the desktop's
+/// plumbing (gvfs, the portals).
+const SYSTEM_TYPES: &[&str] = &[
+    "autofs",
+    "binfmt_misc",
+    "bpf",
+    "cgroup",
+    "cgroup2",
+    "configfs",
+    "debugfs",
+    "devpts",
+    "devtmpfs",
+    "efivarfs",
+    "fusectl",
+    "hugetlbfs",
+    "mqueue",
+    "nsfs",
+    "proc",
+    "pstore",
+    "ramfs",
+    "rpc_pipefs",
+    "securityfs",
+    "swap",
+    "sysfs",
+    "tmpfs",
+    "tracefs",
+    "fuse.gvfsd-fuse",
+    "fuse.portal",
+    "fuse.xdg-document-portal",
+];
+
 /// One line of fstab, or of mountinfo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -60,6 +92,19 @@ impl Entry {
         NETWORK_TYPES.contains(&self.fs_type.as_str())
             // The old sshfs form: `sshfs#user@host:/dir /mnt fuse ...`.
             || (self.fs_type == "fuse" && self.source.starts_with("sshfs#"))
+    }
+
+    /// A filesystem on a block device: UDisks2's, listed from there.
+    fn is_block(&self) -> bool {
+        ["/dev/", "UUID=", "LABEL=", "PARTUUID=", "PARTLABEL="]
+            .iter()
+            .any(|p| self.source.starts_with(p))
+    }
+
+    /// Worth listing: a network share, or a local mount that's neither
+    /// a block device's nor the system's.
+    fn is_candidate(&self) -> bool {
+        self.is_network() || !(self.is_block() || SYSTEM_TYPES.contains(&self.fs_type.as_str()))
     }
 
     /// `name=value` among the options.
@@ -141,39 +186,42 @@ fn unescape(field: &str) -> OsString {
     OsString::from_vec(out)
 }
 
-/// The shares worth listing, as GVfs chooses them: a network entry of
-/// fstab with `x-gvfs-show` or somewhere a user looks (`/media`,
-/// `/run/media`, `/mnt`, the home), not `x-gvfs-hide`; then a network
-/// filesystem mounted by hand in such a place. Named by `x-gvfs-name`,
-/// else the folder; `x-gvfs-icon` / `x-gvfs-symbolic-icon` kept.
-pub fn shares(fstab: &[Entry], mounts: &[Entry], home: &Path) -> Vec<Share> {
+/// The mounts worth listing, as GVfs chooses them: an entry of fstab
+/// (a network share, or a local filesystem without a block device) with
+/// `x-gvfs-show` or somewhere a user looks (`/media`, `/run/media`,
+/// `/mnt`, the home), not `x-gvfs-hide`; then such a filesystem mounted
+/// by hand in such a place. Named by `x-gvfs-name`, else the folder;
+/// `x-gvfs-icon` / `x-gvfs-symbolic-icon` kept.
+pub fn mounts(fstab: &[Entry], mounted: &[Entry], home: &Path) -> Vec<Mount> {
     let visible = |dir: &Path| super::user_visible(dir, home);
-    let mounted = |dir: &Path| mounts.iter().any(|m| m.dir == dir);
-    let mut shares: Vec<Share> = fstab
+    let is_mounted = |dir: &Path| mounted.iter().any(|m| m.dir == dir);
+    let mut mounts: Vec<Mount> = fstab
         .iter()
-        .filter(|e| e.is_network() && !e.has_option("x-gvfs-hide"))
+        .filter(|e| e.is_candidate() && !e.has_option("x-gvfs-hide"))
         .filter(|e| e.has_option("x-gvfs-show") || visible(&e.dir))
-        .map(|e| share(e, mounted(&e.dir), true))
+        .map(|e| mount_of(e, is_mounted(&e.dir), true))
         .collect();
-    for m in mounts {
-        if m.is_network() && visible(&m.dir) && !shares.iter().any(|s| s.mount_point == m.dir) {
-            shares.push(share(m, true, false));
+    for m in mounted {
+        if m.is_candidate() && visible(&m.dir) && !mounts.iter().any(|s| s.mount_point == m.dir) {
+            mounts.push(mount_of(m, true, false));
         }
     }
-    shares
+    mounts
 }
 
-fn share(e: &Entry, mounted: bool, in_fstab: bool) -> Share {
+fn mount_of(e: &Entry, mounted: bool, in_fstab: bool) -> Mount {
     let label = e
         .option("x-gvfs-name")
         .map(|n| super::percent_decode(n).to_string_lossy().into_owned())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| super::base_name(&e.dir));
-    Share {
+    Mount {
         mount_point: e.dir.clone(),
         label,
         source: e.source.clone(),
         fs_type: e.fs_type.clone(),
+        network: e.is_network(),
+        usage: None,
         icon: e.option("x-gvfs-icon").map(str::to_owned),
         symbolic_icon: e.option("x-gvfs-symbolic-icon").map(str::to_owned),
         mounted,
@@ -186,10 +234,10 @@ pub async fn mount(dir: PathBuf) -> Result<(), String> {
     run("mount", &[dir.into_os_string()]).await
 }
 
-/// `umount <dir>`; a FUSE share mounted by hand (sshfs, not in fstab):
+/// `umount <dir>`; a FUSE mount by hand (sshfs, encfs, not in fstab):
 /// `fusermount3 -u` (`fusermount -u` where there's no 3), as only the
 /// user who mounted it may.
-pub async fn unmount(share: Share) -> Result<(), String> {
+pub async fn unmount(share: Mount) -> Result<(), String> {
     let dir = share.mount_point.into_os_string();
     if share.fs_type.starts_with("fuse") && !share.in_fstab {
         let fusermount =
@@ -282,7 +330,7 @@ broken line
     }
 
     #[test]
-    fn shares_as_gvfs_lists_them() {
+    fn mounts_as_gvfs_lists_them() {
         let home = Path::new("/home/u");
         let fstab = parse_fstab(
             "\
@@ -294,40 +342,47 @@ nas:/Elsewhere /srv/elsewhere nfs users 0 0
 sshfs#u@box:/ /home/u/box fuse users,noauto 0 0
 ",
         );
-        let mounts = parse_mountinfo(
+        let mounted = parse_mountinfo(
             "\
 461 22 0:60 / /media/NAS/Backup rw - nfs4 nas:/Backup rw
 90 22 0:90 / /home/u/remote rw - fuse.sshfs u@other:/ rw
 91 22 0:91 / /var/lib/x rw - nfs4 nas:/x rw
 92 22 0:92 / /run/media/u/smb rw - cifs //nas/share rw
+93 22 0:93 / /media/Vault rw - fuse.encfs encfs rw
+94 22 0:94 / /media/scratch rw - tmpfs tmpfs rw
+95 22 8:1 /data /mnt/bind rw - ext4 /dev/sda1 rw
+96 22 0:96 / /run/user/1000/doc rw - fuse.portal portal rw
 ",
         );
-        let shares = shares(&fstab, &mounts, home);
-        let names: Vec<(&str, bool, bool)> = shares
+        let mounts = mounts(&fstab, &mounted, home);
+        let names: Vec<(&str, bool, bool, bool)> = mounts
             .iter()
-            .map(|s| (s.label.as_str(), s.mounted, s.in_fstab))
+            .map(|s| (s.label.as_str(), s.mounted, s.in_fstab, s.network))
             .collect();
         assert_eq!(
             names,
             vec![
-                ("Backup", true, true),
-                ("NAS Srv", false, true),
-                ("box", false, true),
-                ("remote", true, false),
-                ("smb", true, false),
+                ("Backup", true, true, true),
+                ("NAS Srv", false, true, true),
+                ("box", false, true, true),
+                ("remote", true, false, true),
+                ("smb", true, false, true),
+                ("Vault", true, false, false),
             ],
-            "fstab's network entries under /media, the home, or x-gvfs-show (not \\
-             x-gvfs-hide, not a local filesystem, not where nobody looks), then \\
-             those mounted by hand where a user looks"
+            "fstab's entries under /media, the home, or x-gvfs-show (not \
+             x-gvfs-hide, not a block device's, not where nobody looks), then \
+             those mounted by hand where a user looks (not tmpfs, not a block \
+             device bound elsewhere, not the portals)"
         );
         assert_eq!(
-            shares[1].symbolic_icon.as_deref(),
+            mounts[1].symbolic_icon.as_deref(),
             Some("network-server-symbolic")
         );
-        assert_eq!(shares[1].icon, None);
+        assert_eq!(mounts[1].icon, None);
+        assert!(mounts[5].encrypted());
         assert_eq!(
-            shares.iter().map(Share::family).collect::<Vec<_>>(),
-            vec!["nfs", "nfs", "ssh", "ssh", "smb"]
+            mounts.iter().map(Mount::family).collect::<Vec<_>>(),
+            vec!["nfs", "nfs", "ssh", "ssh", "smb", "encrypted"]
         );
     }
 }

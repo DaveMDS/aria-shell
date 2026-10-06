@@ -8,12 +8,13 @@
 //!
 //! The devices come from UDisks2 (`udisks.rs`): followed on the system
 //! bus, filtered as GVfs does ([`devices`]), mounted and ejected with
-//! [`Command::Mount`] / [`Command::Eject`]. The network shares from fstab
-//! and mountinfo (`network.rs`), read with the rest, mounted with
-//! `mount` ([`Command::MountShare`] / [`Command::UnmountShare`]). A
-//! failure comes back as a [`Failure`] for the daemon to notify.
+//! [`Command::Mount`] / [`Command::Eject`]. The other mounts from fstab
+//! and mountinfo (`mounts.rs`: network shares, FUSE and bind mounts),
+//! read with the rest, mounted with `mount` ([`Command::MountDir`] /
+//! [`Command::UnmountDir`]). A failure comes back as a [`Failure`] for
+//! the daemon to notify.
 
-mod network;
+mod mounts;
 mod udisks;
 
 use std::collections::{BTreeSet, HashMap};
@@ -269,16 +270,23 @@ impl DeviceKind {
     }
 }
 
-/// A network share, as the popup lists it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Share {
+/// A mount UDisks2 doesn't know (no block device under it), as the
+/// popup lists it: a network share, in its own section; a FUSE or bind
+/// mount (encfs, gocryptfs, bindfs, ...), with the devices.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mount {
     /// Its key.
     pub mount_point: PathBuf,
     /// `x-gvfs-name`, else the folder's name.
     pub label: String,
-    /// `server:/export`, `//server/share`, `user@host:dir`.
+    /// `server:/export`, `//server/share`, `user@host:dir`, `encfs`.
     pub source: String,
     pub fs_type: String,
+    /// A network filesystem (no usage read: `statvfs` would wait on the
+    /// server).
+    pub network: bool,
+    /// The fraction used of a local one, while mounted.
+    pub usage: Option<f32>,
     /// `x-gvfs-icon`, `x-gvfs-symbolic-icon`.
     pub icon: Option<String>,
     pub symbolic_icon: Option<String>,
@@ -287,9 +295,17 @@ pub struct Share {
     pub in_fstab: bool,
 }
 
-impl Share {
-    /// The theme's class: the protocol's family.
+impl Mount {
+    /// The theme's class: a share's protocol (`nfs`, `smb`, `ssh`,
+    /// `dav`, `other`), a local mount's kind (`encrypted`, `fuse`).
     pub fn family(&self) -> &'static str {
+        if !self.network {
+            return if self.encrypted() {
+                "encrypted"
+            } else {
+                "fuse"
+            };
+        }
         match self.fs_type.as_str() {
             "nfs" | "nfs4" => "nfs",
             "cifs" | "smb3" | "smbfs" => "smb",
@@ -299,14 +315,22 @@ impl Share {
         }
     }
 
+    /// An encrypted folder: encfs, gocryptfs, CryFS, securefs, eCryptfs.
+    pub fn encrypted(&self) -> bool {
+        matches!(
+            self.fs_type.as_str(),
+            "fuse.encfs" | "encfs" | "fuse.gocryptfs" | "fuse.cryfs" | "fuse.securefs" | "ecryptfs"
+        )
+    }
+
     /// What [`Places::busy`] knows it by.
     pub fn key(&self) -> String {
-        share_key(&self.mount_point)
+        mount_key(&self.mount_point)
     }
 }
 
-fn share_key(mount_point: &Path) -> String {
-    format!("share:{}", mount_point.display())
+fn mount_key(mount_point: &Path) -> String {
+    format!("mount:{}", mount_point.display())
 }
 
 /// What an eject does to the drive, after unmounting.
@@ -366,8 +390,8 @@ pub enum Event {
     },
     Ejected(String),
     /// `mount` went through: the share is opened.
-    ShareMounted(PathBuf),
-    ShareUnmounted(PathBuf),
+    DirMounted(PathBuf),
+    DirUnmounted(PathBuf),
     Failed(Failure),
 }
 
@@ -375,14 +399,14 @@ pub enum Event {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Volume {
     Device(Device),
-    Share(Share),
+    Mount(Mount),
 }
 
 impl Volume {
     fn key(&self) -> String {
         match self {
             Self::Device(d) => d.path.clone(),
-            Self::Share(s) => s.key(),
+            Self::Mount(s) => s.key(),
         }
     }
 }
@@ -411,8 +435,8 @@ pub enum Command {
     /// then eject or power off its drive when it's removable.
     Eject(String),
     /// `mount` a share (by its mount point), then open it.
-    MountShare(PathBuf),
-    UnmountShare(PathBuf),
+    MountDir(PathBuf),
+    UnmountDir(PathBuf),
 }
 
 #[derive(Debug, Default)]
@@ -423,8 +447,9 @@ pub struct Places {
     bus: Option<Connection>,
     /// `None` while UDisks2 isn't running.
     devices: Option<Vec<Device>>,
-    shares: Vec<Share>,
-    /// The devices (by path) and the shares ([`Share::key`]) a mount or
+    /// The mounts UDisks2 doesn't know: shares and local ones.
+    mounts: Vec<Mount>,
+    /// The devices (by path) and the shares ([`Mount::key`]) a mount or
     /// an eject is under way for.
     busy: BTreeSet<String>,
 }
@@ -480,17 +505,17 @@ impl Places {
                 self.busy.remove(&path);
                 (true, None)
             }
-            Event::ShareMounted(dir) => {
+            Event::DirMounted(dir) => {
                 log::info!("places: {} mounted", dir.display());
-                self.busy.remove(&share_key(&dir));
-                self.reload_shares();
+                self.busy.remove(&mount_key(&dir));
+                self.reload_mounts();
                 open(file_manager, &Target::Path(dir));
                 (true, None)
             }
-            Event::ShareUnmounted(dir) => {
+            Event::DirUnmounted(dir) => {
                 log::info!("places: {} unmounted", dir.display());
-                self.busy.remove(&share_key(&dir));
-                self.reload_shares();
+                self.busy.remove(&mount_key(&dir));
+                self.reload_mounts();
                 (true, None)
             }
             Event::Failed(failure) => {
@@ -501,8 +526,8 @@ impl Places {
                     failure.message
                 );
                 self.busy.remove(&key);
-                if matches!(failure.volume, Volume::Share(_)) {
-                    self.reload_shares();
+                if matches!(failure.volume, Volume::Mount(_)) {
+                    self.reload_mounts();
                 }
                 (true, Some(failure))
             }
@@ -513,7 +538,7 @@ impl Places {
         match command {
             Command::Refresh => {
                 self.reload();
-                self.reload_shares();
+                self.reload_mounts();
                 if let Some(devices) = &mut self.devices {
                     read_usage(devices);
                 }
@@ -572,7 +597,7 @@ impl Places {
                     }
                 })
             }
-            Command::MountShare(dir) => {
+            Command::MountDir(dir) => {
                 let Some(share) = self.share(&dir).cloned() else {
                     return Task::none();
                 };
@@ -581,18 +606,18 @@ impl Places {
                 }
                 log::info!("places: mounting {}", dir.display());
                 Task::future(async move {
-                    match network::mount(dir.clone()).await {
-                        Ok(()) => Event::ShareMounted(dir),
+                    match mounts::mount(dir.clone()).await {
+                        Ok(()) => Event::DirMounted(dir),
                         Err(message) => Event::Failed(Failure {
                             eject: false,
-                            volume: Volume::Share(share),
+                            volume: Volume::Mount(share),
                             message,
                             not_authorized: false,
                         }),
                     }
                 })
             }
-            Command::UnmountShare(dir) => {
+            Command::UnmountDir(dir) => {
                 let Some(share) = self.share(&dir).cloned() else {
                     return Task::none();
                 };
@@ -601,11 +626,11 @@ impl Places {
                 }
                 log::info!("places: unmounting {}", dir.display());
                 Task::future(async move {
-                    match network::unmount(share.clone()).await {
-                        Ok(()) => Event::ShareUnmounted(dir),
+                    match mounts::unmount(share.clone()).await {
+                        Ok(()) => Event::DirUnmounted(dir),
                         Err(message) => Event::Failed(Failure {
                             eject: true,
-                            volume: Volume::Share(share),
+                            volume: Volume::Mount(share),
                             message,
                             not_authorized: false,
                         }),
@@ -631,12 +656,19 @@ impl Places {
         self.devices.as_deref().unwrap_or_default()
     }
 
-    pub fn shares(&self) -> &[Share] {
-        &self.shares
+    /// The network shares.
+    pub fn shares(&self) -> impl Iterator<Item = &Mount> {
+        self.mounts.iter().filter(|m| m.network)
+    }
+
+    /// The local mounts UDisks2 doesn't know (FUSE, bind), listed with
+    /// the devices.
+    pub fn local_mounts(&self) -> impl Iterator<Item = &Mount> {
+        self.mounts.iter().filter(|m| !m.network)
     }
 
     /// Whether a mount or an eject is under way for a device (by its
-    /// path) or a share ([`Share::key`]).
+    /// path) or a share ([`Mount::key`]).
     pub fn busy(&self, key: &str) -> bool {
         self.busy.contains(key)
     }
@@ -644,7 +676,7 @@ impl Places {
     /// The icons the shares' fstab entries name, for the daemon to
     /// resolve.
     pub fn icon_names(&self) -> impl Iterator<Item = &str> {
-        self.shares
+        self.mounts
             .iter()
             .flat_map(|s| s.icon.iter().chain(s.symbolic_icon.iter()))
             .map(String::as_str)
@@ -654,21 +686,27 @@ impl Places {
         self.devices().iter().find(|d| d.path == path)
     }
 
-    fn share(&self, mount_point: &Path) -> Option<&Share> {
-        self.shares.iter().find(|s| s.mount_point == mount_point)
+    fn share(&self, mount_point: &Path) -> Option<&Mount> {
+        self.mounts.iter().find(|s| s.mount_point == mount_point)
     }
 
     /// fstab and mountinfo read again: local files, quick.
-    fn reload_shares(&mut self) {
+    fn reload_mounts(&mut self) {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
             .unwrap_or_default();
         let read = |path| std::fs::read_to_string(path).unwrap_or_default();
-        self.shares = network::shares(
-            &network::parse_fstab(&read(network::fstab_path())),
-            &network::parse_mountinfo(&read(network::mountinfo_path())),
+        let mut mounts = mounts::mounts(
+            &mounts::parse_fstab(&read(mounts::fstab_path())),
+            &mounts::parse_mountinfo(&read(mounts::mountinfo_path())),
             &home,
         );
+        for m in &mut mounts {
+            if m.mounted && !m.network {
+                m.usage = usage(&m.mount_point);
+            }
+        }
+        self.mounts = mounts;
     }
 
     /// Unmount, lock, then the drive: only when it's removable and
@@ -697,9 +735,10 @@ impl Places {
             self.bookmarks.len(),
             self.trash_full
         )];
-        parts.extend(self.shares.iter().map(|s| {
+        parts.extend(self.mounts.iter().map(|s| {
             format!(
-                "share {} {:?} label={:?} type={} mounted={} fstab={} busy={}",
+                "{} {} {:?} label={:?} type={} mounted={} fstab={} busy={}",
+                if s.network { "share" } else { "mount" },
                 s.mount_point.display(),
                 s.source,
                 s.label,

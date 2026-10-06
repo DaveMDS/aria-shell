@@ -187,10 +187,12 @@
  *      ├─ item.home|.desktop|.documents|.download|.music|.pictures|.videos|.trash[.full]|.folder|.remote
  *      │  ├─ icon                                             a button per place: a click opens it in
  *      │  ╰─ label                                            `[general] file_manager`
- *      ├─ device.harddisk|.usb|.thumb|.flash|.optical|.removable[.mounted][.locked][.busy]
- *      │  │                                                   one per UDisks2 volume (a row, `gap`); .locked: a
- *      │  │                                                   LUKS volume (not unlocked yet), .busy: mounting or
- *      │  │                                                   ejecting
+ *      ├─ device.harddisk|.usb|.thumb|.flash|.optical|.removable|.encrypted|.fuse[.mounted][.locked][.busy]
+ *      │  │                                                   one per UDisks2 volume (a row, `gap`), then the
+ *      │  │                                                   local mounts it doesn't know (.encrypted: encfs,
+ *      │  │                                                   gocryptfs, ...; .fuse: any other FUSE or bind
+ *      │  │                                                   mount); .locked: a LUKS volume (not unlocked
+ *      │  │                                                   yet), .busy: mounting or unmounting
  *      │  ├─ button.open                                      opens it, mounting it first (:disabled while
  *      │  │  ├─ icon                                          .locked or .busy)
  *      │  │  ╰─ info                                          a column (`gap`)

@@ -324,12 +324,14 @@ Places     (places/)        daemon-owned places of a file manager's sidebar: `pl
                             home, or `x-gvfs-show`, or mounted at `/`; `x-gvfs-hide` hides any. Kind (icons
                             best first, as libudisks names them), mount point (`/` for the root's btrfs
                             subvolumes), usage by `statvfs`, removable, what an eject does to the drive),
-                            `shares()` (network.rs: fstab's network entries with `x-gvfs-show` or where a
-                            user looks, not `x-gvfs-hide`, then network filesystems mounted by hand there,
-                            from /proc/self/mountinfo; `x-gvfs-name`, `x-gvfs-[symbolic-]icon`; no
-                            `statvfs`, which would wait on the server; `ARIA_SHELL_FSTAB` /
-                            `ARIA_SHELL_MOUNTINFO` name other files, for tests/ui), `busy(key)` (a device's
-                            path, a share's `Share::key`)
+                            `shares()` / `local_mounts()` (mounts.rs: what UDisks2 doesn't know, the mounts
+                            without a block device: fstab's entries with `x-gvfs-show` or where a user
+                            looks, not `x-gvfs-hide`, then those mounted by hand there, from
+                            /proc/self/mountinfo, the system's types (tmpfs, proc, the portals, ...) left
+                            out; `x-gvfs-name`, `x-gvfs-[symbolic-]icon`; a network one has no usage,
+                            `statvfs` would wait on the server, a local one (encfs, bindfs) has;
+                            `ARIA_SHELL_FSTAB` / `ARIA_SHELL_MOUNTINFO` name other files, for tests/ui),
+                            `busy(key)` (a device's path, a mount's `Mount::key`)
   subscription()            udisks.rs: the system bus, `NameOwnerChanged` + every signal under
                             /org/freedesktop/UDisks2, debounced 200 ms -> `GetManagedObjects` read into plain
                             `Block`s and `Drive`s -> `Event::Objects`
@@ -340,19 +342,20 @@ Places     (places/)        daemon-owned places of a file manager's sidebar: `pl
                             the usage) | Open(target): `[general] file_manager` on the path or the URI
                             (`trash:///`) | Mount(path) | Eject(path): unmount, lock a LUKS volume, then
                             eject (optical) or power off a removable drive with nothing else mounted
-                            | MountShare(dir): `mount <dir>` (fstab's `user`/`users`, the setuid `mount`)
-                            | UnmountShare(dir): `umount <dir>`, `fusermount3 -u` for a FUSE share mounted by
-                            hand; their stderr is the failure's message
+                            | MountDir(dir): `mount <dir>` (fstab's `user`/`users`, the setuid `mount`)
+                            | UnmountDir(dir): `umount <dir>`, `fusermount3 -u` for a FUSE mount by hand;
+                            their stderr is the failure's message
 
 PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the popup: a header and a button
                             per place for each section of `[Places] show` (required), in its order, a
-                            bookmark of a listed place left out; a device or a share (`volume()`, one row
-                            for both): `button.open` (icon, label, a device's usage meter) and, while mounted,
+                            bookmark of a listed place left out; the devices then the local mounts, the
+                            shares (`volume()`, one row for all): `button.open` (icon, label, the usage
+                            meter when known) and, while mounted,
                             `button.eject` (disabled on `/`; nodes built disabled in `view`, so the icon takes
                             `button:disabled`'s colour); sized from the widest row
   Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
            | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
-           | MountShare(dir) -> Places(MountShare), closed | UnmountShare(dir) -> Places(UnmountShare)
+           | MountDir(dir) -> Places(MountDir), closed | UnmountDir(dir) -> Places(UnmountDir)
 
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);

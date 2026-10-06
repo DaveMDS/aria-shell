@@ -76,14 +76,19 @@ pub const EDITORS: &[&str] = &[
 
 /// The first of [`EDITORS`] whose program is on the PATH.
 fn auto_editor() -> Option<String> {
-    let editor = EDITORS.iter().find(|line| {
-        let program = line.split_whitespace().next().unwrap_or(line);
-        process::first_on_path(&[program]).is_some()
-    });
+    let editor = first_editor(|program| process::first_on_path(&[program]).is_some());
     if editor.is_none() {
         log::info!("screenshot: none of the editors on the PATH, no editing");
     }
-    editor.map(|line| (*line).to_owned())
+    editor.map(str::to_owned)
+}
+
+/// The first of [`EDITORS`] whose program is `installed`.
+fn first_editor(installed: impl Fn(&str) -> bool) -> Option<&'static str> {
+    EDITORS
+        .iter()
+        .copied()
+        .find(|line| installed(line.split_whitespace().next().unwrap_or(line)))
 }
 
 /// The editor's command line for `path`: in place of every `%f`, last
@@ -690,4 +695,79 @@ fn free_name(directory: &Path, now: &chrono::DateTime<chrono::Local>) -> PathBuf
         n += 1;
     }
     path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn editor(conf: &str) -> Option<String> {
+        Config::parse(conf).section::<ScreenshotConfig>(None).editor
+    }
+
+    #[test]
+    fn editor_none_off_or_a_command_line() {
+        assert_eq!(editor("[Screenshot]\neditor = none\n"), None);
+        assert_eq!(editor("[Screenshot]\neditor = off\n"), None);
+        assert_eq!(
+            editor("[Screenshot]\neditor =  gimp --new  \n").as_deref(),
+            Some("gimp --new")
+        );
+    }
+
+    #[test]
+    fn editor_auto_by_default() {
+        let auto = auto_editor();
+        assert_eq!(editor(""), auto);
+        assert_eq!(editor("[Screenshot]\neditor =\n"), auto);
+        assert_eq!(editor("[Screenshot]\neditor = auto\n"), auto);
+    }
+
+    #[test]
+    fn auto_is_the_first_installed() {
+        assert_eq!(first_editor(|_| false), None);
+        assert_eq!(first_editor(|_| true), Some(EDITORS[0]));
+        assert_eq!(
+            first_editor(|p| p == "ksnip" || p == "spectacle"),
+            Some("ksnip -e %f")
+        );
+        assert!(EDITORS.iter().all(|line| line.contains("%f")));
+    }
+
+    #[test]
+    fn editor_argv_puts_the_path_for_every_percent_f() {
+        let path = Path::new("/tmp/my shots/a.png");
+        assert_eq!(
+            editor_argv("satty --filename %f --output-filename %f", path),
+            [
+                "satty",
+                "--filename",
+                "/tmp/my shots/a.png",
+                "--output-filename",
+                "/tmp/my shots/a.png"
+            ]
+        );
+    }
+
+    #[test]
+    fn editor_argv_without_percent_f_appends_the_path() {
+        let path = Path::new("/tmp/a.png");
+        assert_eq!(
+            editor_argv("satty --filename", path),
+            ["satty", "--filename", "/tmp/a.png"]
+        );
+        assert_eq!(
+            editor_argv("sh -c 'echo \"$1\"' sh", path),
+            ["sh", "-c", "echo \"$1\"", "sh", "/tmp/a.png"]
+        );
+    }
+
+    #[test]
+    fn editor_argv_only_whole_words() {
+        let path = Path::new("/tmp/a.png");
+        assert_eq!(
+            editor_argv("tool --in=%f", path),
+            ["tool", "--in=%f", "/tmp/a.png"]
+        );
+    }
 }

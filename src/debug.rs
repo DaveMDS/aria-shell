@@ -11,7 +11,7 @@ use iced_wayland_subscriber::OutputId;
 use crate::commands::{DebugCommand, Reply};
 use crate::components::locker::Locker;
 use crate::components::panel::{self, Panel};
-use crate::ui::theme;
+use crate::ui::{theme, toast};
 use crate::{AriaShell, Message};
 
 impl AriaShell {
@@ -122,9 +122,15 @@ impl AriaShell {
                 list.push((dialog.window, kind, dialog.output, dialog.rect(out)));
             }
         }
-        for toast in &self.toasts {
-            if let Some(rect) = self.toast_rect(toast) {
-                list.push((toast.window, "notification", toast.output, rect));
+        let corner = self.notifications.config().position;
+        for t in &self.toasts {
+            if let Some(out) = self.output_rect(t.output) {
+                let bars = (
+                    self.bar_height(t.output, panel::Position::Top),
+                    self.bar_height(t.output, panel::Position::Bottom),
+                );
+                let rect = toast::rect(corner, out, bars, t.size, t.margin);
+                list.push((t.window, "notification", t.output, rect));
             }
         }
         for (output, id) in self.osd.windows() {

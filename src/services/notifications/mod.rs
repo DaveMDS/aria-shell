@@ -5,7 +5,7 @@
 //! [`Notifications::subscription`] is the bus connection serving the
 //! interface (`dbus.rs`), the [`Event`]s it yields go through
 //! [`Notifications::apply`], the daemon shows one layer surface per
-//! [`Notification`] (`toast.rs` draws and measures it) and acts on the
+//! [`Notification`] (`ui::toast` draws and measures it) and acts on the
 //! user's clicks with a [`Command`] run by [`Notifications::run`], which
 //! emits the `NotificationClosed` / `ActionInvoked` signals.
 //!
@@ -13,7 +13,6 @@
 
 pub mod client;
 mod dbus;
-pub mod toast;
 
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};

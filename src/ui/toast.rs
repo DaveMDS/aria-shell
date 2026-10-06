@@ -20,11 +20,12 @@ use std::time::{Duration, SystemTime};
 
 use iced::widget::text::Wrapping;
 use iced::widget::{column, mouse_area, row};
-use iced::{Alignment, Element, Length, Size};
+use iced::{Alignment, Element, Length, Padding, Point, Rectangle, Size};
+use iced_exwlshell::reexport::Anchor;
 
-use super::{IconSource, Notification, Notifications};
 use crate::locale::Locale;
 use crate::services::icons::{Icon, Icons};
+use crate::services::notifications::{IconSource, Notification, Notifications, Position};
 use crate::ui::theme::{self, Node, Theme};
 
 /// Width when the theme doesn't set one on `notification`.
@@ -303,6 +304,87 @@ pub fn view<'a>(
         .on_press(Message::Activate(n.id))
         .on_right_press(Message::Dismiss(n.id))
         .into()
+}
+
+/// The layer-shell anchor of the toasts in corner `position`.
+pub fn anchor(position: Position) -> Anchor {
+    use Position::*;
+    match position {
+        TopLeft => Anchor::Top | Anchor::Left,
+        TopRight => Anchor::Top | Anchor::Right,
+        TopCenter => Anchor::Top,
+        BottomLeft => Anchor::Bottom | Anchor::Left,
+        BottomRight => Anchor::Bottom | Anchor::Right,
+        BottomCenter => Anchor::Bottom,
+    }
+}
+
+/// A toast's surface size and margins (top, right, bottom, left) in
+/// the stack from corner `position`: `size` is its box's ([`size`]),
+/// `along` how far the boxes before it on its output reach from the
+/// edge, `edge` the `notifications` root's padding, `room` the box's
+/// shadow's. The surface is the box plus the room; the boxes are
+/// stacked, their shadows overlap the gaps.
+pub fn placement(
+    position: Position,
+    size: (u32, u32),
+    along: i32,
+    edge: Padding,
+    room: Padding,
+) -> ((u32, u32), (i32, i32, i32, i32)) {
+    let surface = (
+        size.0 + (room.left + room.right) as u32,
+        size.1 + (room.top + room.bottom) as u32,
+    );
+    let (top, right, bottom, left) = (
+        room.top as i32,
+        room.right as i32,
+        room.bottom as i32,
+        room.left as i32,
+    );
+    let margin = if position.is_top() {
+        (
+            edge.top as i32 + along - top,
+            edge.right as i32 - right,
+            0,
+            edge.left as i32 - left,
+        )
+    } else {
+        (
+            0,
+            edge.right as i32 - right,
+            edge.bottom as i32 + along - bottom,
+            edge.left as i32 - left,
+        )
+    };
+    (surface, margin)
+}
+
+/// Where a toast's surface is, as asked: from corner `position` of an
+/// output with rectangle `output`, past the bars' exclusive zones on
+/// that edge (`bars`: the top one's height, the bottom one's), by its
+/// margin.
+pub fn rect(
+    position: Position,
+    output: Rectangle,
+    bars: (f32, f32),
+    size: (u32, u32),
+    margin: (i32, i32, i32, i32),
+) -> Rectangle {
+    use Position::*;
+    let (w, h) = (size.0 as f32, size.1 as f32);
+    let (top, right, bottom, left) = margin;
+    let x = match position {
+        TopLeft | BottomLeft => output.x + left as f32,
+        TopRight | BottomRight => output.x + output.width - right as f32 - w,
+        TopCenter | BottomCenter => output.x + (output.width - w) / 2.0,
+    };
+    let y = if position.is_top() {
+        output.y + bars.0 + top as f32
+    } else {
+        output.y + output.height - bars.1 - bottom as f32 - h
+    };
+    Rectangle::new(Point::new(x, y), Size::new(w, h))
 }
 
 #[cfg(test)]

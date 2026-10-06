@@ -16,9 +16,10 @@ use iced::{Alignment, Element, Length, Subscription};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
-use crate::services::notifications::{Command, NotificationsConfig, toast};
+use crate::services::notifications::{Command, NotificationsConfig};
 use crate::time::aligned_ticks;
 use crate::ui::theme::{self, Node};
+use crate::ui::toast;
 
 /// Icon size when the theme doesn't set `height` on `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

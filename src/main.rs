@@ -18,7 +18,7 @@ use iced::{Color, Element, Event, Length, Point, Rectangle, Size, Subscription, 
 use iced_exwlshell::build_pattern::daemon;
 use iced_exwlshell::redraw::Scope;
 use iced_exwlshell::reexport::{
-    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+    KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
 use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver, ShellType};
@@ -40,7 +40,7 @@ use launcher::Launcher;
 use locale::Locale;
 use locker::Locker;
 use network::Network;
-use notifications::{Notifications, toast};
+use notifications::Notifications;
 use osd::Osd;
 use panel::{Action, Panel, PanelConfig};
 use picker::Picker;
@@ -54,6 +54,7 @@ use services::{
 use sysmon::SysMon;
 use tray::Tray;
 use ui::theme::{self, Node, Theme};
+use ui::toast;
 use wallpaper::Wallpapers;
 
 /// Top-level message. `#[to_exwlshell_message]` adds the variants the
@@ -1146,36 +1147,11 @@ impl AriaShell {
                 &self.icons,
                 &toast::Extras::default(),
             );
-            // The surface is the box plus the room for its shadow; the
-            // boxes are stacked, their shadows overlap the gaps.
             let room = self.theme.shadow_room(&node);
             let offset = offsets.entry(self.toasts[i].output).or_insert(0);
             let along = *offset;
             *offset += size.1 as i32 + gap;
-            let size = (
-                size.0 + (room.left + room.right) as u32,
-                size.1 + (room.top + room.bottom) as u32,
-            );
-            let (top, right, bottom, left) = (
-                room.top as i32,
-                room.right as i32,
-                room.bottom as i32,
-                room.left as i32,
-            );
-            let margin = match position {
-                p if p.is_top() => (
-                    edge.top as i32 + along - top,
-                    edge.right as i32 - right,
-                    0,
-                    edge.left as i32 - left,
-                ),
-                _ => (
-                    0,
-                    edge.right as i32 - right,
-                    edge.bottom as i32 + along - bottom,
-                    edge.left as i32 - left,
-                ),
-            };
+            let (size, margin) = toast::placement(position, size, along, edge, room);
             let toast = &mut self.toasts[i];
             if new.contains(&toast.window) {
                 let global = self
@@ -1194,7 +1170,7 @@ impl AriaShell {
                 );
                 tasks.push(Task::done(Message::NewLayerShell {
                     settings: NewLayerShellSettings {
-                        anchor: toast_anchor(position),
+                        anchor: toast::anchor(position),
                         size: LayerSize::px(size.0, size.1),
                         layer: Layer::Overlay,
                         exclusive_zone: None,
@@ -1212,7 +1188,7 @@ impl AriaShell {
                 toast.size = size;
                 tasks.push(Task::done(Message::LayoutChange {
                     id: toast.window,
-                    anchor: toast_anchor(position),
+                    anchor: toast::anchor(position),
                     size: LayerSize::px(size.0, size.1),
                 }));
             }
@@ -1225,34 +1201,6 @@ impl AriaShell {
             }
         }
         Task::batch(tasks)
-    }
-
-    /// Where a toast is, as asked: from the corner of its output, past
-    /// a bar's exclusive zone on that edge, by its margin.
-    fn toast_rect(&self, toast: &Toast) -> Option<Rectangle> {
-        let out = self.output_rect(toast.output)?;
-        let position = self.notifications.config().position;
-        let (w, h) = (toast.size.0 as f32, toast.size.1 as f32);
-        let (top, right, bottom, left) = toast.margin;
-        let reserved = |wanted: panel::Position| -> f32 {
-            self.panels
-                .values()
-                .filter(|p| p.output == toast.output && p.position() == wanted)
-                .map(|p| p.height() as f32)
-                .fold(0.0, f32::max)
-        };
-        use notifications::Position::*;
-        let x = match position {
-            TopLeft | BottomLeft => out.x + left as f32,
-            TopRight | BottomRight => out.x + out.width - right as f32 - w,
-            TopCenter | BottomCenter => out.x + (out.width - w) / 2.0,
-        };
-        let y = if position.is_top() {
-            out.y + reserved(panel::Position::Top) + top as f32
-        } else {
-            out.y + out.height - reserved(panel::Position::Bottom) - bottom as f32 - h
-        };
-        Some(Rectangle::new(Point::new(x, y), Size::new(w, h)))
     }
 
     /// The screens' brightness changed: the OSD, the gadgets.
@@ -1900,19 +1848,6 @@ impl AriaShell {
                     .map(|_| Picker::subscription().map(Message::Picker)),
             ),
         )
-    }
-}
-
-/// The layer-shell anchor of a notification corner.
-fn toast_anchor(position: notifications::Position) -> Anchor {
-    use notifications::Position::*;
-    match position {
-        TopLeft => Anchor::Top | Anchor::Left,
-        TopRight => Anchor::Top | Anchor::Right,
-        TopCenter => Anchor::Top,
-        BottomLeft => Anchor::Bottom | Anchor::Left,
-        BottomRight => Anchor::Bottom | Anchor::Right,
-        BottomCenter => Anchor::Bottom,
     }
 }
 

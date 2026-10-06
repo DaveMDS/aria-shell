@@ -1,13 +1,15 @@
 //! The building blocks of every surface: the theme (the CSS-like files,
 //! resolved per widget, and the themed widgets built from them), and
 //! the reusable pieces a gadget or a component embeds: plain Elm
-//! components whose messages the host maps (the menu, the calendar) and
-//! drawn ones (the graphs).
+//! components whose messages the host maps (the menu, the calendar),
+//! drawn ones (the graphs), and the shapes the shell shows things in (a
+//! notification's toast).
 
 pub mod calendar;
 pub mod graph;
 pub mod menu;
 pub mod theme;
+pub mod toast;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::{Rectangle, Task, widget};

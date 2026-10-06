@@ -1,8 +1,7 @@
 //! State the daemon owns and shares: each service is fed by an external
 //! source (`subscription()` → `apply(Event)`), reaches gadgets read-only
 //! through `gadgets::Context` and is changed by `run(Command)`, from a
-//! gadget's `Action`. No view of its own, but for the notifications'
-//! toasts.
+//! gadget's `Action`. No view of its own: `ui/` draws what they hold.
 
 pub mod audio;
 pub mod brightness;

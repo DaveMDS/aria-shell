@@ -63,8 +63,8 @@ layer is a struct with its own `Message`, `update`, `view` and
 
 `src/` follows that shape. `services/` holds the daemon-owned sources:
 state fed by one stream (`subscription()` -> `apply(Event)`), changed by
-`run(Command)`, read by gadgets through `Context`; no view of their own,
-but the notifications' toasts. `components/` holds the surfaces the
+`run(Command)`, read by gadgets through `Context`; no view of their own.
+`components/` holds the surfaces the
 daemon opens and routes to, each a full Elm component: panel, dialog,
 launcher, exiter, locker, osd, wallpaper, the screenshot picker. A component keeps its surfaces' ids and says what to do with
 them as a `components::Surfaces` (open with these settings, close,
@@ -135,9 +135,10 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
-  toast.rs                  node(n, output) / node_under(parent, n) / view(.., Extras) / size(.., &Extras):
-                            the one view of a notification, on its own layer surface (the daemon stacks them,
-                            `AriaShell::sync_toasts`, from the configured corner by margin) and as a row of the
+  ui/toast.rs               node(n, output) / node_under(parent, n) / view(.., Extras) / size(.., &Extras):
+                            the one view of a notification, on its own layer surface (the daemon keeps the
+                            list, `AriaShell::sync_toasts`, stacked from the configured corner with
+                            `toast::placement` / `anchor`, `rect` for `debug surfaces`) and as a row of the
                             gadget's popup (`Extras`: the width to lay out in, the age, a ✕)
   history / dnd / unseen()  what the gadget shows: the last `history` notifications (newest first, `seen`
                             flag), do-not-disturb (no toasts but critical ones), the count not looked at

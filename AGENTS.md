@@ -89,7 +89,7 @@ ARCHITECTURE.md's facts about the crates. See ARCHITECTURE.md's
 
 `src/` is split by that shape: `services/` holds the daemon-owned
 sources above (a `subscription()` feeding `apply(Event)`, a
-`run(Command)`; no view of their own, but the notifications' toasts),
+`run(Command)`; no view of their own),
 `components/` the surfaces the daemon opens and routes to, each a full
 Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
 `Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with

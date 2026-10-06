@@ -267,7 +267,10 @@ mod tests {
             scope_name("nm-applet", 7),
             r"app-aria\x2dshell-nm\x2dapplet-7.scope"
         );
-        assert_eq!(scope_name(".x y", 1), r"app-aria\x2dshell-\x2ex\x20y-1.scope");
+        assert_eq!(
+            scope_name(".x y", 1),
+            r"app-aria\x2dshell-\x2ex\x20y-1.scope"
+        );
     }
 
     /// Talks to the user's systemd: `cargo test -- --ignored scope`.

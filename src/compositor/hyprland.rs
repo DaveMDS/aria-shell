@@ -179,15 +179,20 @@ async fn active_window() -> Option<Event> {
 pub async fn shown_windows() -> Vec<WindowGeometry> {
     let monitors: Vec<HyprShown> = request_json("j/monitors").await.unwrap_or_default();
     let clients: Vec<HyprPlaced> = request_json("j/clients").await.unwrap_or_default();
-    let active: HyprActiveWindow = request_json("j/activewindow")
-        .await
-        .unwrap_or(HyprActiveWindow {
-            address: String::new(),
-        });
+    let active: HyprActiveWindow =
+        request_json("j/activewindow")
+            .await
+            .unwrap_or(HyprActiveWindow {
+                address: String::new(),
+            });
     shown(&monitors, clients, &active.address)
 }
 
-fn shown(monitors: &[HyprShown], mut clients: Vec<HyprPlaced>, active: &str) -> Vec<WindowGeometry> {
+fn shown(
+    monitors: &[HyprShown],
+    mut clients: Vec<HyprPlaced>,
+    active: &str,
+) -> Vec<WindowGeometry> {
     let workspaces: Vec<i64> = monitors
         .iter()
         .flat_map(|m| {

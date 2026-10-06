@@ -517,10 +517,11 @@ impl Screenshot {
         let Some(Job {
             outputs,
             destination,
-            pick: Some(Pick {
-                frames: Some(frames),
-                windows: Some(windows),
-            }),
+            pick:
+                Some(Pick {
+                    frames: Some(frames),
+                    windows: Some(windows),
+                }),
             ..
         }) = self.jobs.remove(&job)
         else {
@@ -591,7 +592,10 @@ impl Screenshot {
     /// Open the picture in `[Screenshot] editor`.
     fn edit(&self, path: &Path) {
         let Some(editor) = &self.config.editor else {
-            log::warn!("screenshot: no [Screenshot] editor to edit {}", path.display());
+            log::warn!(
+                "screenshot: no [Screenshot] editor to edit {}",
+                path.display()
+            );
             return;
         };
         process::run_argv(&editor_argv(editor, path));

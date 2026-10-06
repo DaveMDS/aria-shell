@@ -550,7 +550,11 @@ mod tests {
             .collect();
         assert_eq!(
             got,
-            [(302, 20, 96, false), (202, 20, 96, false), (2, 20, 96, true)]
+            [
+                (302, 20, 96, false),
+                (202, 20, 96, false),
+                (2, 20, 96, true)
+            ]
         );
     }
 

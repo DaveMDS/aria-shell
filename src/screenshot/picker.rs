@@ -139,7 +139,10 @@ pub enum Action {
     /// These surfaces show something else now.
     Redraw(Vec<Id>),
     Cancel,
-    Take { rect: Rect, destination: Destination },
+    Take {
+        rect: Rect,
+        destination: Destination,
+    },
 }
 
 /// What a surface draws, worked out from the state, before and after a
@@ -274,7 +277,11 @@ impl Picker {
             Message::Take(destination) => return self.take(destination),
             Message::Cancel => return Action::Cancel,
             Message::All => {
-                let all = self.surfaces.iter().map(|s| s.rect).reduce(|a, b| a.union(&b));
+                let all = self
+                    .surfaces
+                    .iter()
+                    .map(|s| s.rect)
+                    .reduce(|a, b| a.union(&b));
                 return match all {
                     Some(rect) => Action::Take {
                         rect,
@@ -444,7 +451,10 @@ impl Picker {
     /// For `debug screenshot`.
     pub fn describe(&self) -> String {
         match self.selection {
-            Some(s) => format!("picker={} selection={}", self.surfaces[s.surface].name, s.rect),
+            Some(s) => format!(
+                "picker={} selection={}",
+                self.surfaces[s.surface].name, s.rect
+            ),
             None => "picker=open selection=none".to_owned(),
         }
     }

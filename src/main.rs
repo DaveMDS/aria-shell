@@ -701,7 +701,9 @@ impl AriaShell {
                 .run(cmd, &self.outputs, &self.compositor)
                 .map(Message::Screenshot),
             Message::Screenshot(event) => {
-                let (task, surfaces) = self.screenshot.apply(event, &self.outputs, &self.compositor);
+                let (task, surfaces) =
+                    self.screenshot
+                        .apply(event, &self.outputs, &self.compositor);
                 Task::batch([task.map(Message::Screenshot), screenshot_surfaces(surfaces)])
             }
             Message::Command(Command::Brightness(cmd)) => {

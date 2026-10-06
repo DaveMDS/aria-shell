@@ -95,7 +95,10 @@ pub const CATALOGUE: Catalogue = &[
     ("exiter.countdown", "Automatically in {n} s"),
     ("exiter.cancel", "Cancel"),
     // the screenshot picker
-    ("screenshot.hint", "Click a window or a screen, or drag an area"),
+    (
+        "screenshot.hint",
+        "Click a window or a screen, or drag an area",
+    ),
     ("screenshot.all", "All screens"),
     ("screenshot.cancel", "Cancel"),
     ("screenshot.copy", "Copy"),

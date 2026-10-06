@@ -266,7 +266,9 @@ impl State {
                     entry.waiting += 1;
                 }
                 if entry.waiting == 0 {
-                    let error = entry.error.unwrap_or_else(|| "no output to capture".to_owned());
+                    let error = entry
+                        .error
+                        .unwrap_or_else(|| "no output to capture".to_owned());
                     self.events.push(Event::Captured(job, Err(error)));
                 } else {
                     self.jobs.insert(job, entry);
@@ -499,11 +501,7 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, u64> for State {
             E::Transform {
                 transform: WEnum::Value(transform),
             } => {
-                if let Some(frame) = state
-                    .captures
-                    .get_mut(key)
-                    .and_then(|c| c.frame.as_mut())
-                {
+                if let Some(frame) = state.captures.get_mut(key).and_then(|c| c.frame.as_mut()) {
                     frame.transform = transform;
                 }
             }

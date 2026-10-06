@@ -108,10 +108,11 @@ pub enum Action<M> {
     /// be gone first.
     Screenshot(crate::services::screenshot::Command),
     Places(crate::services::places::Command),
-    /// Open a popup surface hanging off the widget tagged `anchor`,
+    /// Open popup surface `id` hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
-    /// hand, they call [`Popup::toggle`].
+    /// hand, they call [`Popup::toggle`], which mints the id.
     OpenPopup {
+        id: window::Id,
         anchor: widget::Id,
     },
     ClosePopup(window::Id),
@@ -172,9 +173,14 @@ impl Popup {
     pub fn toggle_nth<M>(&mut self, n: usize) -> Action<M> {
         match self.id.take() {
             Some(id) => Action::ClosePopup(id),
-            None => Action::OpenPopup {
-                anchor: self.anchor_id(n),
-            },
+            None => {
+                let id = window::Id::unique();
+                self.id = Some(id);
+                Action::OpenPopup {
+                    id,
+                    anchor: self.anchor_id(n),
+                }
+            }
         }
     }
 
@@ -186,12 +192,30 @@ impl Popup {
         }
     }
 
-    fn opened(&mut self, id: window::Id) {
-        self.id = Some(id);
-    }
-
     fn closed(&mut self) {
         self.id = None;
+    }
+}
+
+impl<M> Action<M> {
+    /// Whether what it changes right away is only the gadgets' own
+    /// state, what their panel and its popups show: then only those
+    /// surfaces need a new frame. A command to a daemon that changes
+    /// nothing until its answer comes back (`run(&self)`) is: the
+    /// answer's message redraws whatever shows it.
+    pub fn is_local(&self) -> bool {
+        match self {
+            Self::None
+            | Self::Run(_)
+            | Self::Compositor(_)
+            | Self::Tray(_)
+            | Self::SysMon(_)
+            | Self::Audio(_)
+            | Self::Screenshot(_)
+            | Self::Places(_) => true,
+            Self::Many(actions) => actions.iter().all(Self::is_local),
+            _ => false,
+        }
     }
 }
 
@@ -222,7 +246,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Brightness(cmd) => Action::Brightness(cmd),
             Self::Screenshot(cmd) => Action::Screenshot(cmd),
             Self::Places(cmd) => Action::Places(cmd),
-            Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
+            Self::OpenPopup { id, anchor } => Action::OpenPopup { id, anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
                 Action::Many(actions.into_iter().map(|a| a.map_dyn(f.clone())).collect())
@@ -568,12 +592,6 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup_key(event).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_key(event).map(Message::Screenshot),
             Self::Places(g) => g.popup_key(event).map(Message::Places),
-        }
-    }
-
-    pub fn popup_opened(&mut self, id: window::Id) {
-        if let Some(p) = self.popup() {
-            p.opened(id);
         }
     }
 

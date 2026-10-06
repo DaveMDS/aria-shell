@@ -527,9 +527,12 @@ Two things flow between the daemon and the gadgets besides messages:
   `Action::Compositor(Command)` / `Action::Tray(Command)` (and later
   `Action::Audio(..)`, ...) for things only the daemon can do,
   `Action::OpenPopup`/`ClosePopup` for a popup surface, `Action::Many`
-  for several at once. `Panel::update` turns it into the concrete
-  `panel::Action` (same variants, popup bookkeeping done) and
-  `AriaShell::perform` into a `Task`. Gadgets never hold an IPC handle.
+  for several at once. `Panel::update` keeps track of the popups it
+  opens and closes and `map`s its messages to the panel's
+  (`panel::Action` is `gadgets::Action<panel::Message>`), and
+  `AriaShell::perform` turns it into a `Task`. Gadgets never hold an IPC
+  handle. A new service's command is one variant here and one arm in
+  `perform` (and in `map_dyn`).
 
 - **Popups** are xdg popups parented to the panel's layer surface. A
   gadget with one keeps a `gadgets::Popup` field, exposes it through
@@ -546,9 +549,9 @@ Two things flow between the daemon and the gadgets besides messages:
   grows when a submenu unfolds. `Theme::measure(node, text)` /
   `line_height(node)` exist for that (cosmic-text through
   `iced::advanced::graphics::text::Paragraph`). Under the hood `toggle`
-  yields `Action::OpenPopup { anchor }` / `ClosePopup(id)`; the panel
-  mints the `window::Id`, keeps the popup (its gadget, then its anchor
-  rect and size) and records it in the gadget's `Popup`. The daemon asks
+  mints the `window::Id`, records it in the gadget's `Popup` and yields
+  `Action::OpenPopup { id, anchor }` / `ClosePopup(id)`; the panel keeps
+  the popup (its gadget, then its anchor rect and size). The daemon asks
   the widget tree for the anchor's bounds with a custom `Operation`
   (`ui::bounds`) and hands them to `Panel::place_popup`, which answers
   the `NewPopUp` as `Surfaces`, placed by `ui::popup::settings` (centred
@@ -1285,7 +1288,7 @@ Two things flow between the daemon and the gadgets besides messages:
   `update` sends `Message::Redraw(Some(id))` for each surface showing
   `Shared` (all but the wallpapers), and `All` for the rest. A gadget's
   popup is another surface: a `Panel` message with a local action
-  (`panel::Action::is_local`) redraws its popups the same way, any
+  (`gadgets::Action::is_local`) redraws its popups the same way, any
   other action everything. Measured in the nested Sway (2 bars, 2
   wallpapers, test config, an optimized build), shell CPU before →
   after: under pixman (software drawing, a weak GPU's case) at rest

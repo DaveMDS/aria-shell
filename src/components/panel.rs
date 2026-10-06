@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{Space, container, row};
-use iced::{Element, Length, Rectangle, Subscription, Task, widget, window};
+use iced::{Element, Length, Rectangle, Subscription, window};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
@@ -16,9 +16,7 @@ use crate::components::Surfaces;
 
 use crate::config::{Config, RawSection, Section};
 use crate::gadgets::{self, AnyGadget, Context, Shared};
-use crate::services::compositor;
 use crate::services::scripts;
-use crate::services::tray;
 use crate::ui::popup::{self, Side};
 use crate::ui::theme::{self, Node, Theme};
 
@@ -169,55 +167,9 @@ pub enum Message {
     Key(iced::keyboard::Event),
 }
 
-/// What `update` asks the daemon to do; [`gadgets::Action`] with the
-/// popup bookkeeping the panel already did.
-pub enum Action {
-    None,
-    Run(Task<Message>),
-    Compositor(compositor::Command),
-    Tray(tray::Command),
-    Theme(theme::Command),
-    Script(scripts::Command),
-    Notifications(crate::services::notifications::Command),
-    SysMon(crate::services::sysmon::Command),
-    Audio(crate::services::audio::Command),
-    Network(crate::services::network::Command),
-    Idle(crate::services::idle::Command),
-    Power(crate::services::power::Command),
-    Brightness(crate::services::brightness::Command),
-    Screenshot(crate::services::screenshot::Command),
-    Places(crate::services::places::Command),
-    /// Open the popup surface `id` as a child of this panel's surface,
-    /// hanging off the widget tagged `anchor`.
-    OpenPopup {
-        id: window::Id,
-        anchor: widget::Id,
-    },
-    ClosePopup(window::Id),
-    Many(Vec<Action>),
-}
-
-impl Action {
-    /// Whether what it changes right away is only the gadgets' own
-    /// state, what this panel and its popups show: then only those
-    /// surfaces need a new frame. A command to a daemon that changes
-    /// nothing until its answer comes back (`run(&self)`) is: the
-    /// answer's message redraws whatever shows it.
-    pub fn is_local(&self) -> bool {
-        match self {
-            Self::None
-            | Self::Run(_)
-            | Self::Compositor(_)
-            | Self::Tray(_)
-            | Self::SysMon(_)
-            | Self::Audio(_)
-            | Self::Screenshot(_)
-            | Self::Places(_) => true,
-            Self::Many(actions) => actions.iter().all(Self::is_local),
-            _ => false,
-        }
-    }
-}
+/// What `update` asks the daemon to do: a gadget's [`gadgets::Action`],
+/// its messages routed back to the gadget through this panel.
+pub type Action = gadgets::Action<Message>;
 
 impl Panel {
     pub fn new(
@@ -361,45 +313,32 @@ impl Panel {
     }
 
     /// A gadget's action as the daemon sees it: messages routed back to
-    /// gadget `i`, popups given their window id.
+    /// gadget `i`, the popups it opens and closes kept track of.
     fn lift(&mut self, i: usize, action: gadgets::Action<gadgets::Message>) -> Action {
+        self.track_popups(i, &action);
+        action.map(move |m| Message::Gadget(i, m))
+    }
+
+    fn track_popups(&mut self, i: usize, action: &gadgets::Action<gadgets::Message>) {
         match action {
-            gadgets::Action::None => Action::None,
-            gadgets::Action::Run(task) => Action::Run(task.map(move |m| Message::Gadget(i, m))),
-            gadgets::Action::Compositor(cmd) => Action::Compositor(cmd),
-            gadgets::Action::Tray(cmd) => Action::Tray(cmd),
-            gadgets::Action::Theme(cmd) => Action::Theme(cmd),
-            gadgets::Action::Script(cmd) => Action::Script(cmd),
-            gadgets::Action::Notifications(cmd) => Action::Notifications(cmd),
-            gadgets::Action::SysMon(cmd) => Action::SysMon(cmd),
-            gadgets::Action::Audio(cmd) => Action::Audio(cmd),
-            gadgets::Action::Network(cmd) => Action::Network(cmd),
-            gadgets::Action::Idle(cmd) => Action::Idle(cmd),
-            gadgets::Action::Power(cmd) => Action::Power(cmd),
-            gadgets::Action::Brightness(cmd) => Action::Brightness(cmd),
-            gadgets::Action::Screenshot(cmd) => Action::Screenshot(cmd),
-            gadgets::Action::Places(cmd) => Action::Places(cmd),
-            gadgets::Action::OpenPopup { anchor } => {
-                let id = window::Id::unique();
+            gadgets::Action::OpenPopup { id, .. } => {
                 self.popups.insert(
-                    id,
+                    *id,
                     Popup {
                         gadget: i,
                         placed: None,
                     },
                 );
-                if let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) {
-                    g.popup_opened(id);
-                }
-                Action::OpenPopup { id, anchor }
             }
             gadgets::Action::ClosePopup(id) => {
-                self.popups.remove(&id);
-                Action::ClosePopup(id)
+                self.popups.remove(id);
             }
             gadgets::Action::Many(actions) => {
-                Action::Many(actions.into_iter().map(|a| self.lift(i, a)).collect())
+                for a in actions {
+                    self.track_popups(i, a);
+                }
             }
+            _ => {}
         }
     }
 

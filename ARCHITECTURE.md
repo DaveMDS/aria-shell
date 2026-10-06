@@ -66,11 +66,13 @@ state fed by one stream (`subscription()` -> `apply(Event)`), changed by
 `run(Command)`, read by gadgets through `Context`; no view of their own.
 `components/` holds the surfaces the
 daemon opens and routes to, each a full Elm component: panel, dialog,
-launcher, exiter, locker, osd, wallpaper, the screenshot picker. A component keeps its surfaces' ids and says what to do with
-them as a `components::Surfaces` (open with these settings, close,
-resize, redraw), which the daemon turns into the runtime's messages
-(`surface_tasks`): only the daemon talks to the runtime, only the
-component knows where its surfaces go. `gadgets/` holds the bar's
+launcher, exiter, locker, osd, wallpaper, the screenshot picker. A
+component keeps its surfaces' ids and says what to do with them as a
+`ui::Surfaces` (open with these settings, or a popup; close, resize,
+move, redraw, the keyboard), which the daemon turns into the runtime's
+messages (`surface_tasks`): only the daemon talks to the runtime, only
+the owner of a surface knows where it goes. The panel answers so for
+its popups, `ui::toast::Toasts` for the toasts. `gadgets/` holds the bar's
 gadgets (the contract in `gadgets/mod.rs`), `ui/` the building blocks
 of every surface: the theme and the reusable widgets. The plumbing
 (config, commands, process, locale, `shared.rs`, ...) stays at the
@@ -141,10 +143,11 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
   ui/toast.rs               node(n, output) / node_under(parent, n) / view(.., Extras) / size(.., &Extras):
-                            the one view of a notification, on its own layer surface (the daemon keeps the
-                            list, `AriaShell::sync_toasts`, stacked from the configured corner with
-                            `toast::placement` / `anchor`, `rect` for `debug surfaces`) and as a row of the
-                            gadget's popup (`Extras`: the width to lay out in, the age, a ✕)
+                            the one view of a notification, on its own layer surface (`Toasts`: one per
+                            notification, `sync(&Notifications, outputs, focused, ..) -> Surfaces` after every
+                            change, stacked from the configured corner with `placement` / `anchor`, `rect`
+                            for `debug surfaces`) and as a row of the gadget's popup (`Extras`: the width to
+                            lay out in, the age, a ✕)
   history / dnd / unseen()  what the gadget shows: the last `history` notifications (newest first, `seen`
                             flag), do-not-disturb (no toasts but critical ones), the count not looked at
 

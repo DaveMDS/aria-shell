@@ -93,7 +93,7 @@ sources above (a `subscription()` feeding `apply(Event)`, a
 `components/` the surfaces the daemon opens and routes to, each a full
 Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
 `Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
-its surfaces as a `components::Surfaces`. `gadgets/` holds the bar's
+its surfaces as a `ui::Surfaces`. `gadgets/` holds the bar's
 gadgets, their contract in its `mod.rs`; `ui/` the building blocks of
 every surface: the theme (`ui/theme/`), the reusable pieces (the
 menu, the calendar, the graphs) and the shapes things are shown in (a

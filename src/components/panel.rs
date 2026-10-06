@@ -12,7 +12,7 @@ use iced_exwlshell::reexport::{
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::components::Surfaces;
+use crate::ui::Surfaces;
 
 use crate::config::{Config, RawSection, Section};
 use crate::gadgets::{self, AnyGadget, Context};

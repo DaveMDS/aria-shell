@@ -16,16 +16,22 @@
 //!       ╰─ text
 //! ```
 
+use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
 use iced::widget::text::Wrapping;
-use iced::widget::{column, mouse_area, row};
+use iced::widget::{Space, column, mouse_area, row};
+use iced::window::Id;
 use iced::{Alignment, Element, Length, Padding, Point, Rectangle, Size};
-use iced_exwlshell::reexport::Anchor;
+use iced_exwlshell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+};
+use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::locale::Locale;
 use crate::services::icons::{Icon, Icons};
 use crate::services::notifications::{IconSource, Notification, Notifications, Position};
+use crate::ui::Surfaces;
 use crate::ui::theme::{self, Node, Theme};
 
 /// Width when the theme doesn't set one on `notification`.
@@ -304,6 +310,202 @@ pub fn view<'a>(
         .on_press(Message::Activate(n.id))
         .on_right_press(Message::Dismiss(n.id))
         .into()
+}
+
+/// The toasts on screen: one surface per notification shown, on the
+/// focused output when it appears, sized to its content and stacked
+/// from the configured corner (newest nearest to it) with the
+/// `notifications` root's `padding` from the edges and `gap` between
+/// them. The daemon keeps one and syncs it with the notifications
+/// after every change.
+#[derive(Default)]
+pub struct Toasts {
+    toasts: Vec<Toast>,
+}
+
+/// A notification's surface.
+struct Toast {
+    window: Id,
+    /// The notification's id.
+    id: u32,
+    output: OutputId,
+    size: (u32, u32),
+    /// (top, right, bottom, left)
+    margin: (i32, i32, i32, i32),
+}
+
+impl Toasts {
+    /// Make the toasts match the notifications: the surfaces of those
+    /// gone go, the new ones get one on output `focused`, sizes and
+    /// margins are updated in place.
+    pub fn sync(
+        &mut self,
+        notifications: &Notifications,
+        outputs: &BTreeMap<OutputId, OutputInfo>,
+        focused: Option<&OutputInfo>,
+        theme: &Theme,
+        icons: &Icons,
+    ) -> Surfaces {
+        let mut surfaces = Surfaces::default();
+        // Notifications gone: their surfaces go.
+        self.toasts.retain(|t| {
+            let keep = notifications.get(t.id).is_some();
+            if !keep {
+                surfaces.close.push(t.window);
+            }
+            keep
+        });
+        // New notifications: a surface each, on the focused output.
+        let mut new = Vec::new();
+        for n in &notifications.items {
+            if self.toasts.iter().any(|t| t.id == n.id) {
+                continue;
+            }
+            let Some(output) = focused else {
+                log::warn!("no output to show notification {} on", n.id);
+                continue;
+            };
+            let window = Id::unique();
+            new.push(window);
+            self.toasts.push(Toast {
+                window,
+                id: n.id,
+                output: OutputId::from(output),
+                size: (0, 0),
+                margin: (0, 0, 0, 0),
+            });
+        }
+        // Sizes and places, per output, in notification order.
+        let position = notifications.config().position;
+        let stack = theme.resolve(&Node::root("notifications"));
+        let (edge, gap) = (stack.padding, stack.gap as i32);
+        let mut offsets: BTreeMap<OutputId, i32> = BTreeMap::new();
+        for n in &notifications.items {
+            let Some(toast) = self.toasts.iter_mut().find(|t| t.id == n.id) else {
+                continue;
+            };
+            let info = outputs.get(&toast.output);
+            let output_name = info.and_then(|o| o.name.as_deref()).unwrap_or("?");
+            let node = node(n, output_name);
+            let content = size(theme, &node, n, notifications, icons, &Extras::default());
+            let room = theme.shadow_room(&node);
+            let offset = offsets.entry(toast.output).or_insert(0);
+            let along = *offset;
+            *offset += content.1 as i32 + gap;
+            let (size, margin) = placement(position, content, along, edge, room);
+            if new.contains(&toast.window) {
+                toast.size = size;
+                toast.margin = margin;
+                log::debug!(
+                    "notification {}: surface {:?} on {output_name}, {}x{} at margin {margin:?}",
+                    n.id,
+                    toast.window,
+                    size.0,
+                    size.1
+                );
+                let settings = NewLayerShellSettings {
+                    anchor: anchor(position),
+                    size: LayerSize::px(size.0, size.1),
+                    layer: Layer::Overlay,
+                    exclusive_zone: None,
+                    margin: Some(margin),
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    output_option: OutputOption::GlobalName(info.map(|o| o.id).unwrap_or_default()),
+                    namespace: Some("aria-notification".to_owned()),
+                    ..Default::default()
+                };
+                surfaces.open.push((toast.window, settings));
+                continue;
+            }
+            if toast.size != size {
+                toast.size = size;
+                let layout = LayerSize::px(size.0, size.1);
+                surfaces
+                    .resize
+                    .push((toast.window, anchor(position), layout));
+            }
+            if toast.margin != margin {
+                toast.margin = margin;
+                surfaces.margin.push((toast.window, margin));
+            }
+        }
+        surfaces
+    }
+
+    /// Close every toast (the corner or the theme may have changed): the
+    /// next [`Toasts::sync`] opens them again.
+    pub fn close(&mut self) -> Surfaces {
+        Surfaces {
+            close: self.toasts.drain(..).map(|t| t.window).collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// Output `output` went away: its toasts go, the next
+    /// [`Toasts::sync`] shows them on another.
+    pub fn output_removed(&mut self, output: OutputId) -> Surfaces {
+        let mut surfaces = Surfaces::default();
+        self.toasts.retain(|t| {
+            let keep = t.output != output;
+            if !keep {
+                surfaces.close.push(t.window);
+            }
+            keep
+        });
+        surfaces
+    }
+
+    /// Surface `window` was closed, with its output or on our request:
+    /// whether it was a toast. If its notification is still there, the
+    /// next [`Toasts::sync`] gives it a new one.
+    pub fn closed(&mut self, window: Id) -> bool {
+        let before = self.toasts.len();
+        self.toasts.retain(|t| t.window != window);
+        self.toasts.len() != before
+    }
+
+    /// The surfaces: window, notification id, output, surface size and
+    /// margins, for `debug surfaces` (with [`rect`]).
+    pub fn placed(
+        &self,
+    ) -> impl Iterator<Item = (Id, u32, OutputId, (u32, u32), (i32, i32, i32, i32))> + '_ {
+        self.toasts
+            .iter()
+            .map(|t| (t.window, t.id, t.output, t.size, t.margin))
+    }
+
+    pub fn output_of(&self, window: Id) -> Option<OutputId> {
+        self.toasts
+            .iter()
+            .find(|t| t.window == window)
+            .map(|t| t.output)
+    }
+
+    /// Surface `window`'s notification, on output `output` (its name).
+    pub fn view<'a>(
+        &self,
+        window: Id,
+        theme: &'a Theme,
+        notifications: &'a Notifications,
+        icons: &'a Icons,
+        output: &str,
+    ) -> Element<'a, Message> {
+        let Some(n) = self
+            .toasts
+            .iter()
+            .find(|t| t.window == window)
+            .and_then(|t| notifications.get(t.id))
+        else {
+            return Space::new().into();
+        };
+        let node = node(n, output);
+        let content = view(theme, &node, n, notifications, icons, Extras::default());
+        let root = theme
+            .container(&node, content)
+            .width(Length::Fill)
+            .height(Length::Fill);
+        theme.surface(&node, root).into()
+    }
 }
 
 /// The layer-shell anchor of the toasts in corner `position`.

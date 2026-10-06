@@ -30,7 +30,7 @@ use iced_exwlshell::reexport::{
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::components::Surfaces;
+use crate::ui::Surfaces;
 
 pub struct Dialog {
     pub window: Id,

@@ -38,7 +38,6 @@ use iced_exwlshell::reexport::{
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::components::Surfaces;
 use crate::config::{RawSection, Section};
 use crate::locale::Locale;
 use crate::services::audio::Audio;
@@ -47,6 +46,7 @@ use crate::services::icons::Icons;
 use crate::services::idle::Idle;
 use crate::services::network::Network;
 use crate::services::power::Power;
+use crate::ui::Surfaces;
 use crate::ui::graph;
 use crate::ui::theme::{self, Node, Theme};
 pub use watch::Watch;

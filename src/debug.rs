@@ -127,14 +127,14 @@ impl AriaShell {
             }
         }
         let corner = self.notifications.config().position;
-        for t in &self.toasts {
-            if let Some(out) = self.output_rect(t.output) {
+        for (window, _, output, size, margin) in self.toasts.placed() {
+            if let Some(out) = self.output_rect(output) {
                 let bars = (
-                    self.bar_height(t.output, panel::Position::Top),
-                    self.bar_height(t.output, panel::Position::Bottom),
+                    self.bar_height(output, panel::Position::Top),
+                    self.bar_height(output, panel::Position::Bottom),
                 );
-                let rect = toast::rect(corner, out, bars, t.size, t.margin);
-                list.push((t.window, "notification", t.output, rect));
+                let rect = toast::rect(corner, out, bars, size, margin);
+                list.push((window, "notification", output, rect));
             }
         }
         for (output, id) in self.osd.windows() {
@@ -212,8 +212,8 @@ impl AriaShell {
             let window = root
                 .split_once('#')
                 .and_then(|(_, rest)| rest.split(['.', '[', ':']).next()?.parse::<u32>().ok())
-                .and_then(|id| self.toasts.iter().find(|t| t.id == id))
-                .map(|t| t.window);
+                .and_then(|id| self.toasts.placed().find(|(_, n, ..)| *n == id))
+                .map(|(window, ..)| window);
             surfaces
                 .iter()
                 .find(|(w, k, out, _)| {

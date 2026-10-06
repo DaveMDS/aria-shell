@@ -33,9 +33,9 @@ use iced_exwlshell::reexport::{
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::components::Surfaces;
 use crate::locale::Locale;
 use crate::services::screenshot::{Destination, Frozen, Rect, Shot};
+use crate::ui::Surfaces;
 use crate::ui::theme::{self, Node, Theme};
 
 /// How near an edge, in logical pixels, a press grabs it.

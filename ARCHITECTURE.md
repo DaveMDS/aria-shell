@@ -420,7 +420,10 @@ Theme      (theme/)         daemon-owned styling: base.css + the user's theme, p
   scheme() / name()         what's loaded; `available()` lists the themes/*.css of every theme dir
   Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
                             keeps `style`/`scheme` at runtime and reloads (no persistence)
-  resolve(&Node) -> Style   cascade for one element path; container()/button()/text()/row() helpers
+  resolve(&Node) -> Style   cascade for one element path
+  build.rs                  container()/button()/text()/slider()/toggler()/row() ...: plain iced widgets styled
+                            for a Node and tagged with its path; measure()/line_height() for popup sizes
+  fonts.rs                  `font-family` down to the first generic or installed family
 
 Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)
   load() -> Task            builds `Index` (icons/theme.rs theme chain + icons/desktop.rs .desktop db) off-thread
@@ -1237,7 +1240,7 @@ Two things flow between the daemon and the gadgets besides messages:
   (falls back to `theme.palette().text`); `container::Style::text_color`
   and `text::Style::color` are `Option`s and `None` inherits at draw time.
 - `iced::font::Family::Name` wants a `&'static str`: theme font names are
-  leaked once each (`theme::intern`). Fonts come from the system via
+  leaked once each (`ui/theme/fonts.rs`, `intern`). Fonts come from the system via
   cosmic-text's fontdb (`FontSystem::new_with_fonts` loads system fonts);
   `Font::with_name("JetBrainsMono NF")` works for an installed font. A
   `Font` is one family, so a CSS `font-family` list is resolved at theme

@@ -10,7 +10,7 @@ use iced_wayland_subscriber::OutputId;
 
 use crate::commands::{DebugCommand, Reply};
 use crate::components::locker::Locker;
-use crate::components::panel::{self, Panel};
+use crate::components::panel;
 use crate::ui::{theme, toast};
 use crate::{AriaShell, Message};
 
@@ -99,11 +99,15 @@ impl AriaShell {
                 Rectangle::new(Point::new(out.x, y), Size::new(out.width, h)),
             ));
         }
-        for (&id, open) in &self.popups {
-            if let Some(&(_, _, output, bar)) = list.iter().find(|(p, ..)| *p == open.panel)
-                && let Some(position) = self.panels.get(&open.panel).map(Panel::position)
-            {
-                let rect = open.estimate(position, self.popup_room());
+        let bars: Vec<(Id, OutputId, Rectangle)> = list
+            .iter()
+            .map(|&(id, _, output, r)| (id, output, r))
+            .collect();
+        for (bar_id, output, bar) in bars {
+            let Some(panel) = self.panels.get(&bar_id) else {
+                continue;
+            };
+            for (id, rect) in panel.popup_rects(&self.theme) {
                 list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
             }
         }

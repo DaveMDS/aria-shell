@@ -3,11 +3,12 @@
 //! the reusable pieces a gadget or a component embeds: plain Elm
 //! components whose messages the host maps (the menu, the calendar),
 //! drawn ones (the graphs), and the shapes the shell shows things in (a
-//! notification's toast).
+//! gadget's popup, a notification's toast).
 
 pub mod calendar;
 pub mod graph;
 pub mod menu;
+pub mod popup;
 pub mod theme;
 pub mod toast;
 

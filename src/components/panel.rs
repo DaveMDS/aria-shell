@@ -1,22 +1,25 @@
 //! A panel: one layer-shell bar on one output, holding gadgets in three
-//! slots (start / center / end).
+//! slots (start / center / end), and their popups: xdg popup surfaces
+//! child of the bar's ([`crate::ui::popup`]), one at a time, which the
+//! panel opens, sizes and places ([`Surfaces`]) as its gadgets ask.
 
 use std::collections::BTreeMap;
 
 use iced::widget::{Space, container, row};
-use iced::{Element, Length, Padding, Rectangle, Subscription, Task, widget, window};
-use iced_exwlshell::actions::IcedNewPopupSettings;
+use iced::{Element, Length, Rectangle, Subscription, Task, widget, window};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
-    PixelSize, PopupAnchor, PopupGravity,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
+
+use crate::components::Surfaces;
 
 use crate::config::{Config, RawSection, Section};
 use crate::gadgets::{self, AnyGadget, Context, Shared};
 use crate::services::compositor;
 use crate::services::scripts;
 use crate::services::tray;
+use crate::ui::popup::{self, Side};
 use crate::ui::theme::{self, Node, Theme};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
@@ -67,92 +70,6 @@ impl Section for PanelConfig {
             items_start: raw.list_or("items_start", &[]),
             items_center: raw.list_or("items_center", &[]),
             items_end: raw.list_or("items_end", &[]),
-        }
-    }
-}
-
-/// Placement of a popup hanging off a widget with `anchor` bounds in the
-/// surface of a bar at `position`: centred on the widget, on the side
-/// away from the screen edge. `room` is the part of the surface around
-/// the popup's box kept for its shadow: the box, not the surface, meets
-/// the widget.
-pub fn popup_settings(
-    parent: window::Id,
-    position: Position,
-    anchor: Rectangle,
-    size: (u32, u32),
-    room: Padding,
-) -> IcedNewPopupSettings {
-    let anchor = shadow_anchor(position, anchor, room);
-    let (edge, gravity) = match position {
-        Position::Top => (PopupAnchor::Bottom, PopupGravity::Bottom),
-        Position::Bottom => (PopupAnchor::Top, PopupGravity::Top),
-    };
-    IcedNewPopupSettings::new(
-        parent,
-        PixelSize::px(size.0.max(1), size.1.max(1)),
-        (anchor.x as i32, anchor.y as i32),
-        PixelSize::px((anchor.width as u32).max(1), (anchor.height as u32).max(1)),
-    )
-    .anchor(edge)
-    .gravity(gravity)
-}
-
-/// Mouse buttons pressed on any of our windows that no widget took (a
-/// click on a bar beside its gadgets): the daemon closes the popups. A
-/// popup's grab makes the compositor dismiss it on a click outside, but
-/// wlroots (Sway) delivers a click on the same client's other surfaces
-/// instead, so that one is ours to act on.
-pub fn presses_outside() -> Subscription<window::Id> {
-    iced::event::listen_with(|event, status, window| match (event, status) {
-        (
-            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_)),
-            iced::event::Status::Ignored,
-        ) => Some(window),
-        _ => None,
-    })
-}
-
-/// Where [`popup_settings`] asks the popup to go, relative to the
-/// panel surface, before the compositor slides it on screen: for
-/// `debug surfaces`.
-pub fn popup_estimate(
-    position: Position,
-    anchor: Rectangle,
-    size: (u32, u32),
-    room: Padding,
-) -> Rectangle {
-    let anchor = shadow_anchor(position, anchor, room);
-    let (w, h) = (size.0 as f32, size.1 as f32);
-    let x = anchor.x + (anchor.width - w) / 2.0;
-    let y = match position {
-        Position::Top => anchor.y + anchor.height,
-        Position::Bottom => anchor.y - h,
-    };
-    Rectangle::new(iced::Point::new(x, y), iced::Size::new(w, h))
-}
-
-/// The anchor rectangle that puts a popup's box, not its surface, on
-/// the widget: shortened on the side the popup hangs from by the room
-/// there (xdg-shell has no offset; a shorter rectangle stays inside the
-/// bar, a moved one might not), moved sideways when the shadow isn't
-/// centred.
-fn shadow_anchor(position: Position, anchor: Rectangle, room: Padding) -> Rectangle {
-    let x = anchor.x + (room.right - room.left) / 2.0;
-    match position {
-        Position::Top => Rectangle {
-            x,
-            height: (anchor.height - room.top).max(1.0),
-            ..anchor
-        },
-        Position::Bottom => {
-            let cut = room.bottom.min(anchor.height - 1.0).max(0.0);
-            Rectangle {
-                x,
-                y: anchor.y + cut,
-                height: anchor.height - cut,
-                ..anchor
-            }
         }
     }
 }
@@ -216,13 +133,22 @@ pub struct Panel {
     /// `min-height` on `panel`, not from the content.
     height: u32,
     gadgets: Vec<Entry>,
-    /// Open popups, by window id, to the index of the gadget that owns
-    /// each. The panel mints the ids so the daemon only has to map them
-    /// back to the panel.
-    popups: BTreeMap<window::Id, usize>,
+    /// Open popups, by window id. The panel mints the ids so the daemon
+    /// only has to map them back to the panel.
+    popups: BTreeMap<window::Id, Popup>,
     /// Whether the surface was last made keyboard-interactive, for a
     /// popup with a text field (see [`Panel::wants_keyboard`]).
     pub keyboard: bool,
+}
+
+/// An open popup.
+struct Popup {
+    /// The index of the gadget that owns it.
+    gadget: usize,
+    /// Once its widget was located: its anchor in the bar's surface
+    /// (the widget's width, the bar's whole height), and the surface
+    /// size it was last given.
+    placed: Option<(Rectangle, (u32, u32))>,
 }
 
 struct Entry {
@@ -351,9 +277,9 @@ impl Panel {
 
     /// Whether an open popup of this bar shows a text field.
     pub fn wants_keyboard(&self) -> bool {
-        self.popups.values().any(|i| {
+        self.popups.values().any(|p| {
             self.gadgets
-                .get(*i)
+                .get(p.gadget)
                 .is_some_and(|e| e.gadget.popup_keyboard())
         })
     }
@@ -418,7 +344,7 @@ impl Panel {
                 self.lift(i, action)
             }
             Message::Key(event) => {
-                let Some(i) = self.popups.values().copied().find(|i| {
+                let Some(i) = self.popups.values().map(|p| p.gadget).find(|i| {
                     self.gadgets
                         .get(*i)
                         .is_some_and(|e| e.gadget.popup_keyboard())
@@ -455,7 +381,13 @@ impl Panel {
             gadgets::Action::Places(cmd) => Action::Places(cmd),
             gadgets::Action::OpenPopup { anchor } => {
                 let id = window::Id::unique();
-                self.popups.insert(id, i);
+                self.popups.insert(
+                    id,
+                    Popup {
+                        gadget: i,
+                        placed: None,
+                    },
+                );
                 if let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i) {
                     g.popup_opened(id);
                 }
@@ -481,23 +413,152 @@ impl Panel {
         self.gadgets.iter().filter_map(|e| e.gadget.script())
     }
 
-    /// Content size the gadget owning popup `id` wants for it now.
+    /// The side of its widget a popup hangs on.
+    fn popup_side(&self) -> Side {
+        match self.config.position {
+            Position::Top => Side::Below,
+            Position::Bottom => Side::Above,
+        }
+    }
+
+    /// Surface size for popup `id`: what its gadget wants for the
+    /// content now, plus the popup's chrome.
     pub fn popup_size(&self, id: window::Id, shared: Shared<'_>) -> Option<(u32, u32)> {
-        let e = self.popups.get(&id).and_then(|&i| self.gadgets.get(i))?;
+        let e = self
+            .popups
+            .get(&id)
+            .and_then(|p| self.gadgets.get(p.gadget))?;
         let ctx = Context {
             shared,
             node: e.popup_node.clone(),
         };
-        Some(e.gadget.popup_size(ctx))
+        Some(popup::surface_size(shared.theme, e.gadget.popup_size(ctx)))
     }
 
-    /// The popup surface `id` is gone, whoever closed it.
-    pub fn popup_closed(&mut self, id: window::Id) {
-        if let Some(i) = self.popups.remove(&id)
-            && let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(i)
-        {
+    pub fn has_popup(&self, id: window::Id) -> bool {
+        self.popups.contains_key(&id)
+    }
+
+    pub fn has_popups(&self) -> bool {
+        !self.popups.is_empty()
+    }
+
+    /// The open popups' surfaces.
+    pub fn popup_windows(&self) -> impl Iterator<Item = window::Id> + '_ {
+        self.popups.keys().copied()
+    }
+
+    /// The widget of popup `id` was located at `widget` in the bar's
+    /// surface `bar`: open the popup there. The widget gives the x, the
+    /// bar the y: the popup meets the bar's edge, however short the
+    /// button is.
+    pub fn place_popup(
+        &mut self,
+        bar: window::Id,
+        id: window::Id,
+        widget: Rectangle,
+        shared: Shared<'_>,
+    ) -> Surfaces {
+        let Some(size) = self.popup_size(id, shared) else {
+            return Surfaces::default();
+        };
+        let anchor = Rectangle {
+            y: 0.0,
+            height: self.height as f32,
+            ..widget
+        };
+        let side = self.popup_side();
+        let Some(p) = self.popups.get_mut(&id) else {
+            return Surfaces::default();
+        };
+        p.placed = Some((anchor, size));
+        let settings = popup::settings(bar, side, anchor, size, popup::room(shared.theme));
+        Surfaces {
+            popup: vec![(id, settings)],
+            ..Surfaces::default()
+        }
+    }
+
+    /// After a change of the gadgets' or the shared state: the bar
+    /// takes the keyboard while a popup with a text field is open, and
+    /// gives it back after (the compositor sends keys to the popup,
+    /// which holds the grab); a popup whose gadget wants another size
+    /// is placed again with it.
+    pub fn sync_popups(&mut self, bar: window::Id, shared: Shared<'_>) -> Surfaces {
+        let mut surfaces = Surfaces::default();
+        let wanted = self.wants_keyboard();
+        if wanted != self.keyboard {
+            self.keyboard = wanted;
+            let interactivity = if wanted {
+                KeyboardInteractivity::Exclusive
+            } else {
+                KeyboardInteractivity::None
+            };
+            surfaces.keyboard.push((bar, interactivity));
+        }
+        let side = self.popup_side();
+        let room = popup::room(shared.theme);
+        let ids: Vec<window::Id> = self.popups.keys().copied().collect();
+        for id in ids {
+            let Some(size) = self.popup_size(id, shared) else {
+                continue;
+            };
+            let Some(Popup {
+                placed: Some((anchor, placed)),
+                ..
+            }) = self.popups.get_mut(&id)
+            else {
+                continue;
+            };
+            if *placed == size {
+                continue;
+            }
+            *placed = size;
+            let settings = popup::settings(bar, side, *anchor, size, room);
+            surfaces.reposition.push((id, settings));
+        }
+        surfaces
+    }
+
+    /// Close every popup but `except` (another opens, a click
+    /// elsewhere): their surfaces go, their gadgets are told.
+    pub fn close_popups(&mut self, except: Option<window::Id>) -> Surfaces {
+        let ids: Vec<window::Id> = self
+            .popups
+            .keys()
+            .copied()
+            .filter(|&id| Some(id) != except)
+            .collect();
+        for &id in &ids {
+            self.popup_closed(id);
+        }
+        Surfaces {
+            close: ids,
+            ..Surfaces::default()
+        }
+    }
+
+    /// The popup surface `id` is gone, whoever closed it: whether it
+    /// was one of this bar's.
+    pub fn popup_closed(&mut self, id: window::Id) -> bool {
+        let Some(p) = self.popups.remove(&id) else {
+            return false;
+        };
+        if let Some(Entry { gadget: g, .. }) = self.gadgets.get_mut(p.gadget) {
             g.popup_closed();
         }
+        true
+    }
+
+    /// Where the placed popups are asked to be, relative to the bar's
+    /// surface: for `debug surfaces`.
+    pub fn popup_rects(&self, theme: &Theme) -> impl Iterator<Item = (window::Id, Rectangle)> {
+        let side = self.popup_side();
+        let room = popup::room(theme);
+        self.popups.iter().filter_map(move |(&id, p)| {
+            let (anchor, size) = p.placed?;
+            Some((id, popup::estimate(side, anchor, size, room)))
+        })
     }
 
     pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
@@ -551,7 +612,7 @@ impl Panel {
         let Some((i, e)) = self
             .popups
             .get(&id)
-            .and_then(|&i| Some((i, self.gadgets.get(i)?)))
+            .and_then(|p| Some((p.gadget, self.gadgets.get(p.gadget)?)))
         else {
             return Space::new().into();
         };

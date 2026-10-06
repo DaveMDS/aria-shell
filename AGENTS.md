@@ -95,8 +95,9 @@ Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
 `Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
 its surfaces as a `components::Surfaces`. `gadgets/` holds the bar's
 gadgets, their contract in its `mod.rs`; `ui/` the building blocks of
-every surface: the theme (`ui/theme/`) and the reusable pieces (the
-menu, the calendar, the graphs). The plumbing (`config.rs`,
+every surface: the theme (`ui/theme/`), the reusable pieces (the
+menu, the calendar, the graphs) and the shapes things are shown in (a
+gadget's popup, a notification's toast). The plumbing (`config.rs`,
 `commands.rs`, `process.rs`, `locale.rs`, ...) stays at the top.
 
 Styling lives in `ui/theme/`: a CSS-like file (`assets/base.css` always,

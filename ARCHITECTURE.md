@@ -91,7 +91,8 @@ AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, pane
   Message::Locker(locker::Message)         routed to the lock screen while the session is locked
   + variants injected by #[to_exwlshell_message] (NewLayerShell, RemoveWindow, Lock, UnLock, ...)
 
-Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>
+Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadgets: Vec<(Slot, AnyGadget)>; its
+                            gadgets' popups (`place_popup`, `sync_popups`, `close_popups` -> Surfaces)
   Message::Gadget(index, gadgets::Message) | Key(keyboard::Event)   (the latter for the popup wanting the keyboard)
 
 AnyGadget  (gadgets/mod.rs) closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
@@ -546,13 +547,15 @@ Two things flow between the daemon and the gadgets besides messages:
   `line_height(node)` exist for that (cosmic-text through
   `iced::advanced::graphics::text::Paragraph`). Under the hood `toggle`
   yields `Action::OpenPopup { anchor }` / `ClosePopup(id)`; the panel
-  mints the `window::Id`, remembers `popup -> gadget index` and records
-  it in the gadget's `Popup`. The daemon keeps `popup -> (panel, anchor
-  rect, size)`, asks the widget tree for the anchor's bounds with a
-  custom `Operation` (`widget_bounds` in `main.rs`) and sends `NewPopUp`
-  placed by `panel::popup_settings` (centred on the anchor, its box
-  meeting the bar's edge whatever the anchor's height: the anchor rect
-  is stretched to the bar's whole thickness). `view(popup_id)` routes to
+  mints the `window::Id`, keeps the popup (its gadget, then its anchor
+  rect and size) and records it in the gadget's `Popup`. The daemon asks
+  the widget tree for the anchor's bounds with a custom `Operation`
+  (`ui::bounds`) and hands them to `Panel::place_popup`, which answers
+  the `NewPopUp` as `Surfaces`, placed by `ui::popup::settings` (centred
+  on the anchor, its box meeting the bar's edge whatever the anchor's
+  height: the anchor rect is stretched to the bar's whole thickness;
+  the surface sized by `ui::popup::surface_size`, the content plus the
+  `popup` root's chrome and shadow room). `view(popup_id)` routes to
   `Panel::popup_view` -> `Gadget::popup_view`. Whoever closes it (the
   gadget, or the compositor on a click outside), it ends in
   `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's
@@ -562,10 +565,11 @@ Two things flow between the daemon and the gadgets besides messages:
   focus by itself: on Sway (wlroots) an xdg popup's grab doesn't move
   the keyboard, and the bar's layer surface has
   `KeyboardInteractivity::None`. So a gadget whose popup shows a text
-  field says so (`Gadget::popup_keyboard`), and the daemon makes the
-  bar `Exclusive` *before* the popup maps (`sync_keyboard`, first in
-  the batch of `Message::Panel`: a change after the grab started does
-  nothing) and `None` again when the popup closes. The compositor then
+  field says so (`Gadget::popup_keyboard`), and the panel makes the
+  bar `Exclusive` *before* the popup maps (`Panel::sync_popups`, first
+  in the batch of `Message::Panel`, its `Surfaces::keyboard` sent
+  first: a change after the grab started does nothing) and `None` again
+  when the popup closes. The compositor then
   sends the keys to the *bar's* window (verified: the popup's window
   never sees them), and the daemon forwards every keyboard event
   arriving on such a bar to the gadget (`Message::PanelKey` ->
@@ -1090,9 +1094,9 @@ Two things flow between the daemon and the gadgets besides messages:
   descendant, or none).
 - A `tooltip` on a 32px layer surface would be clipped to the surface, so
   the Workspaces gadget has none (Python showed name/title tooltips).
-- A popup's size is asked twice: at `OpenPopup` (to have one) and
-  again when the anchor's bounds come back from the widget tree
-  (`PopupAnchor`), since the state may have moved on in between: the
+- A popup's size is asked when the anchor's bounds come back from the
+  widget tree (`PopupAnchor` -> `Panel::place_popup`), not at
+  `OpenPopup`, since the state may have moved on in between: the
   tray's menu loads over the bus faster than a render pass, and a
   popup created with the size of the "…" placeholder stayed that size
   until some unrelated event resized it (the tray scenario flaked once
@@ -1108,10 +1112,11 @@ Two things flow between the daemon and the gadgets besides messages:
   grab (Sway) only dismisses on a click outside *the client's*
   surfaces: a click on our own bar is delivered to the bar. So the
   daemon also closes the popups on a button press no widget took on
-  any non-popup window of ours (`panel::presses_outside`, `Status::
+  any non-popup window of ours (`ui::popup::presses_outside`, `Status::
   Ignored`: a press on a gadget's button is that gadget's business),
   and opening a popup closes the others (`AriaShell::close_popups`,
-  telling the panel itself since no `Closed` will).
+  every panel's `close_popups(except)`, telling the gadgets since no
+  `Closed` will).
 - A widget's on-screen bounds are only known to the widget tree: query
   them with a custom `widget::Operation` via `iced::advanced::widget::operate`
   (needs the `advanced` feature). The runtime runs the operation on every

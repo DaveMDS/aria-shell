@@ -136,7 +136,6 @@ enum Message {
         popup: Id,
         panel: Id,
         anchor: Rectangle,
-        size: (u32, u32),
     },
     /// Nothing to update: a new frame of that surface (`None`: of all of
     /// them), for a change `Message::redraw_scope` couldn't tell from
@@ -215,8 +214,6 @@ struct AriaShell {
     panels: BTreeMap<Id, Panel>,
     /// The background surfaces.
     wallpapers: Wallpapers,
-    /// Open popup surfaces.
-    popups: BTreeMap<Id, OpenPopup>,
     /// The launcher, while shown, on its dialog surface.
     launcher: Option<(Dialog, Launcher)>,
     /// The exit menu, while shown.
@@ -243,24 +240,6 @@ struct Toast {
     size: (u32, u32),
     /// (top, right, bottom, left)
     margin: (i32, i32, i32, i32),
-}
-
-/// A popup surface: the panel it hangs off, its anchor in that panel's
-/// surface (the widget's width, the bar's whole height), and the
-/// surface size it was last given
-/// (content plus the `popup` root's chrome).
-struct OpenPopup {
-    panel: Id,
-    anchor: Rectangle,
-    size: (u32, u32),
-}
-
-impl OpenPopup {
-    /// Where it was asked to be, relative to the panel's surface (the
-    /// compositor may slide it; a `debug surfaces` estimate).
-    fn estimate(&self, position: panel::Position, room: iced::Padding) -> Rectangle {
-        panel::popup_estimate(position, self.anchor, self.size, room)
-    }
 }
 
 impl AriaShell {
@@ -305,7 +284,6 @@ impl AriaShell {
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
             wallpapers: Wallpapers::default(),
-            popups: BTreeMap::new(),
             launcher: None,
             exiter: None,
             locker: None,
@@ -407,34 +385,19 @@ impl AriaShell {
             .unwrap_or((0, 0))
     }
 
-    /// The popups' content may have changed with the shared state:
-    /// resize the surfaces whose gadget now wants another size.
+    /// The popups' content may have changed with the shared state: the
+    /// bars take or give back the keyboard, the popups whose gadget
+    /// wants another size are placed again.
     fn sync_popups(&mut self) -> Task<Message> {
-        let mut tasks = vec![self.sync_keyboard()];
-        let ids: Vec<Id> = self.popups.keys().copied().collect();
-        for id in ids {
-            let Some(size) = self
-                .popups
-                .get(&id)
-                .and_then(|open| self.popup_surface_size(open.panel, id))
-            else {
-                continue;
-            };
-            let Some(open) = self.popups.get_mut(&id) else {
-                continue;
-            };
-            if open.size == size {
-                continue;
-            }
-            open.size = size;
-            let Some(position) = self.panels.get(&open.panel).map(Panel::position) else {
-                continue;
-            };
-            let settings =
-                panel::popup_settings(open.panel, position, open.anchor, size, self.popup_room());
-            tasks.push(Task::done(Message::PopUpReposition { settings, id }));
-        }
-        Task::batch(tasks)
+        // `Shared` borrows the daemon but for the panels.
+        let mut panels = std::mem::take(&mut self.panels);
+        let surfaces = panels
+            .iter_mut()
+            .fold(Surfaces::default(), |all, (&id, panel)| {
+                all.and(panel.sync_popups(id, self.shared()))
+            });
+        self.panels = panels;
+        surface_tasks(surfaces)
     }
 
     /// New frames for the surfaces showing the shared state (`Shared`):
@@ -448,8 +411,8 @@ impl AriaShell {
         let ids = self
             .panels
             .keys()
-            .chain(self.popups.keys())
             .copied()
+            .chain(self.panels.values().flat_map(Panel::popup_windows))
             .chain(dialogs.map(|d| d.window))
             .chain(
                 self.locker
@@ -463,55 +426,12 @@ impl AriaShell {
 
     /// New frames for a panel's popups, which show its gadgets' state.
     fn redraw_popups(&self, panel: Id) -> Task<Message> {
-        Task::batch(
-            self.popups
-                .iter()
-                .filter(|(_, open)| open.panel == panel)
-                .map(|(&id, _)| Task::done(Message::Redraw(Some(id)))),
-        )
-    }
-
-    /// A bar whose popup shows a text field becomes keyboard-interactive
-    /// (the compositor sends keys to the popup, which holds the grab),
-    /// and stops being so when it doesn't any more.
-    fn sync_keyboard(&mut self) -> Task<Message> {
-        let mut tasks = Vec::new();
-        for (id, panel) in &mut self.panels {
-            let wanted = panel.wants_keyboard();
-            if wanted == panel.keyboard {
-                continue;
-            }
-            panel.keyboard = wanted;
-            tasks.push(Task::done(Message::KeyboardInteractivityChange {
-                id: *id,
-                keyboard_interactivity: if wanted {
-                    KeyboardInteractivity::Exclusive
-                } else {
-                    KeyboardInteractivity::None
-                },
-            }));
-        }
-        Task::batch(tasks)
-    }
-
-    /// Surface size for popup `id` of `panel`: what its gadget wants
-    /// for the content, plus the `popup` root's padding and border, plus
-    /// the room for its shadow.
-    fn popup_surface_size(&self, panel: Id, id: Id) -> Option<(u32, u32)> {
-        let size = self.panels.get(&panel)?.popup_size(id, self.shared())?;
-        let chrome = self.theme.resolve(&Node::root("popup"));
-        let pad = chrome.padding;
-        let room = self.popup_room();
-        let extra = 2.0 * chrome.border_width;
-        Some((
-            size.0 + (pad.left + pad.right + extra + room.left + room.right) as u32,
-            size.1 + (pad.top + pad.bottom + extra + room.top + room.bottom) as u32,
-        ))
-    }
-
-    /// The room around a popup's box for its shadow.
-    fn popup_room(&self) -> iced::Padding {
-        self.theme.shadow_room(&Node::root("popup"))
+        let ids = self
+            .panels
+            .get(&panel)
+            .into_iter()
+            .flat_map(Panel::popup_windows);
+        Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -538,12 +458,7 @@ impl AriaShell {
                     };
                     // The keyboard first: a popup wanting it must map
                     // on a bar that already has it.
-                    Task::batch([
-                        self.sync_keyboard(),
-                        self.perform(id, action),
-                        self.sync_popups(),
-                        redraw,
-                    ])
+                    Task::batch([self.sync_popups(), self.perform(id, action), redraw])
                 }
                 None => Task::none(),
             },
@@ -799,10 +714,10 @@ impl AriaShell {
                 Task::none()
             }
             Message::PressedOutside(window) => {
-                if self.popups.contains_key(&window) {
+                if self.panels.values().any(|p| p.has_popup(window)) {
                     Task::none()
                 } else {
-                    self.close_popups()
+                    self.close_popups(None)
                 }
             }
             Message::Launcher(m) => {
@@ -874,37 +789,13 @@ impl AriaShell {
                 popup,
                 panel,
                 anchor,
-                size,
             } => {
-                let Some(bar) = self.panels.get(&panel) else {
-                    return Task::none();
-                };
-                let position = bar.position();
-                // The widget gives the x, the bar the y: the popup meets
-                // the bar's edge, however short the button is.
-                let anchor = Rectangle {
-                    y: 0.0,
-                    height: bar.height() as f32,
-                    ..anchor
-                };
-                // The state may have moved on while the widget tree was
-                // asked (a tray menu loads faster than that): size the
-                // surface from the state now, not from `OpenPopup`'s.
-                let size = self.popup_surface_size(panel, popup).unwrap_or(size);
-                let settings =
-                    panel::popup_settings(panel, position, anchor, size, self.popup_room());
-                self.popups.insert(
-                    popup,
-                    OpenPopup {
-                        panel,
-                        anchor,
-                        size,
-                    },
-                );
-                Task::done(Message::NewPopUp {
-                    settings,
-                    id: popup,
-                })
+                let mut panels = std::mem::take(&mut self.panels);
+                let surfaces = panels
+                    .get_mut(&panel)
+                    .map(|bar| bar.place_popup(panel, popup, anchor, self.shared()));
+                self.panels = panels;
+                surfaces.map_or_else(Task::none, surface_tasks)
             }
             _ => Task::none(), // runtime variants, handled by the runtime
         }
@@ -948,12 +839,11 @@ impl AriaShell {
         icons.keep_index_of(&self.icons);
         self.icons = icons;
         let mut tasks: Vec<Task<Message>> = self
-            .popups
-            .keys()
-            .chain(self.panels.keys())
-            .map(|&id| Task::done(Message::RemoveWindow(id)))
+            .panels
+            .iter()
+            .flat_map(|(&id, panel)| std::iter::once(id).chain(panel.popup_windows()))
+            .map(|id| Task::done(Message::RemoveWindow(id)))
             .collect();
-        self.popups.clear();
         self.panels.clear();
         tasks.push(surface_tasks(self.wallpapers.close()));
         tasks.push(self.close_launcher());
@@ -1054,27 +944,23 @@ impl AriaShell {
                 self.reload_theme()
             }
             Action::OpenPopup { id, anchor } => {
-                let Some(size) = self.popup_surface_size(panel, id) else {
+                if !self.panels.get(&panel).is_some_and(|p| p.has_popup(id)) {
                     return Task::none();
-                };
+                }
                 // One popup at a time (the compositor's grab already
                 // dismisses the open one on Hyprland, not on Sway,
                 // where a click on our own surfaces is delivered).
-                let close = self.close_popups();
+                let close = self.close_popups(Some(id));
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
                 let open = ui::bounds(anchor).map(move |bounds| Message::PopupAnchor {
                     popup: id,
                     panel,
                     anchor: bounds.unwrap_or_default(),
-                    size,
                 });
                 Task::batch([close, open])
             }
-            Action::ClosePopup(id) => {
-                self.popups.remove(&id);
-                Task::done(Message::RemoveWindow(id))
-            }
+            Action::ClosePopup(id) => Task::done(Message::RemoveWindow(id)),
             Action::Many(actions) => Task::batch(
                 actions
                     .into_iter()
@@ -1399,7 +1285,7 @@ impl AriaShell {
         Task::batch([
             self.close_launcher(),
             self.close_exiter(),
-            self.close_popups(),
+            self.close_popups(None),
             Task::done(Message::Lock),
         ])
     }
@@ -1411,20 +1297,17 @@ impl AriaShell {
         }
     }
 
-    /// Close every open popup, telling its panel (the runtime's
-    /// `Closed` won't, the popup is forgotten here first).
-    fn close_popups(&mut self) -> Task<Message> {
-        let popups = std::mem::take(&mut self.popups);
-        let tasks: Vec<Task<Message>> = popups
-            .into_iter()
-            .map(|(id, open)| {
-                if let Some(panel) = self.panels.get_mut(&open.panel) {
-                    panel.popup_closed(id);
-                }
-                Task::done(Message::RemoveWindow(id))
-            })
-            .collect();
-        Task::batch(tasks)
+    /// Close every open popup but `except` (one opening), telling its
+    /// panel (the runtime's `Closed` won't, the popup is forgotten here
+    /// first).
+    fn close_popups(&mut self, except: Option<Id>) -> Task<Message> {
+        let surfaces = self
+            .panels
+            .values_mut()
+            .fold(Surfaces::default(), |all, panel| {
+                all.and(panel.close_popups(except))
+            });
+        surface_tasks(surfaces)
     }
 
     /// Take the screenshot picker down.
@@ -1625,13 +1508,10 @@ impl AriaShell {
                 if self.osd.closed(id) {
                     return Task::none();
                 }
-                if self.panels.remove(&id).is_some() {
-                    self.popups.retain(|_, open| open.panel != id);
-                } else if let Some(open) = self.popups.remove(&id)
-                    && let Some(panel) = self.panels.get_mut(&open.panel)
+                if self.panels.remove(&id).is_none()
+                    && self.panels.values_mut().any(|p| p.popup_closed(id))
                 {
-                    panel.popup_closed(id);
-                    return self.sync_keyboard();
+                    return self.sync_popups();
                 }
                 Task::none()
             }
@@ -1756,9 +1636,7 @@ impl AriaShell {
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
-        if let Some(owner) = self.popups.get(&window).map(|p| p.panel)
-            && let Some(panel) = self.panels.get(&owner)
-        {
+        if let Some((&owner, panel)) = self.panels.iter().find(|(_, p)| p.has_popup(window)) {
             return panel
                 .popup_view(window, shared)
                 .map(move |m| Message::Panel(owner, m));
@@ -1782,8 +1660,11 @@ impl AriaShell {
         }
         files.extend(self.icons.watch_dirs().iter().cloned());
         files.extend(self.wallpapers.files().cloned());
-        let popups = (!self.popups.is_empty())
-            .then(|| panel::presses_outside().map(Message::PressedOutside));
+        let popups = self
+            .panels
+            .values()
+            .any(Panel::has_popups)
+            .then(|| ui::popup::presses_outside().map(Message::PressedOutside));
         let launcher = self.launcher.iter().flat_map(|(_, launcher)| {
             [
                 launcher
@@ -1862,6 +1743,19 @@ fn open_surfaces(surfaces: Vec<(Id, NewLayerShellSettings)>) -> Task<Message> {
 
 /// Open, close, resize and redraw the surfaces a component asks for.
 fn surface_tasks(surfaces: Surfaces) -> Task<Message> {
+    let keyboard = surfaces
+        .keyboard
+        .into_iter()
+        .map(|(id, keyboard_interactivity)| {
+            Task::done(Message::KeyboardInteractivityChange {
+                id,
+                keyboard_interactivity,
+            })
+        });
+    let popup = surfaces
+        .popup
+        .into_iter()
+        .map(|(id, settings)| Task::done(Message::NewPopUp { settings, id }));
     let close = surfaces
         .close
         .into_iter()
@@ -1870,14 +1764,21 @@ fn surface_tasks(surfaces: Surfaces) -> Task<Message> {
         .resize
         .into_iter()
         .map(|(id, anchor, size)| Task::done(Message::LayoutChange { id, anchor, size }));
+    let reposition = surfaces
+        .reposition
+        .into_iter()
+        .map(|(id, settings)| Task::done(Message::PopUpReposition { settings, id }));
     let redraw = surfaces
         .redraw
         .into_iter()
         .map(|id| Task::done(Message::Redraw(Some(id))));
     Task::batch(
-        std::iter::once(open_surfaces(surfaces.open))
+        keyboard
+            .chain(std::iter::once(open_surfaces(surfaces.open)))
+            .chain(popup)
             .chain(close)
             .chain(resize)
+            .chain(reposition)
             .chain(redraw),
     )
 }

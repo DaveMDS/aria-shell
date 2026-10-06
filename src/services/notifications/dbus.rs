@@ -20,7 +20,7 @@ use zbus::zvariant::OwnedValue;
 use zbus::{Connection, interface};
 
 use super::{Event, IconSource, Notification, Reason, Timeout, Urgency};
-use crate::icons::Icon;
+use crate::services::icons::Icon;
 
 const NAME: &str = "org.freedesktop.Notifications";
 const PATH: &str = "/org/freedesktop/Notifications";

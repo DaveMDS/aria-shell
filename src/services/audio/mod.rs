@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use iced::{Subscription, Task};
 use zbus::Connection;
 
-use crate::icons::Icon;
+use crate::services::icons::Icon;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {

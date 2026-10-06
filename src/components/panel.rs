@@ -12,12 +12,12 @@ use iced_exwlshell::reexport::{
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::compositor;
 use crate::config::{Config, RawSection, Section};
 use crate::gadget::{self, AnyGadget, Context, Shared};
-use crate::scripts;
+use crate::services::compositor;
+use crate::services::scripts;
+use crate::services::tray;
 use crate::theme::{self, Node, Theme};
-use crate::tray;
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation; `size`, `align`,
@@ -252,15 +252,15 @@ pub enum Action {
     Tray(tray::Command),
     Theme(theme::Command),
     Script(scripts::Command),
-    Notifications(crate::notifications::Command),
-    SysMon(crate::sysmon::Command),
-    Audio(crate::audio::Command),
-    Network(crate::network::Command),
-    Idle(crate::idle::Command),
-    Power(crate::power::Command),
-    Brightness(crate::brightness::Command),
-    Screenshot(crate::screenshot::Command),
-    Places(crate::places::Command),
+    Notifications(crate::services::notifications::Command),
+    SysMon(crate::services::sysmon::Command),
+    Audio(crate::services::audio::Command),
+    Network(crate::services::network::Command),
+    Idle(crate::services::idle::Command),
+    Power(crate::services::power::Command),
+    Brightness(crate::services::brightness::Command),
+    Screenshot(crate::services::screenshot::Command),
+    Places(crate::services::places::Command),
     /// Open the popup surface `id` as a child of this panel's surface,
     /// hanging off the widget tagged `anchor`.
     OpenPopup {

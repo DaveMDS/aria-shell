@@ -28,11 +28,12 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
 
 - PAM in Rust is the weakest link: even COSMIC's official greeter has open
   production auth bugs. Ours is a hand-written `libpam` binding
-  (`locker/pam.rs`), small enough to read whole; refused-password path
-  exercised by a UI scenario, the accepted one only by hand.
+  (`components/locker/pam.rs`), small enough to read whole;
+  refused-password path exercised by a UI scenario, the accepted one
+  only by hand.
 - Raw PipeWire volume control and a GStreamer→wgpu bridge for video
   lack mature crates; expect to hand-roll them. (The idle-notifier
-  protocol didn't: `wayland-protocols` has it, see `idle/wayland.rs`.)
+  protocol didn't: `wayland-protocols` has it, see `services/idle/wayland.rs`.)
 - `iced_exwlshell` is a small, fast-moving crate: expect API churn, verify
   against its source in `~/.cargo/registry` rather than memory.
   The branch `exwlshell-0.21` (on 0.21.0-rc1: surfaces rebuilt only
@@ -59,6 +60,16 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
 Plain Elm architecture as iced defines it, nested once per layer. Every
 layer is a struct with its own `Message`, `update`, `view` and
 `subscription`; the parent routes by key and `.map()`s messages up.
+
+`src/` follows that shape. `services/` holds the daemon-owned sources:
+state fed by one stream (`subscription()` -> `apply(Event)`), changed by
+`run(Command)`, read by gadgets through `Context`; no view of their own,
+but the screenshot picker's surfaces and the notifications' toasts.
+`components/` holds the surfaces the daemon opens and routes to, each a
+full Elm component: panel, dialog, launcher, exiter, locker, osd,
+wallpaper. Gadgets, widgets, the theme and the plumbing (config,
+commands, process, locale, ...) stay at the top. The paths in the
+diagram below leave out the `services/` / `components/` prefix.
 
 ```
 AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
@@ -565,7 +576,7 @@ Two things flow between the daemon and the gadgets besides messages:
   is wanted. The shell's own commands are its CLI (`command =
   aria-shell launcher toggle`), with that name resolved to the running
   binary so a dev build works the same; no `aria ` prefix magic as the
-  Python one had. `exec` programs are run by the daemon (`scripts.rs`),
+  Python one had. `exec` programs are run by the daemon (`services/scripts.rs`),
   once per distinct spec however many panels show the gadget: two
   monitors don't run `checkupdates` twice (it fails when they do), and
   the output is shared state read from `ctx.scripts`; a gadget asking
@@ -604,7 +615,7 @@ Two things flow between the daemon and the gadgets besides messages:
   background is what shows, so `rgba` bars and rounded popups work.
   Gadgets must not hard-code colours/paddings/spacing: derive nodes from
   `ctx.node` and go through the theme helpers.
-- **App icons** (`icons/`) are a daemon-owned source with the usual
+- **App icons** (`services/icons/`) are a daemon-owned source with the usual
   verbs. Resolution is `class` -> desktop entry (by id, `StartupWMClass`,
   `Exec` basename, reverse-DNS suffix) -> `Icon=` -> theme lookup, then
   the `[apps_class_map]` override, the class as an icon name, and
@@ -674,9 +685,10 @@ Two things flow between the daemon and the gadgets besides messages:
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
   theme matters here (`launcher`, `launcher icon { height }`), not
   config.
-- **The exit menu** (`exiter.rs`) is the third component on a `Dialog`
-  (`dialog.rs`, the launcher's surface-plus-grabs mechanics pulled out
-  of `main.rs`). Its buttons are explicit config (`buttons = ...`, one
+- **The exit menu** (`components/exiter.rs`) is the third component
+  on a `Dialog` (`components/dialog.rs`, the launcher's
+  surface-plus-grabs mechanics pulled out of `main.rs`). Its buttons
+  are explicit config (`buttons = ...`, one
   `<name> = [!]command` each, `_icon`/`_label`), not free-form keys as
   the Python had; the confirmation replaces the grid on the same
   surface (no second window) with a countdown from `confirm_timeout`
@@ -706,7 +718,7 @@ Two things flow between the daemon and the gadgets besides messages:
   its edges, or a cursor that never entered it, which is the bar button
   clicked twice) and releases; a press outside marks the dialog, the
   release closes it. Same on both compositors, no size bookkeeping.
-- **The lock screen is a component too** (`locker/`), the launcher's
+- **The lock screen is a component too** (`components/locker/`), the launcher's
   shape: the daemon holds `Option<Locker>` from the `lock` command to
   the unlock. The Wayland side is entirely the runtime's
   (`ext-session-lock-v1` in `exwlshellev`): `Message::Lock` asks the
@@ -727,7 +739,7 @@ Two things flow between the daemon and the gadgets besides messages:
   password field (+ an eye button showing it in clear, `secure(!peek)`;
   the click takes the keyboard from the field, so the toggle refocuses
   it) + message + Unlock; `password_prompt = no` unlocks on Enter/click
-  without PAM. PAM is `locker/pam.rs`: `pam_start` /
+  without PAM. PAM is `components/locker/pam.rs`: `pam_start` /
   `pam_authenticate` / `pam_acct_mgmt` / `pam_end` declared by hand
   (`#[link(name = "pam")]`, as `libc::kill` rather than a crate), a
   conversation answering the password to `PAM_PROMPT_ECHO_OFF` (responses
@@ -755,8 +767,9 @@ Two things flow between the daemon and the gadgets besides messages:
   Not ported: the shake
   (no animations in the theme), the spinner (a "Unlocking…" text), a
   wallpaper behind (the theme's `locker { background }` for now).
-- **The tray** (`tray/`) is the first DBus source, the shape notifications
-  and MPRIS will copy: one `zbus::Connection` (tokio feature) opened in
+- **The tray** (`services/tray/`) is the first DBus source, the shape
+  notifications and MPRIS will copy: one `zbus::Connection` (tokio
+  feature) opened in
   the subscription's stream, handed to the daemon as
   `Event::Connected(conn)` so `Tray::run` can call methods with it; the
   stream runs the host loop. The
@@ -816,8 +829,10 @@ Two things flow between the daemon and the gadgets besides messages:
   (`NewLayerShellSettings { output_option: OutputOption::GlobalName(id) }`),
   on `OutputRemoved` it removes them. The broadcast replays current
   outputs to late subscribers, so startup and hot-plug are the same path.
-- **External event sources are `Subscription`s**, not services. A timer
-  is a stream; the compositor IPC socket is a stream (`compositor::hyprland::events`);
+- **External event sources are `Subscription`s**, not singletons
+  running their own loop (the Python's services were). A timer
+  is a stream; the compositor IPC socket is a stream
+  (`services::compositor::hyprland::events`);
   a DBus connection will be one too. Shared connections live in the
   daemon's subscription, their events fan out through `update`, never a
   mutex-guarded static.
@@ -837,9 +852,10 @@ Two things flow between the daemon and the gadgets besides messages:
   (`const NAME` + `from_raw(&RawSection)`). `RawSection` has the typed
   accessors (`str_or`, `bool_or`, `list_or`; add `int_or` when a section
   needs it).
-- **Shared state is owned by the daemon**, one struct per source
-  (`Compositor` now; audio, tray, notifications later), each with the same
-  three verbs: `subscription()` (one stream for the whole process),
+- **Shared state is owned by the daemon**, one struct per source, a
+  service in `services/` (`Compositor`, `Tray`, `Audio`, ...), each
+  with the same three verbs: `subscription()` (one stream for the
+  whole process),
   `apply(Event)`, `run(Command) -> Task`. Gadgets read it through
   `Context` and change it through `Action`. This is the shape to copy for
   the next shared source; don't give gadgets their own connection.
@@ -1039,7 +1055,7 @@ Two things flow between the daemon and the gadgets besides messages:
   workspaces on the same output.
 - `j/workspaces` comes in creation order and includes special workspaces
   (negative ids); we sort by id and drop those.
-- Sway (`compositor/sway.rs`, the i3 IPC on `$SWAYSOCK`: `i3-ipc` +
+- Sway (`services/compositor/sway.rs`, the i3 IPC on `$SWAYSOCK`: `i3-ipc` +
   native-endian u32 length and type + JSON): a con id doesn't select a
   workspace (criteria only match views), so workspaces are identified
   by name, unique in Sway, and activated with `workspace

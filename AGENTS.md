@@ -64,12 +64,13 @@ passed by reference. External event sources are `Subscription`s.
 
 Shared state (the compositor's workspaces/windows, the app icons, the
 tray items, the outputs of gadget scripts, the mixer and the media
-players, ...) is owned by the daemon (`Compositor` in `compositor/`,
-`Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
-`Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`,
-`Power` in `power/`, `Brightness` in `brightness/`, `Screenshot` in
-`screenshot/`, `Places` in `places/`), reaches gadgets read-only through
-`gadget::Context` in `view`, and is changed by returning
+players, ...) is owned by the daemon: the services, in `src/services/`
+(`Compositor` in `compositor/`, `Icons` in `icons/`, `Tray` in `tray/`,
+`Scripts` in `scripts.rs`, `Audio` in `audio/`, `Network` in
+`network/`, `Idle` in `idle/`, `Power` in `power/`, `Brightness` in
+`brightness/`, `Screenshot` in `screenshot/`, `Places` in `places/`).
+It reaches gadgets read-only through `gadget::Context` in `view`, and
+is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
 `Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
 `Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` /
@@ -85,6 +86,16 @@ get a new frame: a new top-level message, or a change that reaches
 another surface, needs its scope (or a `Message::Redraw`) — see
 ARCHITECTURE.md's facts about the crates. See ARCHITECTURE.md's
 "Structure" section before changing the shape of any of these.
+
+`src/` is split by that shape: `services/` holds the daemon-owned
+sources above (a `subscription()` feeding `apply(Event)`, a
+`run(Command)`; no view of their own, but the screenshot picker and the
+notifications' toasts), `components/` the surfaces the daemon opens and
+routes to, each a full Elm component (`Panel`, `Launcher`, `Exiter` on
+a `Dialog`, `Locker`, `Osd`, `Wallpapers`). Gadgets (`gadget.rs`,
+`gadgets/`), reusable widgets (`widgets/`), the theme and the plumbing
+(`config.rs`, `commands.rs`, `process.rs`, `locale.rs`, ...) stay at
+the top.
 
 Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
 plus `[general] style`), loaded for a light or dark scheme
@@ -167,7 +178,7 @@ unused). Adding a language: a file with English's keys, one line in
   its actual source rather than assuming an API shape from memory.
 - PAM (the lock screen's password check) has a rough Rust story -- even
   COSMIC's own official greeter has open production auth bugs. Ours is a
-  direct `libpam` binding (`locker/pam.rs`), the `login` service unless
+  direct `libpam` binding (`components/locker/pam.rs`), the `login` service unless
   `/etc/pam.d/aria-shell` is installed; treat changes there with care and
   try them (`cargo test -- --ignored pam`, `tests/ui/run.sh locker`).
 - `libcosmic`/COSMIC's source (`cosmic-panel`, `cosmic-applets`,

@@ -32,15 +32,15 @@ use iced::window::Id;
 use iced::{Alignment, Element, Length, Padding};
 use iced_wayland_subscriber::OutputId;
 
-use crate::audio::{Audio, Kind as Channel};
-use crate::brightness::Brightness;
 use crate::config::{RawSection, Section};
 use crate::gadgets;
-use crate::icons::Icons;
-use crate::idle::Idle;
 use crate::locale::Locale;
-use crate::network::{DeviceKind, Network, Summary};
-use crate::power::Power;
+use crate::services::audio::{Audio, Kind as Channel};
+use crate::services::brightness::Brightness;
+use crate::services::icons::Icons;
+use crate::services::idle::Idle;
+use crate::services::network::{DeviceKind, Network, Summary};
+use crate::services::power::Power;
 use crate::theme::{self, Node, Theme};
 use crate::widgets::graph;
 

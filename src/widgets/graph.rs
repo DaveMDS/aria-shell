@@ -166,7 +166,7 @@ impl Unit {
     fn format(self, locale: &Locale, v: f32) -> String {
         match self {
             Self::Percent => format!("{v:.0}%"),
-            Self::Rate => crate::sysmon::format::rate(locale, v),
+            Self::Rate => crate::services::sysmon::format::rate(locale, v),
         }
     }
 }

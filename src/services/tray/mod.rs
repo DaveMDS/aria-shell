@@ -21,7 +21,7 @@ use iced::widget::image;
 use iced::{Subscription, Task};
 use zbus::Connection;
 
-use crate::icons::Icon;
+use crate::services::icons::Icon;
 pub use menu::Menu;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

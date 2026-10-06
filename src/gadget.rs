@@ -19,7 +19,6 @@ use iced::widget::{Space, container};
 use iced::{Element, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::compositor::{self, Compositor};
 use crate::config::{Config, Section};
 use crate::gadgets::audio::{self, AudioGadget};
 use crate::gadgets::brightness::{self, BrightnessGadget};
@@ -34,7 +33,8 @@ use crate::gadgets::system_monitor::{self, SystemMonitor};
 use crate::gadgets::themes::{self, Themes};
 use crate::gadgets::tray::{self, TrayGadget};
 use crate::gadgets::workspaces::{self, Workspaces};
-use crate::icons::Icons;
+use crate::services::compositor::{self, Compositor};
+use crate::services::icons::Icons;
 use crate::theme::{Node, Theme};
 
 /// Daemon-owned state a gadget can read while building its view.
@@ -44,16 +44,16 @@ pub struct Shared<'a> {
     pub theme: &'a Theme,
     pub locale: &'a crate::locale::Locale,
     pub icons: &'a Icons,
-    pub tray: &'a crate::tray::Tray,
-    pub notifications: &'a crate::notifications::Notifications,
-    pub sysmon: &'a crate::sysmon::SysMon,
-    pub audio: &'a crate::audio::Audio,
-    pub network: &'a crate::network::Network,
-    pub idle: &'a crate::idle::Idle,
-    pub power: &'a crate::power::Power,
-    pub brightness: &'a crate::brightness::Brightness,
-    pub places: &'a crate::places::Places,
-    pub scripts: &'a crate::scripts::Scripts,
+    pub tray: &'a crate::services::tray::Tray,
+    pub notifications: &'a crate::services::notifications::Notifications,
+    pub sysmon: &'a crate::services::sysmon::SysMon,
+    pub audio: &'a crate::services::audio::Audio,
+    pub network: &'a crate::services::network::Network,
+    pub idle: &'a crate::services::idle::Idle,
+    pub power: &'a crate::services::power::Power,
+    pub brightness: &'a crate::services::brightness::Brightness,
+    pub places: &'a crate::services::places::Places,
+    pub scripts: &'a crate::services::scripts::Scripts,
 }
 
 /// What a gadget gets in `view`: the shared state plus its own place in
@@ -80,20 +80,20 @@ pub enum Action<M> {
     None,
     Run(Task<M>),
     Compositor(compositor::Command),
-    Tray(crate::tray::Command),
+    Tray(crate::services::tray::Command),
     Theme(crate::theme::Command),
-    Script(crate::scripts::Command),
-    Notifications(crate::notifications::Command),
-    SysMon(crate::sysmon::Command),
-    Audio(crate::audio::Command),
-    Network(crate::network::Command),
-    Idle(crate::idle::Command),
-    Power(crate::power::Command),
-    Brightness(crate::brightness::Command),
+    Script(crate::services::scripts::Command),
+    Notifications(crate::services::notifications::Command),
+    SysMon(crate::services::sysmon::Command),
+    Audio(crate::services::audio::Command),
+    Network(crate::services::network::Command),
+    Idle(crate::services::idle::Command),
+    Power(crate::services::power::Command),
+    Brightness(crate::services::brightness::Command),
     /// Take a screenshot; the daemon waits for the gadget's popup to
     /// be gone first.
-    Screenshot(crate::screenshot::Command),
-    Places(crate::places::Command),
+    Screenshot(crate::services::screenshot::Command),
+    Places(crate::services::places::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -273,7 +273,7 @@ pub trait Gadget: Sized {
 
     /// A program the daemon should run for the gadget (`[Custom] exec`),
     /// its output read back with `ctx.scripts.output(&spec)`.
-    fn script(&self) -> Option<crate::scripts::Spec> {
+    fn script(&self) -> Option<crate::services::scripts::Spec> {
         None
     }
 
@@ -346,7 +346,7 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
-            crate::notifications::NotificationsConfig::NAME => Some(Self::Notifications(
+            crate::services::notifications::NotificationsConfig::NAME => Some(Self::Notifications(
                 NotificationsGadget::new(config.section(Some(name)), output),
             )),
             system_monitor::InstanceConfig::NAME => {
@@ -380,17 +380,17 @@ impl AnyGadget {
                 config.section(Some(name)),
                 output,
             ))),
-            crate::power::PowerConfig::NAME => Some(Self::Power(PowerGadget::new(
+            crate::services::power::PowerConfig::NAME => Some(Self::Power(PowerGadget::new(
                 config.section(Some(name)),
                 output,
             ))),
-            crate::brightness::BrightnessConfig::NAME => Some(Self::Brightness(
+            crate::services::brightness::BrightnessConfig::NAME => Some(Self::Brightness(
                 BrightnessGadget::new(config.section(Some(name)), output),
             )),
-            crate::screenshot::ScreenshotConfig::NAME => Some(Self::Screenshot(
+            crate::services::screenshot::ScreenshotConfig::NAME => Some(Self::Screenshot(
                 ScreenshotGadget::new(config.section(Some(name)), output),
             )),
-            crate::places::PlacesConfig::NAME => {
+            crate::services::places::PlacesConfig::NAME => {
                 if config.raw_section(name).get("show").is_none() {
                     log::warn!("[{name}] needs `show = places bookmarks` (the sections, in order)");
                     return None;
@@ -602,7 +602,7 @@ impl AnyGadget {
         }
     }
 
-    pub fn script(&self) -> Option<crate::scripts::Spec> {
+    pub fn script(&self) -> Option<crate::services::scripts::Spec> {
         match self {
             Self::Clock(g) => g.script(),
             Self::Custom(g) => g.script(),

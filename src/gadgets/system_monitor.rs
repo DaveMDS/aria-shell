@@ -21,7 +21,7 @@ use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::process;
-use crate::sysmon::{
+use crate::services::sysmon::{
     Column, Command, MonitorConfig, Process, Sample, Signal, SysMon, Value, format,
 };
 use crate::theme::{self, Node, Theme};

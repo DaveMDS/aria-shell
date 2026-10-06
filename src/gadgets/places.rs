@@ -17,8 +17,10 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::places::{Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target};
-use crate::sysmon::format;
+use crate::services::places::{
+    Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target,
+};
+use crate::services::sysmon::format;
 use crate::theme::{self, Node};
 use crate::widgets::graph;
 
@@ -540,7 +542,7 @@ fn icon<'a>(ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> 
 fn icon_view<'a>(
     ctx: &Context<'a>,
     node: &Node,
-    icon: Option<&crate::icons::Icon>,
+    icon: Option<&crate::services::icons::Icon>,
 ) -> Element<'a, Message> {
     let style = ctx.theme.resolve(node);
     let size = icon_size(ctx, node);

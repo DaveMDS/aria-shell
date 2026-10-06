@@ -1,31 +1,13 @@
-mod audio;
-mod brightness;
 mod commands;
-mod compositor;
+mod components;
 mod config;
-mod dialog;
-mod exiter;
 mod gadget;
 mod gadgets;
-mod icons;
-mod idle;
-mod launcher;
 mod locale;
-mod locker;
-mod network;
-mod notifications;
-mod osd;
-mod panel;
-mod places;
-mod power;
 mod process;
-mod screenshot;
-mod scripts;
-mod sysmon;
+mod services;
 mod theme;
 mod time;
-mod tray;
-mod wallpaper;
 mod watch;
 mod widgets;
 
@@ -48,6 +30,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use audio::Audio;
 use brightness::Brightness;
 use commands::{Command, DebugCommand, OpenCommand, Reply, ToggleCommand};
+use components::{dialog, exiter, launcher, locker, osd, panel, wallpaper};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use dialog::Dialog;
@@ -65,6 +48,10 @@ use panel::{Action, Panel, PanelConfig};
 use places::Places;
 use power::Power;
 use screenshot::Screenshot;
+use services::{
+    audio, brightness, compositor, icons, idle, network, notifications, places, power, screenshot,
+    scripts, sysmon, tray,
+};
 use sysmon::SysMon;
 use theme::{Node, Theme};
 use tray::Tray;

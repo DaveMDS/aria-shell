@@ -163,7 +163,7 @@ const KNOWN: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sysmon::{Cpu, Iface, Mem};
+    use crate::services::sysmon::{Cpu, Iface, Mem};
 
     fn sample() -> Sample {
         Sample {

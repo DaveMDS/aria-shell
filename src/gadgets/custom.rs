@@ -20,7 +20,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Axis, Context, Gadget, Wheel};
 use crate::process;
-use crate::scripts::{self, Output, ReturnType, Spec};
+use crate::services::scripts::{self, Output, ReturnType, Spec};
 use crate::theme;
 
 /// `[Custom]` section.

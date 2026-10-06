@@ -15,10 +15,10 @@ use iced::{Alignment, Element, Length};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
-use crate::idle;
 use crate::locale::Locale;
-use crate::power::{Battery, Command, PowerConfig, State, Warning};
 use crate::process;
+use crate::services::idle;
+use crate::services::power::{Battery, Command, PowerConfig, State, Warning};
 use crate::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.

@@ -9,7 +9,7 @@ use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::screenshot::{Command, Destination, ScreenshotConfig, Target};
+use crate::services::screenshot::{Command, Destination, ScreenshotConfig, Target};
 use crate::theme;
 use crate::widgets::menu::{self, Item, Menu};
 

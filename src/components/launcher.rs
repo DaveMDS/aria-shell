@@ -24,11 +24,11 @@ use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Space, column, operation, scrollable};
 use iced::{Element, Event, Length, Padding, Rectangle, Subscription, Task, widget, window};
 
+use crate::components::exiter::{self, ExiterConfig};
 use crate::config::{self, RawSection, Section};
-use crate::exiter::{self, ExiterConfig};
 use crate::gadget::Shared;
-use crate::icons::Index;
-use crate::icons::desktop::{self, DesktopAction, DesktopEntry};
+use crate::services::icons::Index;
+use crate::services::icons::desktop::{self, DesktopAction, DesktopEntry};
 use crate::theme::{self, Node, Theme};
 use crate::widgets;
 
@@ -783,7 +783,7 @@ mod tests {
     /// A launcher over two entries in a temp dir, Zed with two
     /// actions and Ant without, no usage and an empty query.
     fn tree_launcher() -> Launcher {
-        use crate::icons::desktop::DesktopDb;
+        use crate::services::icons::desktop::DesktopDb;
         let dir = std::env::temp_dir().join(format!("aria-launcher-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

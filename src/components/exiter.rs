@@ -3,7 +3,7 @@
 //! running a program; the dangerous ones ask a confirmation in place,
 //! auto-confirmed after a countdown. `aria-shell exiter toggle`.
 //!
-//! A component on a [`crate::dialog::Dialog`] surface, the launcher's
+//! A component on a [`crate::components::dialog::Dialog`] surface, the launcher's
 //! shape: the daemon owns it while it's open, sizes the surface from
 //! [`Exiter::size`] (the content changes between the grid and the
 //! confirmation) and carries out [`Action::Perform`]. The launcher

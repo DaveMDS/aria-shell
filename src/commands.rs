@@ -38,15 +38,15 @@ pub enum Command {
     /// Lock the session (`aria-shell lock`).
     Lock,
     /// Hold idle or let it go (`aria-shell idle inhibit [toggle|on|off]`).
-    Idle(crate::idle::Command),
+    Idle(crate::services::idle::Command),
     /// Show the OSD (`aria-shell osd show ...`).
-    Osd(crate::osd::Content),
+    Osd(crate::components::osd::Content),
     /// Set the screens' brightness (`aria-shell brightness up`).
-    Brightness(crate::brightness::Command),
+    Brightness(crate::services::brightness::Command),
     /// The default output's or input's volume (`aria-shell volume up`).
     Volume(VolumeCommand),
     /// Take a screenshot (`aria-shell screenshot window`).
-    Screenshot(crate::screenshot::Command),
+    Screenshot(crate::services::screenshot::Command),
     /// Run a preferred program (`aria-shell open terminal`).
     Open(OpenCommand),
     /// Answered through the channel.
@@ -121,8 +121,8 @@ pub enum VolumeCommand {
 
 impl VolumeCommand {
     /// The mixer's command, with the step and the ceiling in percent.
-    pub fn command(&self, step: f32, max: f32) -> crate::audio::Command {
-        use crate::audio::{Command, Kind};
+    pub fn command(&self, step: f32, max: f32) -> crate::services::audio::Command {
+        use crate::services::audio::{Command, Kind};
         let kind = |input: bool| if input { Kind::Input } else { Kind::Output };
         match *self {
             Self::Step { input, up, by } => {
@@ -174,11 +174,11 @@ enum Parsed {
     Launcher(ToggleCommand),
     Exiter(ToggleCommand),
     Lock,
-    Idle(crate::idle::Command),
-    Osd(crate::osd::Content),
-    Brightness(crate::brightness::Command),
+    Idle(crate::services::idle::Command),
+    Osd(crate::components::osd::Content),
+    Brightness(crate::services::brightness::Command),
     Volume(VolumeCommand),
-    Screenshot(crate::screenshot::Command),
+    Screenshot(crate::services::screenshot::Command),
     Open(OpenCommand),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
@@ -208,10 +208,14 @@ fn parse(line: &str) -> Result<Parsed, String> {
         },
         "idle" => match args.as_slice() {
             ["inhibit"] | ["inhibit", "toggle"] => {
-                Ok(Parsed::Idle(crate::idle::Command::ToggleInhibit))
+                Ok(Parsed::Idle(crate::services::idle::Command::ToggleInhibit))
             }
-            ["inhibit", "on"] => Ok(Parsed::Idle(crate::idle::Command::SetInhibit(true))),
-            ["inhibit", "off"] => Ok(Parsed::Idle(crate::idle::Command::SetInhibit(false))),
+            ["inhibit", "on"] => Ok(Parsed::Idle(crate::services::idle::Command::SetInhibit(
+                true,
+            ))),
+            ["inhibit", "off"] => Ok(Parsed::Idle(crate::services::idle::Command::SetInhibit(
+                false,
+            ))),
             _ => Err(format!(
                 "invalid arguments for <idle>: {} (inhibit [toggle | on | off])",
                 args.join(" ")
@@ -267,7 +271,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
 /// `osd show [--icon <name>] [--value <percent>] [text...]`: the
 /// options first, then the text (every word left; the client sends its
 /// arguments as one line, so this is how a text with spaces comes).
-fn parse_osd_show(args: &[&str]) -> Result<crate::osd::Content, String> {
+fn parse_osd_show(args: &[&str]) -> Result<crate::components::osd::Content, String> {
     let mut icon = None;
     let mut value = None;
     let mut words = args.iter();
@@ -294,8 +298,8 @@ fn parse_osd_show(args: &[&str]) -> Result<crate::osd::Content, String> {
             "osd show: nothing to show (--icon <name>, --value <percent>, text)".to_owned(),
         );
     }
-    Ok(crate::osd::Content {
-        kind: crate::osd::Kind::Custom,
+    Ok(crate::components::osd::Content {
+        kind: crate::components::osd::Kind::Custom,
         icon,
         value,
         text,
@@ -306,8 +310,8 @@ fn parse_osd_show(args: &[&str]) -> Result<crate::osd::Content, String> {
 
 /// `brightness up [percent] | down [percent] | set <percent>
 /// [--output <connector>]`: every screen without `--output`.
-fn parse_brightness(args: &[&str]) -> Result<crate::brightness::Command, String> {
-    use crate::brightness::{Command, Target};
+fn parse_brightness(args: &[&str]) -> Result<crate::services::brightness::Command, String> {
+    use crate::services::brightness::{Command, Target};
     const USAGE: &str = "(up [percent] | down [percent] | set <percent>) [--output <connector>]";
     let mut target = Target::All;
     let mut rest = Vec::new();
@@ -392,8 +396,8 @@ fn parse_volume(args: &[&str]) -> Result<VolumeCommand, String> {
 /// then `--edit` to
 /// open the file in the editor or `--clipboard` to copy it instead of
 /// a file, anywhere.
-fn parse_screenshot(args: &[&str]) -> Result<crate::screenshot::Command, String> {
-    use crate::screenshot::{Command, Destination, Target};
+fn parse_screenshot(args: &[&str]) -> Result<crate::services::screenshot::Command, String> {
+    use crate::services::screenshot::{Command, Destination, Target};
     let edit = args.contains(&"--edit");
     let clipboard = args.contains(&"--clipboard");
     let destination = match (edit, clipboard) {
@@ -650,8 +654,8 @@ mod tests {
     #[test]
     fn parses_osd_show() {
         let custom = |icon: Option<&str>, value, text: Option<&str>| {
-            Ok(Parsed::Osd(crate::osd::Content {
-                kind: crate::osd::Kind::Custom,
+            Ok(Parsed::Osd(crate::components::osd::Content {
+                kind: crate::components::osd::Kind::Custom,
                 icon: icon.map(str::to_owned),
                 value,
                 text: text.map(str::to_owned),
@@ -680,7 +684,7 @@ mod tests {
 
     #[test]
     fn parses_brightness() {
-        use crate::brightness::{Command, Target};
+        use crate::services::brightness::{Command, Target};
         assert_eq!(
             parse("brightness up"),
             Ok(Parsed::Brightness(Command::Step {
@@ -762,7 +766,7 @@ mod tests {
 
     #[test]
     fn volume_with_the_gadgets_step_and_ceiling() {
-        use crate::audio::{Command, Kind};
+        use crate::services::audio::{Command, Kind};
         let up = VolumeCommand::Step {
             input: false,
             up: true,
@@ -853,7 +857,7 @@ mod tests {
 
     #[test]
     fn parses_screenshot() {
-        use crate::screenshot::{Command, Destination, Target};
+        use crate::services::screenshot::{Command, Destination, Target};
         let shot = |target, destination| {
             Ok(Parsed::Screenshot(Command {
                 target,

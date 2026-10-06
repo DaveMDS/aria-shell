@@ -22,7 +22,7 @@ use iced::{Subscription, Task};
 use zbus::Connection;
 
 use crate::config::{RawSection, Section};
-use crate::icons::Icon;
+use crate::services::icons::Icon;
 
 /// `[Notifications]` section: the daemon's settings and the bar
 /// gadget's, together (as `[Tray]` is the one place for the tray).

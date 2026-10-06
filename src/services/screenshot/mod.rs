@@ -26,10 +26,10 @@ use iced::{Element, Subscription, Task};
 use iced_exwlshell::reexport::NewLayerShellSettings;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::compositor::{Compositor, WindowGeometry};
 use crate::config::{Config, RawSection, Section};
 use crate::locale::Locale;
 use crate::process;
+use crate::services::compositor::{Compositor, WindowGeometry};
 use crate::theme::Theme;
 use picker::Picker;
 use pixels::{Frames, RawFrame, Rect, Shot};

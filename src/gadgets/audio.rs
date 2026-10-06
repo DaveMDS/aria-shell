@@ -17,11 +17,11 @@ use iced::widget::{Space, column, mouse_area, row, scrollable};
 use iced::{Alignment, Element, Length};
 use iced_wayland_subscriber::OutputInfo;
 
-use crate::audio::{Channel, Command, Kind, PlaybackStatus, Player};
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::locale::Locale;
 use crate::process;
+use crate::services::audio::{Channel, Command, Kind, PlaybackStatus, Player};
 use crate::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.

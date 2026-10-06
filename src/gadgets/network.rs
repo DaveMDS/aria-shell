@@ -18,11 +18,11 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::network::{
+use crate::process;
+use crate::services::network::{
     AccessPoint, Command, Device, DeviceKind, DeviceState, FailKey, FailReason, IpConfig, Profile,
     Security, Summary,
 };
-use crate::process;
 use crate::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
@@ -906,9 +906,10 @@ impl NetworkGadget {
         let locale = ctx.locale;
         let key = FailKey::Uuid(p.uuid.clone());
         let active = ctx.network.active_by_uuid(&p.uuid);
-        let on = active.is_some_and(|a| a.state == crate::network::ActiveState::Activated);
+        let on =
+            active.is_some_and(|a| a.state == crate::services::network::ActiveState::Activated);
         let connecting = ctx.network.attempting(&key)
-            || active.is_some_and(|a| a.state == crate::network::ActiveState::Activating);
+            || active.is_some_and(|a| a.state == crate::services::network::ActiveState::Activating);
         let failure = ctx.network.failure(&key);
         let node = list
             .child("vpn")

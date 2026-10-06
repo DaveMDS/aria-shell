@@ -617,7 +617,7 @@ pub async fn add_and_activate(
     ap: &AccessPoint,
     password: Option<&str>,
 ) -> zbus::Result<String> {
-    let login = crate::locker::login();
+    let login = crate::components::locker::login();
     let settings = connection_settings(ap, password, &login);
     let (path, _active) = manager(conn)
         .await?

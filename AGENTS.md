@@ -89,10 +89,11 @@ ARCHITECTURE.md's facts about the crates. See ARCHITECTURE.md's
 
 `src/` is split by that shape: `services/` holds the daemon-owned
 sources above (a `subscription()` feeding `apply(Event)`, a
-`run(Command)`; no view of their own, but the screenshot picker and the
-notifications' toasts), `components/` the surfaces the daemon opens and
-routes to, each a full Elm component (`Panel`, `Launcher`, `Exiter` on
-a `Dialog`, `Locker`, `Osd`, `Wallpapers`). Gadgets (`gadget.rs`,
+`run(Command)`; no view of their own, but the notifications' toasts),
+`components/` the surfaces the daemon opens and routes to, each a full
+Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
+`Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
+its surfaces as a `components::Surfaces`. Gadgets (`gadget.rs`,
 `gadgets/`), reusable widgets (`widgets/`), the theme and the plumbing
 (`config.rs`, `commands.rs`, `process.rs`, `locale.rs`, ...) stay at
 the top.

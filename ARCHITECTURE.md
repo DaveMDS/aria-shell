@@ -64,10 +64,9 @@ layer is a struct with its own `Message`, `update`, `view` and
 `src/` follows that shape. `services/` holds the daemon-owned sources:
 state fed by one stream (`subscription()` -> `apply(Event)`), changed by
 `run(Command)`, read by gadgets through `Context`; no view of their own,
-but the screenshot picker's surfaces and the notifications' toasts.
-`components/` holds the surfaces the daemon opens and routes to, each a
-full Elm component: panel, dialog, launcher, exiter, locker, osd,
-wallpaper. A component keeps its surfaces' ids and says what to do with
+but the notifications' toasts. `components/` holds the surfaces the
+daemon opens and routes to, each a full Elm component: panel, dialog,
+launcher, exiter, locker, osd, wallpaper, the screenshot picker. A component keeps its surfaces' ids and says what to do with
 them as a `components::Surfaces` (open with these settings, close,
 resize, redraw), which the daemon turns into the runtime's messages
 (`surface_tasks`): only the daemon talks to the runtime, only the
@@ -306,12 +305,16 @@ Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory,
                             `ext-output-image-capture-source` per output, one frame each into a memfd shm
                             buffer read back; `ext-data-control-v1` for the clipboard (a source offering
                             `image/png` until `cancelled`, each `send` written from a thread, other clients'
-                            offers destroyed at once); plus the picker's events while it's open
-  apply(Event, outputs, &Compositor) -> (Task, Surfaces)   `components::Surfaces`: the daemon opens
-                            and closes the picker's layer surfaces and redraws those it names
+                            offers destroyed at once)
+  apply(Event) -> (Task, Option<Frozen>)   a Pick: every output and the shown windows asked together, the
+                            frames made upright (`Event::Frozen`), handed to the daemon as `Frozen` (the
+                            shots, the windows, what Enter does, whether copy and edit can be offered),
+                            which opens the picker; `cut(shots, rect, destination)` what it takes
                             (`Message::Screenshot` is `Scope::None`)
-  picker.rs                 Pick: every output and the shown windows asked together, the frames made upright
-                            (`Event::Frozen`), then `Picker::open`: one `Layer::Overlay` surface per output
+
+Picker     (picker.rs)      the screenshot picker, a component the daemon owns while open: `picker:
+                            Option<Picker>`; `Picker::open(Frozen, outputs, focused) -> (Picker, Surfaces)`:
+                            one `Layer::Overlay` surface per output
                             (`exclusive_zone -1`, all `OnDemand`), `stack![image(frozen), canvas(Overlay),
                             toolbar]`. State in the global logical space (surface-local + the output's
                             origin): `Drag::New` (a click picks the topmost window under it or the output, a
@@ -322,7 +325,9 @@ Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory,
                             position; moves, the release, Escape/Enter, a right click come from
                             `listen_with`. `Look` before/after a message names the surfaces to redraw.
                             Enter takes the command's destination, the toolbar's buttons theirs, All every
-                            output; the picture is cut from the frozen shots
+                            output: `Action::Take`, the daemon closes it and hands the rect to
+                            `Screenshot::cut`; a surface closed (its output gone) or the outputs changing
+                            cancel it
 
 ScreenshotGadget (gadgets/screenshot.rs)  impl Gadget: an icon button; left click the picker, right click a
                             menu (the active window, the bar's screen, every screen)

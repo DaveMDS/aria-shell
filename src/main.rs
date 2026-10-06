@@ -30,7 +30,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use audio::Audio;
 use brightness::Brightness;
 use commands::{Command, OpenCommand, Reply, ToggleCommand};
-use components::{Surfaces, dialog, exiter, launcher, locker, osd, panel, wallpaper};
+use components::{Surfaces, dialog, exiter, launcher, locker, osd, panel, picker, wallpaper};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use dialog::Dialog;
@@ -45,6 +45,7 @@ use network::Network;
 use notifications::{Notifications, toast};
 use osd::Osd;
 use panel::{Action, Panel, PanelConfig};
+use picker::Picker;
 use places::Places;
 use power::Power;
 use screenshot::Screenshot;
@@ -91,6 +92,8 @@ enum Message {
     Brightness(brightness::Event),
     /// Captures and saved pictures.
     Screenshot(screenshot::Event),
+    /// The screenshot picker's input, while it's open.
+    Picker(picker::Message),
     /// UDisks2's devices, mounts and ejects.
     Places(places::Event),
     /// A gadget's program ran.
@@ -171,6 +174,7 @@ impl Message {
             | Message::Power(_)
             | Message::Brightness(_)
             | Message::Screenshot(_)
+            | Message::Picker(_)
             | Message::Places(_) => Scope::None,
             // A gadget's own state: its popups follow (`update`).
             Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
@@ -220,6 +224,8 @@ struct AriaShell {
     exiter: Option<(Dialog, Exiter)>,
     /// The lock screen, from the `lock` command to the unlock.
     locker: Option<Locker>,
+    /// The screenshot picker, while it's open.
+    picker: Option<Picker>,
     /// Last pointer position reported by one of our surfaces.
     cursor: Option<(Id, Point)>,
     /// One layer surface per notification shown.
@@ -304,6 +310,7 @@ impl AriaShell {
             launcher: None,
             exiter: None,
             locker: None,
+            picker: None,
             cursor: None,
             toasts: Vec::new(),
             osd,
@@ -697,15 +704,44 @@ impl AriaShell {
                     .run(cmd.command(config.step, config.max_volume))
                     .map(Message::Audio)
             }
-            Message::Command(Command::Screenshot(cmd)) => self
-                .screenshot
-                .run(cmd, &self.outputs, &self.compositor)
-                .map(Message::Screenshot),
+            Message::Command(Command::Screenshot(cmd)) => {
+                if cmd.target == screenshot::Target::Pick && self.picker.is_some() {
+                    log::debug!("screenshot: the picker is open already");
+                    return Task::none();
+                }
+                self.screenshot
+                    .run(cmd, &self.outputs, &self.compositor)
+                    .map(Message::Screenshot)
+            }
             Message::Screenshot(event) => {
-                let (task, surfaces) =
-                    self.screenshot
-                        .apply(event, &self.outputs, &self.compositor);
-                Task::batch([task.map(Message::Screenshot), surface_tasks(surfaces)])
+                let (task, frozen) = self.screenshot.apply(event);
+                let task = task.map(Message::Screenshot);
+                let Some(frozen) = frozen else {
+                    return task;
+                };
+                let focused = self.compositor.focused_output.as_deref();
+                let (picker, surfaces) = Picker::open(frozen, &self.outputs, focused);
+                self.picker = Some(picker);
+                Task::batch([task, surface_tasks(surfaces)])
+            }
+            Message::Picker(m) => {
+                let Some(picker) = &mut self.picker else {
+                    return Task::none();
+                };
+                match picker.update(m) {
+                    picker::Action::Redraw(ids) => surface_tasks(Surfaces {
+                        redraw: ids,
+                        ..Surfaces::default()
+                    }),
+                    picker::Action::Cancel => {
+                        log::info!("screenshot: picking cancelled");
+                        self.close_picker()
+                    }
+                    picker::Action::Take { rect, destination } => {
+                        let cut = self.screenshot.cut(picker.shots.clone(), rect, destination);
+                        Task::batch([self.close_picker(), cut.map(Message::Screenshot)])
+                    }
+                }
             }
             Message::Command(Command::Brightness(cmd)) => {
                 if self.brightness.run(cmd) {
@@ -1445,6 +1481,23 @@ impl AriaShell {
         Task::batch(tasks)
     }
 
+    /// Take the screenshot picker down.
+    fn close_picker(&mut self) -> Task<Message> {
+        match self.picker.take() {
+            Some(picker) => surface_tasks(picker.close()),
+            None => Task::none(),
+        }
+    }
+
+    /// The outputs changed under the picker: it closes, its pictures
+    /// are of outputs no longer so.
+    fn picker_outputs_changed(&mut self) -> Task<Message> {
+        if self.picker.is_some() {
+            log::info!("screenshot: the outputs changed, picking cancelled");
+        }
+        self.close_picker()
+    }
+
     fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
         match event {
             ShellEvent::NewShell(info) if info.shell == ShellType::SessionLock => {
@@ -1516,7 +1569,7 @@ impl AriaShell {
                     .is_none()
                 {
                     self.brightness.outputs_changed();
-                    tasks.push(surface_tasks(self.screenshot.outputs_changed()));
+                    tasks.push(self.picker_outputs_changed());
                 }
                 tasks.extend([self.open_panels(&output), self.open_wallpaper(&output)]);
                 Task::batch(tasks)
@@ -1538,7 +1591,7 @@ impl AriaShell {
                 let moved = place(known) != place(&output);
                 *known = output;
                 if moved {
-                    surface_tasks(self.screenshot.outputs_changed())
+                    self.picker_outputs_changed()
                 } else {
                     Task::none()
                 }
@@ -1548,7 +1601,7 @@ impl AriaShell {
                 let mut closing = Task::none();
                 if self.outputs.remove(&gone).is_some() {
                     self.brightness.outputs_changed();
-                    closing = surface_tasks(self.screenshot.outputs_changed());
+                    closing = self.picker_outputs_changed();
                 }
                 let ids: Vec<Id> = self
                     .panels
@@ -1586,8 +1639,12 @@ impl AriaShell {
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
-                if self.screenshot.picker_surfaces().any(|(w, _)| w == id) {
-                    return surface_tasks(self.screenshot.surface_closed(id));
+                if let Some(picker) = &self.picker
+                    && picker.has_window(id)
+                {
+                    // Its output went: it was showing every output.
+                    log::info!("screenshot: a picker surface closed, picking cancelled");
+                    return self.close_picker();
                 }
                 if let Some(locker) = &mut self.locker
                     && locker.remove_window(id)
@@ -1678,8 +1735,12 @@ impl AriaShell {
             let output = locker.output_of(window).map_or("", |o| self.output_name(o));
             return locker.view(shared, output).map(Message::Locker);
         }
-        if let Some(picker) = self.screenshot.view(window, &self.theme, &self.locale) {
-            return picker.map(Message::Screenshot);
+        if let Some(view) = self
+            .picker
+            .as_ref()
+            .and_then(|p| p.view(window, &self.theme, &self.locale))
+        {
+            return view.map(Message::Picker);
         }
         if let Some((dialog, launcher)) = &self.launcher
             && dialog.is_window(window)
@@ -1834,7 +1895,12 @@ impl AriaShell {
             .chain(popups)
             .chain(launcher)
             .chain(exiter)
-            .chain(locker),
+            .chain(locker)
+            .chain(
+                self.picker
+                    .as_ref()
+                    .map(|_| Picker::subscription().map(Message::Picker)),
+            ),
         )
     }
 }

@@ -8,6 +8,7 @@ pub mod launcher;
 pub mod locker;
 pub mod osd;
 pub mod panel;
+pub mod picker;
 pub mod wallpaper;
 
 use iced::window::Id;

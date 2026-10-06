@@ -1,8 +1,9 @@
 # Outputs and the config changing under the shell, for every kind of
 # surface: an output going takes its panel, wallpaper and OSD with it
 # and leaves the other output's; coming back brings its panel and
-# wallpaper back, once; a config reload closes them all and opens each
-# again, once.
+# wallpaper back, once. The launcher on it closes with its grabs, the
+# screenshot picker on every output closes. A config reload closes them
+# all and opens each again, once.
 
 config=$ARIA_UI_OUT/config
 cp -r "$ARIA_UI_ROOT/tests/ui/config" "$config"
@@ -59,6 +60,18 @@ assert_surface popup "a click reaches the other output's bar"
 swaymsg output HEADLESS-2 enable > /dev/null
 inject "layout 3840 1080"
 wait_count panel HEADLESS-2 1 "the panel came back again"
+
+# The screenshot picker on every output: one going cancels it, its
+# pictures are of the outputs as they were.
+aria screenshot
+i=0
+while [ "$(count screenshot)" != 2 ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+assert_eq "$(count screenshot)" 2 "the picker on every output"
+swaymsg output HEADLESS-2 disable > /dev/null
+wait_count screenshot "" 0 "the picker closed on every output"
+assert_contains "$(aria debug screenshot)" "picker=closed"
+swaymsg output HEADLESS-2 enable > /dev/null
+wait_count panel HEADLESS-2 1 "the panel came back once more"
 
 # A config change: everything reopens (the OSD closes, its position may
 # have changed).

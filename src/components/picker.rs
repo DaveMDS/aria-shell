@@ -1,4 +1,5 @@
-//! The picker: what `aria-shell screenshot` opens. The outputs frozen,
+//! The screenshot picker: what `aria-shell screenshot` opens. The
+//! outputs frozen by the screenshot service ([`Frozen`]),
 //! one overlay surface each showing its own picture, and on them a
 //! selection to make: a click picks the window under the pointer (or
 //! the output, on bare desktop), a drag draws an area; either is then
@@ -12,7 +13,12 @@
 //! routes the pointer (a drag keeps sending to the surface it started
 //! on, past its edges) the selection follows. A selection stays on the
 //! output it started on.
+//!
+//! The daemon owns it while it's open, opens and closes the surfaces it
+//! asks for ([`Surfaces`]) and hands what it takes back to the service
+//! (`Screenshot::cut`).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use iced::keyboard::{self, key::Named};
@@ -25,11 +31,11 @@ use iced::{
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
-use iced_wayland_subscriber::OutputId;
+use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use super::Destination;
-use super::pixels::{Rect, Shot};
+use crate::components::Surfaces;
 use crate::locale::Locale;
+use crate::services::screenshot::{Destination, Frozen, Rect, Shot};
 use crate::theme::{self, Node, Theme};
 
 /// How near an edge, in logical pixels, a press grabs it.
@@ -57,9 +63,9 @@ pub struct Picker {
 }
 
 /// One output's surface.
-pub struct Surface {
-    pub window: Id,
-    pub output: OutputId,
+struct Surface {
+    window: Id,
+    output: OutputId,
     name: String,
     rect: Rect,
     picture: image::Handle,
@@ -96,23 +102,6 @@ struct Edges {
     right: bool,
     top: bool,
     bottom: bool,
-}
-
-/// What the outputs to open the picker on show and are called.
-pub struct Output {
-    pub id: OutputId,
-    pub global: u32,
-    pub name: String,
-    pub focused: bool,
-}
-
-/// What the surfaces of a picker take as given.
-pub struct Setup {
-    pub shots: Arc<Vec<Shot>>,
-    pub windows: Vec<Rect>,
-    pub destination: Destination,
-    pub can_copy: bool,
-    pub can_edit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -155,24 +144,29 @@ struct Look {
 }
 
 impl Picker {
-    /// The picker and its surfaces, one per output with a shot.
-    pub fn open(setup: Setup, outputs: &[Output]) -> (Self, Vec<(Id, NewLayerShellSettings)>) {
+    /// The picker and its surfaces, one per output with a shot;
+    /// `focused` (the compositor's focused output) gets the toolbar.
+    pub fn open(
+        frozen: Frozen,
+        outputs: &BTreeMap<OutputId, OutputInfo>,
+        focused: Option<&str>,
+    ) -> (Self, Surfaces) {
         let mut surfaces = Vec::new();
         let mut settings = Vec::new();
-        let mut focused = 0;
-        for shot in setup.shots.iter() {
-            let Some(output) = outputs.iter().find(|o| o.global == shot.output) else {
+        let mut focused_surface = 0;
+        for shot in frozen.shots.iter() {
+            let Some(output) = outputs.values().find(|o| o.id == shot.output) else {
                 continue;
             };
-            if output.focused {
-                focused = surfaces.len();
+            if output.name.is_some() && output.name.as_deref() == focused {
+                focused_surface = surfaces.len();
             }
             let window = Id::unique();
             let (w, h) = shot.image.dimensions();
             surfaces.push(Surface {
                 window,
-                output: output.id.clone(),
-                name: output.name.clone(),
+                output: OutputId::from(output),
+                name: output.name.clone().unwrap_or_default(),
                 rect: shot.rect,
                 picture: image::Handle::from_rgba(w, h, shot.image.as_raw().clone()),
             });
@@ -190,29 +184,43 @@ impl Picker {
                     // click on one without would take the keyboard
                     // away (Sway focuses that output's workspace).
                     keyboard_interactivity: KeyboardInteractivity::OnDemand,
-                    output_option: OutputOption::GlobalName(output.global),
+                    output_option: OutputOption::GlobalName(output.id),
                     namespace: Some("aria-screenshot".to_owned()),
                     ..Default::default()
                 },
             ));
         }
+        log::info!("screenshot: picking on {} output(s)", settings.len());
         let picker = Self {
             surfaces,
-            shots: setup.shots,
-            windows: setup.windows,
+            shots: frozen.shots,
+            windows: frozen.windows,
             selection: None,
             drag: None,
             cursor: None,
-            focused,
-            destination: setup.destination,
-            can_copy: setup.can_copy,
-            can_edit: setup.can_edit,
+            focused: focused_surface,
+            destination: frozen.destination,
+            can_copy: frozen.can_copy,
+            can_edit: frozen.can_edit,
         };
-        (picker, settings)
+        let open = Surfaces {
+            open: settings,
+            ..Surfaces::default()
+        };
+        (picker, open)
     }
 
-    pub fn surfaces(&self) -> &[Surface] {
-        &self.surfaces
+    /// Take it down: every surface goes.
+    pub fn close(&self) -> Surfaces {
+        Surfaces {
+            close: self.surfaces.iter().map(|s| s.window).collect(),
+            ..Surfaces::default()
+        }
+    }
+
+    /// The surfaces, with their output.
+    pub fn windows(&self) -> impl Iterator<Item = (Id, OutputId)> + '_ {
+        self.surfaces.iter().map(|s| (s.window, s.output.clone()))
     }
 
     pub fn has_window(&self, window: Id) -> bool {

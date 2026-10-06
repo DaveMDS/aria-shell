@@ -50,7 +50,11 @@ impl AriaShell {
                 Task::none()
             }
             DebugCommand::Screenshot => {
-                reply.send(self.screenshot.describe());
+                let picker = match &self.picker {
+                    Some(p) => p.describe(),
+                    None => "picker=closed".to_owned(),
+                };
+                reply.send(self.screenshot.describe(&picker));
                 Task::none()
             }
             DebugCommand::Places => {
@@ -131,7 +135,7 @@ impl AriaShell {
                 list.push((id, "osd", output, self.osd.rect(&self.theme, out, bars)));
             }
         }
-        for (id, output) in self.screenshot.picker_surfaces() {
+        for (id, output) in self.picker.iter().flat_map(|p| p.windows()) {
             if let Some(out) = self.output_rect(output) {
                 list.push((id, "screenshot", output, out));
             }

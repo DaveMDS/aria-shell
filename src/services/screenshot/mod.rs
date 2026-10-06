@@ -1,5 +1,6 @@
 //! Screenshots: the active window, one output, every output, or what
-//! the picker selects (picker.rs: a window, an output, an area), saved
+//! the picker selects (`components::picker`: a window, an output, an
+//! area), saved
 //! as PNG in `[Screenshot] directory` (with `--edit`, then opened in
 //! `[Screenshot] editor`) or, with `--clipboard`, only copied to the
 //! clipboard. `aria-shell screenshot [window | output | all]`.
@@ -9,11 +10,11 @@
 //! frame per output the picture touches; the picture is a rectangle of
 //! the global logical space cut out of them (pixels.rs), at the largest
 //! scale of those outputs. The windows' rectangles are asked of the
-//! compositor at the time ([`Compositor::shown_windows`]). The picker
-//! shows every output frozen: captured first, its surfaces opened by
-//! the daemon after ([`Surfaces`]), the picture cut from those frames.
+//! compositor at the time ([`Compositor::shown_windows`]). For the
+//! picker every output is frozen: captured first and handed to the
+//! daemon ([`Frozen`]), which opens the picker on them; the picture is
+//! cut from those frames ([`Screenshot::cut`]).
 
-mod picker;
 mod pixels;
 mod wayland;
 
@@ -21,18 +22,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use iced::window::Id;
-use iced::{Element, Subscription, Task};
+use iced::{Subscription, Task};
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
-use crate::components::Surfaces;
 use crate::config::{Config, RawSection, Section};
-use crate::locale::Locale;
 use crate::process;
 use crate::services::compositor::{Compositor, WindowGeometry};
-use crate::theme::Theme;
-use picker::Picker;
-use pixels::{Frames, RawFrame, Rect, Shot};
+use pixels::{Frames, RawFrame};
+pub use pixels::{Rect, Shot};
 use wayland::{Handle, Request, Support};
 
 /// `[Screenshot]` section.
@@ -117,7 +114,6 @@ pub enum Event {
         windows: Vec<WindowGeometry>,
         destination: Destination,
     },
-    Picker(picker::Message),
     Taken {
         destination: Destination,
         result: Result<(Picture, Png), String>,
@@ -142,6 +138,18 @@ impl std::fmt::Debug for Shots {
     }
 }
 
+/// Every output frozen, for the picker: what it shows and what its
+/// selection can be taken to.
+pub struct Frozen {
+    pub shots: Arc<Vec<Shot>>,
+    /// The windows on screen, topmost first.
+    pub windows: Vec<Rect>,
+    /// What Enter does.
+    pub destination: Destination,
+    pub can_copy: bool,
+    pub can_edit: bool,
+}
+
 /// A picture encoded, for the clipboard.
 #[derive(Clone)]
 pub struct Png(Arc<Vec<u8>>);
@@ -160,7 +168,6 @@ pub struct Screenshot {
     next_job: u64,
     /// Captures under way.
     jobs: HashMap<u64, Job>,
-    picker: Option<Picker>,
     last: Option<Picture>,
 }
 
@@ -194,7 +201,6 @@ impl Screenshot {
             },
             next_job: 0,
             jobs: HashMap::new(),
-            picker: None,
             last: None,
         }
     }
@@ -205,11 +211,7 @@ impl Screenshot {
     }
 
     pub fn subscription(&self) -> Subscription<Event> {
-        let wayland = Subscription::run(wayland::events).map(Event::Wayland);
-        match self.picker {
-            Some(_) => Subscription::batch([wayland, Picker::subscription().map(Event::Picker)]),
-            None => wayland,
-        }
+        Subscription::run(wayland::events).map(Event::Wayland)
     }
 
     pub fn run(
@@ -223,7 +225,7 @@ impl Screenshot {
             return Task::none();
         }
         let placed: Vec<(u32, Rect)> = outputs.values().filter_map(place).collect();
-        let picking = self.picker.is_some() || self.jobs.values().any(|j| j.pick.is_some());
+        let picking = self.jobs.values().any(|j| j.pick.is_some());
         let rect = match &command.target {
             Target::Pick if picking => {
                 log::debug!("screenshot: the picker is open already");
@@ -300,13 +302,9 @@ impl Screenshot {
         handle.send(Request::Capture { job, outputs });
     }
 
-    pub fn apply(
-        &mut self,
-        event: Event,
-        outputs: &BTreeMap<OutputId, OutputInfo>,
-        compositor: &Compositor,
-    ) -> (Task<Event>, Surfaces) {
-        let mut surfaces = Surfaces::default();
+    /// Carry on with an event; every output frozen for the picker, when
+    /// that's what it brought.
+    pub fn apply(&mut self, event: Event) -> (Task<Event>, Option<Frozen>) {
         match event {
             Event::Wayland(wayland::Event::Connected(handle, support)) => {
                 self.handle = Some(handle);
@@ -314,11 +312,11 @@ impl Screenshot {
             }
             Event::Windows(job, windows) => {
                 let Some(entry) = self.jobs.get_mut(&job) else {
-                    return (Task::none(), surfaces);
+                    return (Task::none(), None);
                 };
                 if let Some(pick) = &mut entry.pick {
                     pick.windows = Some(windows);
-                    return (self.freeze(job), surfaces);
+                    return (self.freeze(job), None);
                 }
                 match windows.iter().find(|w| w.active) {
                     Some(w) => self.capture(job, Rect::new(w.x, w.y, w.width, w.height)),
@@ -334,12 +332,12 @@ impl Screenshot {
                     Err(e) => {
                         log::warn!("screenshot: {e}");
                         self.jobs.remove(&job);
-                        return (Task::none(), surfaces);
+                        return (Task::none(), None);
                     }
                 };
                 if let Some(pick) = self.jobs.get_mut(&job).and_then(|j| j.pick.as_mut()) {
                     pick.frames = Some(frames);
-                    return (self.freeze(job), surfaces);
+                    return (self.freeze(job), None);
                 }
                 let Some(Job {
                     rect: Some(rect),
@@ -348,7 +346,7 @@ impl Screenshot {
                     ..
                 }) = self.jobs.remove(&job)
                 else {
-                    return (Task::none(), surfaces);
+                    return (Task::none(), None);
                 };
                 let directory = self.directory_for(destination);
                 let task = Task::perform(
@@ -364,23 +362,14 @@ impl Screenshot {
                         result,
                     },
                 );
-                return (task, surfaces);
+                return (task, None);
             }
             Event::Frozen {
                 shots,
                 windows,
                 destination,
             } => {
-                let outputs: Vec<picker::Output> = outputs
-                    .values()
-                    .map(|info| picker::Output {
-                        id: OutputId::from(info),
-                        global: info.id,
-                        name: info.name.clone().unwrap_or_default(),
-                        focused: info.name.is_some() && info.name == compositor.focused_output,
-                    })
-                    .collect();
-                let setup = picker::Setup {
+                let frozen = Frozen {
                     shots: shots.0,
                     windows: windows
                         .iter()
@@ -390,41 +379,7 @@ impl Screenshot {
                     can_copy: self.support.clipboard,
                     can_edit: self.config.editor.is_some(),
                 };
-                let (picker, open) = Picker::open(setup, &outputs);
-                log::info!("screenshot: picking on {} output(s)", open.len());
-                surfaces.open = open;
-                self.picker = Some(picker);
-            }
-            Event::Picker(message) => {
-                let Some(picker) = &mut self.picker else {
-                    return (Task::none(), surfaces);
-                };
-                match picker.update(message) {
-                    picker::Action::Redraw(ids) => surfaces.redraw = ids,
-                    picker::Action::Cancel => {
-                        log::info!("screenshot: picking cancelled");
-                        surfaces = self.close_picker();
-                    }
-                    picker::Action::Take { rect, destination } => {
-                        let shots = picker.shots.clone();
-                        surfaces = self.close_picker();
-                        let directory = self.directory_for(destination);
-                        let task = Task::perform(
-                            async move {
-                                tokio::task::spawn_blocking(move || {
-                                    picture(&shots, rect, directory)
-                                })
-                                .await
-                                .map_err(|e| e.to_string())?
-                            },
-                            move |result| Event::Taken {
-                                destination,
-                                result,
-                            },
-                        );
-                        return (task, surfaces);
-                    }
-                }
+                return (Task::none(), Some(frozen));
             }
             Event::Taken {
                 destination,
@@ -457,7 +412,24 @@ impl Screenshot {
             }
             Event::Taken { result: Err(e), .. } => log::warn!("screenshot: {e}"),
         }
-        (Task::none(), surfaces)
+        (Task::none(), None)
+    }
+
+    /// Cut `rect` out of the frozen outputs `shots` (what the picker
+    /// took), the `destination` way.
+    pub fn cut(&self, shots: Arc<Vec<Shot>>, rect: Rect, destination: Destination) -> Task<Event> {
+        let directory = self.directory_for(destination);
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || picture(&shots, rect, directory))
+                    .await
+                    .map_err(|e| e.to_string())?
+            },
+            move |result| Event::Taken {
+                destination,
+                result,
+            },
+        )
     }
 
     fn directory_for(&self, destination: Destination) -> Option<PathBuf> {
@@ -505,54 +477,6 @@ impl Screenshot {
         )
     }
 
-    fn close_picker(&mut self) -> Surfaces {
-        Surfaces {
-            close: self
-                .picker
-                .take()
-                .map(|p| p.surfaces().iter().map(|s| s.window).collect())
-                .unwrap_or_default(),
-            ..Surfaces::default()
-        }
-    }
-
-    /// One of our surfaces went away (its output did): the picker
-    /// closes, it was showing every output.
-    pub fn surface_closed(&mut self, window: Id) -> Surfaces {
-        match &self.picker {
-            Some(p) if p.has_window(window) => {
-                log::info!("screenshot: a picker surface closed, picking cancelled");
-                self.close_picker()
-            }
-            _ => Surfaces::default(),
-        }
-    }
-
-    /// The outputs changed under the picker: it closes.
-    pub fn outputs_changed(&mut self) -> Surfaces {
-        if self.picker.is_some() {
-            log::info!("screenshot: the outputs changed, picking cancelled");
-        }
-        self.close_picker()
-    }
-
-    /// The picker's surfaces: window and output.
-    pub fn picker_surfaces(&self) -> impl Iterator<Item = (Id, OutputId)> + '_ {
-        self.picker
-            .iter()
-            .flat_map(|p| p.surfaces().iter().map(|s| (s.window, s.output.clone())))
-    }
-
-    pub fn view<'a>(
-        &'a self,
-        window: Id,
-        theme: &'a Theme,
-        locale: &'a Locale,
-    ) -> Option<Element<'a, Event>> {
-        let view = self.picker.as_ref()?.view(window, theme, locale)?;
-        Some(view.map(Event::Picker))
-    }
-
     /// Open the picture in `[Screenshot] editor`.
     fn edit(&self, path: &Path) {
         let Some(editor) = &self.config.editor else {
@@ -565,8 +489,8 @@ impl Screenshot {
         process::run_argv(&process::on_file(editor, path));
     }
 
-    /// For `aria-shell debug screenshot`.
-    pub fn describe(&self) -> String {
+    /// For `aria-shell debug screenshot`, with the picker's state.
+    pub fn describe(&self, picker: &str) -> String {
         let (capture, clipboard) = match (&self.handle, self.support) {
             (None, _) => ("connecting", "connecting"),
             (Some(_), s) => (
@@ -591,10 +515,6 @@ impl Screenshot {
                 format!("{place} {}x{}", p.width, p.height)
             }
             None => "none".to_owned(),
-        };
-        let picker = match &self.picker {
-            Some(p) => p.describe(),
-            None => "picker=closed".to_owned(),
         };
         let editor = self.config.editor.as_deref().unwrap_or("none");
         format!("capture={capture}; clipboard={clipboard}; editor={editor}; {picker}; last={last}")

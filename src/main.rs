@@ -16,6 +16,7 @@ mod network;
 mod notifications;
 mod osd;
 mod panel;
+mod places;
 mod power;
 mod process;
 mod screenshot;
@@ -61,6 +62,7 @@ use network::Network;
 use notifications::{Notifications, toast};
 use osd::Osd;
 use panel::{Action, Panel, PanelConfig};
+use places::Places;
 use power::Power;
 use screenshot::Screenshot;
 use sysmon::SysMon;
@@ -211,6 +213,7 @@ struct AriaShell {
     power: Power,
     brightness: Brightness,
     screenshot: Screenshot,
+    places: Places,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -310,6 +313,7 @@ impl AriaShell {
             power,
             brightness,
             screenshot,
+            places: Places::default(),
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -340,6 +344,7 @@ impl AriaShell {
             idle: &self.idle,
             power: &self.power,
             brightness: &self.brightness,
+            places: &self.places,
             scripts: &self.scripts,
         }
     }
@@ -1236,6 +1241,10 @@ impl AriaShell {
                 } else {
                     Task::none()
                 }
+            }
+            Action::Places(cmd) => {
+                self.places.run(cmd, self.general.file_manager.as_deref());
+                Task::none()
             }
             Action::Theme(cmd) => {
                 match cmd {

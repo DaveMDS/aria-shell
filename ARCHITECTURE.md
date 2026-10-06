@@ -314,6 +314,19 @@ ScreenshotGadget (gadgets/screenshot.rs)  impl Gadget: an icon button; left clic
   Message::Pick | OpenMenu | Menu  -> Action::Screenshot (with the popup's close: the daemon waits 150 ms
                             before capturing, so the menu is off the screen)
 
+Places     (places/)        daemon-owned places of a file manager's sidebar: `places()` (the home, the XDG
+                            folders of `user-dirs.dirs` that exist, the trash), `bookmarks()` (GTK's
+                            `gtk-3.0/bookmarks`, then KDE's `user-places.xbel` without Dolphin's system,
+                            hidden and device entries; no duplicates, no local folder that's gone; a
+                            `file://` one a `Target::Path`, any other scheme a `Target::Uri`), `trash_full()`
+  run(Command, file_manager) Refresh (everything read again: a few small files, no watcher) | Open(target):
+                            `[general] file_manager` on the path or the URI (`trash:///`)
+
+PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the popup: a header and a button
+                            per place for each section of `[Places] show` (required), in its order, a
+                            bookmark of a listed place left out; sized from the widest row
+  Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
+
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is

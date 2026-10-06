@@ -27,6 +27,7 @@ use crate::gadgets::clock::{self, Clock};
 use crate::gadgets::custom::{self, Custom};
 use crate::gadgets::network::{self, NetworkGadget};
 use crate::gadgets::notifications::{self, NotificationsGadget};
+use crate::gadgets::places::{self, PlacesGadget};
 use crate::gadgets::power::{self, PowerGadget};
 use crate::gadgets::screenshot::{self, ScreenshotGadget};
 use crate::gadgets::system_monitor::{self, SystemMonitor};
@@ -51,6 +52,7 @@ pub struct Shared<'a> {
     pub idle: &'a crate::idle::Idle,
     pub power: &'a crate::power::Power,
     pub brightness: &'a crate::brightness::Brightness,
+    pub places: &'a crate::places::Places,
     pub scripts: &'a crate::scripts::Scripts,
 }
 
@@ -91,6 +93,7 @@ pub enum Action<M> {
     /// Take a screenshot; the daemon waits for the gadget's popup to
     /// be gone first.
     Screenshot(crate::screenshot::Command),
+    Places(crate::places::Command),
     /// Open a popup surface hanging off the widget tagged `anchor`,
     /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
     /// hand, they call [`Popup::toggle`].
@@ -204,6 +207,7 @@ impl<M: Send + 'static> Action<M> {
             Self::Power(cmd) => Action::Power(cmd),
             Self::Brightness(cmd) => Action::Brightness(cmd),
             Self::Screenshot(cmd) => Action::Screenshot(cmd),
+            Self::Places(cmd) => Action::Places(cmd),
             Self::OpenPopup { anchor } => Action::OpenPopup { anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -296,6 +300,7 @@ pub enum AnyGadget {
     Power(PowerGadget),
     Brightness(BrightnessGadget),
     Screenshot(ScreenshotGadget),
+    Places(PlacesGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -312,6 +317,7 @@ pub enum Message {
     Power(power::Message),
     Brightness(brightness::Message),
     Screenshot(screenshot::Message),
+    Places(places::Message),
 }
 
 impl AnyGadget {
@@ -384,6 +390,16 @@ impl AnyGadget {
             crate::screenshot::ScreenshotConfig::NAME => Some(Self::Screenshot(
                 ScreenshotGadget::new(config.section(Some(name)), output),
             )),
+            crate::places::PlacesConfig::NAME => {
+                if config.raw_section(name).get("show").is_none() {
+                    log::warn!("[{name}] needs `show = places bookmarks` (the sections, in order)");
+                    return None;
+                }
+                Some(Self::Places(PlacesGadget::new(
+                    config.section(Some(name)),
+                    output,
+                )))
+            }
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -406,6 +422,7 @@ impl AnyGadget {
             Self::Power(_) => "power",
             Self::Brightness(_) => "brightness",
             Self::Screenshot(_) => "screenshot",
+            Self::Places(_) => "places",
         }
     }
 
@@ -427,6 +444,7 @@ impl AnyGadget {
             (Self::Power(g), Message::Power(m)) => g.update(m).map(Message::Power),
             (Self::Brightness(g), Message::Brightness(m)) => g.update(m).map(Message::Brightness),
             (Self::Screenshot(g), Message::Screenshot(m)) => g.update(m).map(Message::Screenshot),
+            (Self::Places(g), Message::Places(m)) => g.update(m).map(Message::Places),
             _ => Action::None,
         }
     }
@@ -445,6 +463,7 @@ impl AnyGadget {
             Self::Power(g) => g.view(ctx).map(Message::Power),
             Self::Brightness(g) => g.view(ctx).map(Message::Brightness),
             Self::Screenshot(g) => g.view(ctx).map(Message::Screenshot),
+            Self::Places(g) => g.view(ctx).map(Message::Places),
         }
     }
 
@@ -462,6 +481,7 @@ impl AnyGadget {
             Self::Power(g) => g.popup_view(ctx).map(Message::Power),
             Self::Brightness(g) => g.popup_view(ctx).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_view(ctx).map(Message::Screenshot),
+            Self::Places(g) => g.popup_view(ctx).map(Message::Places),
         }
     }
 
@@ -479,6 +499,7 @@ impl AnyGadget {
             Self::Power(g) => g.popup_size(ctx),
             Self::Brightness(g) => g.popup_size(ctx),
             Self::Screenshot(g) => g.popup_size(ctx),
+            Self::Places(g) => g.popup_size(ctx),
         }
     }
 
@@ -496,6 +517,7 @@ impl AnyGadget {
             Self::Power(g) => g.popup(),
             Self::Brightness(g) => g.popup(),
             Self::Screenshot(g) => g.popup(),
+            Self::Places(g) => g.popup(),
         }
     }
 
@@ -513,6 +535,7 @@ impl AnyGadget {
             Self::Power(g) => g.popup_keyboard(),
             Self::Brightness(g) => g.popup_keyboard(),
             Self::Screenshot(g) => g.popup_keyboard(),
+            Self::Places(g) => g.popup_keyboard(),
         }
     }
 
@@ -530,6 +553,7 @@ impl AnyGadget {
             Self::Power(g) => g.popup_key(event).map(Message::Power),
             Self::Brightness(g) => g.popup_key(event).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_key(event).map(Message::Screenshot),
+            Self::Places(g) => g.popup_key(event).map(Message::Places),
         }
     }
 
@@ -556,6 +580,7 @@ impl AnyGadget {
             Self::Power(g) => <PowerGadget as Gadget>::popup_closed(g),
             Self::Brightness(g) => <BrightnessGadget as Gadget>::popup_closed(g),
             Self::Screenshot(g) => <ScreenshotGadget as Gadget>::popup_closed(g),
+            Self::Places(g) => <PlacesGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -573,6 +598,7 @@ impl AnyGadget {
             Self::Power(g) => g.icon_names(),
             Self::Brightness(g) => g.icon_names(),
             Self::Screenshot(g) => g.icon_names(),
+            Self::Places(g) => g.icon_names(),
         }
     }
 
@@ -590,6 +616,7 @@ impl AnyGadget {
             Self::Power(g) => g.script(),
             Self::Brightness(g) => g.script(),
             Self::Screenshot(g) => g.script(),
+            Self::Places(g) => g.script(),
         }
     }
 
@@ -607,6 +634,7 @@ impl AnyGadget {
             Self::Power(g) => g.subscription().map(Message::Power),
             Self::Brightness(g) => g.subscription().map(Message::Brightness),
             Self::Screenshot(g) => g.subscription().map(Message::Screenshot),
+            Self::Places(g) => g.subscription().map(Message::Places),
         }
     }
 }

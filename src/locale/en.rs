@@ -106,6 +106,12 @@ pub const CATALOGUE: Catalogue = &[
     ("screenshot.save", "Save"),
     ("screenshot.window", "Active window"),
     ("screenshot.screen", "This screen"),
+    // places
+    ("places.places", "Places"),
+    ("places.bookmarks", "Bookmarks"),
+    ("places.home", "Home"),
+    ("places.trash", "Trash"),
+    ("places.empty", "No places"),
     // themes
     ("themes.light", "Light"),
     ("themes.dark", "Dark"),

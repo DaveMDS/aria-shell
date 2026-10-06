@@ -176,6 +176,19 @@
  *   popup > gadget.screenshot
  *   ╰─ menu                                                   the active window, this screen, all screens
  *
+ *   gadget.places
+ *   ╰─ button                                                 left click opens the popup
+ *      ├─ icon                                                `[Places] icon`, drawn at the node's `height`
+ *      ╰─ label                                               `[Places] label`, when set
+ *   popup > gadget.places
+ *   ╰─ list                                                   a column (`gap`); `width` sizes the popup, else
+ *      │                                                      the widest row does
+ *      ├─ header.places | header.bookmarks ╰─ title           section titles, in `[Places] show` order
+ *      ├─ item.home|.desktop|.documents|.download|.music|.pictures|.videos|.trash[.full]|.folder|.remote
+ *      │  ├─ icon                                             a button per place: a click opens it in
+ *      │  ╰─ label                                            `[general] file_manager`
+ *      ╰─ empty                                               "No places"
+ *
  *   gadget.power                                              a row (`gap` between the buttons); middle click holds
  *   │                                                         idle / lets it go, right click runs `settings_command`
  *   ├─ button.status[.charging|.discharging|.full|.not-charging|.empty][.low|.critical]
@@ -815,6 +828,44 @@ gadget.screenshot > button:hover {
 }
 gadget.screenshot icon {
   height: 16px;
+}
+
+gadget.places > button {
+  padding: 0 2px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget.places > button:hover {
+  background: var(--aria-border);
+}
+gadget.places > button icon {
+  height: 16px;
+}
+gadget.places list {
+  padding: 4px;
+  gap: 2px;
+}
+gadget.places header {
+  padding: 6px 8px 2px 8px;
+}
+gadget.places header title {
+  font-weight: bold;
+  color: var(--aria-muted);
+}
+gadget.places item {
+  padding: 4px 10px;
+  gap: 8px;
+  border-radius: 4px;
+}
+gadget.places item:hover {
+  background: var(--aria-border);
+}
+gadget.places item icon {
+  height: 16px;
+}
+gadget.places empty {
+  padding: 8px;
+  color: var(--aria-muted);
 }
 
 gadget.power {

@@ -67,12 +67,12 @@ players, ...) is owned by the daemon (`Compositor` in `compositor/`,
 `Icons` in `icons/`, `Tray` in `tray/`, `Scripts` in `scripts.rs`,
 `Audio` in `audio/`, `Network` in `network/`, `Idle` in `idle/`,
 `Power` in `power/`, `Brightness` in `brightness/`, `Screenshot` in
-`screenshot/`), reaches gadgets read-only through
+`screenshot/`, `Places` in `places/`), reaches gadgets read-only through
 `gadget::Context` in `view`, and is changed by returning
 `gadget::Action::Compositor(cmd)` / `Action::Tray(cmd)` /
 `Action::Script(cmd)` / `Action::Audio(cmd)` / `Action::Network(cmd)` /
 `Action::Idle(cmd)` / `Action::Power(cmd)` / `Action::Brightness(cmd)` /
-`Action::Screenshot(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Screenshot(cmd)` / `Action::Places(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like

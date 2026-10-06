@@ -28,3 +28,6 @@ libpulse-binding = "2.30.1"
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# the KDE places file (user-places.xbel), and the bookmarks' file:// URIs
+roxmltree = "0.20"
+percent-encoding = "2"

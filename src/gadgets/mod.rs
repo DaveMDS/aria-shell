@@ -4,6 +4,7 @@ pub mod clock;
 pub mod custom;
 pub mod network;
 pub mod notifications;
+pub mod places;
 pub mod power;
 pub mod screenshot;
 pub mod system_monitor;

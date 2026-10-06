@@ -7,6 +7,7 @@
 //! in between, so no `$VAR`, pipes or redirections unless the user
 //! writes `sh -c '...'` in the config.
 
+use std::ffi::OsStr;
 use std::io;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -138,10 +139,16 @@ pub fn filled(line: &str, placeholder: &str, args: &[String], absent: &[&str]) -
     }
 }
 
-/// A command line run on `path` (an editor, a file manager): the path
-/// in place of every `%f`, last when there's none.
-pub fn on_file(line: &str, path: &Path) -> Vec<String> {
-    filled(line, "%f", &[path.to_string_lossy().into_owned()], &[])
+/// A command line run on `file` (an editor, a file manager): its path,
+/// or a URI the program understands (`trash:///`), in place of every
+/// `%f`, last when there's none.
+pub fn on_file(line: &str, file: impl AsRef<OsStr>) -> Vec<String> {
+    filled(
+        line,
+        "%f",
+        &[file.as_ref().to_string_lossy().into_owned()],
+        &[],
+    )
 }
 
 /// The terminals `[general] terminal = auto` tries, in order, after

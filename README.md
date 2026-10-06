@@ -52,7 +52,8 @@ bar per monitor (or per `[panel:*]` section):
 | `apps`          | 🔲 | fixed list of apps to run (like a dock)                                         |
 | `home`          | 🔲 | a menu (cinnamon style) with app categories, search, favorites and sys controls |
 | `file`          | 🔲 | file browser in a tree of menus?                                                |
-| `places`        | 🔲 | menu with usefully locations, like home, favorites, devices                     |
+| `Places`        | ✅ | A file manager's sidebar: the home, the XDG folders, the trash, GTK's and KDE's bookmarks, opened in `[general] file_manager` |
+| `Places`        | 🔲 | Devices (mount, unmount, eject, disk usage, through UDisks2) and network shares  |
 | `Brightness`    | 🔲 | Night light (colour temperature), a monitor's own buttons seen without reopening the popup |
 
 - ✅ Multi-monitor, hot-plug aware

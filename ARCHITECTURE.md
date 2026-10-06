@@ -264,7 +264,7 @@ Power      (power/)         daemon-owned UPower and power profiles: `battery()` 
                             every signal under /org/freedesktop/UPower (the profiles' path is under it), re-read
                             200 ms after the last one -> `Event::UPower` / `Event::Profiles` (`None`: not running)
   apply(Event) -> (changed, Option<Low>, Task)   a battery newly at UPower's low / critical warning is a `Low`
-                            the daemon words (`notify_low`) and sends over the session bus as any app would
+                            `notify_low(low, locale)` words and sends over the session bus as any app would
                             (`replaces_id`: one notification, closed once the warning is gone)
   run(Command) -> Task      SetProfile -> the `ActiveProfile` property
 

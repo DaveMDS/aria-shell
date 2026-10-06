@@ -582,7 +582,7 @@ impl AriaShell {
                 self.idle.set_on_battery(self.power.on_battery());
                 let mut tasks = vec![follow_up.map(Message::Power)];
                 if let Some(low) = low {
-                    tasks.push(self.notify_low(low));
+                    tasks.push(self.power.notify_low(low, &self.locale).map(Message::Power));
                 }
                 if changed {
                     tasks.push(self.observe_osd());
@@ -598,7 +598,7 @@ impl AriaShell {
                     .apply(event, self.general.file_manager.as_deref());
                 let mut tasks = Vec::new();
                 if let Some(failure) = failure {
-                    tasks.push(self.notify_places(failure));
+                    tasks.push(failure.notify(&self.locale).map(Message::Places));
                 }
                 if changed {
                     tasks.push(self.sync_popups());
@@ -1192,59 +1192,6 @@ impl AriaShell {
                     .map(Message::Compositor)
             }
         }
-    }
-
-    /// The battery got low: say so, in the user's language.
-    fn notify_low(&self, low: power::Low) -> Task<Message> {
-        let critical = low.warning == power::Warning::Critical;
-        let summary = self.locale.tr(if critical {
-            "power.critical_title"
-        } else {
-            "power.low_title"
-        });
-        let percent = format!("{:.0}", low.percentage);
-        let body = if low.time_to_empty > 0 {
-            self.locale.fmt(
-                "power.low_body_time",
-                &[
-                    ("n", &percent),
-                    ("time", &power::duration(&self.locale, low.time_to_empty)),
-                ],
-            )
-        } else {
-            self.locale.fmt("power.low_body", &[("n", &percent)])
-        };
-        self.power
-            .notify(summary.to_owned(), body, critical)
-            .map(Message::Power)
-    }
-
-    /// A device that wouldn't mount or eject: a notification with
-    /// UDisks2's reason (polkit's refusal worded: no agent to ask for
-    /// the password, usually).
-    fn notify_places(&self, failure: places::Failure) -> Task<Message> {
-        let (name, icon) = match &failure.volume {
-            places::Volume::Device(d) => (d.name(&self.locale), "drive-harddisk-symbolic"),
-            places::Volume::Mount(s) => (s.label.clone(), "folder-remote-symbolic"),
-        };
-        let key = match (&failure.volume, failure.eject) {
-            (_, false) => "places.mount_failed",
-            (places::Volume::Device(_), true) => "places.eject_failed",
-            (places::Volume::Mount(_), true) => "places.unmount_failed",
-        };
-        let summary = self.locale.fmt(key, &[("name", &name)]);
-        let body = if failure.not_authorized {
-            self.locale.tr("places.not_authorized").to_owned()
-        } else {
-            failure.message
-        };
-        let icon = icon.to_owned();
-        Task::future(async move {
-            if let Err(e) = notifications::client::notify(0, icon, summary, body, false).await {
-                log::warn!("places: can't notify: {e}");
-            }
-        })
-        .discard()
     }
 
     /// `aria-shell lock`: ask the compositor for the session lock; the

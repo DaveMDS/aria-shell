@@ -223,7 +223,7 @@ pub struct Power {
 }
 
 /// What [`Power::apply`] found worth telling: the battery reached a
-/// warning level (the daemon words the notification).
+/// warning level ([`Power::notify_low`] says so).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Low {
     pub warning: Warning,
@@ -326,8 +326,29 @@ impl Power {
         (notify.then_some(low), Task::none())
     }
 
-    /// Send the low battery notification, replacing the previous one.
-    pub fn notify(&self, summary: String, body: String, critical: bool) -> Task<Event> {
+    /// The battery got low: say so in a notification, in the user's
+    /// language, replacing the previous one.
+    pub fn notify_low(&self, low: Low, locale: &Locale) -> Task<Event> {
+        let critical = low.warning == Warning::Critical;
+        let summary = locale
+            .tr(if critical {
+                "power.critical_title"
+            } else {
+                "power.low_title"
+            })
+            .to_owned();
+        let percent = format!("{:.0}", low.percentage);
+        let body = if low.time_to_empty > 0 {
+            locale.fmt(
+                "power.low_body_time",
+                &[
+                    ("n", &percent),
+                    ("time", &duration(locale, low.time_to_empty)),
+                ],
+            )
+        } else {
+            locale.fmt("power.low_body", &[("n", &percent)])
+        };
         let replaces = self.notification;
         let icon = self.battery().map(|b| b.icon.clone()).unwrap_or_default();
         Task::future(async move {

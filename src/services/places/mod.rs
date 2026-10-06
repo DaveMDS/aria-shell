@@ -28,6 +28,7 @@ use zbus::Connection;
 use crate::config::{RawSection, Section};
 use crate::locale::Locale;
 use crate::process;
+use crate::services::notifications::client;
 use crate::services::sysmon::format;
 
 /// `[Places]` section: the gadget's keys (the daemon has none).
@@ -428,7 +429,7 @@ impl Volume {
 }
 
 /// A mount or an eject refused (by UDisks2, by `mount`), for the daemon
-/// to notify.
+/// to notify ([`Failure::notify`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Failure {
     pub eject: bool,
@@ -438,6 +439,36 @@ pub struct Failure {
     /// Polkit said no: no agent to ask for the password, or the wrong
     /// one.
     pub not_authorized: bool,
+}
+
+impl Failure {
+    /// Say so in a notification, in the user's language, with UDisks2's
+    /// reason (polkit's refusal worded: no agent to ask for the
+    /// password, usually).
+    pub fn notify(self, locale: &Locale) -> Task<Event> {
+        let (name, icon) = match &self.volume {
+            Volume::Device(d) => (d.name(locale), "drive-harddisk-symbolic"),
+            Volume::Mount(s) => (s.label.clone(), "folder-remote-symbolic"),
+        };
+        let key = match (&self.volume, self.eject) {
+            (_, false) => "places.mount_failed",
+            (Volume::Device(_), true) => "places.eject_failed",
+            (Volume::Mount(_), true) => "places.unmount_failed",
+        };
+        let summary = locale.fmt(key, &[("name", &name)]);
+        let body = if self.not_authorized {
+            locale.tr("places.not_authorized").to_owned()
+        } else {
+            self.message
+        };
+        let icon = icon.to_owned();
+        Task::future(async move {
+            if let Err(e) = client::notify(0, icon, summary, body, false).await {
+                log::warn!("places: can't notify: {e}");
+            }
+        })
+        .discard()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

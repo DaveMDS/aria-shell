@@ -50,6 +50,7 @@ aria-shell debug idle               # the idle stages: power source, holds, scre
 aria-shell debug power              # the battery, the peripherals, the power profiles as UPower sees them
 aria-shell debug brightness         # the screens (backlight, DDC monitors), their outputs and levels
 aria-shell debug screenshot         # the capture protocols, the picker's selection, the last picture
+aria-shell debug places             # the places, and the devices as UDisks2 gives them
 ```
 
 ## Architecture

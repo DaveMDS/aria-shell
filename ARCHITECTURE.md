@@ -318,14 +318,31 @@ Places     (places/)        daemon-owned places of a file manager's sidebar: `pl
                             folders of `user-dirs.dirs` that exist, the trash), `bookmarks()` (GTK's
                             `gtk-3.0/bookmarks`, then KDE's `user-places.xbel` without Dolphin's system,
                             hidden and device entries; no duplicates, no local folder that's gone; a
-                            `file://` one a `Target::Path`, any other scheme a `Target::Uri`), `trash_full()`
-  run(Command, file_manager) Refresh (everything read again: a few small files, no watcher) | Open(target):
-                            `[general] file_manager` on the path or the URI (`trash:///`)
+                            `file://` one a `Target::Path`, any other scheme a `Target::Uri`), `trash_full()`,
+                            `devices()` (UDisks2's volumes as GVfs chooses them: not `HintIgnore`, not swap; a
+                            `HintSystem` one only mounted or in fstab under /media, /run/media, /mnt or the
+                            home, or `x-gvfs-show`, or mounted at `/`; `x-gvfs-hide` hides any. Kind (icons
+                            best first, as libudisks names them), mount point (`/` for the root's btrfs
+                            subvolumes), usage by `statvfs`, removable, what an eject does to the drive),
+                            `busy(path)`
+  subscription()            udisks.rs: the system bus, `NameOwnerChanged` + every signal under
+                            /org/freedesktop/UDisks2, debounced 200 ms -> `GetManagedObjects` read into plain
+                            `Block`s and `Drive`s -> `Event::Objects`
+  apply(Event, file_manager) -> (changed, Option<Failure>)   the devices filtered; `Mounted` opens the
+                            mount point; `Failed` goes back to the daemon, which notifies it
+                            (`notifications::client`, as any app; polkit's refusal worded: no agent)
+  run(Command, file_manager) -> Task   Refresh (everything read again: a few small files, no watcher;
+                            the usage) | Open(target): `[general] file_manager` on the path or the URI
+                            (`trash:///`) | Mount(path) | Eject(path): unmount, lock a LUKS volume, then
+                            eject (optical) or power off a removable drive with nothing else mounted
 
 PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the popup: a header and a button
                             per place for each section of `[Places] show` (required), in its order, a
-                            bookmark of a listed place left out; sized from the widest row
+                            bookmark of a listed place left out; a device: `button.open` (icon, label, usage
+                            meter) and, while mounted, `button.eject` (disabled on `/`; nodes built disabled
+                            in `view`, so the icon takes `button:disabled`'s colour); sized from the widest row
   Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
+           | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
 
 graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);

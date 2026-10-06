@@ -356,12 +356,9 @@ impl Exiter {
         size: f32,
     ) -> Element<'a, Message> {
         let style = shared.theme.resolve(node);
-        button
+        shared
             .icons
-            .iter()
-            .find(|name| shared.icons.has_name(name))
-            .or(button.icons.first())
-            .and_then(|name| shared.icons.get_name(name, None))
+            .first_of(&button.icons)
             .map(|icon| icon.view(size, style.color))
             .unwrap_or_else(|| Space::new().width(size).height(size).into())
     }

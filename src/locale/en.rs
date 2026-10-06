@@ -111,6 +111,14 @@ pub const CATALOGUE: Catalogue = &[
     ("places.bookmarks", "Bookmarks"),
     ("places.home", "Home"),
     ("places.trash", "Trash"),
+    ("places.devices", "Devices"),
+    ("places.volume", "{size} volume"),
+    ("places.mount_failed", "Can't mount {name}"),
+    ("places.eject_failed", "Can't eject {name}"),
+    (
+        "places.not_authorized",
+        "Not allowed: an authentication agent (polkit) is needed to ask for the password",
+    ),
     ("places.empty", "No places"),
     // themes
     ("themes.light", "Light"),

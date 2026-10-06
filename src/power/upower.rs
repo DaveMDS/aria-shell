@@ -1,8 +1,7 @@
 //! UPower and the power profiles over the system bus: the event stream
 //! (either service coming and going, every signal under
 //! `/org/freedesktop/UPower` folded into one debounced re-read of both)
-//! and the calls behind the [`Command`](super::Command)s; the low
-//! battery notification over the session bus, as any app sends one.
+//! and the calls behind the [`Command`](super::Command)s.
 //!
 //! The profiles are `org.freedesktop.UPower.PowerProfiles`, served by
 //! power-profiles-daemon and tuned-ppd alike, at a path under UPower's.
@@ -56,28 +55,6 @@ trait UPower {
 trait PowerProfiles {
     #[zbus(property)]
     fn set_active_profile(&self, profile: &str) -> zbus::Result<()>;
-}
-
-#[proxy(
-    interface = "org.freedesktop.Notifications",
-    default_service = "org.freedesktop.Notifications",
-    default_path = "/org/freedesktop/Notifications"
-)]
-trait Notifications {
-    #[allow(clippy::too_many_arguments)]
-    fn notify(
-        &self,
-        app_name: &str,
-        replaces_id: u32,
-        app_icon: &str,
-        summary: &str,
-        body: &str,
-        actions: &[&str],
-        hints: HashMap<&str, Value<'_>>,
-        expire_timeout: i32,
-    ) -> zbus::Result<u32>;
-
-    fn close_notification(&self, id: u32) -> zbus::Result<()>;
 }
 
 /// The event stream: the bus, then both services' state after every
@@ -241,41 +218,6 @@ pub async fn set_profile(conn: Connection, profile: String) -> zbus::Result<()> 
     PowerProfilesProxy::new(&conn)
         .await?
         .set_active_profile(&profile)
-        .await
-}
-
-/// Send (or replace, with `replaces`) a notification on the session
-/// bus; its id.
-pub async fn notify(
-    replaces: u32,
-    icon: String,
-    summary: String,
-    body: String,
-    critical: bool,
-) -> zbus::Result<u32> {
-    let conn = Connection::session().await?;
-    let mut hints = HashMap::new();
-    hints.insert("urgency", Value::U8(if critical { 2 } else { 1 }));
-    NotificationsProxy::new(&conn)
-        .await?
-        .notify(
-            "Aria Shell",
-            replaces,
-            &icon,
-            &summary,
-            &body,
-            &[],
-            hints,
-            -1,
-        )
-        .await
-}
-
-pub async fn close_notification(id: u32) -> zbus::Result<()> {
-    let conn = Connection::session().await?;
-    NotificationsProxy::new(&conn)
-        .await?
-        .close_notification(id)
         .await
 }
 

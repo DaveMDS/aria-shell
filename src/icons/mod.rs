@@ -265,6 +265,18 @@ impl Icons {
         self.named.get(&(name.to_owned(), dir.map(PathBuf::from)))
     }
 
+    /// For a caller with alternatives, best first (every one of them
+    /// among its icon names, for the daemon to resolve): the first the
+    /// theme has, else the first (resolved to the generic fallback).
+    pub fn first_of<S: AsRef<str>>(&self, names: &[S]) -> Option<&Icon> {
+        let name = names
+            .iter()
+            .map(AsRef::as_ref)
+            .find(|n| self.has_name(n))
+            .or_else(|| names.first().map(AsRef::as_ref))?;
+        self.get_name(name, None)
+    }
+
     /// Directories whose changes should rebuild the index: where the
     /// desktop entries and the theme icons live (none until the index
     /// is built, which reads them anyway).

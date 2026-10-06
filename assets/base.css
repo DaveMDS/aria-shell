@@ -183,10 +183,21 @@
  *   popup > gadget.places
  *   ╰─ list                                                   a column (`gap`); `width` sizes the popup, else
  *      │                                                      the widest row does
- *      ├─ header.places | header.bookmarks ╰─ title           section titles, in `[Places] show` order
+ *      ├─ header.places | header.devices | header.bookmarks ╰─ title   section titles, in `[Places] show` order
  *      ├─ item.home|.desktop|.documents|.download|.music|.pictures|.videos|.trash[.full]|.folder|.remote
  *      │  ├─ icon                                             a button per place: a click opens it in
  *      │  ╰─ label                                            `[general] file_manager`
+ *      ├─ device.harddisk|.usb|.thumb|.flash|.optical|.removable[.mounted][.locked][.busy]
+ *      │  │                                                   one per UDisks2 volume (a row, `gap`); .locked: a
+ *      │  │                                                   LUKS volume (not unlocked yet), .busy: mounting or
+ *      │  │                                                   ejecting
+ *      │  ├─ button.open                                      opens it, mounting it first (:disabled while
+ *      │  │  ├─ icon                                          .locked or .busy)
+ *      │  │  ╰─ info                                          a column (`gap`)
+ *      │  │     ├─ label                                      its label, else its size
+ *      │  │     ╰─ meter[.critical] > fill                    how full it is, while mounted (.critical: 90%)
+ *      │  ╰─ button.eject > icon                              while mounted, ⏏: unmounts it, then powers a
+ *      │                                                      removable drive off (:disabled on /)
  *      ╰─ empty                                               "No places"
  *
  *   gadget.power                                              a row (`gap` between the buttons); middle click holds
@@ -862,6 +873,42 @@ gadget.places item:hover {
 }
 gadget.places item icon {
   height: 16px;
+}
+gadget.places device {
+  gap: 2px;
+}
+gadget.places device button.open {
+  padding: 4px 10px;
+  gap: 8px;
+  border-radius: 4px;
+}
+gadget.places device button:hover {
+  background: var(--aria-border);
+}
+gadget.places device button:disabled {
+  color: var(--aria-muted);
+}
+gadget.places device button.eject {
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+gadget.places device icon {
+  height: 16px;
+}
+gadget.places device info {
+  gap: 3px;
+}
+gadget.places device meter {
+  height: 3px;
+  background: var(--aria-border);
+  border-radius: 2px;
+}
+gadget.places device meter fill {
+  background: var(--aria-accent);
+  border-radius: 2px;
+}
+gadget.places device meter.critical fill {
+  background: var(--aria-urgent);
 }
 gadget.places empty {
   padding: 8px;

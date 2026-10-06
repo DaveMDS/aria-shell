@@ -271,7 +271,7 @@ impl Power {
                 return (None, Task::none());
             }
             let close = Task::future(async move {
-                if let Err(e) = upower::close_notification(id).await {
+                if let Err(e) = crate::notifications::client::close_notification(id).await {
                     log::debug!("power: closing the notification: {e}");
                 }
             })
@@ -288,7 +288,9 @@ impl Power {
         let replaces = self.notification;
         let icon = self.battery().map(|b| b.icon.clone()).unwrap_or_default();
         Task::future(async move {
-            match upower::notify(replaces, icon, summary, body, critical).await {
+            match crate::notifications::client::notify(replaces, icon, summary, body, critical)
+                .await
+            {
                 Ok(id) => Some(Event::Notified(id)),
                 Err(e) => {
                     log::warn!("power: can't notify: {e}");

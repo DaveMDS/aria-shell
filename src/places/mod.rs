@@ -5,10 +5,21 @@
 //! (`user-places.xbel`: Dolphin). Read again by [`Command::Refresh`]
 //! whenever the popup opens (a few small files); a click opens one in
 //! `[general] file_manager` ([`Command::Open`]).
+//!
+//! The devices come from UDisks2 (`udisks.rs`): followed on the system
+//! bus, filtered as GVfs does ([`devices`]), mounted and ejected with
+//! [`Command::Mount`] / [`Command::Eject`]. A failure comes back as a
+//! [`Failure`] for the daemon to notify.
 
+mod udisks;
+
+use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
+
+use iced::{Subscription, Task};
+use zbus::Connection;
 
 use crate::config::{RawSection, Section};
 use crate::process;
@@ -35,7 +46,9 @@ impl Section for PlacesConfig {
             .filter_map(|name| {
                 let group = Group::from_name(name);
                 if group.is_none() {
-                    log::warn!("[Places] show: unknown section {name:?} (places, bookmarks)");
+                    log::warn!(
+                        "[Places] show: unknown section {name:?} (places, devices, bookmarks)"
+                    );
                 }
                 group
             })
@@ -54,6 +67,8 @@ impl Section for PlacesConfig {
 pub enum Group {
     /// The home, the XDG folders, the trash.
     Places,
+    /// UDisks2's.
+    Devices,
     /// GTK's and KDE's.
     Bookmarks,
 }
@@ -62,6 +77,7 @@ impl Group {
     fn from_name(name: &str) -> Option<Self> {
         match name {
             "places" => Some(Self::Places),
+            "devices" => Some(Self::Devices),
             "bookmarks" => Some(Self::Bookmarks),
             _ => None,
         }
@@ -70,6 +86,7 @@ impl Group {
     pub fn name(self) -> &'static str {
         match self {
             Self::Places => "places",
+            Self::Devices => "devices",
             Self::Bookmarks => "bookmarks",
         }
     }
@@ -156,11 +173,176 @@ pub struct Place {
     pub target: Target,
 }
 
+/// A filesystem UDisks2 has, as the popup lists it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Device {
+    /// UDisks2's object path of the block with the filesystem (the
+    /// cleartext one, for an unlocked LUKS volume): its key.
+    pub path: String,
+    /// `/dev/sdb1`, for `debug places` and the order.
+    pub device: PathBuf,
+    /// The filesystem's label; empty when it has none (the gadget then
+    /// words it by size).
+    pub label: String,
+    pub size: u64,
+    pub kind: DeviceKind,
+    /// Where it's mounted (the first place, when several).
+    pub mount_point: Option<PathBuf>,
+    /// A LUKS volume not unlocked (it can't be opened yet).
+    pub locked: bool,
+    /// On a drive that comes out (USB, SD card, optical): an eject
+    /// also ejects or powers off the drive.
+    pub removable: bool,
+    /// The drive's object path; empty for none.
+    pub drive: String,
+    pub drive_action: Option<DriveAction>,
+    /// The LUKS container of an unlocked volume, locked again by an
+    /// eject.
+    pub crypto_backing: Option<String>,
+    /// The fraction used, read with `statvfs` while mounted.
+    pub usage: Option<f32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceKind {
+    HardDisk,
+    /// A disk on USB (or FireWire): an external hard disk, a USB stick
+    /// that doesn't say it is one.
+    UsbDisk,
+    /// A USB stick (`Media` `thumb`).
+    Thumb,
+    /// An SD card, a flash reader's media.
+    Flash,
+    Optical,
+    /// Any other drive that comes out.
+    Removable,
+}
+
+impl DeviceKind {
+    pub const ALL: [DeviceKind; 6] = [
+        DeviceKind::HardDisk,
+        DeviceKind::UsbDisk,
+        DeviceKind::Thumb,
+        DeviceKind::Flash,
+        DeviceKind::Optical,
+        DeviceKind::Removable,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::HardDisk => "harddisk",
+            Self::UsbDisk => "usb",
+            Self::Thumb => "thumb",
+            Self::Flash => "flash",
+            Self::Optical => "optical",
+            Self::Removable => "removable",
+        }
+    }
+
+    /// The icon theme's names, without `-symbolic`, best first: the
+    /// first the theme has is used (as libudisks names them for
+    /// Nautilus and Nemo; the last one every theme has).
+    pub fn icons(self) -> &'static [&'static str] {
+        match self {
+            Self::HardDisk => &["drive-harddisk"],
+            Self::UsbDisk => &[
+                "drive-harddisk-usb",
+                "drive-removable-media-usb",
+                "drive-removable-media",
+            ],
+            Self::Thumb => &[
+                "media-removable",
+                "drive-removable-media-usb",
+                "drive-removable-media",
+            ],
+            Self::Flash => &["media-flash", "drive-removable-media"],
+            Self::Optical => &["media-optical", "drive-optical"],
+            Self::Removable => &["drive-removable-media"],
+        }
+    }
+}
+
+/// What an eject does to the drive, after unmounting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriveAction {
+    /// Optical media out of the tray.
+    Eject,
+    /// Safe removal: the drive spun down and switched off.
+    PowerOff,
+}
+
+/// A UDisks2 block, as `udisks.rs` read it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Block {
+    path: String,
+    device: PathBuf,
+    size: u64,
+    id_usage: String,
+    id_type: String,
+    id_label: String,
+    hint_ignore: bool,
+    hint_system: bool,
+    /// Empty for none.
+    drive: String,
+    /// Empty for none.
+    crypto_backing: String,
+    /// The fstab entries: `dir`, `opts`.
+    fstab: Vec<(PathBuf, String)>,
+    /// `Some` when it has a filesystem.
+    mount_points: Option<Vec<PathBuf>>,
+    /// `Some` when it's a LUKS container: its cleartext block, empty
+    /// while locked.
+    cleartext: Option<String>,
+}
+
+/// A UDisks2 drive, as `udisks.rs` read it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Drive {
+    removable: bool,
+    ejectable: bool,
+    can_power_off: bool,
+    optical: bool,
+    connection_bus: String,
+    media: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum Event {
+    /// The system bus.
+    Bus(Connection),
+    /// UDisks2's blocks and drives; `None` while it isn't running.
+    Objects(Option<(Vec<Block>, HashMap<String, Drive>)>),
+    /// A mount went through: the device is opened there.
+    Mounted {
+        path: String,
+        mount_point: PathBuf,
+    },
+    Ejected(String),
+    Failed(Failure),
+}
+
+/// A mount or an eject UDisks2 refused, for the daemon to notify.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Failure {
+    pub eject: bool,
+    pub device: Device,
+    /// UDisks2's message.
+    pub message: String,
+    /// Polkit said no: no agent to ask for the password, or the wrong
+    /// one.
+    pub not_authorized: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Read everything again.
     Refresh,
     Open(Target),
+    /// Mount a device (by its path), then open it.
+    Mount(String),
+    /// Unmount it (and lock it, when it's an unlocked LUKS volume),
+    /// then eject or power off its drive when it's removable.
+    Eject(String),
 }
 
 #[derive(Debug, Default)]
@@ -168,6 +350,11 @@ pub struct Places {
     places: Vec<Place>,
     bookmarks: Vec<Place>,
     trash_full: bool,
+    bus: Option<Connection>,
+    /// `None` while UDisks2 isn't running.
+    devices: Option<Vec<Device>>,
+    /// The devices a mount or an eject is under way for.
+    busy: BTreeSet<String>,
 }
 
 /// The XDG folders shown, in this order (Templates and Public aren't).
@@ -183,19 +370,119 @@ const USER_DIRS: [(&str, Kind); 6] = [
 const TRASH_URI: &str = "trash:///";
 
 impl Places {
-    pub fn run(&mut self, command: Command, file_manager: Option<&str>) {
-        match command {
-            Command::Refresh => self.reload(),
-            Command::Open(target) => match file_manager {
-                Some(file_manager) => {
-                    let argv = match &target {
-                        Target::Path(path) => process::on_file(file_manager, path),
-                        Target::Uri(uri) => process::on_file(file_manager, uri),
-                    };
-                    process::run_argv(&argv);
+    pub fn subscription(&self) -> Subscription<Event> {
+        Subscription::run(udisks::events)
+    }
+
+    /// Apply an event: whether what gadgets see changed, and a failure
+    /// to notify. A mount that went through is opened in `file_manager`.
+    pub fn apply(&mut self, event: Event, file_manager: Option<&str>) -> (bool, Option<Failure>) {
+        match event {
+            Event::Bus(conn) => {
+                self.bus = Some(conn);
+                (false, None)
+            }
+            Event::Objects(objects) => {
+                let devices = objects.map(|(blocks, drives)| {
+                    let home = std::env::var_os("HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_default();
+                    let mut devices = devices(&blocks, &drives, &home);
+                    read_usage(&mut devices);
+                    devices
+                });
+                if devices == self.devices {
+                    return (false, None);
                 }
-                None => log::warn!("places: no file manager ([general] file_manager)"),
-            },
+                self.devices = devices;
+                (true, None)
+            }
+            Event::Mounted { path, mount_point } => {
+                log::info!("places: {path} mounted at {}", mount_point.display());
+                self.busy.remove(&path);
+                open(file_manager, &Target::Path(mount_point));
+                (true, None)
+            }
+            Event::Ejected(path) => {
+                log::info!("places: {path} ejected");
+                self.busy.remove(&path);
+                (true, None)
+            }
+            Event::Failed(failure) => {
+                log::warn!(
+                    "places: {} {}: {}",
+                    if failure.eject { "eject" } else { "mount" },
+                    failure.device.path,
+                    failure.message
+                );
+                self.busy.remove(&failure.device.path);
+                (true, Some(failure))
+            }
+        }
+    }
+
+    pub fn run(&mut self, command: Command, file_manager: Option<&str>) -> Task<Event> {
+        match command {
+            Command::Refresh => {
+                self.reload();
+                if let Some(devices) = &mut self.devices {
+                    read_usage(devices);
+                }
+                Task::none()
+            }
+            Command::Open(target) => {
+                open(file_manager, &target);
+                Task::none()
+            }
+            Command::Mount(path) => {
+                let (Some(conn), Some(device)) = (self.bus.clone(), self.device(&path).cloned())
+                else {
+                    return Task::none();
+                };
+                if !self.busy.insert(path.clone()) {
+                    return Task::none();
+                }
+                log::info!("places: mounting {path}");
+                Task::future(async move {
+                    match udisks::mount(conn, path.clone()).await {
+                        Ok(mount_point) => Event::Mounted { path, mount_point },
+                        Err(e) => {
+                            let (message, not_authorized) = udisks::failure(&e);
+                            Event::Failed(Failure {
+                                eject: false,
+                                device,
+                                message,
+                                not_authorized,
+                            })
+                        }
+                    }
+                })
+            }
+            Command::Eject(path) => {
+                let (Some(conn), Some(device)) = (self.bus.clone(), self.device(&path).cloned())
+                else {
+                    return Task::none();
+                };
+                if !self.busy.insert(path.clone()) {
+                    return Task::none();
+                }
+                let plan = self.eject_plan(&device);
+                log::info!("places: ejecting {path}: {plan:?}");
+                Task::future(async move {
+                    match udisks::eject(conn, plan).await {
+                        Ok(()) => Event::Ejected(path),
+                        Err(e) => {
+                            let (message, not_authorized) = udisks::failure(&e);
+                            Event::Failed(Failure {
+                                eject: true,
+                                device,
+                                message,
+                                not_authorized,
+                            })
+                        }
+                    }
+                })
+            }
         }
     }
 
@@ -209,6 +496,68 @@ impl Places {
 
     pub fn trash_full(&self) -> bool {
         self.trash_full
+    }
+
+    pub fn devices(&self) -> &[Device] {
+        self.devices.as_deref().unwrap_or_default()
+    }
+
+    /// Whether a mount or an eject is under way for the device.
+    pub fn busy(&self, path: &str) -> bool {
+        self.busy.contains(path)
+    }
+
+    fn device(&self, path: &str) -> Option<&Device> {
+        self.devices().iter().find(|d| d.path == path)
+    }
+
+    /// Unmount, lock, then the drive: only when it's removable and
+    /// nothing else on it stays mounted (the user unmounts the other
+    /// partitions first).
+    fn eject_plan(&self, device: &Device) -> udisks::Eject {
+        let others_mounted = self
+            .devices()
+            .iter()
+            .any(|d| d.path != device.path && d.drive == device.drive && d.mount_point.is_some());
+        udisks::Eject {
+            unmount: device.mount_point.as_ref().map(|_| device.path.clone()),
+            lock: device.crypto_backing.clone(),
+            drive: device
+                .drive_action
+                .filter(|_| device.removable && !device.drive.is_empty() && !others_mounted)
+                .map(|action| (device.drive.clone(), action)),
+        }
+    }
+
+    /// For `aria-shell debug places`.
+    pub fn describe(&self) -> String {
+        let mut parts = vec![format!(
+            "places={} bookmarks={} trash_full={}",
+            self.places.len(),
+            self.bookmarks.len(),
+            self.trash_full
+        )];
+        match &self.devices {
+            None => parts.push("udisks=false".to_owned()),
+            Some(devices) => parts.extend(devices.iter().map(|d| {
+                format!(
+                    "{} {:?} label={:?} kind={} mounted={} usage={} removable={} drive_action={:?} locked={} busy={}",
+                    d.device.display(),
+                    d.path,
+                    d.label,
+                    d.kind.name(),
+                    d.mount_point
+                        .as_ref()
+                        .map_or("-".to_owned(), |p| p.display().to_string()),
+                    d.usage.map_or("-".to_owned(), |u| format!("{:.0}%", u * 100.0)),
+                    d.removable,
+                    d.drive_action,
+                    d.locked,
+                    self.busy(&d.path),
+                )
+            })),
+        }
+        parts.join("; ")
     }
 
     fn reload(&mut self) {
@@ -260,6 +609,165 @@ impl Places {
         self.trash_full = std::fs::read_dir(data_home.join("Trash/files"))
             .is_ok_and(|mut entries| entries.next().is_some());
     }
+}
+
+/// Run `[general] file_manager` on a place.
+fn open(file_manager: Option<&str>, target: &Target) {
+    match file_manager {
+        Some(file_manager) => {
+            let argv = match target {
+                Target::Path(path) => process::on_file(file_manager, path),
+                Target::Uri(uri) => process::on_file(file_manager, uri),
+            };
+            process::run_argv(&argv);
+        }
+        None => log::warn!("places: no file manager ([general] file_manager)"),
+    }
+}
+
+/// The devices worth listing, as GVfs (Nautilus, Nemo) chooses them:
+/// a filesystem or a LUKS volume UDisks2 doesn't say to ignore, not
+/// swap; a system one (an internal disk) only while it's mounted, or
+/// set in fstab, somewhere a user looks (`/media`, `/run/media`, `/mnt`,
+/// the home), or with `x-gvfs-show`, and the root filesystem (as
+/// Dolphin lists it: `/` isn't among the places); `x-gvfs-hide` hides
+/// any. An unlocked LUKS container is listed as its cleartext volume.
+fn devices(blocks: &[Block], drives: &HashMap<String, Drive>, home: &Path) -> Vec<Device> {
+    let by_path: HashMap<&str, &Block> = blocks.iter().map(|b| (b.path.as_str(), b)).collect();
+    let mut devices: Vec<Device> = blocks
+        .iter()
+        .filter(|b| shown(b, home))
+        .map(|b| {
+            let backing = by_path.get(b.crypto_backing.as_str());
+            // A cleartext volume's drive is its container's.
+            let drive_path = match backing {
+                Some(c) if b.drive.is_empty() => c.drive.clone(),
+                _ => b.drive.clone(),
+            };
+            let drive = drives.get(&drive_path);
+            let removable = drive.is_some_and(|d| {
+                d.removable || matches!(d.connection_bus.as_str(), "usb" | "sdio" | "ieee1394")
+            });
+            let kind = match drive {
+                Some(d) if d.optical => DeviceKind::Optical,
+                Some(d) if d.media.starts_with("flash") || d.connection_bus == "sdio" => {
+                    DeviceKind::Flash
+                }
+                Some(d) if d.media == "thumb" => DeviceKind::Thumb,
+                Some(d) if matches!(d.connection_bus.as_str(), "usb" | "ieee1394") => {
+                    DeviceKind::UsbDisk
+                }
+                _ if removable => DeviceKind::Removable,
+                _ => DeviceKind::HardDisk,
+            };
+            let drive_action = drive.and_then(|d| {
+                if d.ejectable && d.optical {
+                    Some(DriveAction::Eject)
+                } else if d.can_power_off {
+                    Some(DriveAction::PowerOff)
+                } else if d.ejectable {
+                    Some(DriveAction::Eject)
+                } else {
+                    None
+                }
+            });
+            Device {
+                path: b.path.clone(),
+                device: b.device.clone(),
+                label: b.id_label.clone(),
+                size: b.size,
+                kind,
+                mount_point: b.mount_points.as_ref().and_then(|m| main_mount(m)),
+                locked: b.cleartext.as_deref() == Some(""),
+                removable,
+                drive: drive_path,
+                drive_action,
+                crypto_backing: backing.map(|c| c.path.clone()),
+                usage: None,
+            }
+        })
+        .collect();
+    devices.sort_by(|a, b| {
+        a.removable
+            .cmp(&b.removable)
+            .then_with(|| a.device.cmp(&b.device))
+    });
+    devices
+}
+
+fn shown(b: &Block, home: &Path) -> bool {
+    let unlocked_container = b.cleartext.as_deref().is_some_and(|c| !c.is_empty());
+    let has_content = b.mount_points.is_some() || (b.cleartext.is_some() && !unlocked_container);
+    if b.hint_ignore || !has_content || b.id_type == "swap" {
+        return false;
+    }
+    if b.fstab
+        .iter()
+        .any(|(_, opts)| has_option(opts, "x-gvfs-hide"))
+    {
+        return false;
+    }
+    if b.fstab
+        .iter()
+        .any(|(_, opts)| has_option(opts, "x-gvfs-show"))
+    {
+        return true;
+    }
+    if !b.hint_system {
+        return true;
+    }
+    let mounted = b.mount_points.iter().flatten();
+    if mounted.clone().any(|p| p == Path::new("/")) {
+        return true;
+    }
+    let in_fstab = b.fstab.iter().map(|(dir, _)| dir);
+    mounted.chain(in_fstab).any(|p| user_visible(p, home))
+}
+
+/// Where a device mounted in several places opens: `/` for the root
+/// filesystem (btrfs subvolumes mount it at `/home`, `/var/log`, ...
+/// as well), else the first.
+fn main_mount(mount_points: &[PathBuf]) -> Option<PathBuf> {
+    mount_points
+        .iter()
+        .find(|p| *p == Path::new("/"))
+        .or_else(|| mount_points.first())
+        .cloned()
+}
+
+fn has_option(opts: &str, name: &str) -> bool {
+    opts.split(',').any(|o| o.trim() == name)
+}
+
+/// Somewhere a user looks for mounted things.
+fn user_visible(path: &Path, home: &Path) -> bool {
+    ["/media", "/run/media", "/mnt"]
+        .iter()
+        .any(|dir| path.starts_with(dir) && path != Path::new(dir))
+        || (!home.as_os_str().is_empty() && path.starts_with(home) && path != home)
+}
+
+/// The fraction used of each mounted device (as `df` has it: what's
+/// left to users counts as free).
+fn read_usage(devices: &mut [Device]) {
+    for d in devices {
+        d.usage = d.mount_point.as_deref().and_then(usage);
+    }
+}
+
+fn usage(path: &Path) -> Option<f32> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut st = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: `c` is a NUL-terminated path, `st` is written by the call.
+    if unsafe { libc::statvfs(c.as_ptr(), st.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: statvfs succeeded, so it filled `st`.
+    let st = unsafe { st.assume_init() };
+    let used = st.f_blocks.saturating_sub(st.f_bfree) as f64;
+    let total = used + st.f_bavail as f64;
+    (total > 0.0).then(|| (used / total) as f32)
 }
 
 /// `$<var>`, else `<home>/<fallback>`.
@@ -429,9 +937,12 @@ mod tests {
 
     #[test]
     fn config_sections_in_order() {
-        let config = Config::parse("[Places]\nshow = bookmarks devices places\nlabel = Go\n");
+        let config = Config::parse("[Places]\nshow = bookmarks devices nope places\nlabel = Go\n");
         let places: PlacesConfig = config.section(None);
-        assert_eq!(places.show, vec![Group::Bookmarks, Group::Places]);
+        assert_eq!(
+            places.show,
+            vec![Group::Bookmarks, Group::Devices, Group::Places]
+        );
         assert_eq!(places.label, "Go");
         assert_eq!(places.icon, "folder-symbolic");
         assert!(places.symbolic_icons);

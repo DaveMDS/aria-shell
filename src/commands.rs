@@ -76,6 +76,8 @@ pub enum DebugCommand {
     Brightness,
     /// The capture protocol, the last picture saved.
     Screenshot,
+    /// The places, the devices.
+    Places,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -248,12 +250,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["power"] => Ok(Parsed::Debug(DebugCommand::Power)),
             ["brightness"] => Ok(Parsed::Debug(DebugCommand::Brightness)),
             ["screenshot"] => Ok(Parsed::Debug(DebugCommand::Screenshot)),
+            ["places"] => Ok(Parsed::Debug(DebugCommand::Places)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | screenshot | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | screenshot | places | widgets [filter])",
                 args.join(" ")
             )),
         },

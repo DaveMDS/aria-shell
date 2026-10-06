@@ -104,6 +104,8 @@ enum Message {
     Brightness(brightness::Event),
     /// Captures and saved pictures.
     Screenshot(screenshot::Event),
+    /// UDisks2's devices, mounts and ejects.
+    Places(places::Event),
     /// A gadget's program ran.
     Scripts(scripts::Event),
     /// From the command socket (`aria-shell launcher toggle`).
@@ -181,7 +183,8 @@ impl Message {
             | Message::Network(_)
             | Message::Power(_)
             | Message::Brightness(_)
-            | Message::Screenshot(_) => Scope::None,
+            | Message::Screenshot(_)
+            | Message::Places(_) => Scope::None,
             // A gadget's own state: its popups follow (`update`).
             Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
                 Scope::Window(*id)
@@ -694,6 +697,20 @@ impl AriaShell {
                 }
                 Task::batch(tasks)
             }
+            Message::Places(event) => {
+                let (changed, failure) = self
+                    .places
+                    .apply(event, self.general.file_manager.as_deref());
+                let mut tasks = Vec::new();
+                if let Some(failure) = failure {
+                    tasks.push(self.notify_places(failure));
+                }
+                if changed {
+                    tasks.push(self.sync_popups());
+                    tasks.push(self.redraw_shared());
+                }
+                Task::batch(tasks)
+            }
             Message::Brightness(event) => {
                 if self.brightness.apply(event) {
                     self.brightness_changed()
@@ -786,6 +803,10 @@ impl AriaShell {
                 }
                 DebugCommand::Screenshot => {
                     reply.send(self.screenshot.describe());
+                    Task::none()
+                }
+                DebugCommand::Places => {
+                    reply.send(self.places.describe());
                     Task::none()
                 }
                 DebugCommand::Locale => {
@@ -1242,10 +1263,10 @@ impl AriaShell {
                     Task::none()
                 }
             }
-            Action::Places(cmd) => {
-                self.places.run(cmd, self.general.file_manager.as_deref());
-                Task::none()
-            }
+            Action::Places(cmd) => self
+                .places
+                .run(cmd, self.general.file_manager.as_deref())
+                .map(Message::Places),
             Action::Theme(cmd) => {
                 match cmd {
                     theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
@@ -1718,6 +1739,33 @@ impl AriaShell {
         self.power
             .notify(summary.to_owned(), body, critical)
             .map(Message::Power)
+    }
+
+    /// A device that wouldn't mount or eject: a notification with
+    /// UDisks2's reason (polkit's refusal worded: no agent to ask for
+    /// the password, usually).
+    fn notify_places(&self, failure: places::Failure) -> Task<Message> {
+        let name = gadgets::places::device_name(&self.locale, &failure.device);
+        let summary = self.locale.fmt(
+            if failure.eject {
+                "places.eject_failed"
+            } else {
+                "places.mount_failed"
+            },
+            &[("name", &name)],
+        );
+        let body = if failure.not_authorized {
+            self.locale.tr("places.not_authorized").to_owned()
+        } else {
+            failure.message
+        };
+        Task::future(async move {
+            let icon = "drive-harddisk-symbolic".to_owned();
+            if let Err(e) = notifications::client::notify(0, icon, summary, body, false).await {
+                log::warn!("places: can't notify: {e}");
+            }
+        })
+        .discard()
     }
 
     /// `aria-shell lock`: ask the compositor for the session lock; the
@@ -2230,6 +2278,7 @@ impl AriaShell {
                 self.power.subscription().map(Message::Power),
                 self.brightness.subscription().map(Message::Brightness),
                 self.screenshot.subscription().map(Message::Screenshot),
+                self.places.subscription().map(Message::Places),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

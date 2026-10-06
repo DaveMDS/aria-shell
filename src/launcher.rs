@@ -579,17 +579,11 @@ impl Launcher {
                 theme::Length::Px(px) => Some(px),
                 _ => None,
             });
-            let name = button
-                .icons
-                .iter()
-                .find(|n| shared.icons.has_name(n))
-                .or(button.icons.first());
-            let icon: Element<'a, Message> =
-                match (name.and_then(|n| shared.icons.get_name(n, None)), size) {
-                    (Some(icon), Some(size)) => icon.view(size, style.color),
-                    (_, Some(size)) => Space::new().width(size).height(size).into(),
-                    _ => Space::new().into(),
-                };
+            let icon: Element<'a, Message> = match (shared.icons.first_of(&button.icons), size) {
+                (Some(icon), Some(size)) => icon.view(size, style.color),
+                (_, Some(size)) => Space::new().width(size).height(size).into(),
+                _ => Space::new().into(),
+            };
             actions.push(
                 theme
                     .button(&b, icon)

@@ -1,19 +1,24 @@
 //! Places gadget: an icon (and a label, when set). A left click opens
 //! the popup: the sections of `[Places] show`, in that order, as a
 //! file manager's sidebar has them (the home, the XDG folders, the
-//! trash; the GTK and KDE bookmarks), a click on one opening it in
-//! `[general] file_manager`.
+//! trash; the disks, USB sticks and cards UDisks2 has; the GTK and KDE
+//! bookmarks), a click on one opening it in `[general] file_manager`
+//! (a device not mounted is mounted first), ⏏ on a device unmounting
+//! it (and powering its drive off, when it's removable).
 //!
 //! Holds no places: they come from `ctx.places`, read again as the
 //! popup opens (`Action::Places(Refresh)`).
 
-use iced::widget::{Space, row};
+use iced::widget::{Space, button, row};
 use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
-use crate::places::{Command, Group, Kind, Place, PlacesConfig, Target};
+use crate::locale::Locale;
+use crate::places::{Command, Device, DeviceKind, Group, Kind, Place, PlacesConfig, Target};
+use crate::sysmon::format;
 use crate::theme::{self, Node};
+use crate::widgets::graph;
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;
@@ -27,6 +32,9 @@ pub struct PlacesGadget {
 pub enum Message {
     TogglePopup,
     Open(Target),
+    /// Mount a device (by its path), then open it.
+    Mount(String),
+    Eject(String),
 }
 
 /// A themed part of the popup and its size, built together so the
@@ -57,6 +65,12 @@ impl Gadget for PlacesGadget {
                 self.popup.close(),
                 Action::Places(Command::Open(target)),
             ]),
+            Message::Mount(path) => Action::Many(vec![
+                self.popup.close(),
+                Action::Places(Command::Mount(path)),
+            ]),
+            // The popup stays: the device leaves it, or shows why not.
+            Message::Eject(path) => Action::Places(Command::Eject(path)),
         }
     }
 
@@ -64,6 +78,8 @@ impl Gadget for PlacesGadget {
         let mut names = vec![self.config.icon.clone()];
         names.extend(Kind::ALL.iter().map(|k| self.icon_name(*k, false)));
         names.push(self.icon_name(Kind::Trash, true));
+        names.extend(DeviceKind::ALL.iter().flat_map(|k| self.device_icons(*k)));
+        names.push(self.symbolic(EJECT_ICON));
         names
     }
 
@@ -111,10 +127,19 @@ impl Gadget for PlacesGadget {
 
 impl PlacesGadget {
     fn icon_name(&self, kind: Kind, trash_full: bool) -> String {
-        let name = match kind {
+        self.symbolic(match kind {
             Kind::Trash if trash_full => "user-trash-full",
             kind => kind.icon(),
-        };
+        })
+    }
+
+    /// The kind's icons, best first.
+    fn device_icons(&self, kind: DeviceKind) -> Vec<String> {
+        kind.icons().iter().map(|n| self.symbolic(n)).collect()
+    }
+
+    /// `name`, `-symbolic` with `symbolic_icons`.
+    fn symbolic(&self, name: &str) -> String {
         if self.config.symbolic_icons {
             format!("{name}-symbolic")
         } else {
@@ -130,8 +155,14 @@ impl PlacesGadget {
         let shows_places = self.config.show.contains(&Group::Places);
         let mut rows = Vec::new();
         for &group in &self.config.show {
-            let entries: Vec<&Place> = match group {
-                Group::Places => places.iter().collect(),
+            let entries: Vec<Block<'a>> = match group {
+                Group::Places => places.iter().map(|p| self.item(ctx, &list, p)).collect(),
+                Group::Devices => ctx
+                    .places
+                    .devices()
+                    .iter()
+                    .map(|d| self.device(ctx, &list, d))
+                    .collect(),
                 // A bookmark of a place listed above isn't repeated
                 // (GTK's file managers bookmark the home, often).
                 Group::Bookmarks => ctx
@@ -139,6 +170,7 @@ impl PlacesGadget {
                     .bookmarks()
                     .iter()
                     .filter(|b| !(shows_places && places.iter().any(|p| p.target == b.target)))
+                    .map(|p| self.item(ctx, &list, p))
                     .collect(),
             };
             if entries.is_empty() {
@@ -146,10 +178,11 @@ impl PlacesGadget {
             }
             let title = match group {
                 Group::Places => ctx.locale.tr("places.places"),
+                Group::Devices => ctx.locale.tr("places.devices"),
                 Group::Bookmarks => ctx.locale.tr("places.bookmarks"),
             };
             rows.push(header(ctx, &list, group, title));
-            rows.extend(entries.into_iter().map(|p| self.item(ctx, &list, p)));
+            rows.extend(entries);
         }
         if rows.is_empty() {
             let empty = list.child("empty");
@@ -219,6 +252,135 @@ impl PlacesGadget {
     }
 }
 
+impl PlacesGadget {
+    /// A device: a button opening it (mounting it first) with its
+    /// icon, its name and, while mounted, how full it is, and ⏏
+    /// beside it while mounted (as Nemo has it: nothing to eject before
+    /// a mount); disabled on the root filesystem, which can't be
+    /// unmounted but is mounted all the same.
+    fn device<'a>(&'a self, ctx: &Context<'a>, list: &Node, d: &Device) -> Block<'a> {
+        let theme = ctx.theme;
+        let busy = ctx.places.busy(&d.path);
+        let node = list
+            .child("device")
+            .class(d.kind.name())
+            .class_if("mounted", d.mount_point.is_some())
+            .class_if("locked", d.locked)
+            .class_if("busy", busy);
+        let s = theme.resolve(&node);
+
+        // Disabled already here, not only once iced draws it: the icon
+        // and the label take their colour from `button:disabled` too.
+        let open = disabled(node.child("button").class("open"), busy || d.locked);
+        let os = theme.resolve(&open);
+        let i = open.child("icon");
+        let info = open.child("info");
+        let l = info.child("label");
+        let meter = info.child("meter");
+        let name = device_name(ctx.locale, d);
+        let icon_box = padded(theme, &i, Size::new(icon_size(ctx, &i), icon_size(ctx, &i)));
+        let text = theme.measure(&l, &name);
+        let text = padded(
+            theme,
+            &l,
+            Size::new(text.width, text.height.max(theme.line_height(&l))),
+        );
+        let mut info_height = text.height;
+        let mut parts: Vec<Element<'a, Message>> =
+            vec![theme.text(&l, name).width(Length::Fill).into()];
+        if let Some(usage) = d.usage {
+            let full = usage >= 0.9;
+            let meter = meter.class_if("critical", full);
+            info_height +=
+                theme.resolve(&info).gap + px(theme.resolve(&meter).height).unwrap_or(8.0);
+            parts.push(graph::meter(theme, &meter, usage));
+        }
+        let info_size = padded(theme, &info, Size::new(text.width, info_height));
+        let chrome = |s: &theme::Style| {
+            Size::new(
+                s.padding.left + s.padding.right + 2.0 * s.border_width,
+                s.padding.top + s.padding.bottom + 2.0 * s.border_width,
+            )
+        };
+        let open_chrome = chrome(&os);
+        let open_size = Size::new(
+            icon_box.width + os.gap + info_size.width + open_chrome.width,
+            icon_box.height.max(info_size.height) + open_chrome.height,
+        );
+        let target = match &d.mount_point {
+            Some(mount_point) => Some(Message::Open(Target::Path(mount_point.clone()))),
+            None => Some(Message::Mount(d.path.clone())),
+        }
+        .filter(|_| !busy && !d.locked);
+        let content = row![
+            icon_view(ctx, &i, ctx.icons.first_of(&self.device_icons(d.kind))),
+            theme.column(&info, parts).width(Length::Fill),
+        ]
+        .spacing(os.gap)
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
+        let mut buttons: Vec<Element<'a, Message>> = vec![
+            theme
+                .button(&open, content)
+                .width(Length::Fill)
+                .on_press_maybe(target)
+                .into(),
+        ];
+        let mut size = open_size;
+
+        if let Some(mount_point) = &d.mount_point {
+            let root = mount_point == std::path::Path::new("/");
+            let eject = disabled(node.child("button").class("eject"), busy || root);
+            let ei = eject.child("icon");
+            let es = chrome(&theme.resolve(&eject));
+            let ei_size = padded(
+                theme,
+                &ei,
+                Size::new(icon_size(ctx, &ei), icon_size(ctx, &ei)),
+            );
+            size.width += s.gap + ei_size.width + es.width;
+            size.height = size.height.max(ei_size.height + es.height);
+            buttons.push(
+                theme
+                    .button(&eject, icon(ctx, &ei, &self.symbolic(EJECT_ICON)))
+                    .on_press_maybe((!busy && !root).then(|| Message::Eject(d.path.clone())))
+                    .into(),
+            );
+        }
+        let content = row(buttons)
+            .spacing(s.gap)
+            .align_y(Alignment::Center)
+            .width(Length::Fill);
+        (
+            theme.container(&node, content).width(Length::Fill).into(),
+            Size::new(
+                size.width + s.padding.left + s.padding.right,
+                size.height + s.padding.top + s.padding.bottom,
+            ),
+        )
+    }
+}
+
+const EJECT_ICON: &str = "media-eject";
+
+/// What a device is called: its label, else its size ("32 GB volume").
+pub fn device_name(locale: &Locale, d: &Device) -> String {
+    if d.label.is_empty() {
+        locale.fmt("places.volume", &[("size", &format::bytes(locale, d.size))])
+    } else {
+        d.label.clone()
+    }
+}
+
+/// `node` as a disabled button, when it is one.
+fn disabled(node: Node, disabled: bool) -> Node {
+    if disabled {
+        node.status(button::Status::Disabled)
+    } else {
+        node
+    }
+}
+
 /// A section's title.
 fn header<'a>(ctx: &Context<'a>, list: &Node, group: Group, title: &'a str) -> Block<'a> {
     let theme = ctx.theme;
@@ -268,9 +430,18 @@ fn icon_size(ctx: &Context<'_>, node: &Node) -> f32 {
 /// A themed icon by name, at the node's `height` (its `width` if
 /// there's no height), or a blank of that size.
 fn icon<'a>(ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> {
+    icon_view(ctx, node, ctx.icons.get_name(name, None))
+}
+
+/// [`icon`] for an icon already looked up.
+fn icon_view<'a>(
+    ctx: &Context<'a>,
+    node: &Node,
+    icon: Option<&crate::icons::Icon>,
+) -> Element<'a, Message> {
     let style = ctx.theme.resolve(node);
     let size = icon_size(ctx, node);
-    let icon = match ctx.icons.get_name(name, None) {
+    let icon = match icon {
         Some(icon) => icon.view(size, style.color),
         None => Space::new().width(size).height(size).into(),
     };

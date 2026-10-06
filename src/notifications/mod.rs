@@ -11,6 +11,7 @@
 //!
 //! Reference: <https://specifications.freedesktop.org/notification-spec/latest/>
 
+pub mod client;
 mod dbus;
 pub mod toast;
 

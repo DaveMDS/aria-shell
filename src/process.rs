@@ -184,9 +184,10 @@ fn pick_terminal(env: Option<&str>, installed: impl Fn(&str) -> bool) -> Option<
 /// `argv` run inside a terminal emulator: `terminal` is a command line
 /// (`[general] terminal`), `argv` in place of `%c`, or `-e` and `argv`
 /// last when there's none (as the desktop entry spec has terminals
-/// take it).
+/// take it). An empty `argv`: the terminal alone, its shell.
 pub fn in_terminal(terminal: &str, argv: &[String]) -> Vec<String> {
-    filled(terminal, "%c", argv, &["-e"])
+    let absent: &[&str] = if argv.is_empty() { &[] } else { &["-e"] };
+    filled(terminal, "%c", argv, absent)
 }
 
 /// The file managers `[general] file_manager = auto` tries, in order;
@@ -364,6 +365,11 @@ mod tests {
         assert_eq!(
             in_terminal("wezterm start -- %c", &argv),
             ["wezterm", "start", "--", "btop", "-p"]
+        );
+        assert_eq!(in_terminal("kitty --single", &[]), ["kitty", "--single"]);
+        assert_eq!(
+            in_terminal("wezterm start -- %c", &[]),
+            ["wezterm", "start", "--"]
         );
         assert_eq!(first_on_path(&["no-such-program-xyz", "sh"]), Some("sh"));
         assert_eq!(first_on_path(&["no-such-program-xyz"]), None);

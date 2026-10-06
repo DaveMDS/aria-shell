@@ -221,7 +221,6 @@ pub struct GeneralConfig {
     /// The file manager's command line, the directory in place of `%f`
     /// (last when there's none); `auto`: the first of
     /// [`process::FILE_MANAGERS`] on the PATH; `none`/`off`: none.
-    #[allow(dead_code)] // nothing opens a directory yet
     pub file_manager: Option<String>,
 }
 

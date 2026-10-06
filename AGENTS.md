@@ -40,6 +40,7 @@ aria-shell osd show --icon display-brightness-symbolic --value 40   # the OSD, f
 aria-shell brightness up            # every screen's brightness (--output eDP-1: one; down, set 40)
 aria-shell volume up                # the default output's volume (--input: the microphone; down, set 40, mute)
 aria-shell screenshot               # the picker; `window`, `output [connector]`, `all` at once (--clipboard, --edit)
+aria-shell open terminal            # [general] terminal; `open file-manager [dir]`: [general] file_manager
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
@@ -139,6 +140,11 @@ Conventional Commits. Short subject, no enforced capitalization, no
 trailing period, optional `Component: description` prefix, optional
 free-form body when it helps. Do not add a `Co-Authored-By` attribution
 line.
+
+The tree is kept `cargo fmt` clean (default rustfmt settings): run
+`cargo fmt` before every commit, so a later run touches nothing but
+your own changes. `cargo fmt -- <file>` formats the whole crate anyway,
+not just that file.
 
 ## Translations
 

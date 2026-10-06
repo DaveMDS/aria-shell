@@ -46,7 +46,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use audio::Audio;
 use brightness::Brightness;
-use commands::{Command, DebugCommand, Reply, ToggleCommand};
+use commands::{Command, DebugCommand, OpenCommand, Reply, ToggleCommand};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
 use dialog::Dialog;
@@ -164,6 +164,8 @@ impl Message {
             Message::Widgets(..) | Message::Command(Command::Debug(..)) => Scope::None,
             // Only closes surfaces.
             Message::OsdExpired(_) => Scope::None,
+            // Only runs a program.
+            Message::Command(Command::Open(_)) => Scope::None,
             // The pointer's surface, for its hover styles: an iced widget
             // keeps its status (hovered, pressed) in itself, rebuilt as
             // unknown with every message and known again only when
@@ -664,6 +666,10 @@ impl AriaShell {
                 Task::none()
             }
             Message::Command(Command::Lock) => self.lock(),
+            Message::Command(Command::Open(what)) => {
+                self.open(what);
+                Task::none()
+            }
             Message::Command(Command::Idle(cmd)) => {
                 self.idle.run(cmd);
                 self.observe_osd()
@@ -1707,6 +1713,26 @@ impl AriaShell {
 
     /// `aria-shell lock`: ask the compositor for the session lock; the
     /// surfaces come back as `NewShell` events. Whatever is open goes.
+    /// `aria-shell open ...`: the terminal or the file manager of
+    /// `[general]`, logged when there's none.
+    fn open(&self, what: OpenCommand) {
+        match what {
+            OpenCommand::Terminal => match &self.general.terminal {
+                Some(terminal) => process::run_argv(&process::in_terminal(terminal, &[])),
+                None => log::warn!("open terminal: no terminal ([general] terminal)"),
+            },
+            OpenCommand::FileManager(dir) => match &self.general.file_manager {
+                Some(file_manager) => {
+                    let dir = dir
+                        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+                        .unwrap_or_else(|| PathBuf::from("/"));
+                    process::run_argv(&process::on_file(file_manager, &dir));
+                }
+                None => log::warn!("open file-manager: no file manager ([general] file_manager)"),
+            },
+        }
+    }
+
     fn lock(&mut self) -> Task<Message> {
         if self.locker.is_some() {
             log::info!("lock requested while locked, ignored");

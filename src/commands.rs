@@ -47,6 +47,8 @@ pub enum Command {
     Volume(VolumeCommand),
     /// Take a screenshot (`aria-shell screenshot window`).
     Screenshot(crate::screenshot::Command),
+    /// Run a preferred program (`aria-shell open terminal`).
+    Open(OpenCommand),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -77,6 +79,15 @@ pub enum DebugCommand {
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
+}
+
+/// `aria-shell open ...`: a program of `[general]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenCommand {
+    /// A new terminal.
+    Terminal,
+    /// The file manager, on a directory (the home when `None`).
+    FileManager(Option<PathBuf>),
 }
 
 /// Where the daemon writes the answer to a [`Command::Debug`].
@@ -166,6 +177,7 @@ enum Parsed {
     Brightness(crate::brightness::Command),
     Volume(VolumeCommand),
     Screenshot(crate::screenshot::Command),
+    Open(OpenCommand),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -213,6 +225,17 @@ fn parse(line: &str) -> Result<Parsed, String> {
         "brightness" => Ok(Parsed::Brightness(parse_brightness(&args)?)),
         "volume" => Ok(Parsed::Volume(parse_volume(&args)?)),
         "screenshot" => Ok(Parsed::Screenshot(parse_screenshot(&args)?)),
+        "open" => match args.as_slice() {
+            ["terminal"] => Ok(Parsed::Open(OpenCommand::Terminal)),
+            ["file-manager"] => Ok(Parsed::Open(OpenCommand::FileManager(None))),
+            ["file-manager", dir @ ..] => Ok(Parsed::Open(OpenCommand::FileManager(Some(
+                PathBuf::from(dir.join(" ")),
+            )))),
+            _ => Err(format!(
+                "invalid arguments for <open>: {} (terminal, file-manager [dir])",
+                args.join(" ")
+            )),
+        },
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -521,6 +544,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Screenshot(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Open(cmd)) => {
+                let _ = tx.send(Command::Open(cmd)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Debug(cmd)) => {
                 let (reply_tx, mut reply_rx) = mpsc::channel(1);
                 let _ = tx.send(Command::Debug(cmd, Reply(reply_tx))).await;
@@ -552,7 +579,7 @@ pub fn send(words: &[String]) -> Result<String, String> {
             path.display()
         )
     })?;
-    sock.write_all(format!("{}\n", words.join(" ")).as_bytes())
+    sock.write_all(format!("{}\n", absolute_dir(words).join(" ")).as_bytes())
         .map_err(|e| e.to_string())?;
     let mut reply = String::new();
     BufReader::new(&sock)
@@ -563,6 +590,19 @@ pub fn send(words: &[String]) -> Result<String, String> {
         ("OK", rest) => Ok(rest.to_owned()),
         ("ERR", rest) => Err(rest.to_owned()),
         _ => Err(format!("bad reply {reply:?}")),
+    }
+}
+
+/// `words` with the directory of `open file-manager <dir>` made
+/// absolute: the shell's working directory isn't the client's.
+fn absolute_dir(words: &[String]) -> Vec<String> {
+    match words {
+        [open, what, dir @ ..] if open == "open" && what == "file-manager" && !dir.is_empty() => {
+            let dir = dir.join(" ");
+            let dir = std::path::absolute(&dir).map_or(dir, |d| d.to_string_lossy().into_owned());
+            vec![open.clone(), what.clone(), dir]
+        }
+        _ => words.to_vec(),
     }
 }
 
@@ -762,6 +802,49 @@ mod tests {
         assert_eq!(
             mute.command(5.0, 100.0),
             Command::ToggleDefaultMute(Kind::Input)
+        );
+    }
+
+    #[test]
+    fn parses_open() {
+        assert_eq!(
+            parse("open terminal"),
+            Ok(Parsed::Open(OpenCommand::Terminal))
+        );
+        assert_eq!(
+            parse("open file-manager"),
+            Ok(Parsed::Open(OpenCommand::FileManager(None)))
+        );
+        assert_eq!(
+            parse("open file-manager /tmp/my dir"),
+            Ok(Parsed::Open(OpenCommand::FileManager(Some(
+                "/tmp/my dir".into()
+            ))))
+        );
+        assert!(parse("open").is_err());
+        assert!(parse("open browser").is_err());
+        assert!(parse("open terminal now").is_err());
+    }
+
+    #[test]
+    fn the_client_sends_an_absolute_dir() {
+        let words = |w: &[&str]| w.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(
+            absolute_dir(&words(&["open", "file-manager", "my dir"])),
+            words(&[
+                "open",
+                "file-manager",
+                &cwd.join("my dir").to_string_lossy()
+            ])
+        );
+        assert_eq!(
+            absolute_dir(&words(&["open", "file-manager", "/tmp"])),
+            words(&["open", "file-manager", "/tmp"])
+        );
+        assert_eq!(
+            absolute_dir(&words(&["open", "terminal"])),
+            words(&["open", "terminal"])
         );
     }
 

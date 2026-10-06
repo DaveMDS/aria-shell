@@ -426,8 +426,11 @@ commands::listen()          (commands.rs) the command socket as a Subscription; 
                             `Command::Osd(Content)`, `Command::Brightness(brightness::Command)`,
                             `Command::Volume(VolumeCommand)` (made an `audio::Command` by the daemon with the
                             Audio gadget's `[Audio] step` / `max_volume`, so keys and wheel agree),
-                            `Command::Screenshot(screenshot::Command)`
-commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments
+                            `Command::Screenshot(screenshot::Command)`, `Command::Open(OpenCommand)` (Terminal
+                            | FileManager(dir): `[general] terminal` alone, `file_manager` on the dir or the
+                            home, run by the daemon)
+commands::send(args)        the client: `aria-shell launcher toggle` is the same binary with arguments; the
+                            dir of `open file-manager` made absolute first (the shell's cwd isn't ours)
 commands::single_instance() first thing in `main` for the shell: an exclusive `flock` on
                             `<WAYLAND_DISPLAY>.lock` next to the socket, held until exit, or exit 1 (a
                             second shell would run the autostart again and take the socket); a lock,

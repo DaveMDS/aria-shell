@@ -252,6 +252,7 @@ aria-shell osd      show [--icon <name>] [--value <percent>] [text]
 aria-shell brightness up [percent]|down [percent]|set <percent> [--output <connector>]
 aria-shell volume   up [percent]|down [percent]|set <percent>|mute [toggle|on|off] [--input]
 aria-shell screenshot [window|output [connector]|all] [--edit|--clipboard]
+aria-shell open     terminal|file-manager [dir]
 aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness|screenshot
 TODO: reload
 TODO: terminal [toggle|show|hide]
@@ -344,8 +345,9 @@ doesn't take them down with it.
 
 Keys are the compositor's: bind them to the shell's commands
 (`aria-shell launcher toggle`, `aria-shell exiter toggle`,
-`aria-shell lock`, ...). Ready-made examples, with the start of the
-shell, volume, brightness and screenshot keys, are in
+`aria-shell lock`, `aria-shell open terminal`, ...). Ready-made
+examples, with the start of the shell, the terminal and the file manager
+(Super+Enter, Super+E), volume, brightness and screenshot keys, are in
 [`assets/compositors/`](assets/compositors/): `hyprland.lua`
 (Hyprland 0.56 and later), `hyprland.conf` (earlier Hyprland),
 `sway.conf`.
@@ -362,7 +364,8 @@ repository (`assets/aria.conf`) for a full reference.
 
 The preferred programs are in `[general]`: `terminal` and `file_manager`,
 each `auto` (the first one installed), `none`, or a command line (`%c` the
-program a terminal runs, `%f` the directory), as `[Screenshot] editor` is.
+program a terminal runs, `%f` the directory), as `[Screenshot] editor` is;
+`aria-shell open terminal` and `aria-shell open file-manager [dir]` run them.
 
 
 ---

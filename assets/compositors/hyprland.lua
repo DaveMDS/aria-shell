@@ -14,6 +14,10 @@ hl.bind("SUPER + Space",  hl.dsp.exec_cmd("aria-shell launcher toggle"))
 hl.bind("SUPER + Escape", hl.dsp.exec_cmd("aria-shell exiter toggle"))
 hl.bind("SUPER + L",      hl.dsp.exec_cmd("aria-shell lock"))
 
+-- The [general] terminal and file manager
+hl.bind("SUPER + Return", hl.dsp.exec_cmd("aria-shell open terminal"))
+hl.bind("SUPER + E",      hl.dsp.exec_cmd("aria-shell open file-manager"))
+
 -- Volume: the default output (--input: the microphone), by [Audio] step
 -- up to max_volume; whatever changes it, the shell shows its OSD by itself
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("aria-shell volume up"),           { locked = true, repeating = true })

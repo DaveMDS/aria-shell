@@ -15,8 +15,8 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::theme::{self, Command, Scheme};
-use crate::widgets::menu::{self, Item, Menu};
+use crate::ui::menu::{self, Item, Menu};
+use crate::ui::theme::{self, Command, Scheme};
 
 /// `[Themes]` section.
 #[derive(Debug, Clone)]

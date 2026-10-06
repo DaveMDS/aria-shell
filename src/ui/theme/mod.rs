@@ -65,7 +65,7 @@ const DEFAULT_HANDLE: f32 = 12.0;
 const DEFAULT_TOGGLE: f32 = 16.0;
 
 /// Always loaded first; the neutral defaults every theme builds on.
-const BASE: &str = include_str!("../../assets/base.css");
+const BASE: &str = include_str!("../../../assets/base.css");
 
 /// Bar thickness when no rule sets `min-height` on `panel`.
 pub const DEFAULT_PANEL_HEIGHT: f32 = 32.0;

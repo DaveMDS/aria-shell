@@ -70,9 +70,12 @@ launcher, exiter, locker, osd, wallpaper, the screenshot picker. A component kee
 them as a `components::Surfaces` (open with these settings, close,
 resize, redraw), which the daemon turns into the runtime's messages
 (`surface_tasks`): only the daemon talks to the runtime, only the
-component knows where its surfaces go. Gadgets, widgets, the theme and the plumbing (config,
-commands, process, locale, ...) stay at the top. The paths in the
-diagram below leave out the `services/` / `components/` prefix.
+component knows where its surfaces go. `gadgets/` holds the bar's
+gadgets (the contract in `gadgets/mod.rs`), `ui/` the building blocks
+of every surface: the theme and the reusable widgets. The plumbing
+(config, commands, process, locale, ...) stays at the top. The paths
+in the diagram below leave out the `services/` / `components/` / `ui/`
+prefix.
 
 ```
 AriaShell  (main.rs)        daemon; owns Config, ShellReceiver, Compositor, panels: BTreeMap<window::Id, Panel>
@@ -107,10 +110,10 @@ Custom     (gadgets/custom.rs) impl Gadget: icon and/or label, a program per mou
   Message::Left | Right | Middle | Scroll(delta)   -> process::run; with `exec`, Action::Script(Refresh(spec))
   script() -> Option<scripts::Spec>                the `exec` for the daemon; its output read from `ctx.scripts`
 
-Menu       (widgets/menu.rs)  reusable component: Item tree (labels, toggles, separators, submenus unfolding in
-                              place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
+Menu       (menu.rs)        reusable component: Item tree (labels, toggles, separators, submenus unfolding in
+                            place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
 
-Calendar   (widgets/calendar.rs)  reusable component, not a gadget: state + Message + update + view(today, theme, node)
+Calendar   (calendar.rs)    reusable component, not a gadget: state + Message + update + view(today, theme, node)
 
 Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
   subscription()            the single IPC stream (compositor/hyprland.rs or sway.rs), yields `Event`s
@@ -377,7 +380,7 @@ PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the p
            | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
            | MountDir(dir) -> Places(MountDir), closed | UnmountDir(dir) -> Places(UnmountDir)
 
-graph      (widgets/graph.rs)  canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
+graph      (graph.rs)       canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
                             filled to a fraction, label over it), `Graph` (up to two series, grid lines);
                             `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
                             containers (`meter > fill` with `FillPortion`), so the theme styles it
@@ -598,7 +601,7 @@ Two things flow between the daemon and the gadgets besides messages:
   tree and the supported properties for theme authors; `[general] style`
   names a user theme loaded on top (`themes/<name>.css` in the config
   dirs, the XDG data dirs, then `assets/`; or a path). Both are parsed
-  and type-checked at load (`theme/css.rs` scanner, `selector.rs`,
+  and type-checked at load (`ui/theme/css.rs` scanner, `selector.rs`,
   `value.rs`); bad selectors/declarations are logged with `file:line:col`
   and skipped, a syntax error rejects the file (and on hot reload keeps
   the last good theme). `:root { --x: v }` variables are substituted
@@ -855,7 +858,7 @@ Two things flow between the daemon and the gadgets besides messages:
 - **Closed gadget set.** No plugins, no `dyn`. Adding a gadget: one file
   under `gadgets/`, one variant in `AnyGadget` and `gadgets::Message`, one
   arm in each `match` in `gadgets/mod.rs`.
-- **Reusable widgets live in `widgets/`** (`Calendar` so far), as plain
+- **Reusable widgets live in `ui/`** (`Calendar`, `Menu`), as plain
   Elm components: a host embeds one as a field, calls `update` with the
   widget's `Message` and `.map()`s its `view`. Nothing in iced or a
   third-party crate fit (`iced_aw::date_picker` is a modal picker, and
@@ -1329,7 +1332,7 @@ Two things flow between the daemon and the gadgets besides messages:
   RelativeOffset { y: i / (n-1) })` to keep item `i` of `n` in view:
   it needs no row height but scrolls on every arrow, from the very
   first. Now it keeps the row in view the way a list should: on
-  Up/Down it asks the widget tree (`widgets::bounds`, the popups'
+  Up/Down it asks the widget tree (`ui::bounds`, the popups'
   anchor operation) for the selected row and the list container
   (`Theme::tag`), both in layout coordinates (unscrolled), so `row.y -
   list.y` is the row's offset in the content; with the current offset

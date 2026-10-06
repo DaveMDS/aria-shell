@@ -25,7 +25,7 @@ use iced::{Alignment, Element, Length, Size};
 use super::{IconSource, Notification, Notifications};
 use crate::locale::Locale;
 use crate::services::icons::{Icon, Icons};
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 /// Width when the theme doesn't set one on `notification`.
 const DEFAULT_WIDTH: f32 = 360.0;

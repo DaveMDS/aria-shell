@@ -24,7 +24,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::components::Surfaces;
 use crate::config::{Config, RawSection, Section};
-use crate::theme::{Node, Theme};
+use crate::ui::theme::{Node, Theme};
 
 /// `[wallpaper]` / `[wallpaper:<connector>]` section.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use configparser::ini::Ini;
 
 use crate::process;
-use crate::theme::Scheme;
+use crate::ui::theme::Scheme;
 
 /// The loaded configuration file. Plain data owned by the application
 /// state; pass it by reference to whoever needs a section.

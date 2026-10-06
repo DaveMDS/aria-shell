@@ -17,7 +17,7 @@ use crate::gadgets::{self, AnyGadget, Context, Shared};
 use crate::services::compositor;
 use crate::services::scripts;
 use crate::services::tray;
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation; `size`, `align`,

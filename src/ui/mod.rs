@@ -1,9 +1,13 @@
-//! Reusable widgets that aren't gadgets: plain Elm components a gadget or
-//! a shell window embeds and whose messages it maps.
+//! The building blocks of every surface: the theme (the CSS-like files,
+//! resolved per widget, and the themed widgets built from them), and
+//! the reusable pieces a gadget or a component embeds: plain Elm
+//! components whose messages the host maps (the menu, the calendar) and
+//! drawn ones (the graphs).
 
 pub mod calendar;
 pub mod graph;
 pub mod menu;
+pub mod theme;
 
 use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::{Rectangle, Task, widget};

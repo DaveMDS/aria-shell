@@ -14,7 +14,7 @@ use iced::widget::{Space, canvas as canvas_widget, container, row};
 use iced::{Color, Element, Font, Length, Point, Rectangle, Renderer, Size, mouse};
 
 use crate::locale::Locale;
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 /// One series: its values (oldest first) and its colour.
 #[derive(Clone)]

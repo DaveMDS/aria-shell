@@ -21,8 +21,8 @@ use crate::components::dialog;
 use crate::config::{RawSection, Section};
 use crate::gadgets::Shared;
 use crate::locale::Locale;
-use crate::theme::{self, Node, Theme};
 use crate::time;
+use crate::ui::theme::{self, Node, Theme};
 
 /// `[exiter]` section.
 #[derive(Debug, Clone, PartialEq, Eq)]

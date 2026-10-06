@@ -93,12 +93,13 @@ sources above (a `subscription()` feeding `apply(Event)`, a
 `components/` the surfaces the daemon opens and routes to, each a full
 Elm component (`Panel`, `Launcher`, `Exiter` on a `Dialog`, `Locker`,
 `Osd`, `Wallpapers`, the screenshot `Picker`) that says what to do with
-its surfaces as a `components::Surfaces`. Gadgets (`gadgets/`, the
-contract in its `mod.rs`), reusable widgets (`widgets/`), the theme and the plumbing
-(`config.rs`, `commands.rs`, `process.rs`, `locale.rs`, ...) stay at
-the top.
+its surfaces as a `components::Surfaces`. `gadgets/` holds the bar's
+gadgets, their contract in its `mod.rs`; `ui/` the building blocks of
+every surface: the theme (`ui/theme/`) and the reusable pieces (the
+menu, the calendar, the graphs). The plumbing (`config.rs`,
+`commands.rs`, `process.rs`, `locale.rs`, ...) stays at the top.
 
-Styling lives in `theme/`: a CSS-like file (`assets/base.css` always,
+Styling lives in `ui/theme/`: a CSS-like file (`assets/base.css` always,
 plus `[general] style`), loaded for a light or dark scheme
 (`:root.light` / `:root.dark` variables, `panel.dark { }` rules; the
 `Themes` gadget switches scheme and theme at runtime), resolved per

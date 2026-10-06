@@ -36,7 +36,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use crate::components::Surfaces;
 use crate::locale::Locale;
 use crate::services::screenshot::{Destination, Frozen, Rect, Shot};
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 /// How near an edge, in logical pixels, a press grabs it.
 const GRIP: f32 = 10.0;

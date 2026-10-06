@@ -23,7 +23,7 @@ use crate::services::network::{
     AccessPoint, Command, Device, DeviceKind, DeviceState, FailKey, FailReason, IpConfig, Profile,
     Security, Summary,
 };
-use crate::theme::{self, Node};
+use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

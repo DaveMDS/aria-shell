@@ -24,9 +24,9 @@ use crate::process;
 use crate::services::sysmon::{
     Column, Command, MonitorConfig, Process, Sample, Signal, SysMon, Value, format,
 };
-use crate::theme::{self, Node, Theme};
 use crate::time::aligned_ticks;
-use crate::widgets::graph;
+use crate::ui::graph;
+use crate::ui::theme::{self, Node, Theme};
 
 /// `[SystemMonitor:<id>]`: a gadget's keys (the sampler's and the
 /// popup's are `sysmon::MonitorConfig`, from the base `[SystemMonitor]`;

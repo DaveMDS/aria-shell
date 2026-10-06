@@ -17,7 +17,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::process;
 use crate::services::brightness::{BrightnessConfig, Command, Display, Kind, Target, WheelTarget};
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

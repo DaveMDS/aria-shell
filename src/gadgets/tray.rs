@@ -6,7 +6,7 @@
 //!
 //! Holds no item state: it reads the daemon's [`Tray`](crate::services::tray::Tray)
 //! from the view context. The popup shows the menu the daemon loaded
-//! for the clicked item (a `widgets::menu::Menu`); submenus unfold in
+//! for the clicked item (a `ui::menu::Menu`); submenus unfold in
 //! place and the popup is resized (its size is a function of the state,
 //! see [`Gadget::popup_size`]).
 
@@ -18,8 +18,8 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::services::tray::{Command, Orientation, Status};
-use crate::theme;
-use crate::widgets::menu::{self, Menu};
+use crate::ui::menu::{self, Menu};
+use crate::ui::theme;
 
 /// `[Tray]` section: no keys yet (the Python one had none either).
 #[derive(Debug, Clone)]

@@ -13,7 +13,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget};
 use crate::services::compositor::{Command, Window, Workspace};
-use crate::theme::{Length, Node};
+use crate::ui::theme::{Length, Node};
 
 /// `[WorkSpaces]` section (spelled as in the Python implementation).
 #[derive(Debug, Clone)]

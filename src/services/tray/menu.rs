@@ -1,5 +1,5 @@
 //! `com.canonical.dbusmenu`: the menu a tray item exports, fetched as
-//! one layout tree into `widgets::menu` items, shown by the tray gadget
+//! one layout tree into `ui::menu` items, shown by the tray gadget
 //! in its popup.
 //!
 //! Reference: `libdbusmenu/libdbusmenu-glib/dbus-menu.xml`. Not
@@ -15,7 +15,7 @@ use zbus::proxy::CacheProperties;
 use zbus::zvariant::{ObjectPath, OwnedValue, Value};
 use zbus::{Connection, proxy};
 
-use crate::widgets::menu::{Item, Toggle};
+use crate::ui::menu::{Item, Toggle};
 
 /// `(id, properties, children)`, where each child is the same struct in
 /// a variant.

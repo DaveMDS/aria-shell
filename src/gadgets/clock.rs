@@ -8,7 +8,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::time;
-use crate::widgets::calendar::{self, Calendar};
+use crate::ui::calendar::{self, Calendar};
 
 /// `[Clock]` section. Same keys and defaults as the Python implementation.
 #[derive(Debug, Clone)]

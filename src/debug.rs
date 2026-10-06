@@ -11,7 +11,8 @@ use iced_wayland_subscriber::OutputId;
 use crate::commands::{DebugCommand, Reply};
 use crate::components::locker::Locker;
 use crate::components::panel::{self, Panel};
-use crate::{AriaShell, Message, theme};
+use crate::ui::theme;
+use crate::{AriaShell, Message};
 
 impl AriaShell {
     /// Answer a `debug` command: what the daemon and the services see.

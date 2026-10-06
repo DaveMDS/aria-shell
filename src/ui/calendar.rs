@@ -11,7 +11,7 @@ use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length};
 
 use crate::locale::Locale;
-use crate::theme::{Node, Theme};
+use crate::ui::theme::{Node, Theme};
 
 const CELL: u32 = 32;
 const PADDING: u32 = 12;

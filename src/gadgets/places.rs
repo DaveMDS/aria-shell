@@ -21,8 +21,8 @@ use crate::services::places::{
     Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target,
 };
 use crate::services::sysmon::format;
-use crate::theme::{self, Node};
-use crate::widgets::graph;
+use crate::ui::graph;
+use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

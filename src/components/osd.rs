@@ -46,8 +46,8 @@ use crate::services::icons::Icons;
 use crate::services::idle::Idle;
 use crate::services::network::{DeviceKind, Network, Summary};
 use crate::services::power::Power;
-use crate::theme::{self, Node, Theme};
-use crate::widgets::graph;
+use crate::ui::graph;
+use crate::ui::theme::{self, Node, Theme};
 
 /// Surface size when the theme doesn't set `width` / `height` on `osd`.
 const DEFAULT_SIZE: (f32, f32) = (320.0, 56.0);

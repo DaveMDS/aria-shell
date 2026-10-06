@@ -10,8 +10,8 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::services::screenshot::{Command, Destination, ScreenshotConfig, Target};
-use crate::theme;
-use crate::widgets::menu::{self, Item, Menu};
+use crate::ui::menu::{self, Item, Menu};
+use crate::ui::theme;
 
 /// Icon size when the theme doesn't set `height` on `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

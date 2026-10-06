@@ -6,10 +6,9 @@ mod gadgets;
 mod locale;
 mod process;
 mod services;
-mod theme;
 mod time;
+mod ui;
 mod watch;
-mod widgets;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -53,8 +52,8 @@ use services::{
     scripts, sysmon, tray,
 };
 use sysmon::SysMon;
-use theme::{Node, Theme};
 use tray::Tray;
+use ui::theme::{self, Node, Theme};
 use wallpaper::Wallpapers;
 
 /// Top-level message. `#[to_exwlshell_message]` adds the variants the
@@ -1063,7 +1062,7 @@ impl AriaShell {
                 let close = self.close_popups();
                 // Only the widget tree knows where the anchor is: ask it,
                 // then open the popup there.
-                let open = widgets::bounds(anchor).map(move |bounds| Message::PopupAnchor {
+                let open = ui::bounds(anchor).map(move |bounds| Message::PopupAnchor {
                     popup: id,
                     panel,
                     anchor: bounds.unwrap_or_default(),

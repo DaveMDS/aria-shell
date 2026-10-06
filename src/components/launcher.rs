@@ -30,8 +30,8 @@ use crate::config::{self, RawSection, Section};
 use crate::gadgets::Shared;
 use crate::services::icons::Index;
 use crate::services::icons::desktop::{self, DesktopAction, DesktopEntry};
-use crate::theme::{self, Node, Theme};
-use crate::widgets;
+use crate::ui;
+use crate::ui::theme::{self, Node, Theme};
 
 /// `[launcher]` section.
 #[derive(Debug, Clone)]
@@ -346,8 +346,8 @@ impl Launcher {
         let padding = theme.resolve(&node).padding;
         let item = theme::widget_id(&node);
         let list = theme::widget_id(&self.node.child("list"));
-        widgets::bounds(item).and_then(move |item| {
-            widgets::bounds(list.clone()).map(move |list| Message::Located {
+        ui::bounds(item).and_then(move |item| {
+            ui::bounds(list.clone()).map(move |list| Message::Located {
                 item: Some(item),
                 list,
                 padding,

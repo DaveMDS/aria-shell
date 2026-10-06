@@ -36,7 +36,7 @@ use iced_wayland_subscriber::OutputInfo;
 use crate::config::{Config, Section};
 use crate::services::compositor::{self, Compositor};
 use crate::services::icons::Icons;
-use crate::theme::{Node, Theme};
+use crate::ui::theme::{Node, Theme};
 use audio::AudioGadget;
 use brightness::BrightnessGadget;
 use clock::Clock;
@@ -95,7 +95,7 @@ pub enum Action<M> {
     Run(Task<M>),
     Compositor(compositor::Command),
     Tray(crate::services::tray::Command),
-    Theme(crate::theme::Command),
+    Theme(crate::ui::theme::Command),
     Script(crate::services::scripts::Command),
     Notifications(crate::services::notifications::Command),
     SysMon(crate::services::sysmon::Command),

@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use iced::widget::{Column, Space};
 use iced::{Element, Length, Size};
 
-use crate::theme::{self, Node, Theme};
+use crate::ui::theme::{self, Node, Theme};
 
 const CHECK_ON: &str = "✓";
 const RADIO_ON: &str = "●";

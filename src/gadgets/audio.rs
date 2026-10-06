@@ -22,7 +22,7 @@ use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::audio::{Channel, Command, Kind, PlaybackStatus, Player};
-use crate::theme::{self, Node};
+use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
 const DEFAULT_ICON_SIZE: f32 = 16.0;

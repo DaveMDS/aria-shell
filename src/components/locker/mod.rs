@@ -26,8 +26,8 @@ use iced_wayland_subscriber::OutputId;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::Shared;
-use crate::theme::{self, Node};
 use crate::time;
+use crate::ui::theme::{self, Node};
 
 /// `[locker]` section. Same keys and defaults as the Python
 /// implementation.

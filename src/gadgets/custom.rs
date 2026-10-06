@@ -21,7 +21,7 @@ use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Wheel};
 use crate::process;
 use crate::services::scripts::{self, Output, ReturnType, Spec};
-use crate::theme;
+use crate::ui::theme;
 
 /// `[Custom]` section.
 #[derive(Debug, Clone)]

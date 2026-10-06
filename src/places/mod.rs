@@ -8,9 +8,12 @@
 //!
 //! The devices come from UDisks2 (`udisks.rs`): followed on the system
 //! bus, filtered as GVfs does ([`devices`]), mounted and ejected with
-//! [`Command::Mount`] / [`Command::Eject`]. A failure comes back as a
-//! [`Failure`] for the daemon to notify.
+//! [`Command::Mount`] / [`Command::Eject`]. The network shares from fstab
+//! and mountinfo (`network.rs`), read with the rest, mounted with
+//! `mount` ([`Command::MountShare`] / [`Command::UnmountShare`]). A
+//! failure comes back as a [`Failure`] for the daemon to notify.
 
+mod network;
 mod udisks;
 
 use std::collections::{BTreeSet, HashMap};
@@ -47,7 +50,7 @@ impl Section for PlacesConfig {
                 let group = Group::from_name(name);
                 if group.is_none() {
                     log::warn!(
-                        "[Places] show: unknown section {name:?} (places, devices, bookmarks)"
+                        "[Places] show: unknown section {name:?} (places, devices, network, bookmarks)"
                     );
                 }
                 group
@@ -69,6 +72,8 @@ pub enum Group {
     Places,
     /// UDisks2's.
     Devices,
+    /// fstab's network shares, and those mounted by hand.
+    Network,
     /// GTK's and KDE's.
     Bookmarks,
 }
@@ -78,6 +83,7 @@ impl Group {
         match name {
             "places" => Some(Self::Places),
             "devices" => Some(Self::Devices),
+            "network" => Some(Self::Network),
             "bookmarks" => Some(Self::Bookmarks),
             _ => None,
         }
@@ -87,6 +93,7 @@ impl Group {
         match self {
             Self::Places => "places",
             Self::Devices => "devices",
+            Self::Network => "network",
             Self::Bookmarks => "bookmarks",
         }
     }
@@ -262,6 +269,46 @@ impl DeviceKind {
     }
 }
 
+/// A network share, as the popup lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Share {
+    /// Its key.
+    pub mount_point: PathBuf,
+    /// `x-gvfs-name`, else the folder's name.
+    pub label: String,
+    /// `server:/export`, `//server/share`, `user@host:dir`.
+    pub source: String,
+    pub fs_type: String,
+    /// `x-gvfs-icon`, `x-gvfs-symbolic-icon`.
+    pub icon: Option<String>,
+    pub symbolic_icon: Option<String>,
+    pub mounted: bool,
+    /// In fstab (it can be mounted again), not mounted by hand.
+    pub in_fstab: bool,
+}
+
+impl Share {
+    /// The theme's class: the protocol's family.
+    pub fn family(&self) -> &'static str {
+        match self.fs_type.as_str() {
+            "nfs" | "nfs4" => "nfs",
+            "cifs" | "smb3" | "smbfs" => "smb",
+            "sshfs" | "fuse.sshfs" | "fuse" => "ssh",
+            "davfs" | "fuse.davfs2" => "dav",
+            _ => "other",
+        }
+    }
+
+    /// What [`Places::busy`] knows it by.
+    pub fn key(&self) -> String {
+        share_key(&self.mount_point)
+    }
+}
+
+fn share_key(mount_point: &Path) -> String {
+    format!("share:{}", mount_point.display())
+}
+
 /// What an eject does to the drive, after unmounting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveAction {
@@ -318,15 +365,35 @@ pub enum Event {
         mount_point: PathBuf,
     },
     Ejected(String),
+    /// `mount` went through: the share is opened.
+    ShareMounted(PathBuf),
+    ShareUnmounted(PathBuf),
     Failed(Failure),
 }
 
-/// A mount or an eject UDisks2 refused, for the daemon to notify.
+/// What failed to mount or unmount.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Volume {
+    Device(Device),
+    Share(Share),
+}
+
+impl Volume {
+    fn key(&self) -> String {
+        match self {
+            Self::Device(d) => d.path.clone(),
+            Self::Share(s) => s.key(),
+        }
+    }
+}
+
+/// A mount or an eject refused (by UDisks2, by `mount`), for the daemon
+/// to notify.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Failure {
     pub eject: bool,
-    pub device: Device,
-    /// UDisks2's message.
+    pub volume: Volume,
+    /// UDisks2's message, `mount`'s stderr.
     pub message: String,
     /// Polkit said no: no agent to ask for the password, or the wrong
     /// one.
@@ -343,6 +410,9 @@ pub enum Command {
     /// Unmount it (and lock it, when it's an unlocked LUKS volume),
     /// then eject or power off its drive when it's removable.
     Eject(String),
+    /// `mount` a share (by its mount point), then open it.
+    MountShare(PathBuf),
+    UnmountShare(PathBuf),
 }
 
 #[derive(Debug, Default)]
@@ -353,7 +423,9 @@ pub struct Places {
     bus: Option<Connection>,
     /// `None` while UDisks2 isn't running.
     devices: Option<Vec<Device>>,
-    /// The devices a mount or an eject is under way for.
+    shares: Vec<Share>,
+    /// The devices (by path) and the shares ([`Share::key`]) a mount or
+    /// an eject is under way for.
     busy: BTreeSet<String>,
 }
 
@@ -408,14 +480,30 @@ impl Places {
                 self.busy.remove(&path);
                 (true, None)
             }
+            Event::ShareMounted(dir) => {
+                log::info!("places: {} mounted", dir.display());
+                self.busy.remove(&share_key(&dir));
+                self.reload_shares();
+                open(file_manager, &Target::Path(dir));
+                (true, None)
+            }
+            Event::ShareUnmounted(dir) => {
+                log::info!("places: {} unmounted", dir.display());
+                self.busy.remove(&share_key(&dir));
+                self.reload_shares();
+                (true, None)
+            }
             Event::Failed(failure) => {
+                let key = failure.volume.key();
                 log::warn!(
-                    "places: {} {}: {}",
+                    "places: {} {key}: {}",
                     if failure.eject { "eject" } else { "mount" },
-                    failure.device.path,
                     failure.message
                 );
-                self.busy.remove(&failure.device.path);
+                self.busy.remove(&key);
+                if matches!(failure.volume, Volume::Share(_)) {
+                    self.reload_shares();
+                }
                 (true, Some(failure))
             }
         }
@@ -425,6 +513,7 @@ impl Places {
         match command {
             Command::Refresh => {
                 self.reload();
+                self.reload_shares();
                 if let Some(devices) = &mut self.devices {
                     read_usage(devices);
                 }
@@ -450,7 +539,7 @@ impl Places {
                             let (message, not_authorized) = udisks::failure(&e);
                             Event::Failed(Failure {
                                 eject: false,
-                                device,
+                                volume: Volume::Device(device),
                                 message,
                                 not_authorized,
                             })
@@ -475,11 +564,51 @@ impl Places {
                             let (message, not_authorized) = udisks::failure(&e);
                             Event::Failed(Failure {
                                 eject: true,
-                                device,
+                                volume: Volume::Device(device),
                                 message,
                                 not_authorized,
                             })
                         }
+                    }
+                })
+            }
+            Command::MountShare(dir) => {
+                let Some(share) = self.share(&dir).cloned() else {
+                    return Task::none();
+                };
+                if !self.busy.insert(share.key()) {
+                    return Task::none();
+                }
+                log::info!("places: mounting {}", dir.display());
+                Task::future(async move {
+                    match network::mount(dir.clone()).await {
+                        Ok(()) => Event::ShareMounted(dir),
+                        Err(message) => Event::Failed(Failure {
+                            eject: false,
+                            volume: Volume::Share(share),
+                            message,
+                            not_authorized: false,
+                        }),
+                    }
+                })
+            }
+            Command::UnmountShare(dir) => {
+                let Some(share) = self.share(&dir).cloned() else {
+                    return Task::none();
+                };
+                if !self.busy.insert(share.key()) {
+                    return Task::none();
+                }
+                log::info!("places: unmounting {}", dir.display());
+                Task::future(async move {
+                    match network::unmount(share.clone()).await {
+                        Ok(()) => Event::ShareUnmounted(dir),
+                        Err(message) => Event::Failed(Failure {
+                            eject: true,
+                            volume: Volume::Share(share),
+                            message,
+                            not_authorized: false,
+                        }),
                     }
                 })
             }
@@ -502,13 +631,44 @@ impl Places {
         self.devices.as_deref().unwrap_or_default()
     }
 
-    /// Whether a mount or an eject is under way for the device.
-    pub fn busy(&self, path: &str) -> bool {
-        self.busy.contains(path)
+    pub fn shares(&self) -> &[Share] {
+        &self.shares
+    }
+
+    /// Whether a mount or an eject is under way for a device (by its
+    /// path) or a share ([`Share::key`]).
+    pub fn busy(&self, key: &str) -> bool {
+        self.busy.contains(key)
+    }
+
+    /// The icons the shares' fstab entries name, for the daemon to
+    /// resolve.
+    pub fn icon_names(&self) -> impl Iterator<Item = &str> {
+        self.shares
+            .iter()
+            .flat_map(|s| s.icon.iter().chain(s.symbolic_icon.iter()))
+            .map(String::as_str)
     }
 
     fn device(&self, path: &str) -> Option<&Device> {
         self.devices().iter().find(|d| d.path == path)
+    }
+
+    fn share(&self, mount_point: &Path) -> Option<&Share> {
+        self.shares.iter().find(|s| s.mount_point == mount_point)
+    }
+
+    /// fstab and mountinfo read again: local files, quick.
+    fn reload_shares(&mut self) {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        let read = |path| std::fs::read_to_string(path).unwrap_or_default();
+        self.shares = network::shares(
+            &network::parse_fstab(&read(network::fstab_path())),
+            &network::parse_mountinfo(&read(network::mountinfo_path())),
+            &home,
+        );
     }
 
     /// Unmount, lock, then the drive: only when it's removable and
@@ -537,6 +697,18 @@ impl Places {
             self.bookmarks.len(),
             self.trash_full
         )];
+        parts.extend(self.shares.iter().map(|s| {
+            format!(
+                "share {} {:?} label={:?} type={} mounted={} fstab={} busy={}",
+                s.mount_point.display(),
+                s.source,
+                s.label,
+                s.fs_type,
+                s.mounted,
+                s.in_fstab,
+                self.busy(&s.key()),
+            )
+        }));
         match &self.devices {
             None => parts.push("udisks=false".to_owned()),
             Some(devices) => parts.extend(devices.iter().map(|d| {

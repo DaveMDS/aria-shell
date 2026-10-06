@@ -383,6 +383,7 @@ impl AriaShell {
             .chain(self.notifications.icon_names().map(str::to_owned))
             .chain(self.audio.icon_names().map(str::to_owned))
             .chain(self.power.icon_names().map(str::to_owned))
+            .chain(self.places.icon_names().map(str::to_owned))
             .chain(self.osd.icon_names().map(str::to_owned))
             .chain(
                 self.locker
@@ -1745,22 +1746,26 @@ impl AriaShell {
     /// UDisks2's reason (polkit's refusal worded: no agent to ask for
     /// the password, usually).
     fn notify_places(&self, failure: places::Failure) -> Task<Message> {
-        let name = gadgets::places::device_name(&self.locale, &failure.device);
-        let summary = self.locale.fmt(
-            if failure.eject {
-                "places.eject_failed"
-            } else {
-                "places.mount_failed"
-            },
-            &[("name", &name)],
-        );
+        let (name, icon) = match &failure.volume {
+            places::Volume::Device(d) => (
+                gadgets::places::device_name(&self.locale, d),
+                "drive-harddisk-symbolic",
+            ),
+            places::Volume::Share(s) => (s.label.clone(), "folder-remote-symbolic"),
+        };
+        let key = match (&failure.volume, failure.eject) {
+            (_, false) => "places.mount_failed",
+            (places::Volume::Device(_), true) => "places.eject_failed",
+            (places::Volume::Share(_), true) => "places.unmount_failed",
+        };
+        let summary = self.locale.fmt(key, &[("name", &name)]);
         let body = if failure.not_authorized {
             self.locale.tr("places.not_authorized").to_owned()
         } else {
             failure.message
         };
+        let icon = icon.to_owned();
         Task::future(async move {
-            let icon = "drive-harddisk-symbolic".to_owned();
             if let Err(e) = notifications::client::notify(0, icon, summary, body, false).await {
                 log::warn!("places: can't notify: {e}");
             }

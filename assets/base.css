@@ -183,7 +183,7 @@
  *   popup > gadget.places
  *   ╰─ list                                                   a column (`gap`); `width` sizes the popup, else
  *      │                                                      the widest row does
- *      ├─ header.places | header.devices | header.bookmarks ╰─ title   section titles, in `[Places] show` order
+ *      ├─ header.places|.devices|.network|.bookmarks ╰─ title  section titles, in `[Places] show` order
  *      ├─ item.home|.desktop|.documents|.download|.music|.pictures|.videos|.trash[.full]|.folder|.remote
  *      │  ├─ icon                                             a button per place: a click opens it in
  *      │  ╰─ label                                            `[general] file_manager`
@@ -198,6 +198,8 @@
  *      │  │     ╰─ meter[.critical] > fill                    how full it is, while mounted (.critical: 90%)
  *      │  ╰─ button.eject > icon                              while mounted, ⏏: unmounts it, then powers a
  *      │                                                      removable drive off (:disabled on /)
+ *      ├─ share.nfs|.smb|.ssh|.dav|.other[.mounted][.busy]    one per network share (fstab's, or mounted by
+ *      │                                                      hand): as `device`, without the meter
  *      ╰─ empty                                               "No places"
  *
  *   gadget.power                                              a row (`gap` between the buttons); middle click holds
@@ -874,25 +876,31 @@ gadget.places item:hover {
 gadget.places item icon {
   height: 16px;
 }
-gadget.places device {
+gadget.places device,
+gadget.places share {
   gap: 2px;
 }
-gadget.places device button.open {
+gadget.places device button.open,
+gadget.places share button.open {
   padding: 4px 10px;
   gap: 8px;
   border-radius: 4px;
 }
-gadget.places device button:hover {
+gadget.places device button:hover,
+gadget.places share button:hover {
   background: var(--aria-border);
 }
-gadget.places device button:disabled {
+gadget.places device button:disabled,
+gadget.places share button:disabled {
   color: var(--aria-muted);
 }
-gadget.places device button.eject {
+gadget.places device button.eject,
+gadget.places share button.eject {
   padding: 4px 6px;
   border-radius: 4px;
 }
-gadget.places device icon {
+gadget.places device icon,
+gadget.places share icon {
   height: 16px;
 }
 gadget.places device info {

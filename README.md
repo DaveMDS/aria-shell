@@ -54,7 +54,8 @@ bar per monitor (or per `[panel:*]` section):
 | `file`          | 🔲 | file browser in a tree of menus?                                                |
 | `Places`        | ✅ | A file manager's sidebar: the home, the XDG folders, the trash, GTK's and KDE's bookmarks, opened in `[general] file_manager` |
 | `Places`        | ✅ | Devices through UDisks2, chosen as GVfs does (plus the root filesystem): mount and open, unmount and power off, disk usage, failures notified |
-| `Places`        | 🔲 | Unlocking LUKS volumes, network shares (fstab, gvfs)                            |
+| `Places`        | ✅ | Network shares of fstab (NFS, SMB, sshfs, WebDAV, ...) chosen as GVfs does, and those mounted by hand: `mount` and open, `umount` |
+| `Places`        | 🔲 | Unlocking LUKS volumes, the shares gvfs mounts (smb://, sftp:// from Nautilus or `gio mount`) |
 | `polkit`        | 🔲 | A polkit authentication agent (mounting an internal disk asks for the admin password) |
 | `Brightness`    | 🔲 | Night light (colour temperature), a monitor's own buttons seen without reopening the popup |
 

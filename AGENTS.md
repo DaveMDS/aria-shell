@@ -123,7 +123,9 @@ for the system bus: `DBUS_SYSTEM_BUS_ADDRESS`), UPower and the power
 profiles through `tests/ui/upower` (the same way), UDisks2 through
 `tests/ui/udisks` (the same way), the monitors' DDC/CI
 through `tests/ui/bin/ddcutil` (a fake `ddcutil`, first on every
-scenario's PATH), the clipboard through `wl-paste`, so nothing
+scenario's PATH), network shares through `tests/ui/bin/mount` and
+`umount` (on the scenario's own fstab and mountinfo:
+`ARIA_SHELL_FSTAB`, `ARIA_SHELL_MOUNTINFO`), the clipboard through `wl-paste`, so nothing
 depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`
 (status, logs, screenshots). Needs `sway`, `grim`, `dbus-run-session`,
 `wl-clipboard` and `python3` installed; no root. Add a scenario for every new interactive

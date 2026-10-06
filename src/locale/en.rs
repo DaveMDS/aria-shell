@@ -112,9 +112,11 @@ pub const CATALOGUE: Catalogue = &[
     ("places.home", "Home"),
     ("places.trash", "Trash"),
     ("places.devices", "Devices"),
+    ("places.network", "Network"),
     ("places.volume", "{size} volume"),
     ("places.mount_failed", "Can't mount {name}"),
     ("places.eject_failed", "Can't eject {name}"),
+    ("places.unmount_failed", "Can't unmount {name}"),
     (
         "places.not_authorized",
         "Not allowed: an authentication agent (polkit) is needed to ask for the password",

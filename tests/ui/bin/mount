@@ -1,0 +1,23 @@
+#!/bin/sh
+# A fake mount, first on every scenario's PATH (inner.sh): `mount <dir>`
+# as the shell runs it for a network share of fstab, on the scenario's
+# own fstab and mountinfo (ARIA_SHELL_FSTAB, ARIA_SHELL_MOUNTINFO): the
+# entry's line appended to the mountinfo. A share whose folder has a
+# file in $ARIA_UI_OUT/unreachable/ fails, as a server that doesn't
+# answer. Every call is logged to $ARIA_UI_OUT/mount.log.
+[ -n "$ARIA_SHELL_FSTAB" ] && [ -n "$ARIA_SHELL_MOUNTINFO" ] || {
+    echo "fake mount: no ARIA_SHELL_FSTAB / ARIA_SHELL_MOUNTINFO" >&2
+    exit 1
+}
+echo "mount $*" >> "$ARIA_UI_OUT/mount.log"
+dir=$1
+escaped=$(printf '%s' "$dir" | sed 's/ /\\040/g')
+entry=$(d=$escaped awk '$1 !~ /^#/ && $2 == ENVIRON["d"] { print $1, $3; exit }' "$ARIA_SHELL_FSTAB")
+[ -n "$entry" ] || { echo "mount: $dir: can't find in /etc/fstab." >&2; exit 1; }
+if [ -e "$ARIA_UI_OUT/unreachable/$(basename "$dir")" ]; then
+    echo "mount.nfs: Connection timed out for $dir" >&2
+    exit 32
+fi
+set -- $entry
+mkdir -p "$dir" 2> /dev/null
+echo "100 1 0:99 / $escaped rw,relatime shared:1 - $2 $1 rw" >> "$ARIA_SHELL_MOUNTINFO"

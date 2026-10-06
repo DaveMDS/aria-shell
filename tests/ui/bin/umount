@@ -1,0 +1,21 @@
+#!/bin/sh
+# A fake umount, first on every scenario's PATH (inner.sh): `umount
+# <dir>` on the scenario's mountinfo (ARIA_SHELL_MOUNTINFO), its line
+# taken out. A share whose folder has a file in $ARIA_UI_OUT/busy/
+# fails, as one in use. Every call is logged to $ARIA_UI_OUT/mount.log;
+# also run as fusermount3 (`-u <dir>`).
+[ -n "$ARIA_SHELL_MOUNTINFO" ] || {
+    echo "fake umount: no ARIA_SHELL_MOUNTINFO" >&2
+    exit 1
+}
+echo "$(basename "$0") $*" >> "$ARIA_UI_OUT/mount.log"
+[ "$1" = -u ] && shift
+dir=$1
+if [ -e "$ARIA_UI_OUT/busy/$(basename "$dir")" ]; then
+    echo "umount: $dir: target is busy." >&2
+    exit 32
+fi
+escaped=$(printf '%s' "$dir" | sed 's/ /\\040/g')
+grep -qF " $escaped " "$ARIA_SHELL_MOUNTINFO" || { echo "umount: $dir: not mounted." >&2; exit 32; }
+d=$escaped awk '$5 != ENVIRON["d"]' "$ARIA_SHELL_MOUNTINFO" > "$ARIA_SHELL_MOUNTINFO.new"
+mv "$ARIA_SHELL_MOUNTINFO.new" "$ARIA_SHELL_MOUNTINFO"

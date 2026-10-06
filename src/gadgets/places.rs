@@ -9,13 +9,15 @@
 //! Holds no places: they come from `ctx.places`, read again as the
 //! popup opens (`Action::Places(Refresh)`).
 
+use std::path::PathBuf;
+
 use iced::widget::{Space, button, row};
 use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::gadget::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
-use crate::places::{Command, Device, DeviceKind, Group, Kind, Place, PlacesConfig, Target};
+use crate::places::{Command, Device, DeviceKind, Group, Kind, Place, PlacesConfig, Share, Target};
 use crate::sysmon::format;
 use crate::theme::{self, Node};
 use crate::widgets::graph;
@@ -35,6 +37,9 @@ pub enum Message {
     /// Mount a device (by its path), then open it.
     Mount(String),
     Eject(String),
+    /// Mount a share (by its mount point), then open it.
+    MountShare(PathBuf),
+    UnmountShare(PathBuf),
 }
 
 /// A themed part of the popup and its size, built together so the
@@ -69,8 +74,13 @@ impl Gadget for PlacesGadget {
                 self.popup.close(),
                 Action::Places(Command::Mount(path)),
             ]),
+            Message::MountShare(dir) => Action::Many(vec![
+                self.popup.close(),
+                Action::Places(Command::MountShare(dir)),
+            ]),
             // The popup stays: the device leaves it, or shows why not.
             Message::Eject(path) => Action::Places(Command::Eject(path)),
+            Message::UnmountShare(dir) => Action::Places(Command::UnmountShare(dir)),
         }
     }
 
@@ -80,6 +90,7 @@ impl Gadget for PlacesGadget {
         names.push(self.icon_name(Kind::Trash, true));
         names.extend(DeviceKind::ALL.iter().flat_map(|k| self.device_icons(*k)));
         names.push(self.symbolic(EJECT_ICON));
+        names.push(self.symbolic(SHARE_ICON));
         names
     }
 
@@ -163,6 +174,12 @@ impl PlacesGadget {
                     .iter()
                     .map(|d| self.device(ctx, &list, d))
                     .collect(),
+                Group::Network => ctx
+                    .places
+                    .shares()
+                    .iter()
+                    .map(|s| self.share(ctx, &list, s))
+                    .collect(),
                 // A bookmark of a place listed above isn't repeated
                 // (GTK's file managers bookmark the home, often).
                 Group::Bookmarks => ctx
@@ -179,6 +196,7 @@ impl PlacesGadget {
             let title = match group {
                 Group::Places => ctx.locale.tr("places.places"),
                 Group::Devices => ctx.locale.tr("places.devices"),
+                Group::Network => ctx.locale.tr("places.network"),
                 Group::Bookmarks => ctx.locale.tr("places.bookmarks"),
             };
             rows.push(header(ctx, &list, group, title));
@@ -253,33 +271,92 @@ impl PlacesGadget {
 }
 
 impl PlacesGadget {
-    /// A device: a button opening it (mounting it first) with its
-    /// icon, its name and, while mounted, how full it is, and ⏏
-    /// beside it while mounted (as Nemo has it: nothing to eject before
-    /// a mount); disabled on the root filesystem, which can't be
+    /// A device: its icon, its name and, while mounted, how full it is;
+    /// ⏏ beside it while mounted (as Nemo has it: nothing to eject before
+    /// a mount), disabled on the root filesystem, which can't be
     /// unmounted but is mounted all the same.
     fn device<'a>(&'a self, ctx: &Context<'a>, list: &Node, d: &Device) -> Block<'a> {
-        let theme = ctx.theme;
         let busy = ctx.places.busy(&d.path);
-        let node = list
-            .child("device")
-            .class(d.kind.name())
-            .class_if("mounted", d.mount_point.is_some())
-            .class_if("locked", d.locked)
-            .class_if("busy", busy);
+        let open = match &d.mount_point {
+            Some(mount_point) => Message::Open(Target::Path(mount_point.clone())),
+            None => Message::Mount(d.path.clone()),
+        };
+        let eject = d.mount_point.as_ref().map(|mount_point| {
+            let root = mount_point == std::path::Path::new("/");
+            (!busy && !root).then(|| Message::Eject(d.path.clone()))
+        });
+        self.volume(
+            ctx,
+            Volume {
+                node: list
+                    .child("device")
+                    .class(d.kind.name())
+                    .class_if("mounted", d.mount_point.is_some())
+                    .class_if("locked", d.locked)
+                    .class_if("busy", busy),
+                icons: self.device_icons(d.kind),
+                name: device_name(ctx.locale, d),
+                usage: d.usage,
+                open: (!busy && !d.locked).then_some(open),
+                eject,
+            },
+        )
+    }
+
+    /// A network share: its icon and its name (no usage: `statvfs` would
+    /// wait on the server), ⏏ while mounted.
+    fn share<'a>(&'a self, ctx: &Context<'a>, list: &Node, share: &Share) -> Block<'a> {
+        let busy = ctx.places.busy(&share.key());
+        let dir = share.mount_point.clone();
+        let open = if share.mounted {
+            Some(Message::Open(Target::Path(dir.clone())))
+        } else {
+            // One mounted by hand, gone: nothing to mount it again with.
+            share.in_fstab.then(|| Message::MountShare(dir.clone()))
+        };
+        let custom = if self.config.symbolic_icons {
+            &share.symbolic_icon
+        } else {
+            &share.icon
+        };
+        let mut icons: Vec<String> = custom.iter().cloned().collect();
+        icons.push(self.symbolic(SHARE_ICON));
+        self.volume(
+            ctx,
+            Volume {
+                node: list
+                    .child("share")
+                    .class(share.family())
+                    .class_if("mounted", share.mounted)
+                    .class_if("busy", busy),
+                icons,
+                name: share.label.clone(),
+                usage: None,
+                open: open.filter(|_| !busy),
+                eject: share
+                    .mounted
+                    .then(|| (!busy).then(|| Message::UnmountShare(dir))),
+            },
+        )
+    }
+
+    /// A device's or a share's row: a button opening it with its icon,
+    /// its name and how full it is (when known), ⏏ beside it.
+    fn volume<'a>(&'a self, ctx: &Context<'a>, v: Volume) -> Block<'a> {
+        let theme = ctx.theme;
+        let node = v.node;
         let s = theme.resolve(&node);
 
         // Disabled already here, not only once iced draws it: the icon
         // and the label take their colour from `button:disabled` too.
-        let open = disabled(node.child("button").class("open"), busy || d.locked);
+        let open = disabled(node.child("button").class("open"), v.open.is_none());
         let os = theme.resolve(&open);
         let i = open.child("icon");
         let info = open.child("info");
         let l = info.child("label");
         let meter = info.child("meter");
-        let name = device_name(ctx.locale, d);
         let icon_box = padded(theme, &i, Size::new(icon_size(ctx, &i), icon_size(ctx, &i)));
-        let text = theme.measure(&l, &name);
+        let text = theme.measure(&l, &v.name);
         let text = padded(
             theme,
             &l,
@@ -287,10 +364,9 @@ impl PlacesGadget {
         );
         let mut info_height = text.height;
         let mut parts: Vec<Element<'a, Message>> =
-            vec![theme.text(&l, name).width(Length::Fill).into()];
-        if let Some(usage) = d.usage {
-            let full = usage >= 0.9;
-            let meter = meter.class_if("critical", full);
+            vec![theme.text(&l, v.name).width(Length::Fill).into()];
+        if let Some(usage) = v.usage {
+            let meter = meter.class_if("critical", usage >= 0.9);
             info_height +=
                 theme.resolve(&info).gap + px(theme.resolve(&meter).height).unwrap_or(8.0);
             parts.push(graph::meter(theme, &meter, usage));
@@ -303,17 +379,12 @@ impl PlacesGadget {
             )
         };
         let open_chrome = chrome(&os);
-        let open_size = Size::new(
+        let mut size = Size::new(
             icon_box.width + os.gap + info_size.width + open_chrome.width,
             icon_box.height.max(info_size.height) + open_chrome.height,
         );
-        let target = match &d.mount_point {
-            Some(mount_point) => Some(Message::Open(Target::Path(mount_point.clone()))),
-            None => Some(Message::Mount(d.path.clone())),
-        }
-        .filter(|_| !busy && !d.locked);
         let content = row![
-            icon_view(ctx, &i, ctx.icons.first_of(&self.device_icons(d.kind))),
+            icon_view(ctx, &i, ctx.icons.first_of(&v.icons)),
             theme.column(&info, parts).width(Length::Fill),
         ]
         .spacing(os.gap)
@@ -323,14 +394,12 @@ impl PlacesGadget {
             theme
                 .button(&open, content)
                 .width(Length::Fill)
-                .on_press_maybe(target)
+                .on_press_maybe(v.open)
                 .into(),
         ];
-        let mut size = open_size;
 
-        if let Some(mount_point) = &d.mount_point {
-            let root = mount_point == std::path::Path::new("/");
-            let eject = disabled(node.child("button").class("eject"), busy || root);
+        if let Some(on_eject) = v.eject {
+            let eject = disabled(node.child("button").class("eject"), on_eject.is_none());
             let ei = eject.child("icon");
             let es = chrome(&theme.resolve(&eject));
             let ei_size = padded(
@@ -343,7 +412,7 @@ impl PlacesGadget {
             buttons.push(
                 theme
                     .button(&eject, icon(ctx, &ei, &self.symbolic(EJECT_ICON)))
-                    .on_press_maybe((!busy && !root).then(|| Message::Eject(d.path.clone())))
+                    .on_press_maybe(on_eject)
                     .into(),
             );
         }
@@ -362,6 +431,21 @@ impl PlacesGadget {
 }
 
 const EJECT_ICON: &str = "media-eject";
+/// A share's icon, when its fstab entry names none.
+const SHARE_ICON: &str = "folder-remote";
+
+/// What [`PlacesGadget::volume`] draws.
+struct Volume {
+    node: Node,
+    /// Best first.
+    icons: Vec<String>,
+    name: String,
+    usage: Option<f32>,
+    /// What a click does; `None`: disabled.
+    open: Option<Message>,
+    /// ⏏: `None` not there, `Some(None)` disabled.
+    eject: Option<Option<Message>>,
+}
 
 /// What a device is called: its label, else its size ("32 GB volume").
 pub fn device_name(locale: &Locale, d: &Device) -> String {

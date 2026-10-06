@@ -74,6 +74,7 @@ An application launcher with support for `.desktop` files.
 - ✅ App list auto-update on install/uninstall
 - ✅ The exit menu's actions as a row of buttons above the search field
 - ✅ Usage-based ranking (what you launch most comes first; counts in `~/.local/state/aria-shell/launcher-usage`)
+- ✅ Terminal apps (`Terminal=true`) in `[general] terminal` (`auto`: `$TERMINAL`, else the first of kitty, alacritty, foot, terminology, ... installed, or a command line with `%c`)
 - ✅ Secondary commands: an entry's desktop actions (e.g. Firefox's "New Private Window") open as child rows with → or the chevron, ← closes them
 - 🔲 `DBusActivatable` entries
 
@@ -358,6 +359,10 @@ AriaShell is configured through a single `aria.conf` file
 (`~/.config/aria-shell/aria.conf`). Each component and gadget can be enabled,
 disabled and tuned independently. Refer to the example config included in the
 repository (`assets/aria.conf`) for a full reference.
+
+The preferred programs are in `[general]`: `terminal` and `file_manager`,
+each `auto` (the first one installed), `none`, or a command line (`%c` the
+program a terminal runs, `%f` the directory), as `[Screenshot] editor` is.
 
 
 ---

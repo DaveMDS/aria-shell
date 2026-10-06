@@ -94,14 +94,121 @@ pub fn command(line: &str) -> Option<Command> {
     Some(cmd)
 }
 
+/// A program the config chooses (`[general] terminal`, `[Screenshot]
+/// editor`, ...): `auto`, or no value, what `auto` finds; `none` or
+/// `off` none; anything else the command line as written.
+pub fn chosen(value: Option<&str>, auto: impl FnOnce() -> Option<String>) -> Option<String> {
+    match value.map(str::trim).unwrap_or("") {
+        "none" | "off" => None,
+        "" | "auto" => auto(),
+        line => Some(line.to_owned()),
+    }
+}
+
+/// The first of `lines` (command lines) whose program is `installed`.
+pub fn first_installed<'a>(lines: &[&'a str], installed: impl Fn(&str) -> bool) -> Option<&'a str> {
+    lines
+        .iter()
+        .copied()
+        .find(|line| installed(line.split_whitespace().next().unwrap_or(line)))
+}
+
+/// Whether `program` is on the PATH.
+pub fn on_path(program: &str) -> bool {
+    first_on_path(&[program]).is_some()
+}
+
+/// `line` split into words, `args` in place of every word that is
+/// `placeholder`; when none is, `absent` then `args` last.
+pub fn filled(line: &str, placeholder: &str, args: &[String], absent: &[&str]) -> Vec<String> {
+    let mut argv = split_words(line);
+    match argv.iter().position(|w| w == placeholder) {
+        Some(_) => argv
+            .into_iter()
+            .flat_map(|w| match w == placeholder {
+                true => args.to_vec(),
+                false => vec![w],
+            })
+            .collect(),
+        None => {
+            argv.extend(absent.iter().map(|w| (*w).to_owned()));
+            argv.extend_from_slice(args);
+            argv
+        }
+    }
+}
+
+/// A command line run on `path` (an editor, a file manager): the path
+/// in place of every `%f`, last when there's none.
+pub fn on_file(line: &str, path: &Path) -> Vec<String> {
+    filled(line, "%f", &[path.to_string_lossy().into_owned()], &[])
+}
+
+/// The terminals `[general] terminal = auto` tries, in order, after
+/// `$TERMINAL`; `%c` is the program run inside.
+pub const TERMINALS: &[&str] = &[
+    "kitty %c",
+    "alacritty -e %c",
+    "foot %c",
+    "terminology -e %c",
+    "wezterm start -- %c",
+    "ghostty -e %c",
+    "gnome-terminal -- %c",
+    "konsole -e %c",
+    "xfce4-terminal -x %c",
+    "xterm -e %c",
+];
+
+/// `[general] terminal = auto`: `$TERMINAL` (as [`TERMINALS`] has it
+/// when it's one of them), else the first of [`TERMINALS`] on the PATH.
+pub fn auto_terminal() -> Option<String> {
+    let env = std::env::var("TERMINAL").ok();
+    let terminal = pick_terminal(env.as_deref(), on_path);
+    if terminal.is_none() {
+        log::info!("no $TERMINAL and none of the terminals on the PATH");
+    }
+    terminal
+}
+
+fn pick_terminal(env: Option<&str>, installed: impl Fn(&str) -> bool) -> Option<String> {
+    match env.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(env) => Some(
+            first_installed(TERMINALS, |program| program == env)
+                .unwrap_or(env)
+                .to_owned(),
+        ),
+        None => first_installed(TERMINALS, installed).map(str::to_owned),
+    }
+}
+
 /// `argv` run inside a terminal emulator: `terminal` is a command line
-/// (`[launcher] terminal`), given `-e` and the program, as the desktop
-/// entry spec has terminals take.
-pub fn in_terminal(terminal: &str, argv: Vec<String>) -> Vec<String> {
-    let mut term: Vec<String> = terminal.split_whitespace().map(str::to_owned).collect();
-    term.push("-e".to_owned());
-    term.extend(argv);
-    term
+/// (`[general] terminal`), `argv` in place of `%c`, or `-e` and `argv`
+/// last when there's none (as the desktop entry spec has terminals
+/// take it).
+pub fn in_terminal(terminal: &str, argv: &[String]) -> Vec<String> {
+    filled(terminal, "%c", argv, &["-e"])
+}
+
+/// The file managers `[general] file_manager = auto` tries, in order;
+/// `%f` is the directory.
+pub const FILE_MANAGERS: &[&str] = &[
+    "nautilus %f",
+    "dolphin %f",
+    "nemo %f",
+    "thunar %f",
+    "caja %f",
+    "pcmanfm-qt %f",
+    "pcmanfm %f",
+];
+
+/// `[general] file_manager = auto`: the first of [`FILE_MANAGERS`] on
+/// the PATH.
+pub fn auto_file_manager() -> Option<String> {
+    let line = first_installed(FILE_MANAGERS, on_path);
+    if line.is_none() {
+        log::info!("none of the file managers on the PATH");
+    }
+    line.map(str::to_owned)
 }
 
 /// The first of `programs` found on the PATH.
@@ -249,12 +356,97 @@ mod tests {
 
     #[test]
     fn terminal_wrapping() {
+        let argv = ["btop".to_owned(), "-p".to_owned()];
         assert_eq!(
-            in_terminal("kitty --single", vec!["btop".into()]),
-            ["kitty", "--single", "-e", "btop"]
+            in_terminal("kitty --single", &argv),
+            ["kitty", "--single", "-e", "btop", "-p"]
+        );
+        assert_eq!(
+            in_terminal("wezterm start -- %c", &argv),
+            ["wezterm", "start", "--", "btop", "-p"]
         );
         assert_eq!(first_on_path(&["no-such-program-xyz", "sh"]), Some("sh"));
         assert_eq!(first_on_path(&["no-such-program-xyz"]), None);
+    }
+
+    #[test]
+    fn chosen_none_off_auto_or_a_command_line() {
+        let auto = || Some("found".to_owned());
+        assert_eq!(chosen(Some("none"), auto), None);
+        assert_eq!(chosen(Some("off"), auto), None);
+        assert_eq!(chosen(None, auto).as_deref(), Some("found"));
+        assert_eq!(chosen(Some("auto"), auto).as_deref(), Some("found"));
+        assert_eq!(
+            chosen(Some("  gimp --new  "), auto).as_deref(),
+            Some("gimp --new")
+        );
+    }
+
+    #[test]
+    fn first_installed_by_program() {
+        let lines = ["a -x %f", "b %f", "c"];
+        assert_eq!(first_installed(&lines, |_| false), None);
+        assert_eq!(first_installed(&lines, |_| true), Some("a -x %f"));
+        assert_eq!(
+            first_installed(&lines, |p| p == "b" || p == "c"),
+            Some("b %f")
+        );
+        assert!(TERMINALS.iter().all(|line| line.contains("%c")));
+        assert!(FILE_MANAGERS.iter().all(|line| line.contains("%f")));
+    }
+
+    #[test]
+    fn terminal_from_the_environment_first() {
+        assert_eq!(
+            pick_terminal(Some("foot"), |_| true).as_deref(),
+            Some("foot %c")
+        );
+        assert_eq!(
+            pick_terminal(Some("myterm --x"), |_| true).as_deref(),
+            Some("myterm --x")
+        );
+        assert_eq!(
+            pick_terminal(Some(" "), |p| p == "foot").as_deref(),
+            Some("foot %c")
+        );
+        assert_eq!(pick_terminal(None, |_| false), None);
+    }
+
+    #[test]
+    fn on_file_puts_the_path_for_every_percent_f() {
+        let path = Path::new("/tmp/my shots/a.png");
+        assert_eq!(
+            on_file("satty --filename %f --output-filename %f", path),
+            [
+                "satty",
+                "--filename",
+                "/tmp/my shots/a.png",
+                "--output-filename",
+                "/tmp/my shots/a.png"
+            ]
+        );
+    }
+
+    #[test]
+    fn on_file_without_percent_f_appends_the_path() {
+        let path = Path::new("/tmp/a.png");
+        assert_eq!(
+            on_file("satty --filename", path),
+            ["satty", "--filename", "/tmp/a.png"]
+        );
+        assert_eq!(
+            on_file("sh -c 'echo \"$1\"' sh", path),
+            ["sh", "-c", "echo \"$1\"", "sh", "/tmp/a.png"]
+        );
+    }
+
+    #[test]
+    fn placeholders_only_whole_words() {
+        let path = Path::new("/tmp/a.png");
+        assert_eq!(
+            on_file("tool --in=%f", path),
+            ["tool", "--in=%f", "/tmp/a.png"]
+        );
     }
 
     #[test]

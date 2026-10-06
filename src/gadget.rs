@@ -357,10 +357,10 @@ impl AnyGadget {
                     return None;
                 }
                 let mut cfg: system_monitor::InstanceConfig = config.section(Some(name));
-                // The default command runs in the launcher's terminal;
-                // the popup follows the base section.
+                // The default command runs in `[general] terminal`; the
+                // popup follows the base section.
                 cfg.terminal = config
-                    .section::<crate::launcher::LauncherConfig>(None)
+                    .section::<crate::config::GeneralConfig>(None)
                     .terminal;
                 let mut gadget = SystemMonitor::new(cfg, output);
                 gadget.set_monitor(&config.section(None));

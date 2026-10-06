@@ -311,13 +311,13 @@ fn exec_basename(exec: &str) -> Option<String> {
 /// quoting and escapes unwound, field codes expanded (no files or URLs
 /// to pass, so `%f %F %u %U` vanish; `%i` is the icon, `%c` the name,
 /// `%k` the file), in `Path=` if set, inside `terminal` (a command
-/// line, given `-e`) when `Terminal=true`, detached (see
+/// line, see [`process::in_terminal`]) when `Terminal=true`, detached (see
 /// [`process::spawn_detached`]). An action has its own `Exec`, the
 /// rest is the entry's. `DBusActivatable` is not honoured.
 pub fn launch(
     entry: &DesktopEntry,
     action: Option<&DesktopAction>,
-    terminal: &str,
+    terminal: Option<&str>,
 ) -> io::Result<()> {
     let line = match action {
         Some(action) => action.exec_line.as_str(),
@@ -328,7 +328,10 @@ pub fn launch(
     };
     let mut argv = exec_argv(line, entry);
     if entry.terminal {
-        argv = process::in_terminal(terminal, argv);
+        let terminal = terminal.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "Terminal=true and no terminal")
+        })?;
+        argv = process::in_terminal(terminal, &argv);
     }
     let (program, args) = argv
         .split_first()

@@ -35,10 +35,6 @@ use crate::widgets;
 /// `[launcher]` section.
 #[derive(Debug, Clone)]
 pub struct LauncherConfig {
-    /// Terminal emulator for `Terminal=true` entries, run as
-    /// `<terminal> -e <command>`. Empty: `$TERMINAL`, else the first
-    /// of [`TERMINALS`] on the PATH, else `xterm`.
-    pub terminal: String,
     /// The exit menu's buttons shown as a row of icons above the
     /// search field: `all`, `none`, or their names.
     pub actions: Actions,
@@ -61,38 +57,16 @@ impl Actions {
     }
 }
 
-/// Terminals tried when neither the config nor `$TERMINAL` says.
-pub const TERMINALS: &[&str] = &[
-    "kitty",
-    "alacritty",
-    "foot",
-    "wezterm",
-    "ghostty",
-    "gnome-terminal",
-    "konsole",
-    "xfce4-terminal",
-    "xterm",
-];
-
 impl Section for LauncherConfig {
     const NAME: &'static str = "launcher";
 
     fn from_raw(raw: &RawSection) -> Self {
-        let terminal = raw
-            .get("terminal")
-            .map(str::to_owned)
-            .or_else(|| std::env::var("TERMINAL").ok().filter(|t| !t.is_empty()))
-            .unwrap_or_else(|| {
-                crate::process::first_on_path(TERMINALS)
-                    .unwrap_or("xterm")
-                    .to_owned()
-            });
         let actions = match raw.list_or("actions", &["all"]).as_slice() {
             [one] if one == "all" => Actions::All,
             [one] if one == "none" => Actions::None,
             names => Actions::Some(names.to_vec()),
         };
-        Self { terminal, actions }
+        Self { actions }
     }
 }
 
@@ -174,6 +148,8 @@ pub struct Launcher {
     config: LauncherConfig,
     /// The exit menu's buttons, for the row of actions.
     exiter: ExiterConfig,
+    /// `[general] terminal`, for `Terminal=true` entries.
+    terminal: Option<String>,
     apps: Option<Arc<Index>>,
     usage: Usage,
     query: String,
@@ -247,10 +223,16 @@ pub enum Action {
 }
 
 impl Launcher {
-    pub fn new(config: LauncherConfig, exiter: ExiterConfig, apps: Option<Arc<Index>>) -> Self {
+    pub fn new(
+        config: LauncherConfig,
+        exiter: ExiterConfig,
+        terminal: Option<String>,
+        apps: Option<Arc<Index>>,
+    ) -> Self {
         let mut launcher = Self {
             config,
             exiter,
+            terminal,
             apps,
             usage: Usage::load(),
             query: String::new(),
@@ -400,7 +382,7 @@ impl Launcher {
                 None => return,
             },
         };
-        match desktop::launch(entry, action, &self.config.terminal) {
+        match desktop::launch(entry, action, self.terminal.as_deref()) {
             Ok(()) => {
                 let id = entry.id.clone();
                 self.usage.bump(&id);
@@ -827,6 +809,7 @@ mod tests {
         let mut launcher = Launcher::new(
             LauncherConfig::from_raw(&RawSection::default()),
             ExiterConfig::from_raw(&RawSection::default()),
+            None,
             Some(Arc::new(Index::from_apps(db))),
         );
         launcher.usage = Usage::default();

@@ -176,7 +176,7 @@ click 300 900
 assert_no_surface popup
 
 # Right click on the bar: the configured command, or a terminal
-# monitor in the launcher's terminal.
+# monitor in [general] terminal (`-e` and the monitor, no %c there).
 click_widget_with right "$bell"
 settle 0.5
 assert_eq "$(cat "$ARIA_UI_OUT/sysmon")" run "command ran"

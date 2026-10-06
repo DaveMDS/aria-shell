@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use configparser::ini::Ini;
 
+use crate::process;
 use crate::theme::Scheme;
 
 /// The loaded configuration file. Plain data owned by the application
@@ -212,6 +213,16 @@ pub struct GeneralConfig {
     pub icon_theme: Option<String>,
     /// The UI language (`en`, `it`, ...); empty for the environment's.
     pub language: String,
+    /// The terminal emulator's command line, the program it runs in
+    /// place of `%c` (`-e` and the program last when there's none);
+    /// `auto`: `$TERMINAL`, else the first of [`process::TERMINALS`]
+    /// on the PATH; `none`/`off`: no terminal.
+    pub terminal: Option<String>,
+    /// The file manager's command line, the directory in place of `%f`
+    /// (last when there's none); `auto`: the first of
+    /// [`process::FILE_MANAGERS`] on the PATH; `none`/`off`: none.
+    #[allow(dead_code)] // nothing opens a directory yet
+    pub file_manager: Option<String>,
 }
 
 impl Section for GeneralConfig {
@@ -235,6 +246,8 @@ impl Section for GeneralConfig {
             reload_style: raw.bool_or("reload_style", true),
             reload_config: raw.bool_or("reload_config", true),
             icon_theme: raw.get("icon_theme").map(str::to_owned),
+            terminal: process::chosen(raw.get("terminal"), process::auto_terminal),
+            file_manager: process::chosen(raw.get("file_manager"), process::auto_file_manager),
         }
     }
 }

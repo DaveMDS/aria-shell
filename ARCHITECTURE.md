@@ -150,7 +150,7 @@ SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[System
                             scrolling table offers Terminate/Kill for it; the list's scrollbar is embedded,
                             `scrollable::Scrollbar::spacing`, so it doesn't cover the last column), opened
                             on the value's tab;
-                            right click on the bar: `command`, else btop/htop/top in the launcher's terminal
+                            right click on the bar: `command`, else btop/htop/top in `[general] terminal`
   Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | Select(pid) | Signal(..)
 
 Audio      (audio/)          daemon-owned mixer and players: `channels_of(kind)` (outputs, inputs, the streams
@@ -284,7 +284,8 @@ Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory,
                             the output's transform undone, `compose` the rect out of the shots at the largest
                             scale among them, PNG) in `spawn_blocking` -> `Event::Taken` (file written, or
                             the PNG to the clipboard; the editor run on the file with `--edit`: its path for
-                            `%f`, last without one; `auto` = the first of `EDITORS` on the PATH, at load)
+                            `%f`, last without one, `process::on_file`; `auto` = the first of `EDITORS`
+                            on the PATH, at load)
   subscription()            wayland.rs, the idle/wayland.rs pattern (its own connection, fd polled by tokio,
                             `Handle` + `Request`s): `ext-image-copy-capture-v1` on an
                             `ext-output-image-capture-source` per output, one frame each into a memfd shm
@@ -338,7 +339,11 @@ time       (time.rs)        `aligned_ticks(step)` (a wall-clock-aligned tick str
 
 process    (process.rs)     split_words (shell-like quoting, no shell), command(line), spawn_detached, run(line):
                             the config's command lines and the launcher's desktop entries; `aria-shell` as
-                            the program is this very binary. Each child is moved (systemd's
+                            the program is this very binary. The preferred programs (`[general] terminal`,
+                            `file_manager`, `[Screenshot] editor`): `chosen` (`auto` = `first_installed` of
+                            a list of command lines, `none`/`off`, else the line), `filled` (a placeholder
+                            word, `%c` the program a terminal runs, `%f` a path, else appended last;
+                            `in_terminal`, `on_file`). Each child is moved (systemd's
                             `StartTransientUnit` with its pid, on the session bus, best effort) into
                             `app-aria\x2dshell-<app>-<pid>.scope` in `app.slice`: out of our cgroup, so a
                             `systemctl --user restart aria-shell` (the unit kills its whole cgroup) spares
@@ -615,8 +620,9 @@ Two things flow between the daemon and the gadgets besides messages:
   a desktop id, `for_class` tries `by_id` first) after every launcher
   update, never in `view`. Launching is hand-rolled in
   `icons::desktop::launch` (the Python used `gtk-launch`): spec
-  quoting, field codes, `Path=`, `Terminal=true` via `[launcher]
-  terminal` (default `$TERMINAL`, else the first common terminal on the PATH, `launcher::TERMINALS`) with `-e`, own process
+  quoting, field codes, `Path=`, `Terminal=true` via `[general]
+  terminal` (`process::in_terminal`: the program for `%c`, else `-e` and the program; `auto`
+  = `$TERMINAL`, else the first of `process::TERMINALS` on the PATH; `none` refuses), own process
   group, stdio to null, reaped by a thread. Not done: `DBusActivatable`,
   startup notification, other providers (the Python had only apps too).
   The Python `[launcher]` keys `width/height/icon_size/opacity` are

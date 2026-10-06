@@ -6,7 +6,7 @@
 //! the table offers Terminate / Kill for it).
 //! The popup opens on the tab of the value shown. A right click on the
 //! bar runs `command` (by default a terminal monitor: btop, htop or
-//! top, in the launcher's terminal).
+//! top, in `[general] terminal`).
 //!
 //! Holds no data: the sample, the history and the processes come from
 //! `ctx.sysmon` (`sysmon/`), whose `[SystemMonitor]` section also
@@ -47,9 +47,9 @@ pub struct InstanceConfig {
     pub critical: Option<f32>,
     /// Run on a right click; empty: a terminal monitor.
     pub command: String,
-    /// `[launcher] terminal`, for the default command (set by the
+    /// `[general] terminal`, for the default command (set by the
     /// gadget factory, not a key of this section).
-    pub terminal: String,
+    pub terminal: Option<String>,
 }
 
 impl Section for InstanceConfig {
@@ -92,7 +92,7 @@ impl Section for InstanceConfig {
             warning: number("warning"),
             critical: number("critical"),
             command: raw.str_or("command", ""),
-            terminal: String::new(),
+            terminal: None,
         }
     }
 }
@@ -504,11 +504,14 @@ impl SystemMonitor {
             process::run(&self.config.command);
             return;
         }
+        let Some(terminal) = &self.config.terminal else {
+            log::warn!("system monitor: no terminal for the monitor ([general] terminal)");
+            return;
+        };
         match process::first_on_path(&MONITORS) {
-            Some(program) => process::run_argv(&process::in_terminal(
-                &self.config.terminal,
-                vec![program.to_owned()],
-            )),
+            Some(program) => {
+                process::run_argv(&process::in_terminal(terminal, &[program.to_owned()]))
+            }
             None => log::warn!("system monitor: none of {MONITORS:?} on the PATH"),
         }
     }

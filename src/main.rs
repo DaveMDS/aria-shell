@@ -1600,6 +1600,7 @@ impl AriaShell {
         let launcher = Launcher::new(
             self.config.section(None),
             self.config.section(None),
+            self.general.terminal.clone(),
             self.icons.index(),
         );
         let (dialog, surfaces) = Dialog::open(

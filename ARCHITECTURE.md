@@ -283,7 +283,8 @@ Screenshot (screenshot/)    daemon-owned screenshots: `[Screenshot]` (directory,
                             outputs it touches captured -> `pixels.rs` (pure, unit-tested: shm format -> RGBA,
                             the output's transform undone, `compose` the rect out of the shots at the largest
                             scale among them, PNG) in `spawn_blocking` -> `Event::Taken` (file written, or
-                            the PNG to the clipboard; the editor run on the file with `--edit`)
+                            the PNG to the clipboard; the editor run on the file with `--edit`: its path for
+                            `%f`, last without one; `auto` = the first of `EDITORS` on the PATH, at load)
   subscription()            wayland.rs, the idle/wayland.rs pattern (its own connection, fd polled by tokio,
                             `Handle` + `Request`s): `ext-image-copy-capture-v1` on an
                             `ext-output-image-capture-source` per output, one frame each into a memfd shm

@@ -176,7 +176,7 @@ over Wayland (`ext-image-copy-capture-v1`), no `grim` needed.
 - ✅ The picker: click a window or a screen, drag an area; resize it by its edges and corners, move it; a toolbar (save, copy, edit, every screen), Enter / Escape
 - ✅ At once, for keybinds: `aria-shell screenshot window | output [connector] | all`
 - ✅ Every screen side by side, at the sharpest screen's scale; rotated screens come out upright
-- ✅ A PNG in `[Screenshot] directory`, opened in `[Screenshot] editor` (satty, swappy, ...) with `--edit`; or only on the clipboard with `--clipboard`
+- ✅ A PNG in `[Screenshot] directory`, opened in `[Screenshot] editor` with `--edit` (`auto`: the first of satty, swappy, ksnip, spectacle installed, or a command line with `%f`); or only on the clipboard with `--clipboard`
 - ✅ The `Screenshot` gadget
 - 🔲 Screen recording
 - 🔲 A delay, the pointer in the picture, a notification with a preview

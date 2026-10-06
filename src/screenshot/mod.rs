@@ -41,7 +41,9 @@ pub struct ScreenshotConfig {
     /// Where the pictures go, as written (`~` and relative paths are
     /// resolved by [`Screenshot::new`], which has the [`Config`]).
     pub directory: String,
-    /// The command line that edits a picture, given its path last.
+    /// The command line that edits a picture, its path in place of
+    /// `%f` (last when there's none); `auto`: the first of [`EDITORS`]
+    /// on the PATH; `none`/`off`: no editing.
     pub editor: Option<String>,
     /// The gadget's.
     pub icon: String,
@@ -53,14 +55,50 @@ impl Section for ScreenshotConfig {
     fn from_raw(raw: &RawSection) -> Self {
         Self {
             directory: raw.str_or("directory", "~/Pictures/Screenshots"),
-            editor: raw
-                .get("editor")
-                .map(str::trim)
-                .filter(|e| !e.is_empty())
-                .map(str::to_owned),
+            editor: match raw.get("editor").map(str::trim).unwrap_or("") {
+                "none" | "off" => None,
+                "" | "auto" => auto_editor(),
+                line => Some(line.to_owned()),
+            },
             icon: raw.str_or("icon", "applets-screenshooter-symbolic"),
         }
     }
+}
+
+/// The editors `editor = auto` tries, in order; each saves over the
+/// picture it opened.
+pub const EDITORS: &[&str] = &[
+    "satty --filename %f --output-filename %f",
+    "swappy -f %f -o %f",
+    "ksnip -e %f",
+    "spectacle --edit-existing %f",
+];
+
+/// The first of [`EDITORS`] whose program is on the PATH.
+fn auto_editor() -> Option<String> {
+    let editor = EDITORS.iter().find(|line| {
+        let program = line.split_whitespace().next().unwrap_or(line);
+        process::first_on_path(&[program]).is_some()
+    });
+    if editor.is_none() {
+        log::info!("screenshot: none of the editors on the PATH, no editing");
+    }
+    editor.map(|line| (*line).to_owned())
+}
+
+/// The editor's command line for `path`: in place of every `%f`, last
+/// when there's none.
+fn editor_argv(editor: &str, path: &Path) -> Vec<String> {
+    let path = path.to_string_lossy().into_owned();
+    let mut argv = process::split_words(editor);
+    if argv.iter().any(|w| w == "%f") {
+        for w in argv.iter_mut().filter(|w| *w == "%f") {
+            *w = path.clone();
+        }
+    } else {
+        argv.push(path);
+    }
+    argv
 }
 
 /// What to capture, and where it goes.
@@ -551,9 +589,7 @@ impl Screenshot {
             log::warn!("screenshot: no [Screenshot] editor to edit {}", path.display());
             return;
         };
-        let mut argv = process::split_words(editor);
-        argv.push(path.to_string_lossy().into_owned());
-        process::run_argv(&argv);
+        process::run_argv(&editor_argv(editor, path));
     }
 
     /// For `aria-shell debug screenshot`.
@@ -587,7 +623,8 @@ impl Screenshot {
             Some(p) => p.describe(),
             None => "picker=closed".to_owned(),
         };
-        format!("capture={capture}; clipboard={clipboard}; {picker}; last={last}")
+        let editor = self.config.editor.as_deref().unwrap_or("none");
+        format!("capture={capture}; clipboard={clipboard}; editor={editor}; {picker}; last={last}")
     }
 }
 

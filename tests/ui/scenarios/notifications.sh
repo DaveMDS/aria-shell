@@ -25,8 +25,7 @@ assert_contains "$(call org.freedesktop.Notifications.GetCapabilities)" "'action
 
 # One notification, on the focused output, below the bar at the top right.
 id1=$(nsend -p -t 0 -i dialog-information "First summary" "A body that is long enough to wrap onto a second line in the toast")
-settle
-assert_eq "$(count_widgets 'notification')" 1 "one toast"
+wait_for 'notification' 1 "one toast"
 set -- $(toast_geo)
 assert_eq "$2" HEADLESS-1 "on the focused output"
 x=${3%,*}; y=${3#*,}; w=${4%x*}; h=${4#*x}

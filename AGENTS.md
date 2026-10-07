@@ -41,6 +41,7 @@ aria-shell brightness up            # every screen's brightness (--output eDP-1:
 aria-shell volume up                # the default output's volume (--input: the microphone; down, set 40, mute)
 aria-shell screenshot               # the picker; `window`, `output [connector]`, `all` at once (--clipboard, --edit)
 aria-shell open terminal            # [general] terminal; `open file-manager [dir]`: [general] file_manager
+aria-shell wallpaper next           # every wallpaper folder's next image
 aria-shell debug surfaces           # where our surfaces are (global rects)
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
@@ -51,6 +52,7 @@ aria-shell debug power              # the battery, the peripherals, the power pr
 aria-shell debug brightness         # the screens (backlight, DDC monitors), their outputs and levels
 aria-shell debug screenshot         # the capture protocols, the picker's selection, the last picture
 aria-shell debug places             # the places, and the devices as UDisks2 gives them
+aria-shell debug wallpaper          # each [wallpaper] section: outputs, folder picked, images, the one shown
 ```
 
 ## Architecture

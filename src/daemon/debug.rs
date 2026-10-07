@@ -62,6 +62,10 @@ impl AriaShell {
                 reply.send(self.places.describe());
                 Task::none()
             }
+            DebugCommand::Wallpaper => {
+                reply.send(self.wallpapers.describe());
+                Task::none()
+            }
             DebugCommand::Locale => {
                 reply.send(self.locale.describe());
                 Task::none()

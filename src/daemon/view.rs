@@ -110,7 +110,7 @@ impl AriaShell {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs().iter().cloned());
-        files.extend(self.wallpapers.files().cloned());
+        files.extend(self.wallpapers.watched().cloned());
         let popups = self
             .panels
             .values()
@@ -152,6 +152,7 @@ impl AriaShell {
                 self.brightness.subscription().map(Message::Brightness),
                 self.screenshot.subscription().map(Message::Screenshot),
                 self.places.subscription().map(Message::Places),
+                self.wallpapers.subscription().map(Message::Wallpaper),
                 self.scripts
                     .subscription(self.panels.values().flat_map(Panel::scripts))
                     .map(Message::Scripts),

@@ -274,3 +274,11 @@ pub(crate) fn surface_tasks(surfaces: Surfaces) -> Task<Message> {
             .chain(redraw),
     )
 }
+
+/// What the wallpapers asked for: surfaces opened or closed, images to
+/// decode.
+pub(crate) fn wallpaper_tasks(
+    (surfaces, load): (Surfaces, Task<crate::components::wallpaper::Event>),
+) -> Task<Message> {
+    Task::batch([surface_tasks(surfaces), load.map(Message::Wallpaper)])
+}

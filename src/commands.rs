@@ -49,6 +49,8 @@ pub enum Command {
     Screenshot(crate::services::screenshot::Command),
     /// Run a preferred program (`aria-shell open terminal`).
     Open(OpenCommand),
+    /// The wallpapers (`aria-shell wallpaper next`).
+    Wallpaper(WallpaperCommand),
     /// Answered through the channel.
     Debug(DebugCommand, Reply),
 }
@@ -78,6 +80,8 @@ pub enum DebugCommand {
     Screenshot,
     /// The places, the devices.
     Places,
+    /// The wallpapers: each section's source, images and the one shown.
+    Wallpaper,
     /// Every themed widget (element path + global rectangle), or those
     /// whose path contains the filter.
     Widgets(Option<String>),
@@ -90,6 +94,13 @@ pub enum OpenCommand {
     Terminal,
     /// The file manager, on a directory (the home when `None`).
     FileManager(Option<PathBuf>),
+}
+
+/// `aria-shell wallpaper ...`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WallpaperCommand {
+    /// The next image of every folder, the intervals starting over.
+    Next,
 }
 
 /// Where the daemon writes the answer to a [`Command::Debug`].
@@ -180,6 +191,7 @@ enum Parsed {
     Volume(VolumeCommand),
     Screenshot(crate::services::screenshot::Command),
     Open(OpenCommand),
+    Wallpaper(WallpaperCommand),
     /// Deliver to the daemon and relay its answer.
     Debug(DebugCommand),
     /// Answered by the listener itself.
@@ -242,6 +254,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
                 args.join(" ")
             )),
         },
+        "wallpaper" => match args.as_slice() {
+            ["next"] => Ok(Parsed::Wallpaper(WallpaperCommand::Next)),
+            _ => Err(format!(
+                "invalid arguments for <wallpaper>: {} (next)",
+                args.join(" ")
+            )),
+        },
         "debug" => match args.as_slice() {
             ["surfaces"] => Ok(Parsed::Debug(DebugCommand::Surfaces)),
             ["cursor"] => Ok(Parsed::Debug(DebugCommand::Cursor)),
@@ -255,12 +274,13 @@ fn parse(line: &str) -> Result<Parsed, String> {
             ["brightness"] => Ok(Parsed::Debug(DebugCommand::Brightness)),
             ["screenshot"] => Ok(Parsed::Debug(DebugCommand::Screenshot)),
             ["places"] => Ok(Parsed::Debug(DebugCommand::Places)),
+            ["wallpaper"] => Ok(Parsed::Debug(DebugCommand::Wallpaper)),
             ["widgets"] => Ok(Parsed::Debug(DebugCommand::Widgets(None))),
             ["widgets", filter @ ..] => {
                 Ok(Parsed::Debug(DebugCommand::Widgets(Some(filter.join(" ")))))
             }
             _ => Err(format!(
-                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | screenshot | places | widgets [filter])",
+                "invalid arguments for <debug>: {} (surfaces | cursor | theme | locale | sysmon | audio | network | idle | power | brightness | screenshot | places | wallpaper | widgets [filter])",
                 args.join(" ")
             )),
         },
@@ -553,6 +573,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
             }
             Ok(Parsed::Open(cmd)) => {
                 let _ = tx.send(Command::Open(cmd)).await;
+                "OK".to_owned()
+            }
+            Ok(Parsed::Wallpaper(cmd)) => {
+                let _ = tx.send(Command::Wallpaper(cmd)).await;
                 "OK".to_owned()
             }
             Ok(Parsed::Debug(cmd)) => {
@@ -901,8 +925,22 @@ mod tests {
             parse("debug cursor"),
             Ok(Parsed::Debug(DebugCommand::Cursor))
         );
+        assert_eq!(
+            parse("debug wallpaper"),
+            Ok(Parsed::Debug(DebugCommand::Wallpaper))
+        );
         assert!(parse("debug").is_err());
         assert!(parse("debug nope").is_err());
+    }
+
+    #[test]
+    fn parses_wallpaper() {
+        assert_eq!(
+            parse("wallpaper next"),
+            Ok(Parsed::Wallpaper(WallpaperCommand::Next))
+        );
+        assert!(parse("wallpaper").is_err());
+        assert!(parse("wallpaper previous").is_err());
     }
 
     #[test]

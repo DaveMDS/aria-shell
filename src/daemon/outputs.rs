@@ -9,7 +9,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use crate::components::panel;
 use crate::config::Config;
-use crate::daemon::surface_tasks;
+use crate::daemon::{surface_tasks, wallpaper_tasks};
 use crate::locale::Locale;
 use crate::services::{icons, idle};
 use crate::ui::theme::Theme;
@@ -230,8 +230,8 @@ impl AriaShell {
 
     /// The wallpaper this output is configured for, unless it has one.
     pub(crate) fn open_wallpaper(&mut self, output: &OutputInfo) -> Task<Message> {
-        let (surfaces, load) = self.wallpapers.open(&self.config, output);
-        Task::batch([surface_tasks(surfaces), load.map(Message::Wallpaper)])
+        let changes = self.wallpapers.add_output(&self.config, output);
+        wallpaper_tasks(changes)
     }
 
     /// Logical rectangle of an output in the global space (xdg-output).
@@ -286,13 +286,12 @@ impl AriaShell {
             .map(|id| Task::done(Message::RemoveWindow(id)))
             .collect();
         self.panels.clear();
-        tasks.push(surface_tasks(self.wallpapers.close()));
         tasks.push(self.close_launcher());
         tasks.push(self.close_exiter());
         self.cursor = None;
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
-        tasks.extend(outputs.iter().map(|o| self.open_wallpaper(o)));
+        tasks.push(wallpaper_tasks(self.wallpapers.set_config(&self.config)));
         tasks.push(self.icons.load().map(Message::Icons));
         // The corner or the theme may have changed: reopen the toasts.
         tasks.push(surface_tasks(self.toasts.close()));

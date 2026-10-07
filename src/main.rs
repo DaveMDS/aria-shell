@@ -25,7 +25,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 
 use audio::Audio;
 use brightness::Brightness;
-use commands::{Command, OpenCommand, Reply, ToggleCommand};
+use commands::{Command, OpenCommand, Reply, ToggleCommand, WallpaperCommand};
 use components::{dialog, exiter, launcher, locker, osd, panel, picker, wallpaper};
 use compositor::Compositor;
 use config::{Config, GeneralConfig};
@@ -502,9 +502,9 @@ impl AriaShell {
                     }
                 }
             }
-            Message::Wallpaper(event) => {
-                self.wallpapers.apply(event);
-                Task::none()
+            Message::Wallpaper(event) => daemon::wallpaper_tasks(self.wallpapers.apply(event)),
+            Message::Command(Command::Wallpaper(WallpaperCommand::Next)) => {
+                daemon::wallpaper_tasks(self.wallpapers.next())
             }
             Message::Command(Command::Lock) => self.lock(),
             Message::Command(Command::Open(what)) => {
@@ -695,24 +695,13 @@ impl AriaShell {
                     .path()
                     .is_some_and(|p| paths.contains(&p.to_path_buf()));
                 let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
-                let wallpapers: Vec<PathBuf> = self
-                    .wallpapers
-                    .files()
-                    .filter(|f| paths.contains(f))
-                    .cloned()
-                    .collect();
                 if config_changed && self.general.reload_config {
                     self.reload_config()
                 } else if theme_changed && self.general.reload_style {
                     log::info!("theme file changed, reloading");
                     self.reload_theme()
-                } else if !wallpapers.is_empty() {
-                    log::info!("wallpaper file(s) changed, reloading");
-                    Task::batch(
-                        wallpapers
-                            .into_iter()
-                            .map(|p| self.wallpapers.load(p).map(Message::Wallpaper)),
-                    )
+                } else if let Some(changes) = self.wallpapers.changed(&paths) {
+                    daemon::wallpaper_tasks(changes)
                 } else {
                     // An icon or applications directory: something was
                     // installed or removed.

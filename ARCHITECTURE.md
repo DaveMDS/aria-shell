@@ -496,16 +496,26 @@ Locker     (locker/)        a component the daemon owns from `aria-shell lock` t
                             `SessionLock`), all drawing the one state; `Message::Lock` / `UnLock` to the runtime
   pam.rs                    `authenticate(user, password)`: a direct libpam binding, blocking (spawn_blocking)
 
-Wallpapers (wallpaper.rs)   the desktop background: `WallpaperConfig::for_output(config, connector)` picks
-                            `[wallpaper:<connector>]` (with a source) over `[wallpaper]`; `source` through
-                            `Config::resolve_path` (`~`, absolute, else relative to aria.conf's dir), `fit` =
-                            CSS object-fit (cover default, contain, fill, none, scale-down -> iced ContentFit);
-                            `Wallpapers::open(config, output) -> (Surfaces, Task)` asks for one
-                            `Layer::Background` surface per output (with the panels, closed with the output)
-                            and decodes each file once off-thread (`load` -> `Event::Loaded`, by
-                            content like the avatar), shared by path, reloaded when the watcher sees the
-                            file change; `view` is `image(handle).content_fit(..)` in a `wallpaper` root
-                            container (the theme's background shows around a `contain`ed image)
+Wallpapers (wallpaper/)     the desktop background: `WallpaperConfig::for_output(config, connector)` picks
+                            `[wallpaper:<connector>]` (with a source) over `[wallpaper]` and names the section;
+                            `source` = `Source::Auto` (default) | `None` | `Path` (through `Config::resolve_path`:
+                            `~`, absolute, else relative to aria.conf's dir), `fit` = CSS object-fit (cover
+                            default, contain, fill, none, scale-down -> iced ContentFit), `interval`, `order`.
+                            A `Show` (`show.rs`) per section in use: the images (a file; a folder's png/jpg/
+                            jpeg/webp, recursive; auto: the first `$XDG_DATA_HOME:$XDG_DATA_DIRS` `backgrounds`
+                            with one), the wanted one, the one shown, what to watch (the folders scanned, the
+                            parent of one not there yet); `next` / `rescan` / `skip` (failed decodes) are pure
+                            bookkeeping, unit-tested. `Wallpapers` knows the outputs (`add_output`,
+                            `output_removed`, `set_config` on reload: a show whose section is unchanged keeps
+                            its place) and `sync`s after every change: one `Layer::Background` surface per output
+                            whose show has images (none, and the compositor's background shows, when it has
+                            none), each wanted file decoded once off-thread (`Event::Loaded`, by content like
+                            the avatar) and shown when ready (the old one stays until then), only the images in
+                            use kept. `changed(paths)` from the watcher rescans and re-decodes files whose mtime
+                            moved; a `run_with((section, interval, generation))` timer per rotating show
+                            (`Event::Tick`; `next`, `aria-shell wallpaper next`, bumps the generation so the
+                            interval starts over); `view` is `image(handle).content_fit(..)` in a `wallpaper`
+                            root container (the theme's background shows around a `contain`ed image)
 
 Osd        (osd/)           daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
                             margin); `observe(&Audio, &Network, &Power, &Idle, &Brightness)` after every change of
@@ -1300,8 +1310,17 @@ Two things flow between the daemon and the gadgets besides messages:
   *new* id per call. When a new entry lands, entries not drawn that
   frame are evicted, so pre-warming icons that aren't on screen is
   pointless. `svg::Style { color }` tints (for symbolic icons).
+  A raster of 2 MiB or more as RGBA (`MAX_SYNC_SIZE` in
+  `image/cache.rs`: about 1024x512 and up) is uploaded on a worker
+  thread: the frame draws nothing in its place, and nothing asks
+  another frame when the upload is done, so it shows only at the
+  surface's next frame for some other reason (a wallpaper stayed
+  blank). `image::Renderer::load_image(handle)` is the synchronous
+  upload; the wallpaper's `Uploaded` widget calls it before drawing.
+  The caches are per window (each surface's renderer has its own):
+  `widget::image::allocate` is carried out on the first window only.
   `iced` feature `image-without-codecs` + our own `image = { features
-  = ["png"] }` keeps only the PNG decoder in the binary.
+  = ["png", "jpeg", "webp"] }` keeps only those decoders in the binary.
 - The boot closure of `iced_exwlshell::daemon` may return `(State,
   Task)`: that's where the icon index build starts.
 - After every batch of messages `iced_exwlshell` rebuilds the widget

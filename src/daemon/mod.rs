@@ -7,4 +7,4 @@ mod outputs;
 mod surfaces;
 mod view;
 
-pub(crate) use surfaces::surface_tasks;
+pub(crate) use surfaces::{surface_tasks, wallpaper_tasks};

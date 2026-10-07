@@ -39,7 +39,7 @@ walls=$XDG_CONFIG_HOME/aria-shell/wallpapers
 orig=$(mktemp); cp "$walls/b.png" "$orig"
 trap 'cp "$orig" "$walls/b.png"; rm -f "$orig"' EXIT
 cp "$walls/a.png" "$walls/b.png"
-assert_logged "wallpaper file(s) changed"
+assert_logged "b.png changed, reloading"
 settle 1
 b_top=$(sample 1930 100); b_bottom=$(sample 1930 1070); b_right=$(sample 3830 100)
 [ "$b_top" = "$b_bottom" ] || { echo "b after reload: still vertical ($b_top vs $b_bottom)"; exit 1; }

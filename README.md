@@ -121,18 +121,74 @@ monitor, a live shader on the third.
 
 **Static images** — standard raster formats (PNG, JPEG, WEBP).
 
+**Folders** — every image in a folder and its sub-folders, shown in turn every
+`interval`, by name or shuffled (`order = random`: each one once before any
+comes again). Images added or removed while the shell runs are picked up; when
+the one on screen goes, the next one comes. `aria-shell wallpaper next` skips
+ahead (bind it to a key).
+
 **Animated GIFs** *(planned)* — frame-accurate GIF playback, looped continuously. Useful for subtle motion loops without the overhead of a video file.
 
 **Shadertoy shaders** *(planned)* — GLSL fragment shaders sourced directly from [shadertoy.com](https://shadertoy.com). Save any shader code as a `.shadertoy` file and point the config at it. The shader is executed on the GPU every frame, giving you a fully animated, procedurally generated background with zero CPU cost.
 
+#### Where the wallpaper comes from
+
+`[wallpaper] source` says it, for every monitor; a `[wallpaper:<connector>]`
+section with its own `source` wins on that monitor (`aria-shell debug surfaces`
+names the connectors):
+
+- **`auto`** (the default, also when `source` is empty or missing): the
+  `backgrounds` folder of the XDG data dirs. First the user's,
+  `~/.local/share/backgrounds` (`$XDG_DATA_HOME/backgrounds`), as soon as it has
+  an image: **put your pictures there and that's it, no config needed**. Until
+  then the system's, the first `backgrounds` folder of `$XDG_DATA_DIRS` with an
+  image (usually `/usr/share/backgrounds`, where distributions and desktops
+  install theirs: on a Sway system, Sway's own). Only one folder is used, never
+  a mix of the two. GNOME uses the same folders, so its users find their
+  pictures already there.
+- **a folder**: every image in it and in its sub-folders.
+- **a file**: that image (decoded by content, its name doesn't matter).
+- **`none`**: no wallpaper from Aria Shell, for those who run another one
+  (`swaybg`, `hyprpaper`, ...); without this, `auto` puts one on top of theirs.
+
+In a folder only `png`, `jpg`, `jpeg` and `webp` files count (other files live
+there too: GNOME's slideshow `.xml`), hidden files and folders are skipped. With
+no image found the monitor gets no wallpaper surface at all, and the
+compositor's background shows. Folders are watched: the first image put in a
+folder (even one that didn't exist yet) shows up at once. Paths take `~/...`, or
+are relative to `aria.conf`'s directory.
+
+```ini
+[wallpaper]
+# auto | none | a folder | a file
+source = auto
+# cover | contain | fill | none | scale-down
+fit = cover
+# a folder's next image every 30s, 10m, 1h; empty or 0 = the first one stays
+interval = 30m
+# name | random
+order = random
+
+# a monitor of its own
+[wallpaper:HDMI-A-1]
+source = ~/Pictures/vertical.jpg
+```
+
+Monitors sharing a section show the same image and change together; each
+`[wallpaper:<connector>]` has its own turn. `aria-shell debug wallpaper` tells,
+for each section, the monitors, the folder picked, the images found and the one
+on screen.
+
 - ✅ Per-monitor backgrounds
 - ✅ Fit modes: cover, contain, fill, none, scale-down (CSS `object-fit`)
 - ✅ Static images (reloaded when the file changes)
+- ✅ A default with no config: the user's backgrounds folder, else the system's
+- ✅ Cycle through the images of a folder (by name or random, every `interval`; `aria-shell wallpaper next`)
 - 🔲 Animated GIFs, videos
 - 🔲 `tile` fit mode
 - 🔲 [Shadertoy](https://shadertoy.com) shader support (`.shadertoy` files)
 - 🔲 texture based shader support
-- 🔲 Cycle through files in folder
+- 🔲 A fade between images
 - 🔲 day-time-based wallpapers
 - 🔲 auto-pause when on battery? or when full covered?_
 
@@ -257,7 +313,8 @@ aria-shell brightness up [percent]|down [percent]|set <percent> [--output <conne
 aria-shell volume   up [percent]|down [percent]|set <percent>|mute [toggle|on|off] [--input]
 aria-shell screenshot [window|output [connector]|all] [--edit|--clipboard]
 aria-shell open     terminal|file-manager [dir]
-aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness|screenshot
+aria-shell wallpaper next
+aria-shell debug    surfaces|widgets [selector]|cursor|theme|locale|sysmon|audio|network|idle|power|brightness|screenshot|places|wallpaper
 TODO: reload
 TODO: terminal [toggle|show|hide]
 TODO: notify ....

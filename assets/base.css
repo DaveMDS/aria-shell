@@ -32,11 +32,6 @@
  *   box-shadow                  <x> <y> [blur] <colour> | none; on a surface's root (popup,
  *                               notification, osd, launcher, exiter) the surface grows around
  *                               the box to show it, the box stays where it was
- *
- *   For now what shows through a surface (a shadow, the corners a surface's root
- *   rounds, an rgba background) has only 4 levels of transparency: the shadows
- *   come out as hard bands, rounded corners jagged. This file uses neither on
- *   the surfaces until iced fixes it (see ARCHITECTURE.md, known risks).
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill (content is centred on a sized axis);

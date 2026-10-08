@@ -289,8 +289,8 @@ is loaded on top, with light and dark colour schemes. Themes are found in
 - 🔲 `:hover` on more than buttons, a themed scrollbar
 - 🔲 Remember the theme picked at runtime, follow and set the desktop's colour scheme
 - 🔲 Shader backgrounds for widgets (`background: shader("x.wgsl")`)
-- 🔲 Smooth transparency on the surfaces (shadows, rounded corners, `rgba`
-  backgrounds): only 4 levels for now, waiting for an iced release that fixes it
+- ✅ Smooth transparency on the surfaces (shadows, rounded corners, `rgba`
+  backgrounds), with a patched `iced_wgpu` until an iced release has the fix
 
 
 ---

@@ -40,7 +40,7 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
   when drawn, a fraction of the CPU with the pointer moving) waits for
   the 0.21 release: merge it then, adapting to the API changes made
   after the rc.
-- Transparency has 2 bits: `iced_wgpu` 0.14.0 takes the first non-sRGB
+- Transparency had 2 bits: `iced_wgpu` 0.14.0 takes the first non-sRGB
   surface format needing no feature, and Mesa's Vulkan on Wayland lists
   `Rgb10a2Unorm` before `Bgra8Unorm` (the log says `Selected format:
   Rgb10a2Unorm`), so what shows through a surface has 4 levels: a
@@ -48,12 +48,17 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
   jagged, an `rgba` bar banded. Measured with a red `0 0 30px` shadow:
   the colour fades, the alpha steps from 0.33 to 0. iced master excludes
   `Rgb10a2Unorm`/`Rgb10a2Uint` (a `BLACKLIST` in
-  `wgpu/src/window/compositor.rs`), not in any 0.14 release, and
-  `iced_exwlshell` 0.21 stays on iced 0.14. Chosen: wait for the
-  release, no vendored copy; until then `base.css` gives the surfaces'
-  roots neither shadows nor rounded corners (inner widgets round fine,
-  on an opaque background). The room for a shadow (`Theme::shadow_room`)
-  is already there for when it renders.
+  `wgpu/src/window/compositor.rs`), not in any release (`iced_wgpu` is
+  still 0.14.0 on crates.io), and `iced_exwlshell` 0.21 stays on iced
+  0.14. It showed on text too: on a translucent bar the edges of the
+  letters take wrong levels of what's behind. Chosen, after waiting:
+  `vendor/iced_wgpu` is `iced_wgpu` 0.14.0 as published with master's
+  filter (marked `aria-shell:`, iced's LICENSE beside it), used through
+  `[patch.crates-io]` in `Cargo.toml`; `Bgra8Unorm` is picked, the same
+  shadow fades by one step a pixel. Drop it when a release has the
+  filter and `iced_exwlshell` moves to it: Cargo then warns the patch is
+  unused. `base.css` still gives the surfaces' roots no shadow and no
+  rounded corners: neutral, a theme's to choose.
 
 ## Structure
 
@@ -972,8 +977,7 @@ Two things flow between the daemon and the gadgets besides messages:
   notifications stack: one surface each, the daemon recomputes the
   margins on every change.
 - A surface is only drawn inside its bounds: one the size of its box
-  cut the box's `box-shadow` flat (and transparency has 2 bits for now,
-  see the known risks) (iced draws it `blur` past the box
+  cut the box's `box-shadow` flat (iced draws it `blur` past the box
   moved by the offset, `quad/solid.wgsl`). So the boxed surfaces
   (popups, toasts, the OSD, the dialogs) are their box plus
   `Theme::shadow_room(root)`, the box drawn inside it

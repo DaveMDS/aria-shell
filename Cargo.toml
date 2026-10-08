@@ -31,3 +31,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 # the KDE places file (user-places.xbel), and the bookmarks' file:// URIs
 roxmltree = "0.20"
 percent-encoding = "2"
+
+# 8 bits of alpha on the surfaces: see ARCHITECTURE.md, "Known risks".
+[patch.crates-io]
+iced_wgpu = { path = "vendor/iced_wgpu" }

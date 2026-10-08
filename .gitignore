@@ -2,3 +2,4 @@
 # libpulse writes its cookie in the scenarios' XDG_CONFIG_HOME
 /tests/ui/config*/pulse
 SCRATCHPAD.md
+WIP/

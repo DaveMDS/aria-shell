@@ -4,6 +4,7 @@
 
 mod debug;
 mod outputs;
+pub(crate) mod showcase;
 mod surfaces;
 mod view;
 

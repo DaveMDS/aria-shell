@@ -51,6 +51,7 @@ impl AriaShell {
                     .iter()
                     .flat_map(|l| l.windows().map(|(id, _)| id)),
             )
+            .chain(self.showcase.iter().map(|s| s.window))
             .chain(self.toasts.placed().map(|(window, ..)| window))
             .chain(self.osd.windows().map(|(_, id)| id));
         Task::batch(ids.map(|id| Task::done(Message::Redraw(Some(id)))))
@@ -213,6 +214,7 @@ impl AriaShell {
         Task::batch([
             self.close_launcher(),
             self.close_exiter(),
+            self.close_showcase(),
             self.close_popups(None),
             Task::done(Message::Lock),
         ])

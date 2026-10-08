@@ -176,4 +176,16 @@ pub const CATALOGUE: Catalogue = &[
     ("osd.profile", "Profilo energetico: {name}"),
     ("osd.idle.on", "Tieni sveglio: attivo"),
     ("osd.idle.off", "Tieni sveglio: disattivato"),
+    // showcase: its sample notifications
+    ("showcase.notification.summary", "Una notifica"),
+    (
+        "showcase.notification.body",
+        "Il suo testo, lungo abbastanza da andare a capo.",
+    ),
+    ("showcase.notification.action", "Apri"),
+    ("showcase.critical.summary", "Una notifica critica"),
+    (
+        "showcase.critical.body",
+        "Batteria al 5%: collega il caricatore.",
+    ),
 ];

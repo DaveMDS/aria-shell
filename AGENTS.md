@@ -35,6 +35,7 @@ With arguments the binary is a client of the running shell:
 aria-shell launcher toggle          # what a compositor keybind runs
 aria-shell lock                     # the lock screen (PAM checks the password)
 aria-shell exiter toggle            # the exit menu (lock, suspend, ..., shutdown)
+aria-shell showcase toggle          # every part of the UI at once, for a theme's work and picture
 aria-shell idle inhibit             # hold idle (no lock, screens off, suspend) or let it go
 aria-shell osd show --icon display-brightness-symbolic --value 40   # the OSD, from a script
 aria-shell brightness up            # every screen's brightness (--output eDP-1: one; down, set 40)

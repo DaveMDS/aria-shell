@@ -35,6 +35,8 @@ pub enum Command {
     Launcher(ToggleCommand),
     /// The exit menu (`aria-shell exiter toggle`).
     Exiter(ToggleCommand),
+    /// Every part of the UI at once (`aria-shell showcase toggle`).
+    Showcase(ToggleCommand),
     /// Lock the session (`aria-shell lock`).
     Lock,
     /// Hold idle or let it go (`aria-shell idle inhibit [toggle|on|off]`).
@@ -184,6 +186,7 @@ enum Parsed {
     /// Deliver to the daemon (and reply `OK`).
     Launcher(ToggleCommand),
     Exiter(ToggleCommand),
+    Showcase(ToggleCommand),
     Lock,
     Idle(crate::services::idle::Command),
     Osd(crate::components::osd::Content),
@@ -214,6 +217,7 @@ fn parse(line: &str) -> Result<Parsed, String> {
         )),
         "launcher" => Ok(Parsed::Launcher(ToggleCommand::parse(name, &args)?)),
         "exiter" => Ok(Parsed::Exiter(ToggleCommand::parse(name, &args)?)),
+        "showcase" => Ok(Parsed::Showcase(ToggleCommand::parse(name, &args)?)),
         "lock" => match args.as_slice() {
             [] => Ok(Parsed::Lock),
             _ => Err(format!("invalid arguments for <lock>: {}", args.join(" "))),
@@ -547,6 +551,10 @@ async fn handle(conn: UnixStream, mut tx: mpsc::Sender<Command>) {
                 let _ = tx.send(Command::Exiter(cmd)).await;
                 "OK".to_owned()
             }
+            Ok(Parsed::Showcase(cmd)) => {
+                let _ = tx.send(Command::Showcase(cmd)).await;
+                "OK".to_owned()
+            }
             Ok(Parsed::Lock) => {
                 let _ = tx.send(Command::Lock).await;
                 "OK".to_owned()
@@ -661,6 +669,10 @@ mod tests {
         );
         assert!(parse("launcher what").is_err());
         assert_eq!(parse("exiter"), Ok(Parsed::Exiter(ToggleCommand::Toggle)));
+        assert_eq!(
+            parse("showcase show"),
+            Ok(Parsed::Showcase(ToggleCommand::Show))
+        );
         assert_eq!(
             parse("exiter hide"),
             Ok(Parsed::Exiter(ToggleCommand::Hide))

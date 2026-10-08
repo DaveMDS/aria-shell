@@ -1,0 +1,327 @@
+//! `aria-shell showcase`: every part of the UI at once, on one surface,
+//! to compare them while working on a theme and to take its picture.
+//!
+//! Not the real surfaces: the launcher and the exit menu are one dialog
+//! at a time, a popup closes at the first click elsewhere, the OSD and
+//! the toasts expire. Their views instead, drawn by the same code in
+//! the same root boxes, each at the size its own surface would have,
+//! side by side on one transparent layer surface over the focused
+//! output, between its bars: what shows through is the desktop, as on
+//! the real ones. Inert: what the parts would do is dropped, their
+//! hover still shows. Escape, a click beside the parts or the command
+//! again close it; a theme change redraws it like any surface.
+//!
+//! ```text
+//! showcase      the surface; `padding` around the parts, `gap` between them
+//! ├─ popup > gadget.clock | gadget.themes     the calendar, a menu
+//! ├─ launcher
+//! ├─ exiter
+//! ├─ osd.volume
+//! ╰─ notification.normal | notification.critical
+//! ```
+
+use iced::widget::{column, container, mouse_area, row};
+use iced::window::Id;
+use iced::{Alignment, Element, Event, Length, Subscription, Task, keyboard};
+use iced_exwlshell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
+};
+use iced_wayland_subscriber::OutputId;
+
+use crate::components::exiter::Exiter;
+use crate::components::launcher::Launcher;
+use crate::components::osd::{self, Osd};
+use crate::daemon::view::dialog_surface;
+use crate::gadgets::{AnyGadget, Context};
+use crate::locale::Locale;
+use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
+use crate::ui::theme::Node;
+use crate::ui::{popup, toast};
+use crate::{AriaShell, Message as Shell};
+
+/// The gadgets whose popups show, by their config section.
+const GADGETS: &[&str] = &["Clock", "Themes"];
+
+pub(crate) struct Showcase {
+    pub window: Id,
+    pub output: OutputId,
+    launcher: Launcher,
+    exiter: Exiter,
+    /// With their popup's node, `popup[output=..] > gadget.<kind>`.
+    gadgets: Vec<(AnyGadget, Node)>,
+    notifications: Vec<Notification>,
+    osd: osd::Content,
+    /// A press landed beside the parts: the release closes.
+    pressed_outside: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum Message {
+    /// A press on a part, or what a part would do: nothing.
+    Nothing,
+    /// A press beside the parts.
+    PressedOutside,
+    Released,
+    /// Escape, on window `Id`.
+    Escape(Id),
+}
+
+impl Showcase {
+    /// Icon names the parts draw, for the daemon to resolve.
+    pub fn icon_names(&self) -> impl Iterator<Item = String> + '_ {
+        let notifications = self.notifications.iter().filter_map(|n| match &n.icon {
+            Some(IconSource::Name(name)) => Some(name.clone()),
+            _ => None,
+        });
+        self.launcher
+            .icon_names()
+            .chain(self.exiter.icon_names())
+            .chain(self.osd.icon.as_deref())
+            .map(str::to_owned)
+            .chain(notifications)
+            .chain(self.gadgets.iter().flat_map(|(g, _)| g.icon_names()))
+    }
+
+    /// Desktop ids of the launcher's results, for icon resolution.
+    pub fn app_ids(&self) -> impl Iterator<Item = &str> {
+        self.launcher.visible_ids()
+    }
+
+    pub fn set_apps(&mut self, apps: std::sync::Arc<crate::services::icons::Index>) {
+        self.launcher.set_apps(apps);
+    }
+}
+
+/// Escape on any window; the daemon checks it's the showcase's.
+pub(crate) fn subscription() -> Subscription<Message> {
+    iced::event::listen_with(|event, _, window| match event {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Escape),
+            ..
+        }) => Some(Message::Escape(window)),
+        _ => None,
+    })
+}
+
+/// A normal notification with an action, a critical one without.
+fn notifications(locale: &Locale) -> Vec<Notification> {
+    let sample = |id: u32, urgency, icon: &str, summary, body, actions| Notification {
+        id,
+        serial: 0,
+        app_name: "aria-shell".to_owned(),
+        summary: locale.tr(summary).to_owned(),
+        body: locale.tr(body).to_owned(),
+        icon: Some(IconSource::Name(icon.to_owned())),
+        image: None,
+        urgency,
+        actions,
+        timeout: Timeout::Never,
+    };
+    // Ids no real notification gets soon, for `debug widgets`.
+    vec![
+        sample(
+            u32::MAX,
+            Urgency::Normal,
+            "dialog-information-symbolic",
+            "showcase.notification.summary",
+            "showcase.notification.body",
+            vec![(
+                "open".to_owned(),
+                locale.tr("showcase.notification.action").to_owned(),
+            )],
+        ),
+        sample(
+            u32::MAX - 1,
+            Urgency::Critical,
+            "dialog-warning-symbolic",
+            "showcase.critical.summary",
+            "showcase.critical.body",
+            Vec::new(),
+        ),
+    ]
+}
+
+/// What a part would do, dropped.
+fn nothing<T>(_: T) -> Shell {
+    Shell::Showcase(Message::Nothing)
+}
+
+/// A part, at its surface's size, taking the presses on it.
+fn part(content: Element<'_, Shell>, (w, h): (u32, u32)) -> Element<'_, Shell> {
+    container(mouse_area(content).on_press(nothing(())))
+        .width(w as f32)
+        .height(h as f32)
+        .into()
+}
+
+impl AriaShell {
+    /// Show the showcase on the focused output (the first one if the
+    /// compositor didn't say); the dialogs and the popups go, it would
+    /// hide them.
+    pub(crate) fn open_showcase(&mut self) -> Task<Shell> {
+        let Some(output) = self.focused_output().cloned() else {
+            log::warn!("no output to show the showcase on");
+            return Task::none();
+        };
+        let window = Id::unique();
+        log::info!(
+            "opening the showcase on output {:?} as window {window:?}",
+            output.name
+        );
+        let popup_root =
+            Node::root("popup").attr("output", output.name.clone().unwrap_or_default());
+        let gadgets = GADGETS
+            .iter()
+            .filter_map(|name| {
+                let gadget = AnyGadget::create(name, &self.config, &output)?;
+                let node = popup_root.child("gadget").class(gadget.kind());
+                Some((gadget, node))
+            })
+            .collect();
+        self.showcase = Some(Showcase {
+            window,
+            output: OutputId::from(&output),
+            launcher: Launcher::new(
+                self.config.section(None),
+                self.config.section(None),
+                self.general.terminal.clone(),
+                self.icons.index(),
+            ),
+            exiter: Exiter::new(self.config.section(None)),
+            gadgets,
+            notifications: notifications(&self.locale),
+            osd: osd::Content {
+                kind: osd::Kind::Volume,
+                icon: Some("audio-volume-medium-symbolic".to_owned()),
+                value: Some(40),
+                text: None,
+                muted: false,
+                outputs: None,
+            },
+            pressed_outside: false,
+        });
+        self.resolve_icons();
+        let settings = NewLayerShellSettings {
+            anchor: Anchor::all(),
+            size: LayerSize::FILL,
+            layer: Layer::Top,
+            // Between the bars, not over them.
+            exclusive_zone: None,
+            margin: None,
+            // Escape once clicked; the keyboard stays where it was,
+            // for the editor with the theme open.
+            keyboard_interactivity: KeyboardInteractivity::OnDemand,
+            output_option: OutputOption::GlobalName(output.id),
+            namespace: Some("aria-showcase".to_owned()),
+            ..Default::default()
+        };
+        Task::batch([
+            self.close_launcher(),
+            self.close_exiter(),
+            self.close_popups(None),
+            Task::done(Shell::NewLayerShell {
+                settings,
+                id: window,
+            }),
+        ])
+    }
+
+    pub(crate) fn close_showcase(&mut self) -> Task<Shell> {
+        match self.showcase.take() {
+            Some(showcase) => Task::done(Shell::RemoveWindow(showcase.window)),
+            None => Task::none(),
+        }
+    }
+
+    pub(crate) fn showcase_update(&mut self, message: Message) -> Task<Shell> {
+        let Some(showcase) = &mut self.showcase else {
+            return Task::none();
+        };
+        match message {
+            Message::Nothing => Task::none(),
+            Message::PressedOutside => {
+                showcase.pressed_outside = true;
+                Task::none()
+            }
+            // On the release: closing on the press destroys the surface
+            // before its release, which Hyprland then gives the next
+            // click (see `dialog`).
+            Message::Released if std::mem::take(&mut showcase.pressed_outside) => {
+                self.close_showcase()
+            }
+            Message::Escape(window) if window == showcase.window => self.close_showcase(),
+            Message::Released | Message::Escape(_) => Task::none(),
+        }
+    }
+
+    /// The parts in three columns, centred: the popups, the launcher,
+    /// then the exit menu, the OSD and the toasts.
+    pub(crate) fn showcase_view<'a>(&'a self, showcase: &'a Showcase) -> Element<'a, Shell> {
+        let shared = self.shared();
+        let theme = &self.theme;
+        let output = self.output_name(showcase.output);
+        let root = Node::root("showcase");
+        let gap = theme.resolve(&root).gap;
+        let popups = showcase.gadgets.iter().map(|(gadget, node)| {
+            let ctx = Context {
+                shared,
+                node: node.clone(),
+            };
+            let size = popup::surface_size(theme, gadget.popup_size(ctx.clone()));
+            let box_node = node
+                .parent()
+                .cloned()
+                .unwrap_or_else(|| Node::root("popup"));
+            part(
+                popup::view(theme, &box_node, gadget.popup_view(ctx).map(nothing)),
+                size,
+            )
+        });
+        let launcher = part(
+            dialog_surface(
+                theme,
+                "launcher",
+                showcase.launcher.view(shared).map(nothing),
+                nothing(()),
+            ),
+            Launcher::size(theme),
+        );
+        let exiter = part(
+            dialog_surface(
+                theme,
+                "exiter",
+                showcase.exiter.view(shared).map(nothing),
+                nothing(()),
+            ),
+            showcase.exiter.size(theme, &self.locale),
+        );
+        let osd = part(
+            osd::view(theme, &self.icons, &showcase.osd, output),
+            Osd::size(theme),
+        );
+        let toasts = showcase.notifications.iter().map(|n| {
+            let node = toast::node(n, output);
+            let size = toast::surface_size(theme, &node, n, &self.notifications, &self.icons);
+            part(
+                toast::surface(theme, &node, n, &self.notifications, &self.icons).map(nothing),
+                size,
+            )
+        });
+        let parts = row![
+            column(popups).spacing(gap),
+            launcher,
+            column![exiter, osd].extend(toasts).spacing(gap),
+        ]
+        .spacing(gap);
+        let content = theme
+            .container(&root, parts)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center);
+        mouse_area(content)
+            .on_press(Shell::Showcase(Message::PressedOutside))
+            .on_release(Shell::Showcase(Message::Released))
+            .into()
+    }
+}

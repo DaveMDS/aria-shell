@@ -172,4 +172,16 @@ pub const CATALOGUE: Catalogue = &[
     ("osd.profile", "Power profile: {name}"),
     ("osd.idle.on", "Keep awake: on"),
     ("osd.idle.off", "Keep awake: off"),
+    // showcase: its sample notifications
+    ("showcase.notification.summary", "A notification"),
+    (
+        "showcase.notification.body",
+        "Its body, long enough to wrap onto a second line.",
+    ),
+    ("showcase.notification.action", "Open"),
+    ("showcase.critical.summary", "A critical notification"),
+    (
+        "showcase.critical.body",
+        "Battery at 5%: plug in the charger.",
+    ),
 ];

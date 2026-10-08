@@ -281,6 +281,8 @@ is loaded on top, with light and dark colour schemes. Themes are found in
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`, `:nth-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ Hot reload while editing (a broken file keeps the running theme)
+- ✅ Every part at once to compare them and take the theme's picture
+  (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications)
 - 🔲 `margin`, `opacity`, gradients, `@import`, `!important`, `@font-face`, transitions
 - 🔲 `:hover` on more than buttons, a themed scrollbar
 - 🔲 Remember the theme picked at runtime, follow and set the desktop's colour scheme
@@ -307,6 +309,7 @@ aria-shell ping
 aria-shell lock
 aria-shell launcher [toggle|show|hide]
 aria-shell exiter   [toggle|show|hide]
+aria-shell showcase [toggle|show|hide]
 aria-shell idle     inhibit [toggle|on|off]
 aria-shell osd      show [--icon <name>] [--value <percent>] [text]
 aria-shell brightness up [percent]|down [percent]|set <percent> [--output <connector>]

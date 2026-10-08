@@ -6,7 +6,8 @@ use iced::window::Id;
 use iced::{Element, Event, Length, Subscription, widget};
 
 use crate::components::{dialog, exiter, launcher, panel, picker};
-use crate::ui::theme::Node;
+use crate::daemon::showcase;
+use crate::ui::theme::{Node, Theme};
 use crate::{AriaShell, Message, commands, ui, watch};
 use panel::Panel;
 use picker::Picker;
@@ -27,31 +28,32 @@ impl AriaShell {
         {
             return view.map(Message::Picker);
         }
+        if let Some(showcase) = &self.showcase
+            && showcase.window == window
+        {
+            return self.showcase_view(showcase);
+        }
         if let Some((dialog, launcher)) = &self.launcher
             && dialog.is_window(window)
         {
-            let node = Node::root("launcher");
-            let root = self
-                .theme
-                .container(&node, launcher.view(shared))
-                .width(Length::Fill)
-                .height(Length::Fill);
-            // The shadow's room outside what takes clicks: a press there
-            // is outside the launcher.
-            let content = dialog::content(root, launcher::Message::Nothing);
-            return Element::from(self.theme.surface(&node, content)).map(Message::Launcher);
+            return dialog_surface(
+                &self.theme,
+                "launcher",
+                launcher.view(shared),
+                launcher::Message::Nothing,
+            )
+            .map(Message::Launcher);
         }
         if let Some((dialog, exiter)) = &self.exiter
             && dialog.is_window(window)
         {
-            let node = Node::root("exiter");
-            let root = self
-                .theme
-                .container(&node, exiter.view(shared))
-                .width(Length::Fill)
-                .height(Length::Fill);
-            let content = dialog::content(root, exiter::Message::Nothing);
-            return Element::from(self.theme.surface(&node, content)).map(Message::Exiter);
+            return dialog_surface(
+                &self.theme,
+                "exiter",
+                exiter.view(shared),
+                exiter::Message::Nothing,
+            )
+            .map(Message::Exiter);
         }
         if self
             .launcher
@@ -136,6 +138,10 @@ impl AriaShell {
             .locker
             .iter()
             .map(|l| l.subscription().map(Message::Locker));
+        let showcase = self
+            .showcase
+            .iter()
+            .map(|_| showcase::subscription().map(Message::Showcase));
         Subscription::batch(
             [
                 self.shell_events.listen().map(Message::Shell),
@@ -175,6 +181,7 @@ impl AriaShell {
             .chain(launcher)
             .chain(exiter)
             .chain(locker)
+            .chain(showcase)
             .chain(
                 self.picker
                     .as_ref()
@@ -182,4 +189,22 @@ impl AriaShell {
             ),
         )
     }
+}
+
+/// A dialog's surface content: `content` in the box of root `root`
+/// filling it, inset by its shadow's room. The box takes every press
+/// (`nothing`): one in the shadow's room is outside the dialog.
+pub(crate) fn dialog_surface<'a, M: Clone + 'a>(
+    theme: &Theme,
+    root: &'static str,
+    content: Element<'a, M>,
+    nothing: M,
+) -> Element<'a, M> {
+    let node = Node::root(root);
+    let root = theme
+        .container(&node, content)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    let content = dialog::content(root, nothing);
+    theme.surface(&node, content).into()
 }

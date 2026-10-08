@@ -269,7 +269,7 @@ impl Osd {
             }
             keep
         });
-        let size = self.size(theme);
+        let size = Self::size(theme);
         // The box `margin` from the edge, its shadow's room nearer.
         let room = self.room(theme);
         let margin = match self.config.position {
@@ -352,7 +352,7 @@ impl Osd {
 
     /// The theme changed: the surfaces take its size.
     pub fn relayout(&self, theme: &Theme) -> Surfaces {
-        let (w, h) = self.size(theme);
+        let (w, h) = Self::size(theme);
         let anchor = anchor(self.config.position);
         Surfaces {
             resize: self
@@ -381,7 +381,7 @@ impl Osd {
     /// there (`bars`: the top one's height, the bottom one's), by the
     /// margin.
     pub fn rect(&self, theme: &Theme, output: Rectangle, bars: (f32, f32)) -> Rectangle {
-        let (w, h) = self.size(theme);
+        let (w, h) = Self::size(theme);
         let (w, h) = (w as f32, h as f32);
         let room = self.room(theme);
         let margin = self.config.margin as f32;
@@ -400,7 +400,7 @@ impl Osd {
 
     /// The surface size: the theme's `osd { width; height }`, plus the
     /// room for its shadow ([`Osd::room`]).
-    pub fn size(&self, theme: &Theme) -> (u32, u32) {
+    pub fn size(theme: &Theme) -> (u32, u32) {
         let root = Node::root("osd");
         let s = theme.resolve(&root);
         let px = |l: Option<theme::Length>, default: f32| match l {
@@ -426,64 +426,74 @@ impl Osd {
         icons: &Icons,
         output: &str,
     ) -> Element<'a, M> {
-        let Some(content) = &self.content else {
-            return Space::new().into();
-        };
-        let node = Node::root("osd")
-            .class(content.kind.name())
-            .class_if("muted", content.muted)
-            .attr("output", output.to_owned());
-        let style = theme.resolve(&node);
-        let mut parts: Vec<Element<'a, M>> = Vec::new();
-        if let Some(name) = &content.icon {
-            let icon_node = node.child("icon");
-            let s = theme.resolve(&icon_node);
-            let size = match s.height.or(s.width) {
-                Some(theme::Length::Px(px)) => px,
-                _ => DEFAULT_ICON,
-            };
-            let icon = match icons.get_name(name, None) {
-                Some(icon) => icon.view(size, s.color),
-                None => Space::new().width(size).height(size).into(),
-            };
-            parts.push(theme.container(&icon_node, icon).into());
+        match &self.content {
+            Some(content) => view(theme, icons, content, output),
+            None => Space::new().into(),
         }
-        let value = content.value_on(output);
-        if let Some(value) = value {
-            parts.push(graph::meter(
-                theme,
-                &node.child("meter"),
-                value as f32 / 100.0,
-            ));
-        }
-        if let Some(text) = &content.text {
-            let label = node.child("label");
-            let mut label = theme.container(&label, theme.text(&label, text.clone()));
-            if value.is_none() {
-                label = label.width(Length::Fill);
-            }
-            parts.push(label.into());
-        }
-        if let Some(value) = value {
-            let value_node = node.child("value");
-            parts.push(
-                theme
-                    .container(&value_node, theme.text(&value_node, format!("{value}%")))
-                    .into(),
-            );
-        }
-        let pill = theme
-            .container(
-                &node,
-                row(parts)
-                    .spacing(style.gap)
-                    .align_y(Alignment::Center)
-                    .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .height(Length::Fill);
-        theme.surface(&Node::root("osd"), pill).into()
     }
+}
+
+/// What a surface of the OSD shows for `content` on output `output`.
+pub fn view<'a, M: 'a>(
+    theme: &'a Theme,
+    icons: &Icons,
+    content: &'a Content,
+    output: &str,
+) -> Element<'a, M> {
+    let node = Node::root("osd")
+        .class(content.kind.name())
+        .class_if("muted", content.muted)
+        .attr("output", output.to_owned());
+    let style = theme.resolve(&node);
+    let mut parts: Vec<Element<'a, M>> = Vec::new();
+    if let Some(name) = &content.icon {
+        let icon_node = node.child("icon");
+        let s = theme.resolve(&icon_node);
+        let size = match s.height.or(s.width) {
+            Some(theme::Length::Px(px)) => px,
+            _ => DEFAULT_ICON,
+        };
+        let icon = match icons.get_name(name, None) {
+            Some(icon) => icon.view(size, s.color),
+            None => Space::new().width(size).height(size).into(),
+        };
+        parts.push(theme.container(&icon_node, icon).into());
+    }
+    let value = content.value_on(output);
+    if let Some(value) = value {
+        parts.push(graph::meter(
+            theme,
+            &node.child("meter"),
+            value as f32 / 100.0,
+        ));
+    }
+    if let Some(text) = &content.text {
+        let label = node.child("label");
+        let mut label = theme.container(&label, theme.text(&label, text.clone()));
+        if value.is_none() {
+            label = label.width(Length::Fill);
+        }
+        parts.push(label.into());
+    }
+    if let Some(value) = value {
+        let value_node = node.child("value");
+        parts.push(
+            theme
+                .container(&value_node, theme.text(&value_node, format!("{value}%")))
+                .into(),
+        );
+    }
+    let pill = theme
+        .container(
+            &node,
+            row(parts)
+                .spacing(style.gap)
+                .align_y(Alignment::Center)
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill);
+    theme.surface(&Node::root("osd"), pill).into()
 }
 
 fn anchor(position: Position) -> Anchor {

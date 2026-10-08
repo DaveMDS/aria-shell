@@ -566,12 +566,7 @@ impl Panel {
             .parent()
             .cloned()
             .unwrap_or_else(|| Node::root("popup"));
-        let content = shared
-            .theme
-            .container(&root, content)
-            .width(Length::Fill)
-            .height(Length::Fill);
-        shared.theme.surface(&root, content).into()
+        popup::view(shared.theme, &root, content)
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

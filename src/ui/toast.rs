@@ -498,14 +498,42 @@ impl Toasts {
         else {
             return Space::new().into();
         };
-        let node = node(n, output);
-        let content = view(theme, &node, n, notifications, icons, Extras::default());
-        let root = theme
-            .container(&node, content)
-            .width(Length::Fill)
-            .height(Length::Fill);
-        theme.surface(&node, root).into()
+        surface(theme, &node(n, output), n, notifications, icons)
     }
+}
+
+/// The content of notification `n`'s own surface: its view in the
+/// `node` box (its [`node`]), inset by its shadow's room.
+pub fn surface<'a>(
+    theme: &'a Theme,
+    node: &Node,
+    n: &'a Notification,
+    notifications: &'a Notifications,
+    icons: &'a Icons,
+) -> Element<'a, Message> {
+    let content = view(theme, node, n, notifications, icons, Extras::default());
+    let root = theme
+        .container(node, content)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    theme.surface(node, root).into()
+}
+
+/// The size of notification `n`'s own surface: its [`size`] plus the
+/// room for its shadow.
+pub fn surface_size(
+    theme: &Theme,
+    node: &Node,
+    n: &Notification,
+    notifications: &Notifications,
+    icons: &Icons,
+) -> (u32, u32) {
+    let (w, h) = size(theme, node, n, notifications, icons, &Extras::default());
+    let room = theme.shadow_room(node);
+    (
+        w + (room.left + room.right) as u32,
+        h + (room.top + room.bottom) as u32,
+    )
 }
 
 /// The layer-shell anchor of the toasts in corner `position`.

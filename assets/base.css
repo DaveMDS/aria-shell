@@ -145,6 +145,12 @@
  *         ├─ message                                          what PAM said, "Authentication failed", "Unlocking…"
  *         ╰─ button > text                                    Unlock
  *
+ *   showcase                                                  `aria-shell showcase`: the popups, the launcher, the
+ *                                                             exit menu, the OSD and two notifications at once,
+ *                                                             each as its own root (popup, launcher, ...), on one
+ *                                                             surface between the bars; `padding` around them,
+ *                                                             `gap` between them. Transparent unless styled
+ *
  *   gadget.clock
  *   ╰─ button                                                 the time; click opens the calendar
  *      ╰─ text
@@ -603,6 +609,11 @@ screenshot toolbar button:disabled {
 
 wallpaper {
   background: var(--aria-bg);
+}
+
+showcase {
+  padding: 24px;
+  gap: 24px;
 }
 
 locker {

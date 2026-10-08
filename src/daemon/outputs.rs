@@ -180,6 +180,10 @@ impl AriaShell {
                     self.exiter = None;
                     return surface_tasks(rest);
                 }
+                if self.showcase.as_ref().is_some_and(|s| s.window == id) {
+                    self.showcase = None;
+                    return Task::none();
+                }
                 if self.toasts.closed(id) {
                     return self.sync_toasts();
                 }
@@ -288,6 +292,9 @@ impl AriaShell {
         self.panels.clear();
         tasks.push(self.close_launcher());
         tasks.push(self.close_exiter());
+        // Its gadgets are the config's: built again with it.
+        let showcase = self.showcase.is_some();
+        tasks.push(self.close_showcase());
         self.cursor = None;
         let outputs: Vec<OutputInfo> = self.outputs.values().cloned().collect();
         tasks.extend(outputs.iter().map(|o| self.open_panels(o)));
@@ -298,6 +305,9 @@ impl AriaShell {
         tasks.push(self.sync_toasts());
         // The position may have changed.
         tasks.push(surface_tasks(self.osd.close()));
+        if showcase {
+            tasks.push(self.open_showcase());
+        }
         Task::batch(tasks)
     }
 

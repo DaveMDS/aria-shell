@@ -109,6 +109,8 @@ enum Message {
     LauncherEvent(Id, launcher::Message),
     /// Routed to the lock screen.
     Locker(locker::Message),
+    /// Routed to the showcase.
+    Showcase(daemon::showcase::Message),
     /// Routed to the open exit menu.
     Exiter(exiter::Message),
     /// From the exit menu's subscription: for it when the window is
@@ -228,6 +230,8 @@ struct AriaShell {
     toasts: Toasts,
     /// The OSD, and its surfaces while shown.
     osd: Osd,
+    /// Every part of the UI on one surface, while shown.
+    showcase: Option<daemon::showcase::Showcase>,
 }
 
 impl AriaShell {
@@ -279,6 +283,7 @@ impl AriaShell {
             cursor: None,
             toasts: Toasts::default(),
             osd,
+            showcase: None,
         };
         (shell, load_icons)
     }
@@ -313,6 +318,11 @@ impl AriaShell {
         }
         if let Some((_, launcher)) = &self.launcher {
             for id in launcher.visible_ids() {
+                self.icons.resolve(id);
+            }
+        }
+        if let Some(showcase) = &self.showcase {
+            for id in showcase.app_ids() {
                 self.icons.resolve(id);
             }
         }
@@ -353,6 +363,7 @@ impl AriaShell {
                     .flat_map(|(_, l)| l.icon_names())
                     .map(str::to_owned),
             )
+            .chain(self.showcase.iter().flat_map(|s| s.icon_names()))
             .collect();
         for name in names {
             self.icons.resolve_name(&name, None);
@@ -409,10 +420,13 @@ impl AriaShell {
             }
             Message::Icons(event) => {
                 self.icons.apply(event);
-                if let Some((_, launcher)) = &mut self.launcher
-                    && let Some(index) = self.icons.index()
-                {
-                    launcher.set_apps(index);
+                if let Some(index) = self.icons.index() {
+                    if let Some((_, launcher)) = &mut self.launcher {
+                        launcher.set_apps(index.clone());
+                    }
+                    if let Some(showcase) = &mut self.showcase {
+                        showcase.set_apps(index);
+                    }
                 }
                 self.resolve_icons();
                 Task::none()
@@ -474,6 +488,12 @@ impl AriaShell {
                 (ToggleCommand::Hide | ToggleCommand::Toggle, true) => self.close_launcher(),
                 _ => Task::none(),
             },
+            Message::Command(Command::Showcase(cmd)) => match (cmd, self.showcase.is_some()) {
+                (ToggleCommand::Show | ToggleCommand::Toggle, false) => self.open_showcase(),
+                (ToggleCommand::Hide | ToggleCommand::Toggle, true) => self.close_showcase(),
+                _ => Task::none(),
+            },
+            Message::Showcase(m) => self.showcase_update(m),
             Message::Command(Command::Exiter(cmd)) => match (cmd, self.exiter.is_some()) {
                 (ToggleCommand::Show | ToggleCommand::Toggle, false) => {
                     self.open_exiter(Exiter::new(self.config.section(None)))

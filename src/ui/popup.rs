@@ -7,7 +7,7 @@
 //! closes them ([`presses_outside`]).
 
 use iced::window;
-use iced::{Padding, Rectangle, Subscription};
+use iced::{Element, Length, Padding, Rectangle, Subscription};
 use iced_exwlshell::actions::IcedNewPopupSettings;
 use iced_exwlshell::reexport::{PixelSize, PopupAnchor, PopupGravity};
 
@@ -37,6 +37,16 @@ pub fn surface_size(theme: &Theme, content: (u32, u32)) -> (u32, u32) {
 /// The room around a popup's box for its shadow.
 pub fn room(theme: &Theme) -> Padding {
     theme.shadow_room(&Node::root("popup"))
+}
+
+/// A popup surface's content: a gadget's popup `content` inside the
+/// `root` box (`popup[output=..]`), inset by its shadow's room.
+pub fn view<'a, M: 'a>(theme: &Theme, root: &Node, content: Element<'a, M>) -> Element<'a, M> {
+    let content = theme
+        .container(root, content)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    theme.surface(root, content).into()
 }
 
 /// Placement of a popup of surface size `size` hanging off a widget

@@ -150,6 +150,17 @@ impl AriaShell {
                 list.push((id, "osd", output, self.osd.rect(&self.theme, out, bars)));
             }
         }
+        if let Some(showcase) = &self.showcase
+            && let Some(out) = self.output_rect(showcase.output)
+        {
+            let top = self.bar_height(showcase.output, panel::Position::Top);
+            let bottom = self.bar_height(showcase.output, panel::Position::Bottom);
+            let rect = Rectangle::new(
+                Point::new(out.x, out.y + top),
+                Size::new(out.width, out.height - top - bottom),
+            );
+            list.push((showcase.window, "showcase", showcase.output, rect));
+        }
         for (id, output) in self.picker.iter().flat_map(|p| p.windows()) {
             if let Some(out) = self.output_rect(output) {
                 list.push((id, "screenshot", output, out));
@@ -192,7 +203,8 @@ impl AriaShell {
     /// `:nth-child(n)`; all of them without one), global coordinates
     /// (as estimated by [`AriaShell::surfaces`]), `;`-separated. The
     /// surface is found from the path's root: `panel[output=..]`,
-    /// `launcher`, `popup[output=..]`.
+    /// `launcher`, `popup[output=..]`; the showcase's, for a root with no
+    /// surface of its kind.
     pub(crate) fn describe_widgets(
         &self,
         filter: &Option<String>,
@@ -225,6 +237,9 @@ impl AriaShell {
                         && output.is_none_or(|o| self.output_name(*out) == o)
                         && window.is_none_or(|id| *w == id)
                 })
+                // The showcase draws every kind of root on its surface:
+                // one with no surface of its own is there.
+                .or_else(|| surfaces.iter().find(|(_, k, ..)| *k == "showcase"))
                 .map(|(_, _, _, r)| r.position())
         };
         rects

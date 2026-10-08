@@ -81,7 +81,8 @@ layer is a struct with its own `Message`, `update`, `view` and
   `outputs.rs` (monitors coming and going, config and theme reloads),
   `surfaces.rs` (syncing what's on screen with the state,
   `surface_tasks`), `view.rs` (`view`, `subscription`), `debug.rs`
-  (`aria-shell debug`).
+  (`aria-shell debug`), `showcase.rs` (`aria-shell showcase`: the
+  components' views side by side on one surface, not their surfaces).
 - the plumbing at the top: config, commands, process, locale,
   `shared.rs` (what every view reads), ...
 

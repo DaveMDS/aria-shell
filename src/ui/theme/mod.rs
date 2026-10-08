@@ -49,6 +49,7 @@ use crate::config::{self, Config};
 use value::Property;
 
 pub use build::widget_path;
+pub use fonts::embedded as embedded_fonts;
 pub use node::Node;
 pub use selector::{Selector, node_from_path};
 pub use value::Length;

@@ -932,6 +932,7 @@ fn main() -> iced_exwlshell::Result {
     })
     .settings(Settings {
         shell_broadcast,
+        fonts: theme::embedded_fonts(),
         layer_settings: LayerShellSettings {
             // No initial surface: panels are opened per output as the
             // compositor announces them.

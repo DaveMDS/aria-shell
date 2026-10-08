@@ -1,9 +1,25 @@
 //! Font families: a theme's `font-family` list down to the one to use
-//! (the first generic or installed one), as iced's `Family`.
+//! (the first generic or installed one), as iced's `Family`; and the
+//! fonts built into the shell.
 
+use std::borrow::Cow;
 use std::sync::Mutex;
 
 use iced::font::Family;
+
+/// The fonts built into the binary, loaded at start next to the
+/// system's: `base.css` names them, so the text looks the same on every
+/// system, whatever is installed (`assets/fonts/`, with their licenses).
+pub fn embedded() -> Vec<Cow<'static, [u8]>> {
+    [
+        include_bytes!("../../../assets/fonts/Inter-Regular.ttf").as_slice(),
+        include_bytes!("../../../assets/fonts/Inter-Medium.ttf").as_slice(),
+        include_bytes!("../../../assets/fonts/Inter-Bold.ttf").as_slice(),
+    ]
+    .into_iter()
+    .map(Cow::Borrowed)
+    .collect()
+}
 
 const GENERIC_FAMILIES: [&str; 5] = ["serif", "sans-serif", "monospace", "cursive", "fantasy"];
 

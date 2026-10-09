@@ -90,51 +90,17 @@
 /* Fonts */
 
 :root {
+  --aria-font-xs: 10px;
+  --aria-font-sm: 12px;
+  --aria-font: 14px;
+  --aria-font-lg: 18px;
+  --aria-font-xl: 24px;
+  --aria-font-xxl: 64px;
   font-family: Inter;  /* Inter is embedded in the aria binary */
+  font-size: var(--aria-font);
 }
 
 /* Surfaces */
-
-/*
- * Panel
- * =====
- *
- * A bar, one per output: #2 for [panel:2]. Each gadget is a box of its
- * kind (gadget.clock, gadget.workspaces, ...): #2 for [Clock:2], #search
- * for [Custom:search]. `min-height` is the bar thickness.
- *
- * panel[.top|.bottom][#<instance>][output="<connector>"]
- * ╰─ slot.start | slot.center | slot.end
- *    ╰─ gadget.<kind>[#<instance>]   one per gadget
- */
-panel {
-  min-height: 32px;
-  background: var(--aria-bg);
-  color: var(--aria-fg);
-  font-size: 14px;
-}
-
-panel slot {
-  gap: 8px;
-  padding: 0 8px;
-}
-
-/*
- * Popups
- * ======
- *
- * A gadget's popup: its own surface, the gadget's popup content inside.
- *
- * popup
- * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to
- *    ╰─ ...                       the gadget's popup content
- */
-popup {
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  font-size: 14px;
-  border: 1px solid var(--aria-border);
-}
 
 /*
  * Launcher
@@ -162,7 +128,6 @@ launcher {
   gap: 8px;
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
-  font-size: 14px;
   border: 1px solid var(--aria-border);
 }
 launcher actions {
@@ -208,7 +173,7 @@ launcher icon {
   height: 32px;
 }
 launcher subtitle {
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 launcher item.selected subtitle {
@@ -216,7 +181,7 @@ launcher item.selected subtitle {
 }
 launcher chevron {
   padding: 0 8px;
-  font-size: 18px;
+  font-size: var(--aria-font-lg);
   color: var(--aria-muted);
 }
 launcher item.selected chevron {
@@ -253,7 +218,6 @@ exiter {
   gap: 8px;
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
-  font-size: 14px;
   border: 1px solid var(--aria-border);
 }
 exiter button {
@@ -269,10 +233,10 @@ exiter button icon {
 }
 exiter confirm {
   gap: 12px;
-  font-size: 16px;
+  font-size: var(--aria-font-lg);
 }
 exiter confirm countdown {
-  font-size: 13px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 exiter confirm button {
@@ -334,7 +298,6 @@ screenshot toolbar {
   gap: 6px;
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
-  font-size: 14px;
   border: 1px solid var(--aria-border);
   border-radius: 8px;
 }
@@ -407,7 +370,6 @@ showcase {
 locker {
   background: var(--aria-bg);
   color: var(--aria-fg);
-  font-size: 14px;
 }
 locker box {
   gap: 16px;
@@ -417,15 +379,15 @@ locker avatar {
   border-radius: 64px;
 }
 locker username {
-  font-size: 24px;
+  font-size: var(--aria-font-xl);
   color: var(--aria-accent);
 }
 locker time {
-  font-size: 64px;
+  font-size: var(--aria-font-xxl);
   font-weight: 500;
 }
 locker date {
-  font-size: 26px;
+  font-size: var(--aria-font-xl);
 }
 locker auth {
   gap: 10px;
@@ -499,7 +461,6 @@ osd {
   gap: 14px;
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
-  font-size: 15px;
   border: 1px solid var(--aria-border);
 }
 osd icon {
@@ -553,7 +514,6 @@ notification {
   gap: 10px;
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
-  font-size: 14px;
   border: 1px solid var(--aria-border);
 }
 notification.critical {
@@ -583,7 +543,7 @@ notification actions button:hover {
   border-color: var(--aria-accent);
 }
 notification time {
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 notification button.close {
@@ -595,17 +555,54 @@ notification button.close:hover {
   background: var(--aria-border);
 }
 
+/*
+ * Panel
+ * =====
+ *
+ * A bar, one per output: #2 for [panel:2]. Each gadget is a box of its
+ * kind (gadget.clock, gadget.workspaces, ...): #2 for [Clock:2], #search
+ * for [Custom:search]. `min-height` is the bar thickness.
+ *
+ * panel[.top|.bottom][#<instance>][output="<connector>"]
+ * ╰─ slot.start | slot.center | slot.end
+ *    ╰─ gadget.<kind>[#<instance>]   one per gadget
+ */
+panel {
+  min-height: 32px;
+  background: var(--aria-bg);
+  color: var(--aria-fg);
+}
+
+panel slot {
+  gap: 8px;
+  padding: 0 8px;
+}
+
+/*
+ * Popups
+ * ======
+ *
+ * A gadget's popup
+ *
+ * popup
+ * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to
+ *    ╰─ ...                       the gadget's popup content
+ */
+popup {
+  background: var(--aria-popup-bg);
+  color: var(--aria-fg);
+  border: 1px solid var(--aria-border);
+}
+
+
 /* Gadgets */
 
 /*
- * Gadgets: what they share
- * ========================
+ * Gadgets
+ * =======
  *
- * A gadget's buttons in the bar (`gadget > button`, the tray's items)
- * and the parts its popup is made of (`popup list`, its `header`s,
- * `button`s, `item`s, `empty`, `message`, `details`) look the same in
- * every gadget: these rules. Each gadget's section below only has what
- * differs.
+ * Shared rules for every gadget.
+ *
  */
 gadget {
   gap: 4px;
@@ -669,11 +666,11 @@ popup empty {
 }
 popup message {
   padding: 0 4px 4px 4px;
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 popup details line {
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 
@@ -731,7 +728,7 @@ workspace.urgent {
 window {
   padding: 0;
   height: 16px;
-  font-size: 9px;
+  font-size: var(--aria-font-xs);
 }
 window.urgent {
   color: var(--aria-urgent);
@@ -906,7 +903,7 @@ gadget.power battery icon {
   height: 32px;
 }
 gadget.power battery percent {
-  font-size: 20px;
+  font-size: var(--aria-font-lg);
   font-weight: bold;
 }
 gadget.power battery.low percent {
@@ -1123,7 +1120,7 @@ gadget.system-monitor > button gauge fill {
 }
 gadget.system-monitor > button graph label,
 gadget.system-monitor > button gauge label {
-  font-size: 10px;
+  font-size: var(--aria-font-xs);
   color: var(--aria-fg);
   padding: 0 4px;
 }
@@ -1184,14 +1181,14 @@ gadget.system-monitor graph second {
   color: var(--aria-urgent);
 }
 gadget.system-monitor graph scale {
-  font-size: 10px;
+  font-size: var(--aria-font-xs);
   color: var(--aria-muted);
 }
 gadget.system-monitor cores {
   gap: 4px;
 }
 gadget.system-monitor core text {
-  font-size: 10px;
+  font-size: var(--aria-font-xs);
   color: var(--aria-muted);
 }
 gadget.system-monitor meter {
@@ -1217,12 +1214,12 @@ gadget.system-monitor section > text,
 gadget.system-monitor disk text,
 gadget.system-monitor iface text,
 gadget.system-monitor gpu text {
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 gadget.system-monitor table header column {
   padding: 2px 4px;
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 gadget.system-monitor table header column:hover {
@@ -1233,7 +1230,7 @@ gadget.system-monitor table header column.sorted {
 }
 gadget.system-monitor table row {
   padding: 1px 4px;
-  font-size: 13px;
+  font-size: var(--aria-font-sm);
   border-radius: 3px;
 }
 gadget.system-monitor table row.selected {
@@ -1460,7 +1457,7 @@ gadget.network device.unplugged > button name {
 gadget.network status,
 gadget.network chevron {
   color: var(--aria-muted);
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
 }
 gadget.network chevron {
   padding: 2px 6px;
@@ -1648,7 +1645,7 @@ calendar header button {
   padding: 0 8px;
 }
 calendar weekday {
-  font-size: 12px;
+  font-size: var(--aria-font-sm);
   color: var(--aria-muted);
 }
 calendar day.today {

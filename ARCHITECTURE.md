@@ -686,9 +686,9 @@ Two things flow between the daemon and the gadgets besides messages:
   `node.status(status)`, which is how `:hover`/`:active` work. Text gets
   an explicit colour only when a rule set it on the text node itself;
   otherwise iced's own cascade (container/button `text_color`) carries
-  it, so `workspace:hover { color }` reaches the label. Class names are
-  the Rust roles (`panel`, `slot`, `gadget.clock`, `workspace`, ...),
-  not the Python/GTK ones. The bar thickness is the theme's `min-height`
+  it, so `gadget > button:hover { color }` reaches the label. Class
+  names are the Rust roles (`panel`, `slot`, `gadget.clock`,
+  `button.workspace`, ...), not the Python/GTK ones. The bar thickness is the theme's `min-height`
   on `panel` (layer-shell needs it before layout); a reload that changes
   it sends `LayoutChange` + `ExclusiveZoneChange`. Surfaces are created
   transparent (`daemon(..).style`), the theme's `panel`/`popup`

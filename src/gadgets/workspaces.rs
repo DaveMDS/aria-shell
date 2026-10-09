@@ -7,7 +7,7 @@
 //! the view context and filters it for the output the panel is on.
 
 use iced::Element;
-use iced::widget::text;
+use iced::widget::{row, text};
 use iced_wayland_subscriber::OutputInfo;
 
 use crate::config::{RawSection, Section};
@@ -118,7 +118,8 @@ impl Workspaces {
     ) -> Element<'a, Message> {
         let node = ctx
             .node
-            .child("workspace")
+            .child("button")
+            .class("workspace")
             .class_if("active", ws.active)
             .class_if("urgent", ws.urgent)
             .attr("name", ws.name.clone())
@@ -137,9 +138,9 @@ impl Workspaces {
                     .map(|(i, w)| self.window_view(w, &node.child("window").nth(i, count), ctx)),
             );
         }
-        let content = ctx
-            .theme
-            .row(&node, children)
+        // The button already has the node's padding: only its gap.
+        let content = row(children)
+            .spacing(ctx.theme.resolve(&node).gap)
             .align_y(iced::Alignment::Center);
         ctx.theme
             .button(&node, content)

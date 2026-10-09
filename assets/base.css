@@ -143,13 +143,17 @@ button.flat:hover {
   background: var(--aria-border);
   border-color: transparent;
 }
+/* hovered too: over a context's hover background (the bar's) */
 button.primary,
-button.active {
+button.primary:hover,
+button.active,
+button.active:hover {
   background: var(--aria-accent);
   color: var(--aria-on-accent);
   border-color: var(--aria-accent);
 }
-button.danger {
+button.danger,
+button.danger:hover {
   background: var(--aria-urgent);
   color: var(--aria-on-accent);
   border-color: var(--aria-urgent);
@@ -801,7 +805,7 @@ gadget.clock text {
  * icon, drawn at `height`, and its text.
  *
  * gadget.workspaces
- * ├─ workspace[.active][.urgent][name="<name>"]  a button, one per workspace
+ * ├─ button.workspace[.active][.urgent][name="<name>"]  one per workspace
  * │  ├─ text                   the workspace name
  * │  ╰─ window[.active][.urgent][class="<app id>"]  one per window
  * │     ╰─ text
@@ -809,24 +813,9 @@ gadget.clock text {
  *    ├─ icon
  *    ╰─ text
  */
-gadget.workspaces workspace {
-  padding: 0 6px;
-  gap: 4px;
-  border: 1px solid var(--aria-border);
-  border-radius: 2px;
-}
-gadget.workspaces workspace:hover {
-  border-color: var(--aria-accent);
-}
-gadget.workspaces workspace.active {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-  border-color: transparent;
-}
-gadget.workspaces workspace.urgent {
+gadget.workspaces > button.urgent {
   background: var(--aria-urgent);
   color: var(--aria-on-accent);
-  border-color: transparent;
 }
 gadget.workspaces window {
   padding: 0;

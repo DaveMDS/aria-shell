@@ -121,8 +121,8 @@ widget in `view`. Gadgets never
 hard-code colours, paddings or spacing: they derive a `theme::Node` from
 `ctx.node` (`ctx.node.child("workspace").class_if("active", ..)`) and
 build widgets with `ctx.theme.button/container/text/row`. A new element
-or class is documented in the tree at the top of `assets/base.css`, and
-given a neutral default there.
+or class is documented in `assets/base.css`, in the element tree in the
+comment above its owner's rules, and given a neutral default there.
 
 The config format is the one the Python implementation had, kept
 compatible on purpose; nothing else of its structure (`Singleton`/

@@ -56,357 +56,10 @@
  *   font-size                   px (inherited)
  *   font-weight                 normal | bold | 100..900 (inherited)
  *
- * Element tree:
- *
- *   panel[.top|.bottom][#<instance>][output="<connector>"]   a bar; #2 for [panel:2]
- *   ╰─ slot.start | slot.center | slot.end
- *      ╰─ gadget.<kind>[#<instance>]                          gadget.clock, gadget.workspaces, gadget.tray,
- *                                                             gadget.themes, gadget.custom; #2 for [Clock:2],
- *                                                             #search for [Custom:search]
- *
- *   popup                                                     a popup surface
- *   ╰─ gadget.<kind>[#<instance>]                             the gadget it belongs to
- *      ╰─ ...the gadget's popup content
- *
- *   notifications                                             not a surface: the stack of notifications on an
- *                                                             output; `padding` is its distance from the screen
- *                                                             edges, `gap` the space between notifications
- *   notification[.low|.normal|.critical][#<id>][app="<name>"]  one notification surface (`width` sizes it;
- *                                                             the height follows the content); the id is the
- *                                                             notification's, the app what it called itself.
- *                                                             The same element, with the same rules, is a row
- *                                                             of the Notifications gadget's popup (see below)
- *   ├─ icon                                                   the app's image or icon, drawn at the node's `height`
- *   ├─ summary                                                the title
- *   ├─ time                                                   how long ago it came (popup rows only)
- *   ├─ button.close                                           ✕ (popup rows only)
- *   ├─ body                                                   the text, wrapped at the width
- *   ╰─ actions                                                a row, right-aligned
- *      ╰─ button                                              one per action the app offers
- *         ╰─ text
- *
- *   osd.<volume|microphone|brightness|recording|wifi|network|vpn|charger|profile|idle|custom>[.muted][output="<connector>"]
- *                                                             the OSD, one surface per output while shown
- *                                                             (width/height size it; [osd] position places it);
- *                                                             a row (gap between its parts)
- *   ├─ icon                                                   drawn at the node's `height` (symbolic: `color`)
- *   ├─ meter > fill                                           the level, when there is one (as the system
- *                                                             monitor's: `height`, `background`, `border-radius`)
- *   ├─ label                                                  the text: the network, a script's
- *   ╰─ value                                                  the percent, when there is a level
- *
- *   launcher                                                  the launcher surface (width/height size it)
- *   ├─ actions                                                the exit menu's buttons as icons ([launcher] actions)
- *   │  ╰─ button[.lock|.reboot|...] > icon                    drawn at the node's `height`
- *   ├─ input                                                  the search field (:focus when typing)
- *   ╰─ list                                                   the results (a column; gap between items)
- *      ╰─ item[.selected][.action]                            one result, a button; .action: a desktop action of
- *         │                                                   the result above it (opened with Right or the chevron)
- *         ├─ icon                                             the app icon, drawn at the node's `height`
- *         ├─ title                                            the app name (the action's, on .action)
- *         ├─ subtitle                                         its description, when it has one
- *         ╰─ chevron[.open] > text                            on results with actions: a button, › or ⌄
- *
- *   exiter                                                    the exit menu surface (sized from its content)
- *   ├─ button[.lock|.suspend|.hibernate|.logout|.reboot|.shutdown|.<name>][.selected]
- *   │  ├─ icon                                                 drawn at the node's `height` (symbolic: `color`)
- *   │  ╰─ text                                                 the label
- *   ╰─ confirm                                                 in place of the grid while an action waits
- *      ├─ text                                                 "Reboot?"
- *      ├─ countdown                                            "Automatically in 27 s" (with confirm_timeout)
- *      ├─ button.cancel > text
- *      ╰─ button.ok[.<name>] > text                            the action's label
- *
- *   screenshot[output="<connector>"]                          the screenshot picker, one surface per output over its
- *   │                                                         frozen picture; `padding` keeps the toolbar off the edges
- *   ├─ shade                                                  `background`: dims the picture outside the selection
- *   ├─ hover                                                  `background`, `border`: what a click would pick (the
- *   │                                                         window under the pointer, or the output)
- *   ├─ selection                                              `border`: the selected area's outline
- *   │  ╰─ handle                                              `background`, `border`, `height`: the squares on its
- *   │                                                         corners and edges
- *   ╰─ toolbar                                                a row at the bottom of the selection's output (the
- *      │                                                      focused one before there is a selection)
- *      ├─ text                                                the hint, or the selection's size
- *      ╰─ button.all | button.cancel | button.copy | button.edit | button.save > text
- *                                                             copy without a clipboard and edit without
- *                                                             `[Screenshot] editor` aren't there; all but all and
- *                                                             cancel are :disabled without a selection
- *
- *   wallpaper[output="<connector>"]                           the desktop background, one surface per output; its
- *                                                             `background` shows without an image or around a
- *                                                             `contain`ed one
- *
- *   locker[output="<connector>"]                              the lock screen, one surface per output (fills it)
- *   ╰─ box                                                    the centred column (gap between its blocks)
- *      ├─ avatar                                              the user's picture, a `height` square;
- *                                                             `border-radius` rounds it
- *      ├─ username
- *      ├─ time
- *      ├─ date
- *      ╰─ auth[.error][.busy]                                 the password block (gap between its rows);
- *         │                                                   .error after a refused password, .busy while checking
- *         ├─ field                                            a row (gap between the two)
- *         │  ├─ input                                         the password field (:focus)
- *         │  ╰─ peek[.on] > icon                              the eye button, .on while the password shows;
- *         │                                                   the icon drawn at the node's `height`, `color`
- *         ├─ message                                          what PAM said, "Authentication failed", "Unlocking…"
- *         ╰─ button > text                                    Unlock
- *
- *   showcase                                                  `aria-shell showcase`: the popups, the launcher, the
- *                                                             exit menu, the OSD and two notifications at once,
- *                                                             each as its own root (popup, launcher, ...), on one
- *                                                             surface between the bars; `padding` around them,
- *                                                             `gap` between them. Transparent unless styled
- *
- *   gadget.clock
- *   ╰─ button                                                 the time; click opens the calendar
- *      ╰─ text
- *   popup > gadget.clock
- *   ╰─ calendar
- *      ├─ header
- *      │  ├─ button.prev | button.next                        previous / next month
- *      │  ╰─ text                                             month and year
- *      ├─ weekday                                             one per column
- *      ╰─ day[.today]                                         one per cell
- *
- *   gadget.tray                                               a row; gap between items
- *   ╰─ item[.passive][.attention]                             a button, one per status notifier item
- *      ╰─ icon                                                its icon, drawn at the node's `height`
- *                                                             (symbolic icons take `color`)
- *   popup > gadget.tray
- *   ╰─ menu                                                   the item's menu (see `menu` below)
- *      ╰─ text                                                "…" until the menu is loaded
- *
- *   gadget.themes
- *   ╰─ button                                                 left click toggles light/dark, right opens the menu
- *      ╰─ icon                                                the scheme's icon, drawn at the node's `height`
- *   popup > gadget.themes
- *   ╰─ menu                                                   Light / Dark, then Base and every theme found
- *
- *   gadget.screenshot
- *   ╰─ button                                                 left click opens the picker, right the menu
- *      ╰─ icon                                                `[Screenshot] icon`, drawn at the node's `height`
- *   popup > gadget.screenshot
- *   ╰─ menu                                                   the active window, this screen, all screens
- *
- *   gadget.places
- *   ╰─ button                                                 left click opens the popup
- *      ├─ icon                                                `[Places] icon`, drawn at the node's `height`
- *      ╰─ label                                               `[Places] label`, when set
- *   popup > gadget.places
- *   ╰─ list                                                   a column (`gap`); `width` sizes the popup, else
- *      │                                                      the widest row does
- *      ├─ header.places|.devices|.network|.bookmarks ╰─ title  section titles, in `[Places] show` order
- *      ├─ item.home|.desktop|.documents|.download|.music|.pictures|.videos|.trash[.full]|.folder|.remote
- *      │  ├─ icon                                             a button per place: a click opens it in
- *      │  ╰─ label                                            `[general] file_manager`
- *      ├─ device.harddisk|.usb|.thumb|.flash|.optical|.removable|.encrypted|.fuse[.mounted][.locked][.busy]
- *      │  │                                                   one per UDisks2 volume (a row, `gap`), then the
- *      │  │                                                   local mounts it doesn't know (.encrypted: encfs,
- *      │  │                                                   gocryptfs, ...; .fuse: any other FUSE or bind
- *      │  │                                                   mount); .locked: a LUKS volume (not unlocked
- *      │  │                                                   yet), .busy: mounting or unmounting
- *      │  ├─ button.open                                      opens it, mounting it first (:disabled while
- *      │  │  ├─ icon                                          .locked or .busy)
- *      │  │  ╰─ info                                          a column (`gap`)
- *      │  │     ├─ label                                      its label, else its size
- *      │  │     ╰─ meter[.critical] > fill                    how full it is, while mounted (.critical: 90%)
- *      │  ╰─ button.eject > icon                              while mounted, ⏏: unmounts it, then powers a
- *      │                                                      removable drive off (:disabled on /)
- *      ├─ share.nfs|.smb|.ssh|.dav|.other[.mounted][.busy]    one per network share (fstab's, or mounted by
- *      │                                                      hand): as `device`, without the meter
- *      ╰─ empty                                               "No places"
- *
- *   gadget.power                                              a row (`gap` between the buttons); middle click holds
- *   │                                                         idle / lets it go, right click runs `settings_command`
- *   ├─ button.status[.charging|.discharging|.full|.not-charging|.empty][.low|.critical]
- *   │  │          [.power-saver|.balanced|.performance]       the battery's state and warning, the active profile;
- *   │  │                                                      left click opens the popup (absent without a battery
- *   │  │                                                      and a profiles daemon)
- *   │  ├─ icon.battery                                        UPower's icon, drawn at the node's `height`
- *   │  ├─ text                                                the percent (show_percent)
- *   │  ╰─ icon.profile                                        the active profile's icon
- *   ╰─ button.idle[.inhibited][.playing] > icon               the eye: left click holds idle / lets it go;
- *                                                             .inhibited: held by the user, .playing: by a player
- *   popup > gadget.power
- *   ╰─ list                                                   `width` sizes the popup (a column; `gap`)
- *      ├─ battery[.<state>][.low|.critical]                   ├─ icon ├─ percent ├─ status ("2 h 10 min left")
- *      ├─ details ╰─ line                                     power draw, battery health
- *      ├─ header.devices | header.profile ╰─ title            section titles
- *      ├─ device ├─ icon ├─ name ├─ percent                   one per peripheral with a battery (mouse, headset, ...)
- *      ├─ profiles                                            a row (`gap`), one per profile the daemon offers:
- *      │  ╰─ button.power-saver|.balanced|.performance[.active] ├─ icon ╰─ text
- *      ├─ idle[.inhibited][.playing] ├─ icon ├─ title ╰─ toggle   "Keep awake" (see `toggle`)
- *      ├─ message                                             why performance is limited; held by a player
- *      ╰─ button.settings > text                              runs `settings_command`
- *
- *   gadget.brightness
- *   ╰─ button[.none]                                          .none: no screen to adjust; left click: the popup,
- *      │                                                      wheel: the brightness, right: `settings_command`
- *      ├─ icon                                                drawn at the node's `height`
- *      ╰─ text                                                the bar's screen's percent (show_percent)
- *   popup > gadget.brightness
- *   ╰─ list                                                   `width` sizes the popup (a column; `gap`)
- *      ├─ screen.backlight|.ddc[.unknown][output="<connector>"]   one per screen (.unknown: level not read)
- *      │  ├─ icon                                             the laptop's panel / a monitor
- *      │  ├─ name                                             "Built-in display", the monitor's model
- *      │  ├─ output                                           its connector
- *      │  ├─ value                                            the percent
- *      │  ╰─ slider ╰─ handle                                 (see `slider`)
- *      ├─ empty                                               "No screen to adjust"
- *      ╰─ button.settings > text                              runs `settings_command`
- *
- *   gadget.notifications
- *   ╰─ button[.dnd][.new]                                     left: the history popup, right: do-not-disturb,
- *      ├─ icon                                                middle: closes the toasts; drawn at the node's `height`
- *      ╰─ text                                                the count of notifications not looked at (when > 0)
- *   popup > gadget.notifications
- *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
- *      ├─ header
- *      │  ├─ title
- *      │  ├─ button.dnd[.on]                                  toggles do-not-disturb
- *      │  ╰─ button.clear                                     empties the history
- *      ├─ empty                                               "No notifications"
- *      ╰─ notification[.unseen]...                            one per notification kept, as on the desktop
- *
- *   gadget.system-monitor[#<instance>]
- *   ╰─ button.cpu|.mem|.swap|.disk|.net|.gpu|.temp|.load[.warning|.critical]   the value shown (`show =`);
- *      ├─ icon                                                left click: the popup, right click: `command`;
- *      ├─ text                                                the icon at the node's `height`; the classes
- *      │                                                      from the instance's `warning` / `critical`.
- *      ├─ graph                                               One of text / graph / gauge (`mode =`), the
- *      │  ╰─ label                                            `format` text as the label of the last two:
- *      ╰─ gauge                                               `width` (wider if the label needs it) x
- *         ├─ fill                                             `height`; the graph's `color` is the series,
- *         ╰─ label                                            the gauge's `background`/`border`/`border-radius`
- *                                                             the bar and `fill { background }` the filled
- *                                                             part; `label { color; font-size; padding }`
- *   popup > gadget.system-monitor
- *   ╰─ monitor                                                `width` / `height` size the popup
- *      ├─ tabs                                                a row of buttons, `gap`
- *      │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]  (gpu only with one)
- *      │     ╰─ text
- *      ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes         the active tab: a column, `gap` between
- *                                                             its parts; it scrolls
- *         ├─ header ├─ title ╰─ value
- *         ├─ graph                                            `height`; `color` the first series, `background`,
- *         │  ├─ second                                        `border-color` the grid; the second series' `color`
- *         │  ╰─ scale                                         the scale's top, written top left: `color`, `font-size`
- *         ├─ cores                                            rows of per-core meters, `gap`
- *         │  ╰─ core[.warning|.critical] ├─ meter ╰─ text     (70% / 90%)
- *         ├─ meter[.used|.swap][.warning|.critical]           `height`, `background`, `border-radius`
- *         │  ╰─ fill                                          the filled part: `background`
- *         ├─ details ╰─ text                                  load, uptime, frequency, temperature
- *         ├─ text                                             memory figures
- *         ├─ disk[mount="/"] ├─ name ├─ text ╰─ meter        one per mount
- *         ├─ iface[name="eth0"] ├─ name ╰─ text               one per interface
- *         ├─ gpu ├─ name ├─ text ╰─ meter                     one per GPU
- *         ╰─ table
- *            ├─ header
- *            │  ╰─ column.name|.pid|.user|.cpu|.mem[.sorted][.reverse]   buttons: click sorts; `width` sizes
- *            │     ╰─ text                                                the column (the name takes the rest)
- *            ╰─ row[pid="1234"][name="comm"][state="S"][.selected]      one per process; a click selects it
- *               ╰─ name | pid | user | cpu | mem              texts
- *      ╰─ section.processes > actions[.none]                  under the scrolling table: the selected
- *         ├─ text                                             process's name and pid and the signals, or
- *         ╰─ button.terminate | button.kill ╰─ text           (.none) the help and the buttons :disabled
- *
- *   gadget.audio                                              `gap` between its buttons
- *   ├─ button.output[.muted][.none]                           the default output's level (.none: no output);
- *   │  ├─ icon                                                left: the popup, wheel: volume, middle: mute,
- *   │  ╰─ text                                                right: `mixer_command`; the icon at the node's
- *   │                                                         `height`, `gap` before the percent (show_percent)
- *   ╰─ button.input[.muted][.none]                            the default input, the same way (show_microphone)
- *   popup > gadget.audio
- *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
- *      ├─ section.output|.input|.stream ╰─ title              "Output" / "Input" / "Playing"
- *      ├─ channel.output|.input|.stream[.muted][.default][name="..."]   a row per device / stream
- *      │  ├─ button.mute[.on] ╰─ icon                         the device's / app's icon; toggles mute
- *      │  ├─ name ╰─ text                                     a button on a device that isn't the default
- *      │  ├─ value                                            the percent
- *      │  ╰─ slider ╰─ handle                                 (see `slider`)
- *      ├─ player.playing|.paused|.stopped[name="..."]         one per media player
- *      │  ├─ cover                                            the cover art (the app's icon without): `height`
- *      │  ├─ title | artist | album                           texts
- *      │  ╰─ controls ╰─ button.previous|.play|.next[.disabled] ╰─ icon   (.disabled: the player can't)
- *      ├─ empty                                               "No audio devices"
- *      ╰─ button.mixer ╰─ text                                runs `mixer_command`
- *
- *   gadget.network
- *   ╰─ button.wifi|.wired|.none                               the primary connection: .connected|.connecting|
- *      │                                                      .disconnected, .limited (no internet), .vpn (one is
- *      │                                                      up), .off (Wi‑Fi disabled), .none (no NetworkManager)
- *      ├─ icon                                                its state, drawn at the node's `height`; left: the
- *      │                                                      popup, middle: Wi‑Fi on/off, right: `settings_command`
- *      ├─ icon.vpn                                            the VPN badge (show_vpn)
- *      ╰─ text                                                the connection's name (show_label); `gap` between
- *   popup > gadget.network
- *   ╰─ list                                                   `width` sizes the popup, `height` caps it (scrolls beyond)
- *      ├─ header.wifi[.off] | header.wired | header.vpn        a section title
- *      │  ├─ title                                            "Wi‑Fi networks" / "Ethernet network" / "VPN connections"
- *      │  ├─ button.scan > icon                               (wifi) asks for a scan
- *      │  ╰─ toggle                                           (wifi) on/off (see `toggle`)
- *      ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
- *      │  │                                                   one per network around (:nth-child among them),
- *      │  │                                                   strongest first after the active and the known ones
- *      │  ├─ button                                           the row: click joins it, or unfolds it
- *      │  │  ├─ icon                                          the strength
- *      │  │  ├─ name > text
- *      │  │  ├─ icon.badge                                    the lock (.secured)
- *      │  │  ├─ status                                        "Connected" / "Connecting…"
- *      │  │  ╰─ chevron[.open] > text                         ▾ / ▴: a button unfolding the active and the known ones
- *      │  ├─ details ╰─ line                                  (unfolded, active) addresses, gateway, DNS, band...
- *      │  ├─ actions ╰─ button.disconnect | .connect | .forget ╰─ text   (active: Disconnect; known, idle: Connect)
- *      │  ├─ auth[.busy]                                      (unfolded, secured) the password
- *      │  │  ├─ input                                         the field (:focus)
- *      │  │  ├─ peek[.on] > icon                              the eye
- *      │  │  ╰─ button.connect[.disabled] > text               (.disabled: nothing typed yet)
- *      │  ╰─ message                                          "Wrong password", the enterprise hint
- *      ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]   one per wired device
- *      │  ├─ button ├─ icon ├─ name ├─ status ╰─ chevron       as above; click unfolds the active one, or
- *      │  ├─ details ╰─ line                                  brings a plugged one up
- *      │  ╰─ actions ╰─ button.disconnect > text
- *      ├─ vpn[.active][.connecting][.failed][name="..."]       one per VPN profile
- *      │  ├─ icon ├─ name ├─ status ├─ toggle                  the toggle activates / deactivates it
- *      │  ╰─ message                                          "Needs a password: open the settings"
- *      ├─ empty                                               "Wi‑Fi is off", "No networks found", "NetworkManager
- *      │                                                      is not running"
- *      ╰─ button.settings > text                              runs `settings_command`
- *
- *   toggle[.on]                                               an on/off switch: the track is `height` tall (twice
- *   ╰─ handle                                                 as wide), `background` with the border; the knob's
- *                                                             `background` (the track's `color` when unset) and border
- *
- *   slider                                                    a slider: the rail is `height` thick, `color` its
- *   ╰─ handle                                                 filled part, `background` the rest, with the border;
- *                                                             the handle a circle of `width`, `background`, border
- *
- *   gadget.custom
- *   ╰─ button[.<class>...]                                    the classes come from the exec's JSON output;
- *      ├─ icon                                                `gap` between icon and text; the icon is drawn
- *      ╰─ text                                                at the node's `height` (symbolic ones take `color`)
- *
- *   menu                                                      a menu (tray items, themes): a column, gap between rows
- *   ├─ item[.checked][.submenu][.expanded]                    a row, a button (:disabled when the app says so)
- *   │  ├─ check                                               ✓ / ● / ○ (levels with toggles only)
- *   │  ├─ label
- *   │  ╰─ arrow                                               ▸ / ▾ on a submenu
- *   ├─ separator                                              sized by `height`
- *   ╰─ submenu                                                an unfolded submenu: the same rows, nested
- *                                                             (its padding is the indent)
- *
- *   gadget.workspaces
- *   ├─ workspace[.active][.urgent][name="<name>"]            a button, one per workspace
- *   │  ├─ text                                                the workspace name
- *   │  ╰─ window[.active][.urgent][class="<app id>"]         one per window: the app icon, drawn
- *   │     ╰─ text                                             at the node's `height` (a dot until
- *   │                                                         the icon is known; symbolic icons
- *   │                                                         take `color`); a button when
- *   │                                                         focus_window_on_click is on
- *   ╰─ title[class="<app id>"]                                the active window (show_title): `gap`
- *      ├─ icon                                                between its icon, drawn at the node's
- *      ╰─ text                                                `height`, and its title
+ * Elements: every surface, gadget and shared piece (toggle, slider,
+ * menu, calendar) has its element tree in a comment above its rules,
+ * below: the element types, the classes and attributes they carry,
+ * and what each part is.
  */
 
 :root.light {
@@ -442,6 +95,18 @@
 
 /* Surfaces */
 
+/*
+ * Panel
+ * =====
+ *
+ * A bar, one per output: #2 for [panel:2]. Each gadget is a box of its
+ * kind (gadget.clock, gadget.workspaces, ...): #2 for [Clock:2], #search
+ * for [Custom:search]. `min-height` is the bar thickness.
+ *
+ * panel[.top|.bottom][#<instance>][output="<connector>"]
+ * ╰─ slot.start | slot.center | slot.end
+ *    ╰─ gadget.<kind>[#<instance>]   one per gadget
+ */
 panel {
   min-height: 32px;
   background: var(--aria-bg);
@@ -449,6 +114,21 @@ panel {
   font-size: 14px;
 }
 
+panel slot {
+  gap: 8px;
+  padding: 0 8px;
+}
+
+/*
+ * Popups
+ * ======
+ *
+ * A gadget's popup: its own surface, the gadget's popup content inside.
+ *
+ * popup
+ * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to
+ *    ╰─ ...                       the gadget's popup content
+ */
 popup {
   background: var(--aria-popup-bg);
   color: var(--aria-fg);
@@ -456,11 +136,25 @@ popup {
   border: 1px solid var(--aria-border);
 }
 
-slot {
-  gap: 8px;
-  padding: 0 8px;
-}
-
+/*
+ * Launcher
+ * ========
+ *
+ * `width`/`height` size the surface. An .action item is a desktop action
+ * of the result above it, opened with Right or the chevron.
+ *
+ * launcher
+ * ├─ actions                       the exit menu's buttons ([launcher] actions)
+ * │  ╰─ button[.lock|.reboot|...]
+ * │     ╰─ icon                    drawn at `height`
+ * ├─ input                         the search field (:focus when typing)
+ * ╰─ list                          the results (a column, `gap`)
+ *    ╰─ item[.selected][.action]   one result, a button
+ *       ├─ icon                    the app icon, drawn at `height`
+ *       ├─ title                   the app name (the action's, on .action)
+ *       ├─ subtitle                its description, when it has one
+ *       ╰─ chevron[.open] > text   a button, › or ⌄
+ */
 launcher {
   width: 520px;
   height: 420px;
@@ -536,6 +230,24 @@ launcher item.action icon {
   height: 20px;
 }
 
+/*
+ * Exit menu
+ * =========
+ *
+ * Sized from its content. <action>: lock, suspend, hibernate, logout,
+ * reboot, shutdown, or a custom one's name. `confirm` takes the grid's
+ * place while an action waits, with a countdown (confirm_timeout).
+ *
+ * exiter
+ * ├─ button.<action>[.selected]
+ * │  ├─ icon                          drawn at `height` (symbolic: `color`)
+ * │  ╰─ text                          the label
+ * ╰─ confirm                          while an action waits
+ *    ├─ text                          "Reboot?"
+ *    ├─ countdown                     "Automatically in 27 s"
+ *    ├─ button.cancel > text
+ *    ╰─ button.ok[.<action>] > text   the action's label
+ */
 exiter {
   padding: 16px;
   gap: 8px;
@@ -578,6 +290,27 @@ exiter confirm button:hover {
   color: var(--aria-on-accent);
 }
 
+/*
+ * Screenshot picker
+ * =================
+ *
+ * One surface per output, over its frozen picture; `padding` keeps the
+ * toolbar off the edges. `hover` is what a click would pick: the window
+ * under the pointer, or the output. The toolbar sits at the bottom of
+ * the selection's output (the focused one before there is a selection);
+ * copy isn't there without a clipboard, edit without `[Screenshot]
+ * editor`; all the buttons but all and cancel are :disabled without a
+ * selection.
+ *
+ * screenshot[output="<connector>"]
+ * ├─ shade       `background`: dims the picture outside the selection
+ * ├─ hover       `background`, `border`
+ * ├─ selection   `border`: the selected area's outline
+ * │  ╰─ handle   `background`, `border`, `height`: the squares on it
+ * ╰─ toolbar     a row
+ *    ├─ text     the hint, or the selection's size
+ *    ╰─ button.all|.cancel|.copy|.edit|.save > text
+ */
 screenshot {
   padding: 32px;
 }
@@ -621,15 +354,56 @@ screenshot toolbar button:disabled {
   color: var(--aria-muted);
 }
 
+/*
+ * Wallpaper
+ * =========
+ *
+ * The desktop background, one surface per output; its `background` shows
+ * without an image or around a `contain`ed one.
+ *
+ * wallpaper[output="<connector>"]
+ */
 wallpaper {
   background: var(--aria-bg);
 }
 
+/*
+ * Showcase
+ * ========
+ *
+ * `aria-shell showcase`: the popups, the launcher, the exit menu, the
+ * OSD and two notifications at once, each as its own root (popup,
+ * launcher, ...), on one surface between the bars; `padding` around
+ * them, `gap` between them. Transparent unless styled.
+ *
+ * showcase
+ */
 showcase {
   padding: 24px;
   gap: 24px;
 }
 
+/*
+ * Lock screen
+ * ===========
+ *
+ * One surface per output, filling it. `border-radius` rounds the avatar.
+ * auth is .error after a refused password, .busy while checking.
+ *
+ * locker[output="<connector>"]
+ * ╰─ box                      the centred column (`gap`)
+ *    ├─ avatar                the user's picture, a `height` square
+ *    ├─ username
+ *    ├─ time
+ *    ├─ date
+ *    ╰─ auth[.error][.busy]   the password block (`gap`)
+ *       ├─ field              a row (`gap`)
+ *       │  ├─ input           the password field (:focus)
+ *       │  ╰─ peek[.on]       the eye, .on while the password shows
+ *       │     ╰─ icon         drawn at `height`, `color`
+ *       ├─ message            what PAM said, "Unlocking…"
+ *       ╰─ button > text      Unlock
+ */
 locker {
   background: var(--aria-bg);
   color: var(--aria-fg);
@@ -702,6 +476,22 @@ locker auth.busy button {
   background: var(--aria-muted);
 }
 
+/*
+ * OSD
+ * ===
+ *
+ * One surface per output while shown: `width`/`height` size it, [osd]
+ * position places it; a row (`gap` between its parts). <kind>: volume,
+ * microphone, brightness, recording, wifi, network, vpn, charger,
+ * profile, idle, custom. The meter is styled as the system monitor's
+ * (`height`, `background`, `border-radius`).
+ *
+ * osd.<kind>[.muted][output="<connector>"]
+ * ├─ icon           drawn at `height` (symbolic: `color`)
+ * ├─ meter > fill   the level, when there is one
+ * ├─ label          the text: the network, a script's
+ * ╰─ value          the percent, when there is a level
+ */
 osd {
   width: 320px;
   height: 56px;
@@ -731,6 +521,28 @@ osd value {
   width: 44px;
 }
 
+/*
+ * Notifications
+ * =============
+ *
+ * `notifications` is not a surface: the stack of notifications on an
+ * output; `padding` is its distance from the screen edges, `gap` the
+ * space between notifications. Each `notification` is a surface: `width`
+ * sizes it, the height follows the content; the id is the
+ * notification's, the app what it called itself. The same element, with
+ * the same rules, is a row of the Notifications gadget's popup.
+ *
+ * notifications     the stack on an output
+ * notification[.low|.normal|.critical][#<id>][app="<name>"]
+ * ├─ icon           the app's image or icon, drawn at `height`
+ * ├─ summary        the title
+ * ├─ time           how long ago it came (popup rows only)
+ * ├─ button.close   ✕ (popup rows only)
+ * ├─ body           the text, wrapped at the width
+ * ╰─ actions        a row, right-aligned
+ *    ╰─ button      one per action the app offers
+ *       ╰─ text
+ */
 notifications {
   padding: 8px;
   gap: 8px;
@@ -785,6 +597,16 @@ notification button.close:hover {
 
 /* Gadgets */
 
+/*
+ * Clock gadget
+ * ============
+ *
+ * gadget.clock
+ * ╰─ button     the time; click opens the calendar
+ *    ╰─ text
+ * popup > gadget.clock
+ * ╰─ calendar   (see `calendar`)
+ */
 gadget.clock button {
   padding: 0;
 }
@@ -792,6 +614,24 @@ gadget.clock text {
   font-weight: bold;
 }
 
+/*
+ * Workspaces gadget
+ * =================
+ *
+ * A window is its app's icon, drawn at `height` (a dot until the icon is
+ * known; symbolic icons take `color`), a button when
+ * focus_window_on_click is on. The title (show_title): `gap` between its
+ * icon, drawn at `height`, and its text.
+ *
+ * gadget.workspaces
+ * ├─ workspace[.active][.urgent][name="<name>"]  a button, one per workspace
+ * │  ├─ text                   the workspace name
+ * │  ╰─ window[.active][.urgent][class="<app id>"]  one per window
+ * │     ╰─ text
+ * ╰─ title[class="<app id>"]   the active window
+ *    ├─ icon
+ *    ╰─ text
+ */
 gadget.workspaces {
   gap: 2px;
 }
@@ -830,6 +670,17 @@ gadget.workspaces title icon {
   height: 16px;
 }
 
+/*
+ * Tray gadget
+ * ===========
+ *
+ * gadget.tray                     a row (`gap`)
+ * ╰─ item[.passive][.attention]   a button per status notifier item
+ *    ╰─ icon                      drawn at `height` (symbolic: `color`)
+ * popup > gadget.tray
+ * ╰─ menu                         the item's menu (see `menu`)
+ *    ╰─ text                      "…" until the menu is loaded
+ */
 gadget.tray {
   gap: 4px;
 }
@@ -848,6 +699,16 @@ gadget.tray > item.attention icon {
   color: var(--aria-urgent);
 }
 
+/*
+ * Themes gadget
+ * =============
+ *
+ * gadget.themes
+ * ╰─ button    left: light/dark, right: the menu
+ *    ╰─ icon   the scheme's, drawn at `height`
+ * popup > gadget.themes
+ * ╰─ menu      Light / Dark, then Base and every theme found
+ */
 gadget.themes > button {
   padding: 0 2px;
   border-radius: 2px;
@@ -859,6 +720,16 @@ gadget.themes icon {
   height: 16px;
 }
 
+/*
+ * Screenshot gadget
+ * =================
+ *
+ * gadget.screenshot
+ * ╰─ button    left: the picker, right: the menu
+ *    ╰─ icon   `[Screenshot] icon`, drawn at `height`
+ * popup > gadget.screenshot
+ * ╰─ menu      the active window, this screen, all screens
+ */
 gadget.screenshot > button {
   padding: 0 2px;
   border-radius: 2px;
@@ -870,6 +741,47 @@ gadget.screenshot icon {
   height: 16px;
 }
 
+/*
+ * Places gadget
+ * =============
+ *
+ * Left click opens the popup; the list's `width` sizes it, else the
+ * widest row does. Headers in `[Places] show` order: .places, .devices,
+ * .network, .bookmarks. A place (.home, .desktop, .documents, .download,
+ * .music, .pictures, .videos, .trash[.full], .folder, .remote) is a
+ * button: a click opens it in `[general] file_manager`.
+ *
+ * A device is a UDisks2 volume (.harddisk, .usb, .thumb, .flash,
+ * .optical, .removable), then the local mounts it doesn't know
+ * (.encrypted: encfs, gocryptfs, ...; .fuse: any other FUSE or bind
+ * mount); .locked: a LUKS volume not unlocked yet, .busy: mounting or
+ * unmounting. button.open mounts it first (:disabled while .locked or
+ * .busy); button.eject unmounts it, then powers a removable drive off
+ * (:disabled on /). A share (.nfs, .smb, .ssh, .dav, .other) is a
+ * network share, fstab's or mounted by hand: as a device, without the
+ * meter.
+ *
+ * gadget.places
+ * ╰─ button
+ *    ├─ icon                               `[Places] icon`, drawn at `height`
+ *    ╰─ label                              `[Places] label`, when set
+ * popup > gadget.places
+ * ╰─ list                                  a column (`gap`)
+ *    ├─ header.<section>
+ *    │  ╰─ title
+ *    ├─ item.<place>                       a place
+ *    │  ├─ icon
+ *    │  ╰─ label
+ *    ├─ device.<kind>[.mounted][.locked][.busy]  a row (`gap`)
+ *    │  ├─ button.open                     opens it
+ *    │  │  ├─ icon
+ *    │  │  ╰─ info                         a column (`gap`)
+ *    │  │     ├─ label                     its label, else its size
+ *    │  │     ╰─ meter[.critical] > fill   how full, while mounted
+ *    │  ╰─ button.eject > icon             ⏏, while mounted
+ *    ├─ share.<kind>[.mounted][.busy]      as a device
+ *    ╰─ empty                              "No places"
+ */
 gadget.places > button {
   padding: 0 2px;
   gap: 4px;
@@ -950,6 +862,51 @@ gadget.places empty {
   color: var(--aria-muted);
 }
 
+/*
+ * Power gadget
+ * ============
+ *
+ * A row (`gap` between the buttons); middle click holds idle / lets it
+ * go, right click runs `settings_command`. The status button (absent
+ * without a battery and a profiles daemon) carries the battery's <state>
+ * (.charging, .discharging, .full, .not-charging, .empty), its warning
+ * (.low, .critical) and the active <profile> (.power-saver, .balanced,
+ * .performance). The idle eye is .inhibited when held by the user,
+ * .playing by a player. In the popup, `message` says why performance is
+ * limited, or that a player holds idle.
+ *
+ * gadget.power
+ * ├─ button.status[.<state>][.low|.critical][.<profile>]  left: the popup
+ * │  ├─ icon.battery                     UPower's icon, drawn at `height`
+ * │  ├─ text                             the percent (show_percent)
+ * │  ╰─ icon.profile                     the active profile's icon
+ * ╰─ button.idle[.inhibited][.playing]   left: holds idle / lets it go
+ *    ╰─ icon                             the eye
+ * popup > gadget.power
+ * ╰─ list                                `width` sizes the popup (a column, `gap`)
+ *    ├─ battery[.<state>][.low|.critical]
+ *    │  ├─ icon
+ *    │  ├─ percent
+ *    │  ╰─ status                        "2 h 10 min left"
+ *    ├─ details
+ *    │  ╰─ line                          power draw, battery health
+ *    ├─ header.devices | header.profile
+ *    │  ╰─ title
+ *    ├─ device                           a peripheral with a battery
+ *    │  ├─ icon
+ *    │  ├─ name
+ *    │  ╰─ percent
+ *    ├─ profiles                         a row (`gap`)
+ *    │  ╰─ button.<profile>[.active]
+ *    │     ├─ icon
+ *    │     ╰─ text
+ *    ├─ idle[.inhibited][.playing]       "Keep awake"
+ *    │  ├─ icon
+ *    │  ├─ title
+ *    │  ╰─ toggle                        (see `toggle`)
+ *    ├─ message
+ *    ╰─ button.settings > text           runs `settings_command`
+ */
 gadget.power {
   gap: 2px;
 }
@@ -1069,6 +1026,29 @@ gadget.power button.settings:hover {
   border-color: var(--aria-accent);
 }
 
+/*
+ * Brightness gadget
+ * =================
+ *
+ * .none: no screen to adjust. Left click: the popup, wheel: the
+ * brightness, right: `settings_command`. A screen is .unknown when its
+ * level couldn't be read.
+ *
+ * gadget.brightness
+ * ╰─ button[.none]
+ *    ├─ icon                     drawn at `height`
+ *    ╰─ text                     the bar's screen's percent (show_percent)
+ * popup > gadget.brightness
+ * ╰─ list                        `width` sizes the popup (a column, `gap`)
+ *    ├─ screen.backlight|.ddc[.unknown][output="<connector>"]
+ *    │  ├─ icon                  the laptop's panel / a monitor
+ *    │  ├─ name                  "Built-in display", the monitor's model
+ *    │  ├─ output                its connector
+ *    │  ├─ value                 the percent
+ *    │  ╰─ slider                (see `slider`)
+ *    ├─ empty                    "No screen to adjust"
+ *    ╰─ button.settings > text   runs `settings_command`
+ */
 gadget.brightness > button {
   padding: 0 4px;
   gap: 4px;
@@ -1113,6 +1093,27 @@ gadget.brightness button.settings:hover {
   border-color: var(--aria-accent);
 }
 
+/*
+ * Notifications gadget
+ * ====================
+ *
+ * Left: the history popup, right: do-not-disturb, middle: closes the
+ * toasts. The rows are `notification` elements, with the desktop's rules
+ * (see Notifications).
+ *
+ * gadget.notifications
+ * ╰─ button[.dnd][.new]
+ *    ├─ icon                    drawn at `height`
+ *    ╰─ text                    the count not looked at (when > 0)
+ * popup > gadget.notifications
+ * ╰─ list                       `width` sizes it, `height` caps it (scrolls)
+ *    ├─ header
+ *    │  ├─ title
+ *    │  ├─ button.dnd[.on]      toggles do-not-disturb
+ *    │  ╰─ button.clear         empties the history
+ *    ├─ empty                   "No notifications"
+ *    ╰─ notification[.unseen]   one per notification kept
+ */
 gadget.notifications > button {
   padding: 0 4px;
   gap: 4px;
@@ -1170,6 +1171,81 @@ gadget.notifications list notification.unseen summary {
   color: var(--aria-accent);
 }
 
+/*
+ * System monitor gadget
+ * =====================
+ *
+ * A button per value shown (`show =`), <value>: .cpu, .mem, .swap,
+ * .disk, .net, .gpu, .temp, .load; .warning / .critical from the
+ * instance's `warning` / `critical`. Left click: the popup, right click:
+ * `command`. The icon is drawn at `height`. One of text / graph / gauge
+ * (`mode =`), the `format` text as the label of the last two: `width`
+ * (wider if the label needs it) x `height`; the graph's `color` is the
+ * series, the gauge's `background`/`border`/`border-radius` the bar and
+ * `fill { background }` the filled part; `label { color; font-size;
+ * padding }`.
+ *
+ * In the popup the tabs are buttons (gpu only with one); the active
+ * tab's section is a column (`gap`) that scrolls. A graph: `height`,
+ * `color` the first series, `background`, `border-color` the grid;
+ * `second { color }` the second series; `scale` its top value, written
+ * top left. Cores turn .warning / .critical at 70% / 90%. The table's
+ * columns are buttons: a click sorts, `width` sizes the column (the name
+ * takes the rest); a click on a row selects its process. Under the
+ * table, `actions` has the selected process's name and pid and the
+ * signals, or (.none) the help and the buttons :disabled.
+ *
+ * gadget.system-monitor[#<instance>]
+ * ╰─ button.<value>[.warning|.critical]
+ *    ├─ icon
+ *    ├─ text
+ *    ├─ graph
+ *    │  ╰─ label
+ *    ╰─ gauge
+ *       ├─ fill
+ *       ╰─ label
+ * popup > gadget.system-monitor
+ * ╰─ monitor                    `width` / `height` size the popup
+ *    ├─ tabs                    a row (`gap`)
+ *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]
+ *    │     ╰─ text
+ *    ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes  the active tab
+ *       ├─ header
+ *       │  ├─ title
+ *       │  ╰─ value
+ *       ├─ graph
+ *       │  ├─ second
+ *       │  ╰─ scale
+ *       ├─ cores                rows of per-core meters (`gap`)
+ *       │  ╰─ core[.warning|.critical]
+ *       │     ├─ meter
+ *       │     ╰─ text
+ *       ├─ meter[.used|.swap][.warning|.critical]
+ *       │  ╰─ fill              the filled part: `background`
+ *       ├─ details
+ *       │  ╰─ text              load, uptime, frequency, temperature
+ *       ├─ text                 memory figures
+ *       ├─ disk[mount="/"]      one per mount
+ *       │  ├─ name
+ *       │  ├─ text
+ *       │  ╰─ meter
+ *       ├─ iface[name="eth0"]   one per interface
+ *       │  ├─ name
+ *       │  ╰─ text
+ *       ├─ gpu                  one per GPU
+ *       │  ├─ name
+ *       │  ├─ text
+ *       │  ╰─ meter
+ *       ├─ table
+ *       │  ├─ header
+ *       │  │  ╰─ column.name|.pid|.user|.cpu|.mem[.sorted][.reverse]
+ *       │  │     ╰─ text
+ *       │  ╰─ row[pid="1234"][name="comm"][state="S"][.selected]
+ *       │     ╰─ name | pid | user | cpu | mem
+ *       ╰─ actions[.none]       (processes) under the table
+ *          ├─ text
+ *          ╰─ button.terminate | button.kill > text
+ */
 gadget.system-monitor > button {
   padding: 0 4px;
   gap: 4px;
@@ -1345,6 +1421,42 @@ gadget.system-monitor section.processes > actions.none button:hover {
   border-color: var(--aria-border);
 }
 
+/*
+ * Audio gadget
+ * ============
+ *
+ * `gap` between the buttons. button.output: the default output's level
+ * (.none: no output); left: the popup, wheel: volume, middle: mute,
+ * right: `mixer_command`; `gap` before the percent (show_percent).
+ * button.input: the default input, the same way (show_microphone). In
+ * the popup a channel's name is a button on a device that isn't the
+ * default; a player's .disabled controls are what it can't do.
+ *
+ * gadget.audio
+ * ├─ button.output[.muted][.none]
+ * │  ├─ icon                  drawn at `height`
+ * │  ╰─ text                  the percent
+ * ╰─ button.input[.muted][.none]
+ * popup > gadget.audio
+ * ╰─ list                     `width` sizes it, `height` caps it (scrolls)
+ *    ├─ section.output|.input|.stream
+ *    │  ╰─ title              "Output" / "Input" / "Playing"
+ *    ├─ channel.output|.input|.stream[.muted][.default][name="..."]
+ *    │  ├─ button.mute[.on]   toggles mute
+ *    │  │  ╰─ icon            the device's / app's icon
+ *    │  ├─ name
+ *    │  │  ╰─ text
+ *    │  ├─ value              the percent
+ *    │  ╰─ slider             (see `slider`)
+ *    ├─ player.playing|.paused|.stopped[name="..."]
+ *    │  ├─ cover              the cover art (else the app's icon): `height`
+ *    │  ├─ title | artist | album
+ *    │  ╰─ controls
+ *    │     ╰─ button.previous|.play|.next[.disabled]
+ *    │        ╰─ icon
+ *    ├─ empty                 "No audio devices"
+ *    ╰─ button.mixer > text   runs `mixer_command`
+ */
 gadget.audio {
   gap: 2px;
 }
@@ -1458,6 +1570,65 @@ gadget.audio button.mixer:hover {
   border-color: var(--aria-accent);
 }
 
+/*
+ * Network gadget
+ * ==============
+ *
+ * The button is the primary connection: .wifi, .wired or .none (no
+ * NetworkManager), and its <state>: .connected, .connecting,
+ * .disconnected, .limited (no internet), .vpn (one is up), .off (Wi‑Fi
+ * disabled). Left: the popup, middle: Wi‑Fi on/off, right:
+ * `settings_command`; `gap` between icon and text.
+ *
+ * In the popup the networks around come strongest first, after the
+ * active and the known ones (:nth-child among them); a click joins one,
+ * or unfolds it. Unfolded, the active one shows its details and
+ * Disconnect, a known idle one Connect, a secured one the password. A
+ * wired device's click unfolds the active one, or brings a plugged one
+ * up. A VPN's toggle activates / deactivates it.
+ *
+ * gadget.network
+ * ╰─ button.wifi|.wired|.none[.<state>]
+ *    ├─ icon                                     its state, drawn at `height`
+ *    ├─ icon.vpn                                 the VPN badge (show_vpn)
+ *    ╰─ text                                     the connection's name (show_label)
+ * popup > gadget.network
+ * ╰─ list                                        `width` sizes it, `height` caps it (scrolls)
+ *    ├─ header.wifi[.off] | header.wired | header.vpn
+ *    │  ├─ title                                 "Wi‑Fi networks", "Ethernet network", ...
+ *    │  ├─ button.scan > icon                    (wifi) asks for a scan
+ *    │  ╰─ toggle                                (wifi) on/off (see `toggle`)
+ *    ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
+ *    │  ├─ button                                the row
+ *    │  │  ├─ icon                               the strength
+ *    │  │  ├─ name > text
+ *    │  │  ├─ icon.badge                         the lock (.secured)
+ *    │  │  ├─ status                             "Connected" / "Connecting…"
+ *    │  │  ╰─ chevron[.open] > text              ▾ / ▴, a button
+ *    │  ├─ details
+ *    │  │  ╰─ line                               addresses, gateway, DNS, band...
+ *    │  ├─ actions
+ *    │  │  ╰─ button.disconnect|.connect|.forget > text
+ *    │  ├─ auth[.busy]                           the password
+ *    │  │  ├─ input                              the field (:focus)
+ *    │  │  ├─ peek[.on] > icon                   the eye
+ *    │  │  ╰─ button.connect[.disabled] > text   .disabled: nothing typed yet
+ *    │  ╰─ message                               "Wrong password", the enterprise hint
+ *    ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
+ *    │  ├─ button                                as an ap's: icon, name, status, chevron
+ *    │  ├─ details
+ *    │  │  ╰─ line
+ *    │  ╰─ actions
+ *    │     ╰─ button.disconnect > text
+ *    ├─ vpn[.active][.connecting][.failed][name="..."]  one per VPN profile
+ *    │  ├─ icon
+ *    │  ├─ name
+ *    │  ├─ status
+ *    │  ├─ toggle
+ *    │  ╰─ message                               "Needs a password: open the settings"
+ *    ├─ empty                                    "Wi‑Fi is off", "No networks found", ...
+ *    ╰─ button.settings > text                   runs `settings_command`
+ */
 gadget.network > button {
   padding: 0 4px;
   gap: 4px;
@@ -1634,31 +1805,18 @@ gadget.network button.settings:hover {
   border-color: var(--aria-accent);
 }
 
-toggle {
-  height: 18px;
-  background: var(--aria-border);
-}
-toggle.on {
-  background: var(--aria-accent);
-}
-toggle handle {
-  background: var(--aria-popup-bg);
-}
-toggle:hover handle {
-  background: var(--aria-bg);
-}
-
-slider {
-  height: 4px;
-  color: var(--aria-accent);
-  background: var(--aria-border);
-  border-radius: 2px;
-}
-slider handle {
-  width: 12px;
-  background: var(--aria-accent);
-}
-
+/*
+ * Custom gadget
+ * =============
+ *
+ * The button's classes come from the exec's JSON output; `gap` between
+ * icon and text.
+ *
+ * gadget.custom
+ * ╰─ button[.<class>...]
+ *    ├─ icon   drawn at `height` (symbolic: `color`)
+ *    ╰─ text
+ */
 gadget.custom > button {
   padding: 0 4px;
   gap: 4px;
@@ -1675,8 +1833,71 @@ gadget.custom > button.warning {
   color: var(--aria-urgent);
 }
 
-/* Menu popups (tray items, themes) */
+/* Shared pieces: in several gadgets' popups */
 
+/*
+ * Toggle
+ * ======
+ *
+ * An on/off switch: the track is `height` tall (twice as wide),
+ * `background` with the border; the knob's `background` (the track's
+ * `color` when unset) and border.
+ *
+ * toggle[.on]
+ * ╰─ handle   the knob
+ */
+toggle {
+  height: 18px;
+  background: var(--aria-border);
+}
+toggle.on {
+  background: var(--aria-accent);
+}
+toggle handle {
+  background: var(--aria-popup-bg);
+}
+toggle:hover handle {
+  background: var(--aria-bg);
+}
+
+/*
+ * Slider
+ * ======
+ *
+ * The rail is `height` thick, `color` its filled part, `background` the
+ * rest, with the border; the handle a circle of `width`, `background`,
+ * border.
+ *
+ * slider
+ * ╰─ handle
+ */
+slider {
+  height: 4px;
+  color: var(--aria-accent);
+  background: var(--aria-border);
+  border-radius: 2px;
+}
+slider handle {
+  width: 12px;
+  background: var(--aria-accent);
+}
+
+/*
+ * Menu
+ * ====
+ *
+ * The tray items' and the themes' popups: a column, `gap` between rows.
+ * An unfolded submenu has the same rows, nested; its padding is the
+ * indent.
+ *
+ * menu
+ * ├─ item[.checked][.submenu][.expanded]   a button (:disabled when the app says so)
+ * │  ├─ check                              ✓ / ● / ○ (levels with toggles only)
+ * │  ├─ label
+ * │  ╰─ arrow                              ▸ / ▾ on a submenu
+ * ├─ separator                             sized by `height`
+ * ╰─ submenu                               an unfolded submenu
+ */
 menu {
   padding: 4px;
   gap: 2px;
@@ -1708,8 +1929,17 @@ menu submenu {
   gap: 2px;
 }
 
-/* Calendar popup */
-
+/*
+ * Calendar
+ * ========
+ *
+ * calendar                          the clock's month view
+ * ├─ header
+ * │  ├─ button.prev | button.next   previous / next month
+ * │  ╰─ text                        month and year
+ * ├─ weekday                        one per column
+ * ╰─ day[.today]                    one per cell
+ */
 calendar {
   padding: 12px;
 }

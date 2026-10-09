@@ -7,6 +7,7 @@
 
 use iced::border::Radius;
 use iced::font::Weight;
+use iced::widget::text::LineHeight;
 use iced::{Color, Shadow, Vector};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -94,6 +95,7 @@ pub enum Property {
     FontFamily(Vec<String>),
     FontSize(f32),
     FontWeight(Weight),
+    LineHeight(LineHeight),
 }
 
 pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
@@ -144,6 +146,7 @@ pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
         "font-family" => font_family(value).map(|f| vec![Property::FontFamily(f)]),
         "font-size" => one(|w| px(w).map(Property::FontSize)),
         "font-weight" => one(|w| weight(w).map(Property::FontWeight)),
+        "line-height" => one(|w| line_height(w).map(Property::LineHeight)),
         _ => Err(format!("unknown property {name}")),
     }
 }
@@ -316,6 +319,23 @@ fn font_family(value: &str) -> Result<Vec<String>, String> {
         return Err("empty font-family".to_owned());
     }
     Ok(names)
+}
+
+/// `normal` (iced's 1.3), a number (times the font size, as in CSS) or
+/// pixels (`18px`).
+fn line_height(word: &str) -> Result<LineHeight, String> {
+    if word == "normal" {
+        return Ok(LineHeight::default());
+    }
+    if let Some(px) = word.strip_suffix("px") {
+        return px
+            .parse()
+            .map(|px: f32| LineHeight::Absolute(px.into()))
+            .map_err(|_| format!("invalid line-height {word:?}"));
+    }
+    word.parse()
+        .map(LineHeight::Relative)
+        .map_err(|_| format!("invalid line-height {word:?}, expected a number or pixels"))
 }
 
 fn weight(word: &str) -> Result<Weight, String> {
@@ -526,6 +546,23 @@ mod tests {
             Property::FontWeight(Weight::Light)
         );
         assert!(parse("font-weight", "450").is_err());
+    }
+
+    #[test]
+    fn line_heights() {
+        assert_eq!(
+            one("line-height", "18px"),
+            Property::LineHeight(LineHeight::Absolute(18.0.into()))
+        );
+        assert_eq!(
+            one("line-height", "1.5"),
+            Property::LineHeight(LineHeight::Relative(1.5))
+        );
+        assert_eq!(
+            one("line-height", "normal"),
+            Property::LineHeight(LineHeight::default())
+        );
+        assert!(parse("line-height", "1em").is_err());
     }
 
     #[test]

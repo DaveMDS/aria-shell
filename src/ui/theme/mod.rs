@@ -47,6 +47,7 @@ use std::path::PathBuf;
 
 use iced::border::Radius;
 use iced::font::Weight;
+use iced::widget::text::LineHeight;
 use iced::{Color, Padding, Shadow};
 
 use crate::config::{self, Config};
@@ -159,6 +160,7 @@ pub struct Style {
     pub font_family: Option<&'static str>,
     pub font_size: Option<f32>,
     pub font_weight: Option<Weight>,
+    pub line_height: Option<LineHeight>,
 }
 
 /// One side of a box's border. `color` `None`: not set (transparent).
@@ -387,6 +389,7 @@ impl Style {
             font_family: self.font_family,
             font_size: self.font_size,
             font_weight: self.font_weight,
+            line_height: self.line_height,
             ..Self::default()
         }
     }
@@ -436,6 +439,7 @@ impl Style {
             Property::FontFamily(names) => self.font_family = Some(intern(pick_family(names))),
             Property::FontSize(s) => self.font_size = Some(*s),
             Property::FontWeight(w) => self.font_weight = Some(*w),
+            Property::LineHeight(l) => self.line_height = Some(*l),
         }
     }
 }

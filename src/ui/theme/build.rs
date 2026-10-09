@@ -118,6 +118,9 @@ impl Theme {
         if let Some(size) = s.font_size {
             t = t.size(size);
         }
+        if let Some(line_height) = s.line_height {
+            t = t.line_height(line_height);
+        }
         t.style(move |_| s.text())
     }
 
@@ -147,6 +150,9 @@ impl Theme {
         }
         if let Some(size) = s.font_size {
             t = t.size(size);
+        }
+        if let Some(line_height) = s.line_height {
+            t = t.line_height(line_height);
         }
         if let Some(w) = s.width {
             t = t.width(w);
@@ -308,7 +314,7 @@ impl Theme {
                 content,
                 bounds: Size::INFINITE,
                 size: size.into(),
-                line_height: text::LineHeight::default(),
+                line_height: s.line_height.unwrap_or_default(),
                 font: s.font().unwrap_or_default(),
                 align_x: text::Alignment::Left,
                 align_y: iced::alignment::Vertical::Top,
@@ -330,7 +336,7 @@ impl Theme {
                 content,
                 bounds: Size::new(width, f32::INFINITY),
                 size: size.into(),
-                line_height: text::LineHeight::default(),
+                line_height: s.line_height.unwrap_or_default(),
                 font: s.font().unwrap_or_default(),
                 align_x: text::Alignment::Left,
                 align_y: iced::alignment::Vertical::Top,
@@ -343,8 +349,9 @@ impl Theme {
     /// The height of one line of text of `node`, as [`Theme::measure`]
     /// sees it.
     pub fn line_height(&self, node: &Node) -> f32 {
-        let size = self.resolve(node).font_size.unwrap_or(DEFAULT_FONT_SIZE);
-        text::LineHeight::default().to_absolute(size.into()).0
+        let s = self.resolve(node);
+        let size = s.font_size.unwrap_or(DEFAULT_FONT_SIZE);
+        s.line_height.unwrap_or_default().to_absolute(size.into()).0
     }
 
     /// A `row` styled as `node`: `gap` and padding.

@@ -415,7 +415,20 @@ impl Style {
             Property::BorderRadius(r) => self.border_radius = *r,
             Property::Shadow(s) => self.shadow = *s,
             Property::InsetShadow(s) => self.inset_shadow = *s,
-            Property::Padding(p) => self.padding = *p,
+            Property::Padding(set) => {
+                let padding = &mut self.padding;
+                let sides = [
+                    &mut padding.top,
+                    &mut padding.right,
+                    &mut padding.bottom,
+                    &mut padding.left,
+                ];
+                for (side, p) in sides.into_iter().zip(set.each()) {
+                    if let Some(p) = p {
+                        *side = *p;
+                    }
+                }
+            }
             Property::Gap(g) => self.gap = *g,
             Property::Width(l) => self.width = Some(*l),
             Property::Height(l) => self.height = Some(*l),
@@ -720,6 +733,22 @@ mod tests {
         let s = t.resolve(&Node::root("other"));
         assert_eq!(s.font(), None);
         assert_eq!(s.border().color, Color::TRANSPARENT);
+    }
+
+    #[test]
+    fn padding_sides_cascade() {
+        let t = theme("a { padding: 4px; padding-left: 10px } a b { padding: 1px 2px }");
+        let a = Node::root("a");
+        assert_eq!(
+            t.resolve(&a).padding,
+            Padding {
+                top: 4.0,
+                right: 4.0,
+                bottom: 4.0,
+                left: 10.0
+            }
+        );
+        assert_eq!(t.resolve(&a.child("b")).padding, Padding::from([1.0, 2.0]));
     }
 
     #[test]

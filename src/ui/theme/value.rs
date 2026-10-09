@@ -7,7 +7,7 @@
 
 use iced::border::Radius;
 use iced::font::Weight;
-use iced::{Color, Padding, Shadow, Vector};
+use iced::{Color, Shadow, Vector};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Length {
@@ -83,7 +83,9 @@ pub enum Property {
     BorderRadius(Radius),
     Shadow(Option<Shadow>),
     InsetShadow(Option<InsetShadow>),
-    Padding(Padding),
+    /// The sides a declaration sets: all four for `padding`, one for
+    /// `padding-top`.
+    Padding(Sides<Option<f32>>),
     Gap(f32),
     Width(Length),
     Height(Length),
@@ -124,13 +126,17 @@ pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
         "box-shadow" => box_shadow(&words),
         "padding" => {
             let [top, right, bottom, left] = sides(&words)?;
-            Ok(vec![Property::Padding(Padding {
-                top,
-                right,
-                bottom,
-                left,
+            Ok(vec![Property::Padding(Sides {
+                top: Some(top),
+                right: Some(right),
+                bottom: Some(bottom),
+                left: Some(left),
             })])
         }
+        "padding-top" => one(|w| px(w).map(|p| Property::Padding(Edge::Top.sides(p)))),
+        "padding-right" => one(|w| px(w).map(|p| Property::Padding(Edge::Right.sides(p)))),
+        "padding-bottom" => one(|w| px(w).map(|p| Property::Padding(Edge::Bottom.sides(p)))),
+        "padding-left" => one(|w| px(w).map(|p| Property::Padding(Edge::Left.sides(p)))),
         "gap" => one(|w| px(w).map(Property::Gap)),
         "width" => one(|w| length(w).map(Property::Width)),
         "height" => one(|w| length(w).map(Property::Height)),
@@ -375,25 +381,25 @@ mod tests {
 
     #[test]
     fn padding_and_radius() {
-        assert_eq!(one("padding", "4"), Property::Padding(Padding::new(4.0)));
+        let padding = |top, right, bottom, left| {
+            Property::Padding(Sides {
+                top: Some(top),
+                right: Some(right),
+                bottom: Some(bottom),
+                left: Some(left),
+            })
+        };
+        assert_eq!(one("padding", "4"), padding(4.0, 4.0, 4.0, 4.0));
+        assert_eq!(one("padding", "1px 2px"), padding(1.0, 2.0, 1.0, 2.0));
+        assert_eq!(one("padding", "1 2 3"), padding(1.0, 2.0, 3.0, 2.0));
         assert_eq!(
-            one("padding", "1px 2px"),
-            Property::Padding(Padding {
-                top: 1.0,
-                right: 2.0,
-                bottom: 1.0,
-                left: 2.0
+            one("padding-left", "6px"),
+            Property::Padding(Sides {
+                left: Some(6.0),
+                ..Sides::default()
             })
         );
-        assert_eq!(
-            one("padding", "1 2 3"),
-            Property::Padding(Padding {
-                top: 1.0,
-                right: 2.0,
-                bottom: 3.0,
-                left: 2.0
-            })
-        );
+        assert!(parse("padding-top", "1 2").is_err());
         assert_eq!(
             one("border-radius", "1 2 3 4"),
             Property::BorderRadius(Radius {

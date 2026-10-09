@@ -29,7 +29,12 @@
  * Properties:
  *   color                       text colour (inherited)
  *   background                  colour | transparent | none
- *   border                      <width> solid <colour> | none
+ *   border                      <width> solid <colour> | none; takes room as in CSS: the
+ *                               content sits inside the border, then the padding
+ *   border-top, border-right,   the same, for one side. Sides that differ take no
+ *   border-bottom, border-left  border-radius (the box is square), and where two meet the
+ *                               corner is the top's or the bottom's. Inputs, sliders and
+ *                               toggles draw the top side all around
  *   border-width, border-color, border-radius (1 or 4 values)
  *   box-shadow                  <x> <y> [blur] <colour> | none; on a surface's root (popup,
  *                               notification, osd, launcher, exiter) the surface grows around
@@ -37,7 +42,9 @@
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill (content is centred on a sized axis);
- *                               on `launcher`: the size of its surface
+ *                               the whole box, border and padding included (CSS's
+ *                               `box-sizing: border-box`); on `launcher`: the size of its
+ *                               surface
  *   min-height                  on `panel`: the bar thickness
  *   font-family                 font names and/or serif/sans-serif/monospace, comma-separated:
  *                               the first installed one is used; glyphs it lacks fall back

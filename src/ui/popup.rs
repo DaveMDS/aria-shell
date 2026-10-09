@@ -24,13 +24,11 @@ pub enum Side {
 /// The surface size for content of size `content`: plus the `popup`
 /// root's padding and border, plus the room for its shadow.
 pub fn surface_size(theme: &Theme, content: (u32, u32)) -> (u32, u32) {
-    let chrome = theme.resolve(&Node::root("popup"));
-    let pad = chrome.padding;
+    let inset = theme.resolve(&Node::root("popup")).inset();
     let room = room(theme);
-    let extra = 2.0 * chrome.border_width;
     (
-        content.0 + (pad.left + pad.right + extra + room.left + room.right) as u32,
-        content.1 + (pad.top + pad.bottom + extra + room.top + room.bottom) as u32,
+        content.0 + (inset.left + inset.right + room.left + room.right) as u32,
+        content.1 + (inset.top + inset.bottom + room.top + room.bottom) as u32,
     )
 }
 

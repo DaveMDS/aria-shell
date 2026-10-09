@@ -26,14 +26,51 @@ impl From<Length> for iced::Length {
     }
 }
 
+/// The four sides of a box, in CSS order.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Sides<T> {
+    pub top: T,
+    pub right: T,
+    pub bottom: T,
+    pub left: T,
+}
+
+impl<T: Clone> Sides<T> {
+    pub fn all(value: T) -> Self {
+        Self {
+            top: value.clone(),
+            right: value.clone(),
+            bottom: value.clone(),
+            left: value,
+        }
+    }
+}
+
+impl<T> Sides<T> {
+    pub fn each(&self) -> [&T; 4] {
+        [&self.top, &self.right, &self.bottom, &self.left]
+    }
+
+    pub fn each_mut(&mut self) -> [&mut T; 4] {
+        [
+            &mut self.top,
+            &mut self.right,
+            &mut self.bottom,
+            &mut self.left,
+        ]
+    }
+}
+
 /// One property, typed. Shorthands (`border`) expand to several.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Property {
     Color(Color),
     /// `None` for `none` / `transparent`.
     Background(Option<Color>),
-    BorderWidth(f32),
-    BorderColor(Color),
+    /// The sides a declaration sets: all four for `border`, one for
+    /// `border-top`.
+    BorderWidth(Sides<Option<f32>>),
+    BorderColor(Sides<Option<Color>>),
     BorderRadius(Radius),
     Shadow(Option<Shadow>),
     Padding(Padding),
@@ -58,8 +95,8 @@ pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
     match name {
         "color" => one(|w| color(w).map(Property::Color)),
         "background" | "background-color" => one(|w| background(w).map(Property::Background)),
-        "border-width" => one(|w| px(w).map(Property::BorderWidth)),
-        "border-color" => one(|w| color(w).map(Property::BorderColor)),
+        "border-width" => one(|w| px(w).map(|w| Property::BorderWidth(Sides::all(Some(w))))),
+        "border-color" => one(|w| color(w).map(|c| Property::BorderColor(Sides::all(Some(c))))),
         "border-radius" => {
             let [tl, tr, br, bl] = sides(&words)?;
             Ok(vec![Property::BorderRadius(Radius {
@@ -69,7 +106,11 @@ pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
                 bottom_left: bl,
             })])
         }
-        "border" => border(&words),
+        "border" => border(&words, Edge::All),
+        "border-top" => border(&words, Edge::Top),
+        "border-right" => border(&words, Edge::Right),
+        "border-bottom" => border(&words, Edge::Bottom),
+        "border-left" => border(&words, Edge::Left),
         "box-shadow" => shadow(&words).map(|s| vec![Property::Shadow(s)]),
         "padding" => {
             let [top, right, bottom, left] = sides(&words)?;
@@ -157,10 +198,35 @@ fn sides(words: &[&str]) -> Result<[f32; 4], String> {
     })
 }
 
-/// `<width> [solid] <color>` in any order, or `none`.
-fn border(words: &[&str]) -> Result<Vec<Property>, String> {
+/// The sides a `border` shorthand sets.
+#[derive(Clone, Copy)]
+enum Edge {
+    All,
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+impl Edge {
+    fn sides<T: Clone>(self, value: T) -> Sides<Option<T>> {
+        let mut sides = Sides::default();
+        match self {
+            Self::All => sides = Sides::all(Some(value)),
+            Self::Top => sides.top = Some(value),
+            Self::Right => sides.right = Some(value),
+            Self::Bottom => sides.bottom = Some(value),
+            Self::Left => sides.left = Some(value),
+        }
+        sides
+    }
+}
+
+/// `<width> [solid] <color>` in any order, or `none`, for the sides of
+/// `edge`.
+fn border(words: &[&str], edge: Edge) -> Result<Vec<Property>, String> {
     if words == ["none"] {
-        return Ok(vec![Property::BorderWidth(0.0)]);
+        return Ok(vec![Property::BorderWidth(edge.sides(0.0))]);
     }
     let mut props = Vec::new();
     for w in words {
@@ -168,9 +234,9 @@ fn border(words: &[&str]) -> Result<Vec<Property>, String> {
             continue;
         }
         if let Ok(width) = px(w) {
-            props.push(Property::BorderWidth(width));
+            props.push(Property::BorderWidth(edge.sides(width)));
         } else {
-            props.push(Property::BorderColor(color(w)?));
+            props.push(Property::BorderColor(edge.sides(color(w)?)));
         }
     }
     if props.is_empty() {
@@ -313,22 +379,53 @@ mod tests {
 
     #[test]
     fn border_shorthand() {
+        let red = Color::from_rgb(1.0, 0.0, 0.0);
         assert_eq!(
             parse("border", "1px solid red").unwrap(),
             [
-                Property::BorderWidth(1.0),
-                Property::BorderColor(Color::from_rgb(1.0, 0.0, 0.0))
+                Property::BorderWidth(Sides::all(Some(1.0))),
+                Property::BorderColor(Sides::all(Some(red)))
             ]
         );
         assert_eq!(
             parse("border", "2px").unwrap(),
-            [Property::BorderWidth(2.0)]
+            [Property::BorderWidth(Sides::all(Some(2.0)))]
         );
         assert_eq!(
             parse("border", "none").unwrap(),
-            [Property::BorderWidth(0.0)]
+            [Property::BorderWidth(Sides::all(Some(0.0)))]
         );
         assert!(parse("border", "1px dotted").is_err());
+    }
+
+    #[test]
+    fn border_sides() {
+        let red = Color::from_rgb(1.0, 0.0, 0.0);
+        assert_eq!(
+            parse("border-bottom", "3px solid red").unwrap(),
+            [
+                Property::BorderWidth(Sides {
+                    bottom: Some(3.0),
+                    ..Sides::default()
+                }),
+                Property::BorderColor(Sides {
+                    bottom: Some(red),
+                    ..Sides::default()
+                })
+            ]
+        );
+        assert_eq!(
+            parse("border-left", "none").unwrap(),
+            [Property::BorderWidth(Sides {
+                left: Some(0.0),
+                ..Sides::default()
+            })]
+        );
+        assert_eq!(
+            one("border-width", "2"),
+            Property::BorderWidth(Sides::all(Some(2.0)))
+        );
+        assert!(parse("border-top", "1px dashed red").is_err());
     }
 
     #[test]

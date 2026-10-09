@@ -343,7 +343,7 @@ impl Launcher {
         }
         let i = i.min(rows.len() - 1);
         let node = self.item_node(i, rows[i], rows.len());
-        let padding = theme.resolve(&node).padding;
+        let padding = theme.resolve(&node).inset();
         let item = theme::widget_id(&node);
         let list = theme::widget_id(&self.node.child("list"));
         ui::bounds(item).and_then(move |item| {

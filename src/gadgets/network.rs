@@ -376,7 +376,7 @@ fn speed(locale: &Locale, mbps: u32) -> String {
 /// A row's height: its content over the node's padding.
 fn padded(theme: &theme::Theme, node: &Node, content: f32) -> f32 {
     let s = theme.resolve(node);
-    content + s.padding.top + s.padding.bottom
+    content + s.inset().y()
 }
 
 /// A themed row of the popup and its height, built together so the
@@ -440,8 +440,7 @@ impl NetworkGadget {
         let s = ctx.theme.resolve(&list);
         let height = rows.iter().map(|(_, h)| h).sum::<f32>()
             + s.gap * rows.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
         (height.min(cap), capped)
     }
@@ -507,8 +506,7 @@ impl NetworkGadget {
         let s = theme.resolve(&list);
         let total = rows.iter().map(|(_, h)| h).sum::<f32>()
             + s.gap * rows.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         let capped = total > px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
         (rows, capped)
     }
@@ -1083,7 +1081,7 @@ impl NetworkGadget {
         let input_height = theme.line_height(&input_node)
             + input_style.padding.top
             + input_style.padding.bottom
-            + 2.0 * input_style.border_width;
+            + 2.0 * input_style.border().width;
         let height = input_height
             .max(self.icon_button_height(ctx, &peek))
             .max(self.text_button_height(ctx, &connect));

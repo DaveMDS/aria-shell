@@ -461,6 +461,13 @@ Theme      (theme/)         daemon-owned styling: base.css + the user's theme, p
   resolve(&Node) -> Style   cascade for one element path
   build.rs                  container()/button()/text()/slider()/toggler()/row() ...: plain iced widgets styled
                             for a Node and tagged with its path; measure()/line_height() for popup sizes
+  paint/                    `Painted`: a container's or button's box drawn under its content (shadow and
+                            background, border, content: CSS order), snapped to the pixel grid, the iced
+                            widget styled for its content only; a button's status worked out as iced's.
+                            The border takes room: the widget's padding is `Style::inset()` (border +
+                            padding), which sizes worked out before layout use too. border.rs: sides
+                            that differ as four rectangles that don't overlap (no radius then).
+                            Background images go here
   fonts.rs                  `font-family` down to the first generic or installed family
 
 Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)

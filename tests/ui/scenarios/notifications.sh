@@ -51,7 +51,7 @@ y2=${3#*,}; h2=${4#*x}
 assert_eq "$y2" 40 "the newest at the corner"
 assert_eq "$y1" $((y2 + h2 + 8)) "the first pushed down by it, with the gap"
 set -- $(widget 'notification#'"$id2"' summary')
-assert_eq "$2" $((40 + 10)) "newest on top (summary inside its padding)"
+assert_eq "$2" $((40 + 1 + 10)) "newest on top (summary inside its border and padding)"
 shot toasts-2 "0,0 1920x300"
 
 # Replacing keeps the id and the place, changes the text and size.

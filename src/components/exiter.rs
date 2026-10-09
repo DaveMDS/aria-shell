@@ -378,8 +378,8 @@ impl Exiter {
             .map(|button| theme.measure(&t, button.label.text(locale)).width)
             .fold(0.0, f32::max);
         (
-            icon.max(label_w) + bs.padding.left + bs.padding.right,
-            icon + bs.gap + label_h + bs.padding.top + bs.padding.bottom,
+            icon.max(label_w) + bs.inset().x(),
+            icon + bs.gap + label_h + bs.inset().y(),
         )
     }
 
@@ -404,8 +404,8 @@ impl Exiter {
     /// border included.
     fn box_size(&self, theme: &Theme, locale: &Locale) -> (u32, u32) {
         let s = theme.resolve(&self.node);
-        let chrome_w = s.padding.left + s.padding.right + 2.0 * s.border_width;
-        let chrome_h = s.padding.top + s.padding.bottom + 2.0 * s.border_width;
+        let chrome_w = s.inset().x();
+        let chrome_h = s.inset().y();
         let (w, h) = match self.confirm_texts(locale) {
             Some((question, countdown, button)) => {
                 let c = self.node.child("confirm");
@@ -421,18 +421,13 @@ impl Exiter {
                 let b = c.child("button");
                 let bs = theme.resolve(&b);
                 let bt = b.child("text");
-                let button_w = |text: &str| {
-                    theme.measure(&bt, text).width + bs.padding.left + bs.padding.right
-                };
+                let button_w = |text: &str| theme.measure(&bt, text).width + bs.inset().x();
                 let buttons_w = button_w(locale.tr("exiter.cancel"))
                     + cs.gap
                     + button_w(button.label.text(locale));
                 w = w.max(buttons_w);
-                h += cs.gap + theme.line_height(&bt) + bs.padding.top + bs.padding.bottom;
-                (
-                    w + cs.padding.left + cs.padding.right,
-                    h + cs.padding.top + cs.padding.bottom,
-                )
+                h += cs.gap + theme.line_height(&bt) + bs.inset().y();
+                (w + cs.inset().x(), h + cs.inset().y())
             }
             None => {
                 let n = self.config.buttons.len().max(1);

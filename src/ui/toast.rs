@@ -121,7 +121,7 @@ fn layout(theme: &Theme, node: &Node, has_icon: bool, extras: &Extras) -> Layout
         .or(px(root.width))
         .unwrap_or(DEFAULT_WIDTH)
         .max(1.0);
-    let pad = root.padding;
+    let pad = root.inset();
     let frame = (pad.top, pad.right, pad.bottom, pad.left);
     let icon = has_icon.then(|| {
         let s = theme.resolve(&node.child("icon"));
@@ -168,7 +168,7 @@ pub fn size(
     let text_height = |kind: &'static str, content: &str, taken: f32| {
         let node = node.child(kind);
         let s = theme.resolve(&node);
-        let pad = s.padding;
+        let pad = s.inset();
         let inner = (l.text_width - taken - pad.left - pad.right).max(1.0);
         theme
             .measure_in(&node, content, inner)
@@ -192,13 +192,11 @@ pub fn size(
                 let b = actions.child("button").nth(i, count);
                 let s = theme.resolve(&b);
                 let text = theme.measure(&b.child("text"), label);
-                text.height.max(theme.line_height(&b.child("text")))
-                    + s.padding.top
-                    + s.padding.bottom
+                text.height.max(theme.line_height(&b.child("text"))) + s.inset().y()
             })
             .fold(0.0_f32, f32::max);
         let s = theme.resolve(&actions);
-        height += l.gap + buttons + s.padding.top + s.padding.bottom;
+        height += l.gap + buttons + s.inset().y();
     }
     let size = Size::new(l.width, height + l.frame.0 + l.frame.2);
     (size.width.ceil() as u32, size.height.ceil() as u32)
@@ -214,17 +212,15 @@ fn side_size(theme: &Theme, node: &Node, extras: &Extras) -> (f32, f32) {
         let t = node.child("time");
         let s = theme.resolve(&t);
         let m = theme.measure(&t, age);
-        width += gap + m.width + s.padding.left + s.padding.right;
-        height = height.max(m.height.max(theme.line_height(&t)) + s.padding.top + s.padding.bottom);
+        width += gap + m.width + s.inset().x();
+        height = height.max(m.height.max(theme.line_height(&t)) + s.inset().y());
     }
     if extras.close {
         let b = node.child("button").class("close");
         let s = theme.resolve(&b);
         let m = theme.measure(&b.child("text"), CLOSE_GLYPH);
-        width += gap + m.width + s.padding.left + s.padding.right;
-        height = height.max(
-            m.height.max(theme.line_height(&b.child("text"))) + s.padding.top + s.padding.bottom,
-        );
+        width += gap + m.width + s.inset().x();
+        height = height.max(m.height.max(theme.line_height(&b.child("text"))) + s.inset().y());
     }
     (width, height)
 }

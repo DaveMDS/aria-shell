@@ -13,6 +13,7 @@ use iced::widget::{
 use iced::{Alignment, Border, Color, Element, Font, Padding, Size};
 
 use super::fonts::family;
+use super::paint::Painted;
 use super::{Length, Node, Style, Theme};
 
 use iced::Length as IcedLength;
@@ -29,24 +30,30 @@ const DEFAULT_TOGGLE: f32 = 16.0;
 const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 impl Theme {
-    /// A `container` styled as `node`: padding, size, background,
-    /// border, shadow, text colour. Content is centred on an axis the
-    /// theme sizes (`height: fill` shouldn't leave the content at the
-    /// top).
+    /// A `container` styled as `node`: padding (inside the border),
+    /// size, text colour, and its box (background, border, shadow)
+    /// drawn by [`Painted`].
+    /// Content is centred on an axis the theme sizes (`height: fill`
+    /// shouldn't leave the content at the top).
     pub fn container<'a, M: 'a>(
         &self,
         node: &Node,
         content: impl Into<Element<'a, M>>,
-    ) -> Container<'a, M> {
+    ) -> Painted<'a, Container<'a, M>> {
         let s = self.resolve(node);
-        let mut c = container(content).id(widget_id(node)).padding(s.padding);
+        let mut c = container(content).id(widget_id(node)).padding(s.inset());
         if let Some(w) = s.width {
             c = c.width(w).align_x(Alignment::Center);
         }
         if let Some(h) = s.height {
             c = c.height(h).align_y(Alignment::Center);
         }
-        c.style(move |_| s.container())
+        let text_color = s.color;
+        let c = c.style(move |_| container::Style {
+            text_color,
+            ..container::Style::default()
+        });
+        Painted::fixed(c, node.clone(), s)
     }
 
     /// A plain `container` tagged with `node`'s path and nothing else,
@@ -61,16 +68,16 @@ impl Theme {
     }
 
     /// A `button` styled as `node`, re-resolved with `:hover`/`:active`
-    /// as iced reports them. As for [`Theme::container`], content is
-    /// centred on a themed axis (iced's button lays it out top-left).
-    /// The content sits in a container tagged with the node path (iced
-    /// buttons take no id), so `debug widgets` reports the button's
-    /// content area.
+    /// as iced reports them; its box drawn by [`Painted`]. As for
+    /// [`Theme::container`], content is centred on a themed axis (iced's
+    /// button lays it out top-left). The content sits in a container
+    /// tagged with the node path (iced buttons take no id), so `debug
+    /// widgets` reports the button's content area.
     pub fn button<'a, M: 'a>(
         &'a self,
         node: &Node,
         content: impl Into<Element<'a, M>>,
-    ) -> Button<'a, M> {
+    ) -> Painted<'a, Button<'a, M>> {
         let s = self.resolve(node);
         let mut inner = container(content).id(widget_id(node));
         if s.width.is_some() {
@@ -79,18 +86,22 @@ impl Theme {
         if s.height.is_some() {
             inner = inner.height(IcedLength::Fill).align_y(Alignment::Center);
         }
-        let node = node.clone();
-        let mut b = button(inner).padding(s.padding);
+        let styled = node.clone();
+        let mut b = button(inner).padding(s.inset());
         if let Some(w) = s.width {
             b = b.width(w);
         }
         if let Some(h) = s.height {
             b = b.height(h);
         }
-        b.style(move |theme: &iced::Theme, status| {
-            self.resolve(&node.status(status))
-                .button(theme.palette().text)
-        })
+        let b = b.style(move |theme: &iced::Theme, status| button::Style {
+            text_color: self
+                .resolve(&styled.status(status))
+                .color
+                .unwrap_or(theme.palette().text),
+            ..button::Style::default()
+        });
+        Painted::button(b, node.clone(), self)
     }
 
     /// A `text` styled as `node`: font, size, and colour when a rule sets
@@ -121,7 +132,15 @@ impl Theme {
     ) -> TextInput<'a, M> {
         let s = self.resolve(node);
         let node = node.clone();
-        let mut t = text_input(placeholder, value).padding(s.padding);
+        // iced draws an input's border inside its box: the padding
+        // makes room for it.
+        let border = s.border().width;
+        let mut t = text_input(placeholder, value).padding(Padding {
+            top: s.padding.top + border,
+            right: s.padding.right + border,
+            bottom: s.padding.bottom + border,
+            left: s.padding.left + border,
+        });
         if let Some(font) = s.font() {
             t = t.font(font);
         }
@@ -187,8 +206,8 @@ impl Theme {
                             radius: diameter / 2.0,
                         },
                         background: h.background.unwrap_or(filled).into(),
-                        border_width: h.border_width,
-                        border_color: h.border_color.unwrap_or(Color::TRANSPARENT),
+                        border_width: h.border().width,
+                        border_color: h.border().color,
                     },
                 }
             });
@@ -226,15 +245,15 @@ impl Theme {
                 });
                 toggler::Style {
                     background: track.into(),
-                    background_border_width: s.border_width,
-                    background_border_color: s.border_color.unwrap_or(Color::TRANSPARENT),
+                    background_border_width: s.border().width,
+                    background_border_color: s.border().color,
                     foreground: h
                         .background
                         .or(s.color)
                         .unwrap_or(theme.palette().background)
                         .into(),
-                    foreground_border_width: h.border_width,
-                    foreground_border_color: h.border_color.unwrap_or(Color::TRANSPARENT),
+                    foreground_border_width: h.border().width,
+                    foreground_border_color: h.border().color,
                     text_color: None,
                     // Round unless the theme set a radius on the track.
                     border_radius: (s.border_radius != Radius::default())
@@ -371,32 +390,31 @@ pub fn widget_path(id: &iced::widget::Id) -> Option<String> {
 }
 
 impl Style {
+    /// The border of a widget iced draws whole (a text input, a slider,
+    /// a toggle): one width and colour all around, the top side's when
+    /// the sides differ.
     pub fn border(&self) -> Border {
         Border {
-            color: self.border_color.unwrap_or(Color::TRANSPARENT),
-            width: self.border_width,
+            color: self.border.top.color.unwrap_or(Color::TRANSPARENT),
+            width: self.border.top.width,
             radius: self.border_radius,
         }
     }
 
-    pub fn container(&self) -> container::Style {
-        container::Style {
-            text_color: self.color,
-            background: self.background.map(Into::into),
-            border: self.border(),
-            shadow: self.shadow.unwrap_or_default(),
-            snap: false,
-        }
+    /// The room between the edge of the box and its content, on each
+    /// side: the border, as in CSS, then the padding. A box's size is
+    /// its content's plus this.
+    pub fn inset(&self) -> Padding {
+        self.inset_with(self.padding)
     }
 
-    /// `fallback` is the text colour when no rule set one.
-    pub fn button(&self, fallback: Color) -> button::Style {
-        button::Style {
-            background: self.background.map(Into::into),
-            text_color: self.color.unwrap_or(fallback),
-            border: self.border(),
-            shadow: self.shadow.unwrap_or_default(),
-            snap: false,
+    /// [`Style::inset`] with another padding than the theme's.
+    pub fn inset_with(&self, padding: Padding) -> Padding {
+        Padding {
+            top: self.border.top.width + padding.top,
+            right: self.border.right.width + padding.right,
+            bottom: self.border.bottom.width + padding.bottom,
+            left: self.border.left.width + padding.left,
         }
     }
 
@@ -418,7 +436,7 @@ impl Style {
                 ..value
             },
             value,
-            selection: self.border_color.unwrap_or(Color { a: 0.3, ..value }),
+            selection: self.border.top.color.unwrap_or(Color { a: 0.3, ..value }),
         }
     }
 

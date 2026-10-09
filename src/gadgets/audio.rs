@@ -431,7 +431,7 @@ impl AudioGadget {
         let s = theme.resolve(&node);
         let mute = node.child("button").class("mute");
         let ms = theme.resolve(&mute);
-        let button = self.icon_size(ctx, &mute.child("icon")) + ms.padding.top + ms.padding.bottom;
+        let button = self.icon_size(ctx, &mute.child("icon")) + ms.inset().y();
         let name = node.child("name");
         let ns = theme.resolve(&name);
         let text = name.child("text");
@@ -439,14 +439,13 @@ impl AudioGadget {
             .measure(&text, &c.label)
             .height
             .max(theme.line_height(&text))
-            + ns.padding.top
-            + ns.padding.bottom)
-            .max(theme.line_height(&node.child("value")));
+            + ns.inset().y())
+        .max(theme.line_height(&node.child("value")));
         let mut body = head;
         if c.has_volume {
             body += s.gap + self.slider_height(ctx, &node.child("slider"));
         }
-        button.max(body) + s.padding.top + s.padding.bottom
+        button.max(body) + s.inset().y()
     }
 
     fn slider_height(&self, ctx: &Context<'_>, node: &Node) -> f32 {
@@ -587,12 +586,8 @@ impl AudioGadget {
         let ctl = theme.resolve(&controls);
         let b = controls.child("button");
         let bs = theme.resolve(&b);
-        let buttons = self.icon_size(ctx, &b.child("icon"))
-            + bs.padding.top
-            + bs.padding.bottom
-            + ctl.padding.top
-            + ctl.padding.bottom;
-        info + s.gap + buttons + s.padding.top + s.padding.bottom
+        let buttons = self.icon_size(ctx, &b.child("icon")) + bs.inset().y() + ctl.inset().y();
+        info + s.gap + buttons + s.inset().y()
     }
 
     fn list_width(&self, ctx: &Context<'_>) -> f32 {
@@ -616,11 +611,8 @@ impl AudioGadget {
             let section = list.child("section").class(kind_class(kind));
             let ss = theme.resolve(&section);
             let t = section.child("title");
-            heights.push(
-                theme.measure(&t, title).height.max(theme.line_height(&t))
-                    + ss.padding.top
-                    + ss.padding.bottom,
-            );
+            heights
+                .push(theme.measure(&t, title).height.max(theme.line_height(&t)) + ss.inset().y());
             for c in channels {
                 heights.push(self.channel_height(ctx, &list, c));
             }
@@ -638,8 +630,7 @@ impl AudioGadget {
                     .measure(&empty, ctx.locale.tr("audio.empty"))
                     .height
                     .max(theme.line_height(&empty))
-                    + es.padding.top
-                    + es.padding.bottom,
+                    + es.inset().y(),
             );
         }
         if !self.config.mixer_command.is_empty() {
@@ -651,14 +642,12 @@ impl AudioGadget {
                     .measure(&t, ctx.locale.tr("audio.mixer"))
                     .height
                     .max(theme.line_height(&t))
-                    + ms.padding.top
-                    + ms.padding.bottom,
+                    + ms.inset().y(),
             );
         }
         let height = heights.iter().sum::<f32>()
             + s.gap * heights.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
         if height > cap {
             (cap, true)

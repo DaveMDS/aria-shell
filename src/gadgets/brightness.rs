@@ -151,8 +151,7 @@ impl Gadget for BrightnessGadget {
         let rows = self.rows(&ctx);
         let height = rows.iter().map(|(_, h)| h).sum::<f32>()
             + s.gap * rows.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         let width = px(s.width).unwrap_or(DEFAULT_LIST_WIDTH);
         (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
     }
@@ -307,7 +306,7 @@ fn px(l: Option<theme::Length>) -> Option<f32> {
 
 fn padded(theme: &Theme, node: &Node, content: f32) -> f32 {
     let s = theme.resolve(node);
-    content + s.padding.top + s.padding.bottom
+    content + s.inset().y()
 }
 
 /// A text line's height in `node`, its padding included.

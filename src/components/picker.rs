@@ -642,19 +642,15 @@ impl Paint {
         };
         Self {
             shade: shade.background.unwrap_or(Color::TRANSPARENT),
-            hover: (
-                hover.background,
-                hover.border_color.unwrap_or(Color::TRANSPARENT),
-                hover.border_width,
-            ),
+            hover: (hover.background, hover.border().color, hover.border().width),
             selection: (
-                outline.border_color.unwrap_or(Color::WHITE),
-                outline.border_width,
+                outline.border.top.color.unwrap_or(Color::WHITE),
+                outline.border().width,
             ),
             handle: (
                 handle.background.unwrap_or(Color::WHITE),
-                handle.border_color.unwrap_or(Color::TRANSPARENT),
-                handle.border_width,
+                handle.border().color,
+                handle.border().width,
                 px(handle.height, 8.0),
             ),
         }

@@ -81,7 +81,7 @@ fn labelled_width(theme: &Theme, node: &Node, label: Option<&str>, default: f32)
         return Some(width);
     };
     let l = node.child("label");
-    let pad = theme.resolve(&l).padding;
+    let pad = theme.resolve(&l).inset();
     let pad = if pad.left + pad.right > 0.0 {
         pad.left + pad.right
     } else {
@@ -432,7 +432,7 @@ pub fn graph<'a, M: 'a>(
             .collect(),
         max,
         capacity,
-        grid: s.border_color,
+        grid: s.border.top.color,
         unit,
         scale_label,
         locale,

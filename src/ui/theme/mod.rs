@@ -18,7 +18,10 @@
 //! the root so `color` and the `font-*` properties inherit. The helpers
 //! ([`Theme::container`], [`Theme::button`], [`Theme::text`],
 //! [`Theme::row`], in `build.rs`) do the resolving and return plain
-//! iced widgets; `fonts.rs` picks the font family.
+//! iced widgets; a container's or a button's box (background, border,
+//! shadow) is drawn by hand around it (`paint/`), for what iced's
+//! styles can't draw (a border on one side). `fonts.rs` picks the font
+//! family.
 //!
 //! The theme doesn't watch its own files: the daemon does (`watch.rs`)
 //! and calls [`Theme::try_load`] again.
@@ -34,6 +37,7 @@ mod build;
 mod css;
 mod fonts;
 mod node;
+mod paint;
 mod selector;
 mod value;
 
@@ -52,7 +56,7 @@ pub use build::widget_path;
 pub use fonts::embedded as embedded_fonts;
 pub use node::Node;
 pub use selector::{Selector, node_from_path};
-pub use value::Length;
+pub use value::{Length, Sides};
 
 pub(crate) use build::widget_id;
 use fonts::{intern, pick_family};
@@ -143,8 +147,7 @@ pub struct Style {
     /// button reaches its label).
     pub own_color: bool,
     pub background: Option<Color>,
-    pub border_width: f32,
-    pub border_color: Option<Color>,
+    pub border: Sides<BorderSide>,
     pub border_radius: Radius,
     pub shadow: Option<Shadow>,
     pub padding: Padding,
@@ -155,6 +158,20 @@ pub struct Style {
     pub font_family: Option<&'static str>,
     pub font_size: Option<f32>,
     pub font_weight: Option<Weight>,
+}
+
+/// One side of a box's border. `color` `None`: not set (transparent).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct BorderSide {
+    pub width: f32,
+    pub color: Option<Color>,
+}
+
+impl BorderSide {
+    /// Whether it draws anything.
+    pub fn shows(&self) -> bool {
+        self.width > 0.0 && self.color.is_some_and(|c| c.a > 0.0)
+    }
 }
 
 /// Why a user theme couldn't be loaded. `files` are still the ones to
@@ -380,8 +397,20 @@ impl Style {
                 self.own_color = true;
             }
             Property::Background(b) => self.background = *b,
-            Property::BorderWidth(w) => self.border_width = *w,
-            Property::BorderColor(c) => self.border_color = Some(*c),
+            Property::BorderWidth(set) => {
+                for (side, w) in self.border.each_mut().into_iter().zip(set.each()) {
+                    if let Some(w) = w {
+                        side.width = *w;
+                    }
+                }
+            }
+            Property::BorderColor(set) => {
+                for (side, c) in self.border.each_mut().into_iter().zip(set.each()) {
+                    if let Some(c) = c {
+                        side.color = Some(*c);
+                    }
+                }
+            }
             Property::BorderRadius(r) => self.border_radius = *r,
             Property::Shadow(s) => self.shadow = *s,
             Property::Padding(p) => self.padding = *p,
@@ -674,23 +703,48 @@ mod tests {
              box-shadow: 1 2 3 black; font-family: \"Fira Code\"; font-weight: bold }",
         );
         let s = t.resolve(&Node::root("b"));
-        let c = s.container();
-        assert_eq!(c.background, Some(Color::WHITE.into()));
-        assert_eq!(c.text_color, Some(Color::BLACK));
-        assert_eq!(c.border.width, 2.0);
-        assert_eq!(c.border.color, red());
-        assert_eq!(c.border.radius, Radius::new(3.0));
-        assert_eq!(c.shadow.blur_radius, 3.0);
-        let b = s.button(red());
-        assert_eq!(b.text_color, Color::BLACK);
+        assert_eq!(s.background, Some(Color::WHITE));
+        assert_eq!(s.color, Some(Color::BLACK));
+        let b = s.border();
+        assert_eq!(b.width, 2.0);
+        assert_eq!(b.color, red());
+        assert_eq!(b.radius, Radius::new(3.0));
+        assert_eq!(s.inset(), Padding::new(2.0));
+        assert_eq!(s.shadow.unwrap().blur_radius, 3.0);
         let f = s.font().unwrap();
         assert_eq!(f.family, Family::Name("Fira Code"));
         assert_eq!(f.weight, Weight::Bold);
 
         let s = t.resolve(&Node::root("other"));
         assert_eq!(s.font(), None);
-        assert_eq!(s.button(red()).text_color, red());
-        assert_eq!(s.container().border.color, Color::TRANSPARENT);
+        assert_eq!(s.border().color, Color::TRANSPARENT);
+    }
+
+    #[test]
+    fn border_sides_cascade() {
+        let t = theme(
+            "a { border: 1px solid blue; border-bottom: 3px solid red } \
+             a:hover { border-left: none }",
+        );
+        let blue = BorderSide {
+            width: 1.0,
+            color: Some(Color::from_rgb(0.0, 0.0, 1.0)),
+        };
+        let node = Node::root("a");
+        assert_eq!(
+            t.resolve(&node).border,
+            Sides {
+                bottom: BorderSide {
+                    width: 3.0,
+                    color: Some(red()),
+                },
+                ..Sides::all(blue)
+            }
+        );
+        let hover = t.resolve(&node.status(iced::widget::button::Status::Hovered));
+        assert_eq!(hover.border.left.width, 0.0);
+        assert_eq!(hover.border.top, blue);
+        assert_eq!(hover.inset().x(), 1.0);
     }
 
     #[test]

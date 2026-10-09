@@ -3,12 +3,13 @@
 //! has no locale support without extra features).
 //!
 //! Styled through the host's theme node (`calendar > header | weekday |
-//! day`). The cell grid and outer padding are fixed so [`Calendar::SIZE`]
-//! can be known before layout, which a popup surface needs.
+//! day`). The cell grid and outer padding are fixed so
+//! [`Calendar::size`] can be known before layout, which a popup surface
+//! needs.
 
 use chrono::{Datelike, Days, Months, NaiveDate};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Padding};
 
 use crate::locale::Locale;
 use crate::ui::theme::{Node, Theme};
@@ -28,8 +29,15 @@ pub enum Message {
 }
 
 impl Calendar {
-    /// Pixel size of the view, for hosts that need it up front (popups).
-    pub const SIZE: (u32, u32) = (7 * CELL + 2 * PADDING, 8 * CELL + 2 * PADDING);
+    /// Pixel size of the view styled as `node`, for hosts that need it
+    /// up front (popups): the grid, the padding and the theme's border.
+    pub fn size(theme: &Theme, node: &Node) -> (u32, u32) {
+        let inset = theme.resolve(node).inset_with(Padding::new(PADDING as f32));
+        (
+            ((7 * CELL) as f32 + inset.x()).ceil() as u32,
+            ((8 * CELL) as f32 + inset.y()).ceil() as u32,
+        )
+    }
 
     /// Showing the month of `date`.
     pub fn new(date: NaiveDate) -> Self {

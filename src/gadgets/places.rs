@@ -128,11 +128,10 @@ impl Gadget for PlacesGadget {
         let s = ctx.theme.resolve(&list);
         let rows = self.rows(&ctx);
         let content = rows.iter().map(|(_, size)| size.width).fold(0.0, f32::max);
-        let width = px(s.width).unwrap_or(content + s.padding.left + s.padding.right);
+        let width = px(s.width).unwrap_or(content + s.inset().x());
         let height = rows.iter().map(|(_, size)| size.height).sum::<f32>()
             + s.gap * rows.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
     }
 }
@@ -244,16 +243,8 @@ impl PlacesGadget {
             Size::new(text.width, text.height.max(theme.line_height(&l))),
         );
         let size = Size::new(
-            icon_size.width
-                + s.gap
-                + text.width
-                + s.padding.left
-                + s.padding.right
-                + 2.0 * s.border_width,
-            icon_size.height.max(text.height)
-                + s.padding.top
-                + s.padding.bottom
-                + 2.0 * s.border_width,
+            icon_size.width + s.gap + text.width + s.inset().x(),
+            icon_size.height.max(text.height) + s.inset().y(),
         );
         let content = row![
             icon(ctx, &i, &self.icon_name(place.kind, full)),
@@ -383,12 +374,7 @@ impl PlacesGadget {
             parts.push(graph::meter(theme, &meter, usage));
         }
         let info_size = padded(theme, &info, Size::new(text.width, info_height));
-        let chrome = |s: &theme::Style| {
-            Size::new(
-                s.padding.left + s.padding.right + 2.0 * s.border_width,
-                s.padding.top + s.padding.bottom + 2.0 * s.border_width,
-            )
-        };
+        let chrome = |s: &theme::Style| Size::new(s.inset().x(), s.inset().y());
         let open_chrome = chrome(&os);
         let mut size = Size::new(
             icon_box.width + os.gap + info_size.width + open_chrome.width,
@@ -433,10 +419,7 @@ impl PlacesGadget {
             .width(Length::Fill);
         (
             theme.container(&node, content).width(Length::Fill).into(),
-            Size::new(
-                size.width + s.padding.left + s.padding.right,
-                size.height + s.padding.top + s.padding.bottom,
-            ),
+            Size::new(size.width + s.inset().x(), size.height + s.inset().y()),
         )
     }
 }
@@ -511,8 +494,8 @@ fn px(l: Option<theme::Length>) -> Option<f32> {
 fn padded(theme: &theme::Theme, node: &Node, content: Size) -> Size {
     let s = theme.resolve(node);
     Size::new(
-        content.width + s.padding.left + s.padding.right,
-        content.height + s.padding.top + s.padding.bottom,
+        content.width + s.inset().x(),
+        content.height + s.inset().y(),
     )
 }
 

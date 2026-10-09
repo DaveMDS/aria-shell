@@ -201,7 +201,7 @@ impl Gadget for TrayGadget {
             Some(menu) => self.menu.size(theme, &node, menu.items()),
             None => {
                 let text = theme.measure(&node.child("text"), LOADING);
-                let pad = theme.resolve(&node).padding;
+                let pad = theme.resolve(&node).inset();
                 iced::Size::new(
                     text.width + pad.left + pad.right,
                     text.height + pad.top + pad.bottom,

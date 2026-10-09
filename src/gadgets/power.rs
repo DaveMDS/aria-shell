@@ -186,8 +186,7 @@ impl Gadget for PowerGadget {
         let rows = self.rows(&ctx);
         let height = rows.iter().map(|(_, h)| h).sum::<f32>()
             + s.gap * rows.len().saturating_sub(1) as f32
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         (
             list_width(&ctx).ceil().max(1.0) as u32,
             height.ceil().max(1.0) as u32,
@@ -236,7 +235,7 @@ fn px(l: Option<theme::Length>) -> Option<f32> {
 
 fn padded(theme: &theme::Theme, node: &Node, content: f32) -> f32 {
     let s = theme.resolve(node);
-    content + s.padding.top + s.padding.bottom
+    content + s.inset().y()
 }
 
 fn icon_size(ctx: &Context<'_>, node: &Node) -> f32 {
@@ -559,7 +558,7 @@ impl PowerGadget {
         let theme = ctx.theme;
         let m = list.child("message");
         let s = theme.resolve(&m);
-        let width = list_width(ctx) - s.padding.left - s.padding.right;
+        let width = list_width(ctx) - s.inset().x();
         let height = theme
             .measure_in(&m, &text, width)
             .height

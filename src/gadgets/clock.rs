@@ -84,8 +84,8 @@ impl Gadget for Clock {
         Some(&mut self.popup)
     }
 
-    fn popup_size(&self, _ctx: Context<'_>) -> (u32, u32) {
-        Calendar::SIZE
+    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
+        Calendar::size(ctx.theme, &ctx.node.child("calendar"))
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {

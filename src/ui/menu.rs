@@ -144,7 +144,7 @@ impl Menu {
     /// The size [`Menu::view`] takes, including `node`'s padding.
     pub fn size(&self, theme: &Theme, node: &Node, items: &[Item]) -> Size {
         let inner = self.measure_level(theme, node, items);
-        let pad = theme.resolve(node).padding;
+        let pad = theme.resolve(node).inset();
         Size::new(
             (inner.width + pad.left + pad.right).ceil(),
             (inner.height + pad.top + pad.bottom).ceil(),
@@ -249,7 +249,7 @@ impl Menu {
         for row in self.rows(node, items.to_vec()) {
             let item = &row.item;
             let s = theme.resolve(&row.node);
-            let pad = s.padding;
+            let pad = s.inset();
             if item.separator {
                 let h = match s.height {
                     Some(theme::Length::Px(px)) => px,
@@ -259,7 +259,7 @@ impl Menu {
                 rows += 1;
                 continue;
             }
-            let mut w = pad.left + pad.right + 2.0 * s.border_width;
+            let mut w = pad.left + pad.right;
             let mut parts = 0;
             if let Some(glyph) = row.check {
                 w += theme.measure(&row.node.child("check"), glyph).width;
@@ -278,13 +278,12 @@ impl Menu {
                 .height
                 .max(theme.line_height(&row.node.child("label")))
                 + pad.top
-                + pad.bottom
-                + 2.0 * s.border_width;
+                + pad.bottom;
             rows += 1;
             if item.submenu && self.expanded.contains(&item.id) {
                 let sub_node = node.child("submenu");
                 let sub = self.measure_level(theme, &sub_node, &item.children);
-                let sub_pad = theme.resolve(&sub_node).padding;
+                let sub_pad = theme.resolve(&sub_node).inset();
                 width = width.max(sub.width + sub_pad.left + sub_pad.right);
                 height += sub.height + sub_pad.top + sub_pad.bottom;
                 rows += 1;

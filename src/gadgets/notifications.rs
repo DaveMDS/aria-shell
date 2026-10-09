@@ -160,7 +160,7 @@ impl Gadget for NotificationsGadget {
             let n = &entry.notification;
             let node = toast::node_under(&list, n).class_if("unseen", self.unseen.contains(&n.id));
             let extras = toast::Extras {
-                width: Some(width - list_style.padding.left - list_style.padding.right),
+                width: Some(width - list_style.inset().x()),
                 age: Some(toast::age(entry.received, self.now, ctx.locale)),
                 close: true,
             };
@@ -226,9 +226,7 @@ impl NotificationsGadget {
         let button_height = |b: &Node, label: &str| {
             let bs = theme.resolve(b);
             let t = b.child("text");
-            theme.measure(&t, label).height.max(theme.line_height(&t))
-                + bs.padding.top
-                + bs.padding.bottom
+            theme.measure(&t, label).height.max(theme.line_height(&t)) + bs.inset().y()
         };
         let height = theme
             .measure(&title, ctx.locale.tr("notifications.title"))
@@ -236,8 +234,7 @@ impl NotificationsGadget {
             .max(theme.line_height(&title))
             .max(button_height(&dnd, ctx.locale.tr("notifications.dnd")))
             .max(button_height(&clear, ctx.locale.tr("notifications.clear")))
-            + s.padding.top
-            + s.padding.bottom;
+            + s.inset().y();
         let row = theme
             .row(
                 &header,
@@ -274,7 +271,7 @@ impl NotificationsGadget {
         let theme = ctx.theme;
         let list = ctx.node.child("list");
         let s = theme.resolve(&list);
-        let width = self.list_width(ctx) - s.padding.left - s.padding.right;
+        let width = self.list_width(ctx) - s.inset().x();
         let (_, header) = self.header(ctx, &list);
         let mut height = header;
         let entries = ctx.notifications.history();
@@ -286,8 +283,7 @@ impl NotificationsGadget {
                     .measure(&empty, ctx.locale.tr("notifications.empty"))
                     .height
                     .max(theme.line_height(&empty))
-                + es.padding.top
-                + es.padding.bottom;
+                + es.inset().y();
         }
         for entry in entries {
             let n = &entry.notification;
@@ -301,7 +297,7 @@ impl NotificationsGadget {
             let (_, h) = toast::size(theme, &node, n, ctx.notifications, ctx.icons, &extras);
             height += s.gap + h as f32;
         }
-        height += s.padding.top + s.padding.bottom;
+        height += s.inset().y();
         let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
         if height > cap {
             (cap, true)

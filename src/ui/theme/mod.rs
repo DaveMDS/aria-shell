@@ -56,7 +56,7 @@ pub use build::widget_path;
 pub use fonts::embedded as embedded_fonts;
 pub use node::Node;
 pub use selector::{Selector, node_from_path};
-pub use value::{Length, Sides};
+pub use value::{InsetShadow, Length, Sides};
 
 pub(crate) use build::widget_id;
 use fonts::{intern, pick_family};
@@ -150,6 +150,7 @@ pub struct Style {
     pub border: Sides<BorderSide>,
     pub border_radius: Radius,
     pub shadow: Option<Shadow>,
+    pub inset_shadow: Option<InsetShadow>,
     pub padding: Padding,
     pub gap: f32,
     pub width: Option<Length>,
@@ -413,6 +414,7 @@ impl Style {
             }
             Property::BorderRadius(r) => self.border_radius = *r,
             Property::Shadow(s) => self.shadow = *s,
+            Property::InsetShadow(s) => self.inset_shadow = *s,
             Property::Padding(p) => self.padding = *p,
             Property::Gap(g) => self.gap = *g,
             Property::Width(l) => self.width = Some(*l),

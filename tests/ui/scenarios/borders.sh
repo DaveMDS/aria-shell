@@ -3,8 +3,9 @@
 # the border, then the padding), are drawn sharp on the pixel grid
 # wherever the bar puts the box, and a button's follow its `:hover`
 # (a transparent side keeps the room of the one shown on hover, the
-# button doesn't move). Told apart by the pixels sampled below (pure
-# colours, opaque, the bar black).
+# button doesn't move). Inset shadows: bands inside the box taking no
+# room, a child's over its parent's (waybar's underline). Told apart by
+# the pixels sampled below (pure colours, opaque, the bar black).
 
 conf=$(mktemp -d)
 trap 'rm -rf "$conf"' EXIT
@@ -12,8 +13,13 @@ cp -r "$XDG_CONFIG_HOME/." "$conf"
 cat > "$conf/borders.css" << 'EOF'
 panel {
   background: #000000;
-  padding: 4px 0;
   border-top: 2px solid #0000ff;
+  box-shadow: inset 0 -2px #00ffff;
+}
+gadget.screenshot > button {
+  height: fill;
+  background: #000000;
+  box-shadow: inset 0 -3px #ff00ff;
 }
 gadget.themes > button {
   background: #000000;
@@ -33,6 +39,7 @@ settle 1
 
 sample() { grim -g "$1,$2 1x1" -t ppm - | tail -c 3 | od -An -tu1 | tr -s ' ' | sed 's/^ //'; }
 black="0 0 0"; red="255 0 0"; green="0 255 0"; blue="0 0 255"; yellow="255 255 0"
+cyan="0 255 255"; magenta="255 0 255"
 
 # The content area of the button: its box reaches 4 px (padding) + 2 px
 # (the left border) further left, 4 px (the bottom border) further down.
@@ -75,3 +82,19 @@ pointer 1000 600
 settle 0.5
 assert_eq "$(sample "$cx" $((y + h)))" "$red" "back from hover"
 assert_eq "$(sample $((x - 6)) $((y + h / 2)))" "$black" "the left border transparent again"
+
+# The bar's inset shadow along its bottom, where nothing covers it (the
+# button above is shorter than the bar); the screenshot button, as tall
+# as the bar, draws its own over it, and takes no room for it.
+set -- $(surfaces | tr ';' '\n' | grep 'panel HEADLESS-1 ')
+bar_h=${4#*x}
+assert_eq "$(sample "$cx" $((bar_h - 1)))" "$cyan" "the bar's inset shadow"
+assert_eq "$(sample "$cx" $((bar_h - 2)))" "$cyan" "2 px of it"
+assert_eq "$(sample "$cx" $((bar_h - 3)))" "$black" "no more"
+set -- $(widget 'panel[output="HEADLESS-1"] gadget.screenshot > button')
+sx=$(($1 + $3 / 2))
+shot bar-inset "$(($1 - 40)),0 $(($3 + 80))x$bar_h"
+assert_eq "$(($2 + $4))" "$bar_h" "the button's content down to the bar's bottom"
+assert_eq "$(sample "$sx" $((bar_h - 1)))" "$magenta" "the button's inset shadow over the bar's"
+assert_eq "$(sample "$sx" $((bar_h - 3)))" "$magenta" "3 px of it"
+assert_eq "$(sample "$sx" $((bar_h - 4)))" "$black" "no more"

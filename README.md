@@ -286,7 +286,7 @@ is loaded on top, with light and dark colour schemes. Themes are found in
 - ✅ Every part at once to compare them and take the theme's picture
   (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications)
 - ✅ CSS box model: the border takes room, a border per side (`border-bottom`, ...),
-  boxes sharp on the pixel grid
+  boxes sharp on the pixel grid, `box-shadow: inset` (unblurred)
 - 🔲 `margin`, `opacity`, gradients, `@import`, `!important`, `@font-face`, transitions
 - 🔲 `:hover` on more than buttons, a themed scrollbar
 - 🔲 Remember the theme picked at runtime, follow and set the desktop's colour scheme

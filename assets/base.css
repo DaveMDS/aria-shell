@@ -38,7 +38,11 @@
  *   border-width, border-color, border-radius (1 or 4 values)
  *   box-shadow                  <x> <y> [blur] <colour> | none; on a surface's root (popup,
  *                               notification, osd, launcher, exiter) the surface grows around
- *                               the box to show it, the box stays where it was
+ *                               the box to show it, the box stays where it was.
+ *                               `inset <x> <y> <colour>`: a band inside the border along the
+ *                               sides the offset points away from (`inset 0 -3px`: 3 px at
+ *                               the bottom), over the background, under the content and the
+ *                               children; takes no room; unblurred, the box square
  *   padding                     1 to 4 values
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill (content is centred on a sized axis);

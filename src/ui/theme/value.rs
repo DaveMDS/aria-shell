@@ -61,6 +61,15 @@ impl<T> Sides<T> {
     }
 }
 
+/// A `box-shadow: inset`: a band inside the box, along the sides the
+/// offset points away from (`0 -3px`: 3 px at the bottom). Unblurred:
+/// iced draws no inner shadows, a band is a rectangle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InsetShadow {
+    pub offset: Vector,
+    pub color: Color,
+}
+
 /// One property, typed. Shorthands (`border`) expand to several.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Property {
@@ -73,6 +82,7 @@ pub enum Property {
     BorderColor(Sides<Option<Color>>),
     BorderRadius(Radius),
     Shadow(Option<Shadow>),
+    InsetShadow(Option<InsetShadow>),
     Padding(Padding),
     Gap(f32),
     Width(Length),
@@ -111,7 +121,7 @@ pub fn parse(name: &str, value: &str) -> Result<Vec<Property>, String> {
         "border-right" => border(&words, Edge::Right),
         "border-bottom" => border(&words, Edge::Bottom),
         "border-left" => border(&words, Edge::Left),
-        "box-shadow" => shadow(&words).map(|s| vec![Property::Shadow(s)]),
+        "box-shadow" => box_shadow(&words),
         "padding" => {
             let [top, right, bottom, left] = sides(&words)?;
             Ok(vec![Property::Padding(Padding {
@@ -245,21 +255,40 @@ fn border(words: &[&str], edge: Edge) -> Result<Vec<Property>, String> {
     Ok(props)
 }
 
-/// `<x> <y> [blur] <color>`, or `none`.
-fn shadow(words: &[&str]) -> Result<Option<Shadow>, String> {
-    if words == ["none"] {
-        return Ok(None);
+/// `[inset] <x> <y> [blur] <color>`, or `none`: one shadow, outside
+/// the box or inside it, setting both (a box has one or the other).
+fn box_shadow(words: &[&str]) -> Result<Vec<Property>, String> {
+    let (outer, inset) = match words {
+        ["none"] => (None, None),
+        ["inset", rest @ ..] | [rest @ .., "inset"] => (None, Some(inset_shadow(rest)?)),
+        _ => (Some(shadow(words)?), None),
+    };
+    Ok(vec![Property::Shadow(outer), Property::InsetShadow(inset)])
+}
+
+fn inset_shadow(words: &[&str]) -> Result<InsetShadow, String> {
+    let shadow = shadow(words)?;
+    if shadow.blur_radius != 0.0 {
+        return Err("an inset shadow can't be blurred".to_owned());
     }
+    Ok(InsetShadow {
+        offset: shadow.offset,
+        color: shadow.color,
+    })
+}
+
+/// `<x> <y> [blur] <color>`.
+fn shadow(words: &[&str]) -> Result<Shadow, String> {
     let (x, y, blur, c) = match words {
         [x, y, c] => (px(x)?, px(y)?, 0.0, color(c)?),
         [x, y, blur, c] => (px(x)?, px(y)?, px(blur)?, color(c)?),
-        _ => return Err("expected `<x> <y> [blur] <color>` or `none`".to_owned()),
+        _ => return Err("expected `[inset] <x> <y> [blur] <color>` or `none`".to_owned()),
     };
-    Ok(Some(Shadow {
+    Ok(Shadow {
         color: c,
         offset: Vector::new(x, y),
         blur_radius: blur,
-    }))
+    })
 }
 
 /// The comma list, each name unquoted. Which one is used is decided
@@ -430,23 +459,40 @@ mod tests {
 
     #[test]
     fn shadows() {
-        assert_eq!(one("box-shadow", "none"), Property::Shadow(None));
+        let shadow = |value| parse("box-shadow", value).unwrap();
         assert_eq!(
-            one("box-shadow", "0 2px 6px rgba(0,0,0,0.5)"),
-            Property::Shadow(Some(Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: Vector::new(0.0, 2.0),
-                blur_radius: 6.0
-            }))
+            shadow("none"),
+            [Property::Shadow(None), Property::InsetShadow(None)]
         );
         assert_eq!(
-            one("box-shadow", "-1 -1 black"),
+            shadow("0 2px 6px rgba(0,0,0,0.5)"),
+            [
+                Property::Shadow(Some(Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                    offset: Vector::new(0.0, 2.0),
+                    blur_radius: 6.0
+                })),
+                Property::InsetShadow(None)
+            ]
+        );
+        assert_eq!(
+            shadow("-1 -1 black")[0],
             Property::Shadow(Some(Shadow {
                 color: Color::BLACK,
                 offset: Vector::new(-1.0, -1.0),
                 blur_radius: 0.0
             }))
         );
+        let bottom = [
+            Property::Shadow(None),
+            Property::InsetShadow(Some(InsetShadow {
+                offset: Vector::new(0.0, -3.0),
+                color: Color::WHITE,
+            })),
+        ];
+        assert_eq!(shadow("inset 0 -3px #ffffff"), bottom);
+        assert_eq!(shadow("0 -3px 0 white inset"), bottom);
+        assert!(parse("box-shadow", "inset 0 -3px 2px white").is_err());
         assert!(parse("box-shadow", "1 2").is_err());
     }
 

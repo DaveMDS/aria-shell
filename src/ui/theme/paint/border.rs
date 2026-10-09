@@ -20,7 +20,7 @@ pub fn uniform(sides: &Sides<BorderSide>) -> Option<BorderSide> {
 /// with its colour. A side wider than the box is cut to it.
 pub fn rects(
     bounds: Rectangle,
-    sides: &Sides<BorderSide>,
+    sides: Sides<BorderSide>,
 ) -> impl Iterator<Item = (Rectangle, Color)> {
     let width = |s: &BorderSide| shown(s).map_or(0.0, |s| s.width);
     let top = width(&sides.top).min(bounds.height);
@@ -117,7 +117,7 @@ mod tests {
             bottom: side(3.0, RED),
             ..Sides::default()
         };
-        let rects: Vec<_> = rects(rect(10.0, 20.0, 100.0, 30.0), &bottom).collect();
+        let rects: Vec<_> = rects(rect(10.0, 20.0, 100.0, 30.0), bottom).collect();
         assert_eq!(rects, [(rect(10.0, 47.0, 100.0, 3.0), RED)]);
     }
 
@@ -129,7 +129,7 @@ mod tests {
             bottom: side(3.0, RED),
             left: side(4.0, BLUE),
         };
-        let rects: Vec<_> = rects(rect(0.0, 0.0, 100.0, 30.0), &sides).collect();
+        let rects: Vec<_> = rects(rect(0.0, 0.0, 100.0, 30.0), sides).collect();
         assert_eq!(
             rects,
             [
@@ -149,7 +149,7 @@ mod tests {
             left: side(1.0, RED),
             ..Sides::default()
         };
-        let rects: Vec<_> = rects(rect(0.0, 0.0, 50.0, 10.0), &sides).collect();
+        let rects: Vec<_> = rects(rect(0.0, 0.0, 50.0, 10.0), sides).collect();
         assert_eq!(
             rects,
             [

@@ -1,9 +1,10 @@
 //! A box drawn by hand. iced's own container and button styles draw a
 //! background and a border all around; what a theme asks for can be
-//! more (a border on one side only, `border.rs`). [`Painted`] wraps the
+//! more (a border on one side only, `border.rs`; an inset shadow, bands
+//! inside the border). [`Painted`] wraps the
 //! container or button [`Theme`] builds, styled to draw its content
 //! only, and draws the box under it in CSS order: shadow and
-//! background, then the border, then the content. The border takes
+//! background, the inset shadow, the border, then the content. The border takes
 //! room, as in CSS: the widget's padding is the theme's plus the
 //! border ([`Style::inset`]). The box is snapped to the pixel grid, so
 //! a 1 px border is one sharp line wherever the layout puts the box.
@@ -30,7 +31,7 @@ use iced::{
     Border, Color, Element, Event, Length, Padding, Rectangle, Renderer, Size, Vector, mouse, touch,
 };
 
-use super::{Node, Style, Theme};
+use super::{BorderSide, Node, Sides, Style, Theme};
 
 /// A [`Theme::container`] or [`Theme::button`]: the iced widget `W`
 /// and the box drawn under its content.
@@ -324,7 +325,8 @@ where
     }
 }
 
-/// The box of `style` in `bounds`: shadow, background and border.
+/// The box of `style` in `bounds`, in CSS order: shadow and
+/// background, the inset shadow, the border.
 fn draw_box(renderer: &mut Renderer, bounds: Rectangle, style: &Style, node: &Node) {
     use iced::advanced::Renderer as _;
 
@@ -332,24 +334,52 @@ fn draw_box(renderer: &mut Renderer, bounds: Rectangle, style: &Style, node: &No
     if background.a > 0.0 || quad.border.width > 0.0 || quad.shadow.color.a > 0.0 {
         renderer.fill_quad(quad, background);
     }
-    if border::uniform(&style.border).is_none() {
-        for (bounds, color) in border::rects(bounds, &style.border) {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds,
-                    snap: true,
-                    ..Default::default()
-                },
-                color,
-            );
-        }
+    let sides = border::uniform(&style.border)
+        .is_none()
+        .then(|| border::rects(bounds, style.border));
+    for (bounds, color) in inset_rects(bounds, style).chain(sides.into_iter().flatten()) {
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds,
+                snap: true,
+                ..Default::default()
+            },
+            color,
+        );
     }
 }
 
+/// The bands of the inset shadow, inside the border: along the sides
+/// its offset points away from.
+fn inset_rects(bounds: Rectangle, style: &Style) -> impl Iterator<Item = (Rectangle, Color)> {
+    let border = style.border;
+    let inner = Rectangle {
+        x: bounds.x + border.left.width,
+        y: bounds.y + border.top.width,
+        width: (bounds.width - border.left.width - border.right.width).max(0.0),
+        height: (bounds.height - border.top.width - border.bottom.width).max(0.0),
+    };
+    style.inset_shadow.into_iter().flat_map(move |shadow| {
+        let band = |width: f32| BorderSide {
+            width: width.max(0.0),
+            color: Some(shadow.color),
+        };
+        let bands = Sides {
+            top: band(shadow.offset.y),
+            right: band(-shadow.offset.x),
+            bottom: band(-shadow.offset.y),
+            left: band(shadow.offset.x),
+        };
+        border::rects(inner, bands)
+    })
+}
+
 /// The quad iced draws for the box, and its background colour: with
-/// the border when its sides look the same, square when they don't.
+/// the border when its sides look the same; square when they don't, or
+/// with an inset shadow (both drawn as rectangles).
 fn box_quad(bounds: Rectangle, style: &Style, node: &Node) -> (renderer::Quad, Color) {
-    let border = match border::uniform(&style.border) {
+    let uniform = border::uniform(&style.border).filter(|_| style.inset_shadow.is_none());
+    let border = match uniform {
         Some(side) => Border {
             width: side.width,
             color: side.color.unwrap_or(Color::TRANSPARENT),
@@ -359,7 +389,12 @@ fn box_quad(bounds: Rectangle, style: &Style, node: &Node) -> (renderer::Quad, C
             if style.border_radius != Radius::default() {
                 warn_square(node);
             }
-            Border::default()
+            let side = border::uniform(&style.border).unwrap_or_default();
+            Border {
+                width: side.width,
+                color: side.color.unwrap_or(Color::TRANSPARENT),
+                radius: Radius::default(),
+            }
         }
     };
     let quad = renderer::Quad {
@@ -371,16 +406,16 @@ fn box_quad(bounds: Rectangle, style: &Style, node: &Node) -> (renderer::Quad, C
     (quad, style.background.unwrap_or(Color::TRANSPARENT))
 }
 
-/// Rounded corners need the same border all around: said once per
-/// element.
+/// Rounded corners need the same border all around and no inset
+/// shadow: said once per element.
 fn warn_square(node: &Node) {
     static WARNED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
     let path = format!("{node:?}");
     let mut warned = WARNED.lock().unwrap_or_else(|e| e.into_inner());
     if !warned.contains(&path) {
         log::warn!(
-            "theme: {path}: border-radius ignored, the sides of the border differ \
-             (rounded corners take the same border all around)"
+            "theme: {path}: border-radius ignored: rounded corners take the same \
+             border all around and no inset shadow"
         );
         warned.insert(path);
     }
@@ -389,7 +424,7 @@ fn warn_square(node: &Node) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::theme::{BorderSide, Sides};
+    use crate::ui::theme::InsetShadow;
 
     fn red() -> Color {
         Color::from_rgb(1.0, 0.0, 0.0)
@@ -429,6 +464,43 @@ mod tests {
         let (quad, _) = box_quad(Rectangle::default(), &style, &Node::root("b"));
         assert_eq!(quad.border.width, 0.0);
         assert_eq!(quad.border.radius, Radius::default());
+    }
+
+    #[test]
+    fn inset_shadow_inside_the_border() {
+        let style = Style {
+            border: Sides::all(BorderSide {
+                width: 1.0,
+                color: Some(red()),
+            }),
+            border_radius: Radius::new(4.0),
+            inset_shadow: Some(InsetShadow {
+                offset: Vector::new(2.0, -3.0),
+                color: Color::WHITE,
+            }),
+            ..Style::default()
+        };
+        let bounds = Rectangle::new(iced::Point::new(10.0, 0.0), Size::new(40.0, 20.0));
+        let bands: Vec<_> = inset_rects(bounds, &style).collect();
+        assert_eq!(
+            bands,
+            [
+                // the bottom band across, the left one above it
+                (
+                    Rectangle::new(iced::Point::new(11.0, 16.0), Size::new(38.0, 3.0)),
+                    Color::WHITE
+                ),
+                (
+                    Rectangle::new(iced::Point::new(11.0, 1.0), Size::new(2.0, 15.0)),
+                    Color::WHITE
+                ),
+            ]
+        );
+        // The border stays iced's, square.
+        let (quad, _) = box_quad(bounds, &style, &Node::root("c"));
+        assert_eq!(quad.border.width, 1.0);
+        assert_eq!(quad.border.radius, Radius::default());
+        assert_eq!(inset_rects(bounds, &Style::default()).count(), 0);
     }
 
     #[test]

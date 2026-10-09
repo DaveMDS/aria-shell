@@ -466,8 +466,9 @@ Theme      (theme/)         daemon-owned styling: base.css + the user's theme, p
                             widget styled for its content only; a button's status worked out as iced's.
                             The border takes room: the widget's padding is `Style::inset()` (border +
                             padding), which sizes worked out before layout use too. border.rs: sides
-                            that differ as four rectangles that don't overlap (no radius then).
-                            Background images go here
+                            that differ as four rectangles that don't overlap (no radius then), an
+                            inset shadow's bands the same way inside the border. Background images
+                            go here
   fonts.rs                  `font-family` down to the first generic or installed family
 
 Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)

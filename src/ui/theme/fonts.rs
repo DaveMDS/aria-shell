@@ -12,9 +12,9 @@ use iced::font::Family;
 /// system, whatever is installed (`assets/fonts/`, with their licenses).
 pub fn embedded() -> Vec<Cow<'static, [u8]>> {
     [
-        include_bytes!("../../../assets/fonts/Inter-Regular.ttf").as_slice(),
-        include_bytes!("../../../assets/fonts/Inter-Medium.ttf").as_slice(),
-        include_bytes!("../../../assets/fonts/Inter-Bold.ttf").as_slice(),
+        include_bytes!("../../../assets/fonts/NotoSansDisplay-Regular.ttf").as_slice(),
+        include_bytes!("../../../assets/fonts/NotoSansDisplay-Medium.ttf").as_slice(),
+        include_bytes!("../../../assets/fonts/NotoSansDisplay-Bold.ttf").as_slice(),
     ]
     .into_iter()
     .map(Cow::Borrowed)

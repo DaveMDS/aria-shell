@@ -281,8 +281,9 @@ is loaded on top, with light and dark colour schemes. Themes are found in
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`, `:nth-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ Hot reload while editing (a broken file keeps the running theme)
-- ✅ A font built into the binary (Inter, `assets/fonts/`): the same text on
-  every system, whatever is installed
+- ✅ A font built into the binary (Noto Sans Display, its Latin part,
+  `assets/fonts/`): the same text on every system, whatever is installed;
+  tabular digits, numbers don't shift as they change
 - ✅ Every part at once to compare them and take the theme's picture
   (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications)
 - ✅ CSS box model: the border takes room, a border per side (`border-bottom`, ...),

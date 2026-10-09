@@ -338,7 +338,10 @@ impl Locker {
                 input = input.on_input(Message::Password);
             }
             // The eye: the password in clear while it's on.
-            let peek = field.child("peek").class_if("on", self.peek);
+            let peek = field
+                .child("button")
+                .class("peek")
+                .class_if("active", self.peek);
             let icon_node = peek.child("icon");
             let icon_style = theme.resolve(&icon_node);
             let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };

@@ -114,7 +114,7 @@
  * an icon's height; the bar's buttons are under Gadgets. A disabled
  * button's icon is muted too.
  *
- * button[.flat|.primary|.danger|.active]
+ * button[.flat|.primary|.danger|.active|.peek]
  * ├─ icon      drawn at `height` (symbolic: `color`)
  * ╰─ text
  *
@@ -123,6 +123,8 @@
  * button.primary    the action a dialog suggests: Unlock, Save
  * button.danger     an action not to take lightly: Reboot, Kill
  * button.active     a toggle that is on: do-not-disturb, mute, the power profile
+ * button.peek       the eye by a password field: just its colour, .active while
+ *                   the password shows
  */
 button {
   padding: 4px 8px;
@@ -170,6 +172,16 @@ button.primary:disabled,
 button.danger:disabled {
   background: transparent;
   border-color: var(--aria-border);
+}
+button.peek {
+  padding: 4px;
+  border: none;
+  color: var(--aria-muted);
+}
+button.peek:hover,
+button.peek.active {
+  background: transparent;
+  color: var(--aria-fg);
 }
 
 /*
@@ -532,7 +544,7 @@ wallpaper {
  *    ╰─ auth[.error][.busy]   the password block (`gap`)
  *       ├─ field              a row (`gap`)
  *       │  ├─ input           the password field (:focus)
- *       │  ╰─ peek[.on]       the eye, .on while the password shows
+ *       │  ╰─ button.peek[.active]   the eye (see `button.peek`)
  *       │     ╰─ icon         drawn at `height`, `color`
  *       ├─ message            what PAM said, "Unlocking…"
  *       ╰─ button.primary > text   Unlock (:disabled while checking)
@@ -578,15 +590,10 @@ locker auth input:focus {
 locker auth.error input {
   border-color: var(--aria-urgent);
 }
-locker auth peek {
+locker auth button.peek {
   padding: 6px;
-  border-radius: 6px;
-  color: var(--aria-muted);
 }
-locker auth peek:hover, locker auth peek.on {
-  color: var(--aria-fg);
-}
-locker auth peek icon {
+locker auth button.peek icon {
   height: 20px;
 }
 locker auth message {
@@ -1480,7 +1487,7 @@ gadget.audio player controls button icon {
  *    │  │  ╰─ button.disconnect|.connect|.forget > text
  *    │  ├─ auth[.busy]                           the password
  *    │  │  ├─ input                              the field (:focus)
- *    │  │  ├─ peek[.on] > icon                   the eye
+ *    │  │  ├─ button.peek[.active] > icon        the eye (see `button.peek`)
  *    │  │  ╰─ button.connect > text              :disabled: nothing typed yet
  *    │  ╰─ message                               "Wrong password", the enterprise hint
  *    ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
@@ -1566,16 +1573,6 @@ gadget.network auth input {
 }
 gadget.network auth input:focus {
   border-color: var(--aria-accent);
-}
-gadget.network auth peek {
-  padding: 4px;
-  border-radius: 4px;
-}
-gadget.network auth peek:hover {
-  background: var(--aria-border);
-}
-gadget.network auth peek icon {
-  height: 16px;
 }
 gadget.network message {
   padding: 0 8px 6px 34px;

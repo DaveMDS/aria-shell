@@ -1054,7 +1054,10 @@ impl NetworkGadget {
         if !busy {
             input = input.on_input(Message::Password);
         }
-        let peek = auth.child("peek").class_if("on", self.peek);
+        let peek = auth
+            .child("button")
+            .class("peek")
+            .class_if("active", self.peek);
         let eye = theme
             .button(
                 &peek,

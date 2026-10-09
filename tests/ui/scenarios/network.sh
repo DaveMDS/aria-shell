@@ -87,8 +87,8 @@ nm_idle
 assert_eq "$(count_widgets "$list ap.expanded auth button.connect:disabled")" 1 "Connect disabled with nothing typed"
 type_text secret
 assert_eq "$(count_widgets "$list ap.expanded auth button.connect:disabled")" 0 "Connect enabled"
-click_widget "$list ap.expanded auth peek"
-assert_eq "$(count_widgets "$list ap.expanded auth peek.on")" 1 "the password shown"
+click_widget "$list ap.expanded auth button.peek"
+assert_eq "$(count_widgets "$list ap.expanded auth button.peek.active")" 1 "the password shown"
 shot_surface network-password popup
 key Return
 assert_eq "$(nm_action)" "add-activate Darma6 psk=secret" "a profile added with the key and activated"

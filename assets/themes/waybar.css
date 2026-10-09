@@ -19,9 +19,13 @@
   --color-yellow: #f1c40f;
 }
 
+:root {
+  font-family: Roboto;
+}
+
 panel {
   /* `otf-font-awesome` is required to be installed for icons */
-  font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif;
+  /* font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif; */
   font-size: 13px;
   min-height: 30px;
   color: var(--aria-fg);

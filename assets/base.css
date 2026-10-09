@@ -11,6 +11,8 @@
  *   - comments, `selector, selector { property: value; }`
  *   - selectors: type, .class, #id, [attr="value"], *, descendant (space),
  *     child (>), :hover :active :focus :disabled :first-child :last-child :root
+ *   - `:root` matches every surface's root (panel, popup, launcher, ...):
+ *     the place for inherited defaults, `:root { font-family: ... }`
  *   - `:root { --name: value }` variables, used as `var(--name[, fallback])`;
  *     `:root.light { }` / `:root.dark { }` hold the variables of one colour
  *     scheme, applied over the plain ones when that scheme is active
@@ -423,8 +425,8 @@
 
 /* Fonts */
 
-panel, popup, notification, osd, launcher, exiter, screenshot, locker, showcase {
-  font-family: Inter;
+:root {
+  font-family: Inter;  /* Inter is embedded in the aria binary */
 }
 
 /* Surfaces */

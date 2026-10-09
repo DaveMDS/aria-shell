@@ -711,31 +711,31 @@ gadget.clock text {
  *    ├─ icon
  *    ╰─ text
  */
-workspace {
+gadget.workspaces workspace {
   padding: 0 6px;
   gap: 4px;
   border: 1px solid var(--aria-border);
   border-radius: 2px;
 }
-workspace:hover {
+gadget.workspaces workspace:hover {
   border-color: var(--aria-accent);
 }
-workspace.active {
+gadget.workspaces workspace.active {
   background: var(--aria-accent);
   color: var(--aria-on-accent);
   border-color: transparent;
 }
-workspace.urgent {
+gadget.workspaces workspace.urgent {
   background: var(--aria-urgent);
   color: var(--aria-on-accent);
   border-color: transparent;
 }
-window {
+gadget.workspaces window {
   padding: 0;
   height: 16px;
   font-size: var(--aria-font-xs);
 }
-window.urgent {
+gadget.workspaces window.urgent {
   color: var(--aria-urgent);
 }
 gadget.workspaces title {

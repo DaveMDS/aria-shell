@@ -3,9 +3,10 @@
 # the border, then the padding), are drawn sharp on the pixel grid
 # wherever the bar puts the box, and a button's follow its `:hover`
 # (a transparent side keeps the room of the one shown on hover, the
-# button doesn't move). Inset shadows: bands inside the box taking no
-# room, a child's over its parent's (waybar's underline). Told apart by
-# the pixels sampled below (pure colours, opaque, the bar black).
+# button doesn't move; `height: auto`: the content's height, not the
+# bar's). Inset shadows: bands inside the box taking no room, a child's
+# over its parent's (waybar's underline). Told apart by the pixels
+# sampled below (pure colours, opaque, the bar black).
 
 conf=$(mktemp -d)
 trap 'rm -rf "$conf"' EXIT
@@ -22,6 +23,7 @@ gadget.screenshot > button {
   box-shadow: inset 0 -3px #ff00ff;
 }
 gadget.themes > button {
+  height: auto;
   background: #000000;
   padding: 0 4px;
   border-bottom: 4px solid #ff0000;

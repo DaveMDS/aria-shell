@@ -159,6 +159,15 @@ impl Node {
         self.0.parent.is_none()
     }
 
+    /// The root element: the surface the node is on (`panel`, `popup`).
+    pub fn surface(&self) -> &Node {
+        let mut node = self;
+        while let Some(parent) = node.parent() {
+            node = parent;
+        }
+        node
+    }
+
     pub fn is_first_child(&self) -> bool {
         self.0.index.is_some_and(|(i, _)| i == 0)
     }

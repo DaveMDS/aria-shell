@@ -45,7 +45,7 @@ impl Theme {
         if let Some(w) = s.width {
             c = c.width(w).align_x(Alignment::Center);
         }
-        if let Some(h) = s.height {
+        if let Some(h) = box_height(node, &s) {
             c = c.height(h).align_y(Alignment::Center);
         }
         let text_color = s.color;
@@ -83,7 +83,8 @@ impl Theme {
         if s.width.is_some() {
             inner = inner.width(IcedLength::Fill).align_x(Alignment::Center);
         }
-        if s.height.is_some() {
+        let height = box_height(node, &s);
+        if height.is_some() {
             inner = inner.height(IcedLength::Fill).align_y(Alignment::Center);
         }
         let styled = node.clone();
@@ -91,7 +92,7 @@ impl Theme {
         if let Some(w) = s.width {
             b = b.width(w);
         }
-        if let Some(h) = s.height {
+        if let Some(h) = height {
             b = b.height(h);
         }
         let b = b.style(move |theme: &iced::Theme, status| button::Style {
@@ -367,6 +368,14 @@ impl Theme {
     }
 }
 
+/// The height of a box (a container, a button) of `node`: the theme's,
+/// else in the bar all of it, as a CSS flex row stretches its items
+/// (`height: auto` keeps the content's); elsewhere the content's.
+fn box_height(node: &Node, s: &Style) -> Option<Length> {
+    s.height
+        .or_else(|| (!node.is_root() && node.surface().kind() == "panel").then_some(Length::Fill))
+}
+
 /// The `widget::Id` of the widget built for `node`: its element path.
 pub(crate) fn widget_id(node: &Node) -> iced::widget::Id {
     iced::widget::Id::from(format!("{node:?}"))
@@ -451,5 +460,29 @@ impl Style {
             weight: self.font_weight.unwrap_or_default(),
             ..Font::DEFAULT
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bar_boxes_take_the_bar_height() {
+        let gadget = Node::root("panel").child("slot").child("gadget");
+        let none = Style::default();
+        assert_eq!(box_height(&gadget, &none), Some(Length::Fill));
+        assert_eq!(
+            box_height(&gadget.child("button"), &none),
+            Some(Length::Fill)
+        );
+        let auto = Style {
+            height: Some(Length::Auto),
+            ..Style::default()
+        };
+        assert_eq!(box_height(&gadget, &auto), Some(Length::Auto));
+        assert_eq!(box_height(&Node::root("panel"), &none), None);
+        let popup = Node::root("popup").child("gadget").child("list");
+        assert_eq!(box_height(&popup, &none), None);
     }
 }

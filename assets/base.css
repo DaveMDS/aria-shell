@@ -561,7 +561,10 @@ notification button.close:hover {
  *
  * A bar, one per output: #2 for [panel:2]. Each gadget is a box of its
  * kind (gadget.clock, gadget.workspaces, ...): #2 for [Clock:2], #search
- * for [Custom:search]. `min-height` is the bar thickness.
+ * for [Custom:search]. `min-height` is the bar thickness. Every box in
+ * the bar (a gadget, its buttons) takes all the height inside the
+ * panel's border and padding, as a CSS flex row stretches its items:
+ * `height` sets another, `height: auto` keeps the content's.
  *
  * panel[.top|.bottom][#<instance>][output="<connector>"]
  * ╰─ slot.start | slot.center | slot.end

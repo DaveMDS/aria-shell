@@ -598,6 +598,86 @@ notification button.close:hover {
 /* Gadgets */
 
 /*
+ * Gadgets: what they share
+ * ========================
+ *
+ * A gadget's buttons in the bar (`gadget > button`, the tray's items)
+ * and the parts its popup is made of (`popup list`, its `header`s,
+ * `button`s, `item`s, `empty`, `message`, `details`) look the same in
+ * every gadget: these rules. Each gadget's section below only has what
+ * differs.
+ */
+gadget {
+  gap: 4px;
+}
+gadget > button,
+gadget.tray > item {
+  padding: 0 4px;
+  gap: 4px;
+  border-radius: 2px;
+}
+gadget > button:hover,
+gadget.tray > item:hover {
+  background: var(--aria-border);
+}
+gadget > button icon,
+gadget.tray > item icon {
+  height: 16px;
+}
+
+popup list {
+  width: 360px;
+  height: 600px;
+  padding: 8px;
+  gap: 4px;
+}
+popup list > header {
+  padding: 8px 4px 4px 4px;
+  gap: 8px;
+}
+popup header title {
+  font-weight: bold;
+  color: var(--aria-muted);
+}
+popup button,
+popup item {
+  padding: 4px 8px;
+  gap: 8px;
+  border-radius: 4px;
+}
+popup button:hover,
+popup item:hover {
+  background: var(--aria-border);
+}
+popup button:disabled,
+popup item:disabled {
+  color: var(--aria-muted);
+}
+popup button icon,
+popup item icon {
+  height: 16px;
+}
+popup button.settings,
+popup button.mixer,
+popup list > header button,
+popup actions button {
+  border: 1px solid var(--aria-border);
+}
+popup empty {
+  padding: 12px;
+  color: var(--aria-muted);
+}
+popup message {
+  padding: 0 4px 4px 4px;
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+popup details line {
+  font-size: 12px;
+  color: var(--aria-muted);
+}
+
+/*
  * Clock gadget
  * ============
  *
@@ -607,9 +687,6 @@ notification button.close:hover {
  * popup > gadget.clock
  * ╰─ calendar   (see `calendar`)
  */
-gadget.clock button {
-  padding: 0;
-}
 gadget.clock text {
   font-weight: bold;
 }
@@ -632,9 +709,6 @@ gadget.clock text {
  *    ├─ icon
  *    ╰─ text
  */
-gadget.workspaces {
-  gap: 2px;
-}
 workspace {
   padding: 0 6px;
   gap: 4px;
@@ -681,20 +755,6 @@ gadget.workspaces title icon {
  * ╰─ menu                         the item's menu (see `menu`)
  *    ╰─ text                      "…" until the menu is loaded
  */
-gadget.tray {
-  gap: 4px;
-}
-/* `>`: the menu popup has `item`s too, under `gadget.tray > menu`. */
-gadget.tray > item {
-  padding: 0 2px;
-  border-radius: 2px;
-}
-gadget.tray > item:hover {
-  background: var(--aria-border);
-}
-gadget.tray > item icon {
-  height: 16px;
-}
 gadget.tray > item.attention icon {
   color: var(--aria-urgent);
 }
@@ -709,16 +769,6 @@ gadget.tray > item.attention icon {
  * popup > gadget.themes
  * ╰─ menu      Light / Dark, then Base and every theme found
  */
-gadget.themes > button {
-  padding: 0 2px;
-  border-radius: 2px;
-}
-gadget.themes > button:hover {
-  background: var(--aria-border);
-}
-gadget.themes icon {
-  height: 16px;
-}
 
 /*
  * Screenshot gadget
@@ -730,16 +780,6 @@ gadget.themes icon {
  * popup > gadget.screenshot
  * ╰─ menu      the active window, this screen, all screens
  */
-gadget.screenshot > button {
-  padding: 0 2px;
-  border-radius: 2px;
-}
-gadget.screenshot > button:hover {
-  background: var(--aria-border);
-}
-gadget.screenshot icon {
-  height: 16px;
-}
 
 /*
  * Places gadget
@@ -782,65 +822,9 @@ gadget.screenshot icon {
  *    ├─ share.<kind>[.mounted][.busy]      as a device
  *    ╰─ empty                              "No places"
  */
-gadget.places > button {
-  padding: 0 2px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.places > button:hover {
-  background: var(--aria-border);
-}
-gadget.places > button icon {
-  height: 16px;
-}
-gadget.places list {
-  padding: 4px;
-  gap: 2px;
-}
-gadget.places header {
-  padding: 6px 8px 2px 8px;
-}
-gadget.places header title {
-  font-weight: bold;
-  color: var(--aria-muted);
-}
-gadget.places item {
-  padding: 4px 10px;
-  gap: 8px;
-  border-radius: 4px;
-}
-gadget.places item:hover {
-  background: var(--aria-border);
-}
-gadget.places item icon {
-  height: 16px;
-}
 gadget.places device,
 gadget.places share {
   gap: 2px;
-}
-gadget.places device button.open,
-gadget.places share button.open {
-  padding: 4px 10px;
-  gap: 8px;
-  border-radius: 4px;
-}
-gadget.places device button:hover,
-gadget.places share button:hover {
-  background: var(--aria-border);
-}
-gadget.places device button:disabled,
-gadget.places share button:disabled {
-  color: var(--aria-muted);
-}
-gadget.places device button.eject,
-gadget.places share button.eject {
-  padding: 4px 6px;
-  border-radius: 4px;
-}
-gadget.places device icon,
-gadget.places share icon {
-  height: 16px;
 }
 gadget.places device info {
   gap: 3px;
@@ -856,10 +840,6 @@ gadget.places device meter fill {
 }
 gadget.places device meter.critical fill {
   background: var(--aria-urgent);
-}
-gadget.places empty {
-  padding: 8px;
-  color: var(--aria-muted);
 }
 
 /*
@@ -907,20 +887,6 @@ gadget.places empty {
  *    ├─ message
  *    ╰─ button.settings > text           runs `settings_command`
  */
-gadget.power {
-  gap: 2px;
-}
-gadget.power > button {
-  padding: 0 2px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.power > button:hover {
-  background: var(--aria-border);
-}
-gadget.power > button icon {
-  height: 16px;
-}
 gadget.power > button.low icon.battery,
 gadget.power > button.low text {
   color: var(--aria-warning);
@@ -931,11 +897,6 @@ gadget.power > button.critical text {
 }
 gadget.power > button.idle.inhibited icon {
   color: var(--aria-accent);
-}
-gadget.power list {
-  width: 320px;
-  padding: 8px;
-  gap: 4px;
 }
 gadget.power battery {
   padding: 4px;
@@ -961,17 +922,6 @@ gadget.power details {
   padding: 0 4px 4px 44px;
   gap: 2px;
 }
-gadget.power details line {
-  color: var(--aria-muted);
-  font-size: 12px;
-}
-gadget.power header {
-  padding: 8px 4px 4px 4px;
-}
-gadget.power header title {
-  font-weight: bold;
-  color: var(--aria-muted);
-}
 gadget.power device {
   padding: 4px;
   gap: 8px;
@@ -986,16 +936,7 @@ gadget.power profiles {
   gap: 4px;
 }
 gadget.power profiles button {
-  padding: 6px;
-  gap: 4px;
-  border-radius: 4px;
   border: 1px solid var(--aria-border);
-}
-gadget.power profiles button:hover {
-  border-color: var(--aria-accent);
-}
-gadget.power profiles button icon {
-  height: 16px;
 }
 gadget.power profiles button.active {
   background: var(--aria-accent);
@@ -1011,19 +952,6 @@ gadget.power idle icon {
 }
 gadget.power idle.inhibited icon {
   color: var(--aria-accent);
-}
-gadget.power message {
-  padding: 0 4px 4px 4px;
-  font-size: 12px;
-  color: var(--aria-muted);
-}
-gadget.power button.settings {
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid var(--aria-border);
-}
-gadget.power button.settings:hover {
-  border-color: var(--aria-accent);
 }
 
 /*
@@ -1049,24 +977,8 @@ gadget.power button.settings:hover {
  *    ├─ empty                    "No screen to adjust"
  *    ╰─ button.settings > text   runs `settings_command`
  */
-gadget.brightness > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.brightness > button:hover {
-  background: var(--aria-border);
-}
-gadget.brightness > button icon {
-  height: 16px;
-}
 gadget.brightness > button.none icon {
   color: var(--aria-muted);
-}
-gadget.brightness list {
-  width: 340px;
-  padding: 8px;
-  gap: 6px;
 }
 gadget.brightness screen {
   padding: 2px 0;
@@ -1079,18 +991,6 @@ gadget.brightness screen output,
 gadget.brightness screen value,
 gadget.brightness screen.unknown icon {
   color: var(--aria-muted);
-}
-gadget.brightness empty {
-  padding: 12px;
-  color: var(--aria-muted);
-}
-gadget.brightness button.settings {
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid var(--aria-border);
-}
-gadget.brightness button.settings:hover {
-  border-color: var(--aria-accent);
 }
 
 /*
@@ -1114,18 +1014,6 @@ gadget.brightness button.settings:hover {
  *    ├─ empty                   "No notifications"
  *    ╰─ notification[.unseen]   one per notification kept
  */
-gadget.notifications > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.notifications > button:hover {
-  background: var(--aria-border);
-}
-/* `> button`: the popup rows have an `icon` too, under `list > notification`. */
-gadget.notifications > button icon {
-  height: 16px;
-}
 gadget.notifications > button.new text {
   color: var(--aria-accent);
   font-weight: bold;
@@ -1133,35 +1021,10 @@ gadget.notifications > button.new text {
 gadget.notifications > button.dnd icon {
   color: var(--aria-muted);
 }
-gadget.notifications list {
-  width: 380px;
-  height: 480px;
-  padding: 8px;
-  gap: 6px;
-}
-gadget.notifications header {
-  gap: 6px;
-  padding: 0 0 4px 0;
-}
-gadget.notifications header title {
-  font-weight: bold;
-}
-gadget.notifications header button {
-  padding: 2px 8px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.notifications header button:hover {
-  border-color: var(--aria-accent);
-}
 gadget.notifications header button.dnd.on {
   background: var(--aria-accent);
   color: var(--aria-on-accent);
   border-color: transparent;
-}
-gadget.notifications empty {
-  padding: 12px;
-  color: var(--aria-muted);
 }
 /* The rows: the desktop `notification` rules, as wide as the list. */
 gadget.notifications list notification {
@@ -1246,17 +1109,6 @@ gadget.notifications list notification.unseen summary {
  *          ├─ text
  *          ╰─ button.terminate | button.kill > text
  */
-gadget.system-monitor > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.system-monitor > button:hover {
-  background: var(--aria-border);
-}
-gadget.system-monitor > button icon {
-  height: 16px;
-}
 /* The sparkline and the gauge share the frame. */
 gadget.system-monitor > button graph,
 gadget.system-monitor > button gauge {
@@ -1317,9 +1169,6 @@ gadget.system-monitor tab.active {
 }
 gadget.system-monitor section {
   gap: 6px;
-}
-gadget.system-monitor header title {
-  font-weight: bold;
 }
 gadget.system-monitor header value {
   color: var(--aria-muted);
@@ -1399,26 +1248,12 @@ gadget.system-monitor section.processes > actions {
   padding: 6px 12px 0 12px;
   gap: 6px;
 }
-gadget.system-monitor section.processes > actions button {
-  padding: 2px 8px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.system-monitor section.processes > actions button:hover {
-  border-color: var(--aria-accent);
-}
 gadget.system-monitor section.processes > actions button.kill text {
   color: var(--aria-urgent);
-}
-gadget.system-monitor section.processes > actions button.kill:hover {
-  border-color: var(--aria-urgent);
 }
 gadget.system-monitor section.processes > actions.none text,
 gadget.system-monitor section.processes > actions.none button.kill text {
   color: var(--aria-muted);
-}
-gadget.system-monitor section.processes > actions.none button:hover {
-  border-color: var(--aria-border);
 }
 
 /*
@@ -1457,29 +1292,9 @@ gadget.system-monitor section.processes > actions.none button:hover {
  *    ├─ empty                 "No audio devices"
  *    ╰─ button.mixer > text   runs `mixer_command`
  */
-gadget.audio {
-  gap: 2px;
-}
-gadget.audio > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.audio > button:hover {
-  background: var(--aria-border);
-}
-gadget.audio > button icon {
-  height: 16px;
-}
 gadget.audio > button.muted icon,
 gadget.audio > button.muted text {
   color: var(--aria-muted);
-}
-gadget.audio list {
-  width: 380px;
-  height: 600px;
-  padding: 8px;
-  gap: 6px;
 }
 gadget.audio section {
   padding: 6px 0 0 0;
@@ -1495,10 +1310,6 @@ gadget.audio channel {
 gadget.audio channel button.mute {
   padding: 4px;
   border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.audio channel button.mute:hover {
-  border-color: var(--aria-accent);
 }
 gadget.audio channel button.mute.on {
   background: var(--aria-border);
@@ -1544,30 +1355,11 @@ gadget.audio player album {
 gadget.audio player controls {
   gap: 12px;
 }
-gadget.audio player controls button {
-  padding: 4px;
-  border-radius: 4px;
-}
-gadget.audio player controls button:hover {
-  background: var(--aria-border);
-}
 gadget.audio player controls button.disabled icon {
   color: var(--aria-muted);
 }
 gadget.audio player controls button icon {
   height: 20px;
-}
-gadget.audio empty {
-  padding: 12px;
-  color: var(--aria-muted);
-}
-gadget.audio button.mixer {
-  padding: 4px 8px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.audio button.mixer:hover {
-  border-color: var(--aria-accent);
 }
 
 /*
@@ -1629,47 +1421,12 @@ gadget.audio button.mixer:hover {
  *    ├─ empty                                    "Wi‑Fi is off", "No networks found", ...
  *    ╰─ button.settings > text                   runs `settings_command`
  */
-gadget.network > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.network > button:hover {
-  background: var(--aria-border);
-}
-gadget.network > button icon {
-  height: 16px;
-}
 gadget.network > button.disconnected icon,
 gadget.network > button.none icon {
   color: var(--aria-muted);
 }
 gadget.network > button.limited icon {
   color: var(--aria-warning);
-}
-gadget.network list {
-  width: 380px;
-  height: 600px;
-  padding: 8px;
-  gap: 4px;
-}
-gadget.network header {
-  padding: 8px 4px 4px 4px;
-  gap: 8px;
-}
-gadget.network header title {
-  font-weight: bold;
-  color: var(--aria-muted);
-}
-gadget.network header button.scan {
-  padding: 2px;
-  border-radius: 4px;
-}
-gadget.network header button.scan:hover {
-  background: var(--aria-border);
-}
-gadget.network header button.scan icon {
-  height: 16px;
 }
 gadget.network ap,
 gadget.network device {
@@ -1678,12 +1435,6 @@ gadget.network device {
 gadget.network ap > button,
 gadget.network device > button {
   padding: 6px;
-  gap: 8px;
-  border-radius: 4px;
-}
-gadget.network ap > button:hover,
-gadget.network device > button:hover {
-  background: var(--aria-border);
 }
 gadget.network ap > button icon,
 gadget.network device > button icon {
@@ -1723,26 +1474,12 @@ gadget.network details {
   padding: 0 8px 4px 34px;
   gap: 2px;
 }
-gadget.network details line {
-  color: var(--aria-muted);
-  font-size: 12px;
-}
 gadget.network actions {
   padding: 0 8px 6px 8px;
   gap: 8px;
 }
-gadget.network actions button,
 gadget.network auth button.connect {
-  padding: 4px 10px;
   border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.network actions button:hover,
-gadget.network auth button.connect:hover {
-  border-color: var(--aria-accent);
-}
-gadget.network actions button.forget:hover {
-  border-color: var(--aria-urgent);
 }
 gadget.network auth button.connect.disabled text {
   color: var(--aria-muted);
@@ -1771,8 +1508,6 @@ gadget.network auth peek icon {
 }
 gadget.network message {
   padding: 0 8px 6px 34px;
-  font-size: 12px;
-  color: var(--aria-muted);
 }
 gadget.network ap.failed message,
 gadget.network vpn.failed message {
@@ -1792,18 +1527,6 @@ gadget.network vpn.active name text {
 gadget.network vpn message {
   padding: 0 0 0 28px;
 }
-gadget.network empty {
-  padding: 12px;
-  color: var(--aria-muted);
-}
-gadget.network button.settings {
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid var(--aria-border);
-}
-gadget.network button.settings:hover {
-  border-color: var(--aria-accent);
-}
 
 /*
  * Custom gadget
@@ -1817,17 +1540,6 @@ gadget.network button.settings:hover {
  *    ├─ icon   drawn at `height` (symbolic: `color`)
  *    ╰─ text
  */
-gadget.custom > button {
-  padding: 0 4px;
-  gap: 4px;
-  border-radius: 2px;
-}
-gadget.custom > button:hover {
-  background: var(--aria-border);
-}
-gadget.custom icon {
-  height: 16px;
-}
 /* Classes a script may set: `{"text": "3", "class": "warning"}` */
 gadget.custom > button.warning {
   color: var(--aria-urgent);
@@ -1902,17 +1614,6 @@ menu {
   padding: 4px;
   gap: 2px;
 }
-menu item {
-  padding: 4px 10px;
-  gap: 8px;
-  border-radius: 4px;
-}
-menu item:hover {
-  background: var(--aria-border);
-}
-menu item:disabled {
-  color: var(--aria-muted);
-}
 menu arrow,
 menu check {
   color: var(--aria-muted);
@@ -1945,10 +1646,6 @@ calendar {
 }
 calendar header button {
   padding: 0 8px;
-  border-radius: 4px;
-}
-calendar header button:hover {
-  background: var(--aria-border);
 }
 calendar weekday {
   font-size: 12px;

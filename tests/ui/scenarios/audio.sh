@@ -16,8 +16,8 @@ click_widget "$button"
 assert_surface popup
 wait_for "$player" 1 "the fake player in the popup"
 assert_eq "$(count_widgets 'popup player.paused[name="Aria test player"]')" 1 "paused, by its identity"
-assert_eq "$(count_widgets "$player > controls > button.previous.disabled")" 1 "previous disabled (CanGoPrevious false)"
-assert_eq "$(count_widgets "$player > controls > button.next.disabled")" 0 "next enabled"
+assert_eq "$(count_widgets "$player > controls > button.previous:disabled")" 1 "previous disabled (CanGoPrevious false)"
+assert_eq "$(count_widgets "$player > controls > button.next:disabled")" 0 "next enabled"
 shot_surface popup popup
 
 # The controls reach the player.

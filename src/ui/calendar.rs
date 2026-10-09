@@ -77,8 +77,8 @@ impl Calendar {
                 .align_y(Alignment::Center)
         };
         let header_node = node.child("header");
-        let prev = header_node.child("button").class("prev");
-        let next = header_node.child("button").class("next");
+        let prev = header_node.child("button").class("prev").class("flat");
+        let next = header_node.child("button").class("next").class("flat");
         let header = row![
             theme
                 .button(&prev, theme.text(&prev.child("text"), "<"))

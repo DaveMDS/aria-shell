@@ -216,7 +216,7 @@ fn side_size(theme: &Theme, node: &Node, extras: &Extras) -> (f32, f32) {
         height = height.max(m.height.max(theme.line_height(&t)) + s.inset().y());
     }
     if extras.close {
-        let b = node.child("button").class("close");
+        let b = node.child("button").class("close").class("flat");
         let s = theme.resolve(&b);
         let m = theme.measure(&b.child("text"), CLOSE_GLYPH);
         width += gap + m.width + s.inset().x();
@@ -253,7 +253,7 @@ pub fn view<'a>(
         first = first.push(theme.container(&t, theme.text(&t, age)));
     }
     if extras.close {
-        let b = node.child("button").class("close");
+        let b = node.child("button").class("close").class("flat");
         first = first.push(
             theme
                 .button(&b, theme.text(&b.child("text"), CLOSE_GLYPH))

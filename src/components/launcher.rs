@@ -588,7 +588,10 @@ impl Launcher {
         let actions_node = self.node.child("actions");
         let mut actions: Vec<Element<'a, Message>> = Vec::new();
         for button in self.actions() {
-            let b = actions_node.child("button").class(button.name.clone());
+            let b = actions_node
+                .child("button")
+                .class(button.name.clone())
+                .class("flat");
             let icon_node = b.child("icon");
             let style = theme.resolve(&icon_node);
             let size = style.height.or(style.width).and_then(|l| match l {

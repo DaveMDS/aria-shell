@@ -528,7 +528,10 @@ impl Picker {
             None => locale.tr("screenshot.hint").to_owned(),
         };
         let button = |class: &'static str, key: &'static str, message: Option<Message>| {
-            let node = bar.child("button").class(class);
+            let node = bar
+                .child("button")
+                .class(class)
+                .class_if("primary", class == "save");
             let text = theme.text(&node.child("text"), locale.tr(key));
             Element::from(theme.button(&node, text).on_press_maybe(message))
         };

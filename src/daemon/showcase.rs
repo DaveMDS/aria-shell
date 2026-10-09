@@ -22,7 +22,7 @@
 //! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
 //! │  ╰─ button > icon | text
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
-//!    ╰─ button[.flat|.primary|.danger|.active][:disabled] > text
+//!    ╰─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
 //! ```
 
 use iced::widget::{column, container, mouse_area, row};
@@ -55,17 +55,21 @@ const BAR_BUTTONS: &[(bool, Option<&str>)] = &[
     (false, Some("gadget > button")),
 ];
 
-/// The other buttons: a class, and whether it's enabled.
-const BUTTONS: &[(Option<&str>, bool)] = &[
-    (None, true),
-    (None, false),
-    (Some("flat"), true),
-    (Some("primary"), true),
-    (Some("danger"), true),
-    (Some("active"), true),
+/// The other buttons: a class, whether it's enabled, and whether it
+/// has an icon, a text (its selector) or both.
+const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
+    (None, true, false, true),
+    (None, true, true, true),
+    (None, true, true, false),
+    (None, false, false, true),
+    (Some("flat"), true, false, true),
+    (Some("flat"), true, true, false),
+    (Some("primary"), true, false, true),
+    (Some("danger"), true, false, true),
+    (Some("active"), true, false, true),
 ];
 
-/// The icon the bar's buttons draw.
+/// The icon the sample buttons draw.
 const BUTTON_ICON: &str = "dialog-information-symbolic";
 
 /// The room around the parts and between them.
@@ -377,16 +381,7 @@ impl AriaShell {
         let count = BAR_BUTTONS.len();
         let buttons = BAR_BUTTONS.iter().enumerate().map(|(i, &(icon, label))| {
             let node = gadget.child("button").nth(i, count);
-            let mut content: Vec<Element<'_, Shell>> = Vec::new();
-            if icon {
-                content.push(self.button_icon(&node.child("icon")));
-            }
-            if let Some(label) = label {
-                content.push(theme.text(&node.child("text"), label).into());
-            }
-            let content = row(content)
-                .spacing(theme.resolve(&node).gap)
-                .align_y(Alignment::Center);
+            let content = self.button_content(&node, icon, label.map(str::to_owned));
             theme.button(&node, content).on_press(nothing(())).into()
         });
         let buttons = row(buttons)
@@ -410,22 +405,25 @@ impl AriaShell {
         let popup = Node::root("popup").id("showcase");
         let list = popup.child("buttons");
         let count = BUTTONS.len();
-        let buttons = BUTTONS.iter().enumerate().map(|(i, &(class, enabled))| {
-            let mut node = list.child("button").nth(i, count);
-            let mut label = "button".to_owned();
-            if let Some(class) = class {
-                node = node.class(class);
-                label = format!("{label}.{class}");
-            }
-            if !enabled {
-                label.push_str(":disabled");
-            }
-            let text = theme.text(&node.child("text"), label);
-            theme
-                .button(&node, text)
-                .on_press_maybe(enabled.then(|| nothing(())))
-                .into()
-        });
+        let buttons = BUTTONS
+            .iter()
+            .enumerate()
+            .map(|(i, &(class, enabled, icon, text))| {
+                let mut node = list.child("button").nth(i, count).disabled_if(!enabled);
+                let mut label = "button".to_owned();
+                if let Some(class) = class {
+                    node = node.class(class);
+                    label = format!("{label}.{class}");
+                }
+                if !enabled {
+                    label.push_str(":disabled");
+                }
+                let content = self.button_content(&node, icon, text.then_some(label));
+                theme
+                    .button(&node, content)
+                    .on_press_maybe(enabled.then(|| nothing(())))
+                    .into()
+            });
         let content = theme.container(
             &popup,
             column(buttons)
@@ -435,7 +433,22 @@ impl AriaShell {
         container(content).padding(theme.shadow_room(&popup)).into()
     }
 
-    /// The bar buttons' icon, at the theme's `height` for `node`.
+    /// A sample button's content: the icon, the label, or both.
+    fn button_content(&self, node: &Node, icon: bool, label: Option<String>) -> Element<'_, Shell> {
+        let mut content: Vec<Element<'_, Shell>> = Vec::new();
+        if icon {
+            content.push(self.button_icon(&node.child("icon")));
+        }
+        if let Some(label) = label {
+            content.push(self.theme.text(&node.child("text"), label).into());
+        }
+        row(content)
+            .spacing(self.theme.resolve(node).gap)
+            .align_y(Alignment::Center)
+            .into()
+    }
+
+    /// A sample button's icon, at the theme's `height` for `node`.
     fn button_icon(&self, node: &Node) -> Element<'_, Shell> {
         let style = self.theme.resolve(node);
         let size = match style.height.or(style.width) {

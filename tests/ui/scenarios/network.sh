@@ -84,9 +84,9 @@ wait_for "$list ap.expanded" 0 "folded again"
 click_widget "$list ap[ssid=\"Darma6\"] > button"
 wait_for "$list ap[ssid=\"Darma6\"].expanded auth input" 1 "the password field appears"
 nm_idle
-assert_eq "$(count_widgets "$list ap.expanded auth button.connect.disabled")" 1 "Connect disabled with nothing typed"
+assert_eq "$(count_widgets "$list ap.expanded auth button.connect:disabled")" 1 "Connect disabled with nothing typed"
 type_text secret
-assert_eq "$(count_widgets "$list ap.expanded auth button.connect.disabled")" 0 "Connect enabled"
+assert_eq "$(count_widgets "$list ap.expanded auth button.connect:disabled")" 0 "Connect enabled"
 click_widget "$list ap.expanded auth peek"
 assert_eq "$(count_widgets "$list ap.expanded auth peek.on")" 1 "the password shown"
 shot_surface network-password popup

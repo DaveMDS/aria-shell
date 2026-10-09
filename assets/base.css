@@ -105,7 +105,68 @@
   font-size: var(--aria-font);
 }
 
-/* Shared pieces: in several surfaces and gadgets' popups */
+/*
+ * Buttons
+ * =======
+ *
+ * Every `button` element, wherever it is: the base, and the variants the
+ * code sets as classes. A context only changes what is its own: a size,
+ * an icon's height; the bar's buttons are under Gadgets. A disabled
+ * button's icon is muted too.
+ *
+ * button[.flat|.primary|.danger|.active]
+ * ├─ icon      drawn at `height` (symbolic: `color`)
+ * ╰─ text
+ *
+ * button            bordered: a dialog's, a notification's, a popup's actions
+ * button.flat       no border, a background on hover: rows, icons, the exit menu's grid
+ * button.primary    the action a dialog suggests: Unlock, Save
+ * button.danger     an action not to take lightly: Reboot, Kill
+ * button.active     a toggle that is on: do-not-disturb, mute, the power profile
+ */
+button {
+  padding: 4px 8px;
+  gap: 8px;
+  border: 1px solid var(--aria-border);
+  border-radius: 4px;
+}
+button:hover {
+  border-color: var(--aria-accent);
+}
+button icon {
+  height: 16px;
+}
+button.flat {
+  border-color: transparent;
+}
+button.flat:hover {
+  background: var(--aria-border);
+  border-color: transparent;
+}
+button.primary,
+button.active {
+  background: var(--aria-accent);
+  color: var(--aria-on-accent);
+  border-color: var(--aria-accent);
+}
+button.danger {
+  background: var(--aria-urgent);
+  color: var(--aria-on-accent);
+  border-color: var(--aria-urgent);
+}
+button.primary:hover,
+button.danger:hover,
+button.active:hover {
+  border-color: var(--aria-fg);
+}
+button:disabled {
+  color: var(--aria-muted);
+}
+button.primary:disabled,
+button.danger:disabled {
+  background: transparent;
+  border-color: var(--aria-border);
+}
 
 /*
  * Toggle
@@ -227,7 +288,7 @@ calendar day.today {
  *
  * launcher
  * ├─ actions                       the exit menu's buttons ([launcher] actions)
- * │  ╰─ button[.lock|.reboot|...]
+ * │  ╰─ button.flat[.lock|.reboot|...]
  * │     ╰─ icon                    drawn at `height`
  * ├─ input                         the search field (:focus when typing)
  * ╰─ list                          the results (a column, `gap`)
@@ -251,11 +312,9 @@ launcher actions {
 }
 launcher actions button {
   padding: 6px;
-  border-radius: 6px;
   color: var(--aria-muted);
 }
 launcher actions button:hover {
-  background: var(--aria-border);
   color: var(--aria-fg);
 }
 launcher actions icon {
@@ -320,14 +379,14 @@ launcher item.action icon {
  * place while an action waits, with a countdown (confirm_timeout).
  *
  * exiter
- * ├─ button.<action>[.selected]
+ * ├─ button.<action>.flat[.selected]
  * │  ├─ icon                          drawn at `height` (symbolic: `color`)
  * │  ╰─ text                          the label
  * ╰─ confirm                          while an action waits
  *    ├─ text                          "Reboot?"
  *    ├─ countdown                     "Automatically in 27 s"
  *    ├─ button.cancel > text
- *    ╰─ button.ok[.<action>] > text   the action's label
+ *    ╰─ button.ok[.<action>].danger > text   the action's label
  */
 exiter {
   padding: 16px;
@@ -336,15 +395,14 @@ exiter {
   color: var(--aria-fg);
   border: 1px solid var(--aria-border);
 }
-exiter button {
+exiter > button {
   padding: 12px 16px;
-  gap: 8px;
   border-radius: 8px;
 }
-exiter button:hover, exiter button.selected {
+exiter > button.selected {
   background: var(--aria-border);
 }
-exiter button icon {
+exiter > button icon {
   height: 40px;
 }
 exiter confirm {
@@ -357,17 +415,6 @@ exiter confirm countdown {
 }
 exiter confirm button {
   padding: 6px 16px;
-  gap: 0;
-  border-radius: 6px;
-  background: var(--aria-border);
-}
-exiter confirm button.ok {
-  background: var(--aria-urgent);
-  color: var(--aria-on-accent);
-}
-exiter confirm button:hover {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
 }
 
 /*
@@ -389,7 +436,7 @@ exiter confirm button:hover {
  * │  ╰─ handle   `background`, `border`, `height`: the squares on it
  * ╰─ toolbar     a row
  *    ├─ text     the hint, or the selection's size
- *    ╰─ button.all|.cancel|.copy|.edit|.save > text
+ *    ╰─ button.all|.cancel|.copy|.edit|.save.primary > text
  */
 screenshot {
   padding: 32px;
@@ -419,18 +466,6 @@ screenshot toolbar {
 }
 screenshot toolbar button {
   padding: 6px 12px;
-  border-radius: 6px;
-}
-screenshot toolbar button:hover {
-  background: var(--aria-border);
-}
-screenshot toolbar button.save {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-}
-screenshot toolbar button:disabled {
-  background: transparent;
-  color: var(--aria-muted);
 }
 
 /*
@@ -465,7 +500,7 @@ wallpaper {
  *       │  ╰─ peek[.on]       the eye, .on while the password shows
  *       │     ╰─ icon         drawn at `height`, `color`
  *       ├─ message            what PAM said, "Unlocking…"
- *       ╰─ button > text      Unlock
+ *       ╰─ button.primary > text   Unlock (:disabled while checking)
  */
 locker {
   background: var(--aria-bg);
@@ -527,15 +562,6 @@ locker auth.busy message {
 }
 locker auth button {
   padding: 6px 20px;
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-  border-radius: 6px;
-}
-locker auth button:hover {
-  background: var(--aria-fg);
-}
-locker auth.busy button {
-  background: var(--aria-muted);
 }
 
 /*
@@ -598,7 +624,7 @@ osd value {
  * ├─ icon           the app's image or icon, drawn at `height`
  * ├─ summary        the title
  * ├─ time           how long ago it came (popup rows only)
- * ├─ button.close   ✕ (popup rows only)
+ * ├─ button.close.flat   ✕ (popup rows only)
  * ├─ body           the text, wrapped at the width
  * ╰─ actions        a row, right-aligned
  *    ╰─ button      one per action the app offers
@@ -634,14 +660,6 @@ notification body {
 notification actions {
   gap: 6px;
 }
-notification actions button {
-  padding: 3px 10px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-notification actions button:hover {
-  border-color: var(--aria-accent);
-}
 notification time {
   font-size: var(--aria-font-sm);
   color: var(--aria-muted);
@@ -649,10 +667,6 @@ notification time {
 notification button.close {
   padding: 0 4px;
   color: var(--aria-muted);
-  border-radius: 4px;
-}
-notification button.close:hover {
-  background: var(--aria-border);
 }
 
 /*
@@ -702,7 +716,8 @@ popup {
  * Gadgets
  * =======
  *
- * Shared rules for every gadget.
+ * Shared rules for every gadget. A gadget's buttons in the bar
+ * (`gadget > button`) are flat, as high as the bar.
  *
  */
 /* gadget {
@@ -713,13 +728,11 @@ popup {
 gadget > button {
   padding: 0 6px;
   gap: 4px;
-  border-radius: 2px;
+  border: none;
+  border-radius: 0;
 }
 gadget > button:hover {
   background: var(--aria-border);
-}
-gadget > button icon {
-  height: 16px;
 }
 
 popup list {
@@ -736,29 +749,19 @@ popup header title {
   font-weight: bold;
   color: var(--aria-muted);
 }
-popup button,
 popup item {
   padding: 4px 8px;
   gap: 8px;
   border-radius: 4px;
 }
-popup button:hover,
 popup item:hover {
   background: var(--aria-border);
 }
-popup button:disabled,
 popup item:disabled {
   color: var(--aria-muted);
 }
-popup button icon,
 popup item icon {
   height: 16px;
-}
-popup button.settings,
-popup button.mixer,
-popup list > header button,
-popup actions button {
-  border: 1px solid var(--aria-border);
 }
 popup empty {
   padding: 12px;
@@ -910,12 +913,12 @@ gadget.tray > button.attention icon {
  *    │  ├─ icon
  *    │  ╰─ label
  *    ├─ device.<kind>[.mounted][.locked][.busy]  a row (`gap`)
- *    │  ├─ button.open                     opens it
+ *    │  ├─ button.open.flat                opens it
  *    │  │  ├─ icon
  *    │  │  ╰─ info                         a column (`gap`)
  *    │  │     ├─ label                     its label, else its size
  *    │  │     ╰─ meter[.critical] > fill   how full, while mounted
- *    │  ╰─ button.eject > icon             ⏏, while mounted
+ *    │  ╰─ button.eject.flat > icon        ⏏, while mounted
  *    ├─ share.<kind>[.mounted][.busy]      as a device
  *    ╰─ empty                              "No places"
  */
@@ -974,7 +977,7 @@ gadget.places device meter.critical fill {
  *    │  ├─ name
  *    │  ╰─ percent
  *    ├─ profiles                         a row (`gap`)
- *    │  ╰─ button.<profile>[.active]
+ *    │  ╰─ button.<profile>[.active]       .active: the one in use
  *    │     ├─ icon
  *    │     ╰─ text
  *    ├─ idle[.inhibited][.playing]       "Keep awake"
@@ -1031,14 +1034,6 @@ gadget.power device percent {
 }
 gadget.power profiles {
   gap: 4px;
-}
-gadget.power profiles button {
-  border: 1px solid var(--aria-border);
-}
-gadget.power profiles button.active {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-  border-color: var(--aria-accent);
 }
 gadget.power idle {
   padding: 8px 4px;
@@ -1106,7 +1101,7 @@ gadget.brightness screen.unknown icon {
  * ╰─ list                       `width` sizes it, `height` caps it (scrolls)
  *    ├─ header
  *    │  ├─ title
- *    │  ├─ button.dnd[.on]      toggles do-not-disturb
+ *    │  ├─ button.dnd[.active]  toggles do-not-disturb
  *    │  ╰─ button.clear         empties the history
  *    ├─ empty                   "No notifications"
  *    ╰─ notification[.unseen]   one per notification kept
@@ -1117,11 +1112,6 @@ gadget.notifications > button.new text {
 }
 gadget.notifications > button.dnd icon {
   color: var(--aria-muted);
-}
-gadget.notifications header button.dnd.on {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-  border-color: transparent;
 }
 /* The rows: the desktop `notification` rules, as wide as the list. */
 gadget.notifications list notification {
@@ -1204,7 +1194,7 @@ gadget.notifications list notification.unseen summary {
  *       │     ╰─ name | pid | user | cpu | mem
  *       ╰─ actions[.none]       (processes) under the table
  *          ├─ text
- *          ╰─ button.terminate | button.kill > text
+ *          ╰─ button.terminate | button.kill.danger > text
  */
 /* The sparkline and the gauge share the frame. */
 gadget.system-monitor > button graph,
@@ -1345,11 +1335,7 @@ gadget.system-monitor section.processes > actions {
   padding: 6px 12px 0 12px;
   gap: 6px;
 }
-gadget.system-monitor section.processes > actions button.kill text {
-  color: var(--aria-urgent);
-}
-gadget.system-monitor section.processes > actions.none text,
-gadget.system-monitor section.processes > actions.none button.kill text {
+gadget.system-monitor section.processes > actions.none > text {
   color: var(--aria-muted);
 }
 
@@ -1374,7 +1360,7 @@ gadget.system-monitor section.processes > actions.none button.kill text {
  *    ├─ section.output|.input|.stream
  *    │  ╰─ title              "Output" / "Input" / "Playing"
  *    ├─ channel.output|.input|.stream[.muted][.default][name="..."]
- *    │  ├─ button.mute[.on]   toggles mute
+ *    │  ├─ button.mute[.active]   toggles mute
  *    │  │  ╰─ icon            the device's / app's icon
  *    │  ├─ name
  *    │  │  ╰─ text
@@ -1384,7 +1370,7 @@ gadget.system-monitor section.processes > actions.none button.kill text {
  *    │  ├─ cover              the cover art (else the app's icon): `height`
  *    │  ├─ title | artist | album
  *    │  ╰─ controls
- *    │     ╰─ button.previous|.play|.next[.disabled]
+ *    │     ╰─ button.previous|.play|.next.flat
  *    │        ╰─ icon
  *    ├─ empty                 "No audio devices"
  *    ╰─ button.mixer > text   runs `mixer_command`
@@ -1406,16 +1392,9 @@ gadget.audio channel {
 }
 gadget.audio channel button.mute {
   padding: 4px;
-  border: 1px solid var(--aria-border);
-}
-gadget.audio channel button.mute.on {
-  background: var(--aria-border);
 }
 gadget.audio channel button.mute icon {
   height: 20px;
-}
-gadget.audio channel.muted icon {
-  color: var(--aria-muted);
 }
 gadget.audio channel name {
   padding: 0 2px;
@@ -1452,9 +1431,6 @@ gadget.audio player album {
 gadget.audio player controls {
   gap: 12px;
 }
-gadget.audio player controls button.disabled icon {
-  color: var(--aria-muted);
-}
 gadget.audio player controls button icon {
   height: 20px;
 }
@@ -1488,7 +1464,7 @@ gadget.audio player controls button icon {
  *    │  ├─ button.scan > icon                    (wifi) asks for a scan
  *    │  ╰─ toggle                                (wifi) on/off (see `toggle`)
  *    ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
- *    │  ├─ button                                the row
+ *    │  ├─ button.flat                           the row
  *    │  │  ├─ icon                               the strength
  *    │  │  ├─ name > text
  *    │  │  ├─ icon.badge                         the lock (.secured)
@@ -1501,10 +1477,10 @@ gadget.audio player controls button icon {
  *    │  ├─ auth[.busy]                           the password
  *    │  │  ├─ input                              the field (:focus)
  *    │  │  ├─ peek[.on] > icon                   the eye
- *    │  │  ╰─ button.connect[.disabled] > text   .disabled: nothing typed yet
+ *    │  │  ╰─ button.connect > text              :disabled: nothing typed yet
  *    │  ╰─ message                               "Wrong password", the enterprise hint
  *    ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
- *    │  ├─ button                                as an ap's: icon, name, status, chevron
+ *    │  ├─ button.flat                           as an ap's: icon, name, status, chevron
  *    │  ├─ details
  *    │  │  ╰─ line
  *    │  ╰─ actions
@@ -1574,12 +1550,6 @@ gadget.network details {
 gadget.network actions {
   padding: 0 8px 6px 8px;
   gap: 8px;
-}
-gadget.network auth button.connect {
-  border: 1px solid var(--aria-border);
-}
-gadget.network auth button.connect.disabled text {
-  color: var(--aria-muted);
 }
 gadget.network auth {
   padding: 0 8px 6px 34px;

@@ -373,7 +373,10 @@ impl AudioGadget {
     ) -> Element<'a, Message> {
         let theme = ctx.theme;
         let node = self.channel_node(list, c);
-        let mute = node.child("button").class("mute").class_if("on", c.muted);
+        let mute = node
+            .child("button")
+            .class("mute")
+            .class_if("active", c.muted);
         let mute_button = theme
             .button(&mute, self.channel_icon(ctx, &mute.child("icon"), c))
             .on_press(Message::Mute(c.kind, c.index, !c.muted));
@@ -519,12 +522,13 @@ impl AudioGadget {
         let controls = node.child("controls");
         let bus = p.bus.clone();
         let transport = |class: &'static str, icon: &str, enabled: bool, message: Message| {
-            // A class, not `:disabled`: the icon's colour is resolved
-            // when the view is built, not in the button's style closure.
+            // Disabled already here: the icon's colour is resolved when
+            // the view is built, not in the button's style closure.
             let b = controls
                 .child("button")
                 .class(class)
-                .class_if("disabled", !enabled);
+                .class("flat")
+                .disabled_if(!enabled);
             let mut button = theme.button(&b, self.icon(ctx, &b.child("icon"), icon));
             if enabled {
                 button = button.on_press(message);
@@ -584,7 +588,7 @@ impl AudioGadget {
         let info = cover_size.max(lines);
         let controls = node.child("controls");
         let ctl = theme.resolve(&controls);
-        let b = controls.child("button");
+        let b = controls.child("button").class("flat");
         let bs = theme.resolve(&b);
         let buttons = self.icon_size(ctx, &b.child("icon")) + bs.inset().y() + ctl.inset().y();
         info + s.gap + buttons + s.inset().y()

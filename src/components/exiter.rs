@@ -366,7 +366,7 @@ impl Exiter {
 
     /// The grid's cell: the icon's size and the widest label.
     fn cell(&self, theme: &Theme, locale: &Locale) -> (f32, f32) {
-        let b = self.node.child("button");
+        let b = self.node.child("button").class("flat");
         let bs = theme.resolve(&b);
         let icon = px(theme.resolve(&b.child("icon")).height).unwrap_or(48.0);
         let t = b.child("text");
@@ -463,7 +463,11 @@ impl Exiter {
                 items.push(theme.container(&cd, theme.text(&cd, countdown)).into());
             }
             let cancel = c.child("button").class("cancel");
-            let ok = c.child("button").class("ok").class(button.name.clone());
+            let ok = c
+                .child("button")
+                .class("ok")
+                .class(button.name.clone())
+                .class("danger");
             items.push(
                 row![
                     theme
@@ -488,7 +492,7 @@ impl Exiter {
         }
         let (cw, ch) = self.cell(theme, locale);
         let icon_size = px(theme
-            .resolve(&self.node.child("button").child("icon"))
+            .resolve(&self.node.child("button").class("flat").child("icon"))
             .height)
         .unwrap_or(48.0);
         let cols = self.config.columns.max(1);
@@ -504,6 +508,7 @@ impl Exiter {
                         .node
                         .child("button")
                         .class(button.name.clone())
+                        .class("flat")
                         .class_if("selected", i == self.selected);
                     let bs = theme.resolve(&b);
                     let icon = self.icon(&shared, button, &b.child("icon"), icon_size);

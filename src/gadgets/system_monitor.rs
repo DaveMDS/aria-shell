@@ -619,7 +619,10 @@ impl SystemMonitor {
             None => locale.tr("sysmon.select_help").to_owned(),
         };
         let button = |class: &'static str, label: &'static str, signal: Signal| {
-            let b = actions.child("button").class(class);
+            let b = actions
+                .child("button")
+                .class(class)
+                .class_if("danger", class == "kill");
             let mut button = theme.button(&b, theme.text(&b.child("text"), label));
             if p.is_some() {
                 button = button.on_press(Message::Signal(signal));

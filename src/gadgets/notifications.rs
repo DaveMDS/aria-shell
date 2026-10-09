@@ -220,7 +220,7 @@ impl NotificationsGadget {
         let dnd = header
             .child("button")
             .class("dnd")
-            .class_if("on", ctx.notifications.dnd());
+            .class_if("active", ctx.notifications.dnd());
         let clear = header.child("button").class("clear");
         let s = theme.resolve(&header);
         let button_height = |b: &Node, label: &str| {

@@ -105,6 +105,17 @@ impl Node {
         })
     }
 
+    /// `:disabled` already in `view`, for a button without `on_press`
+    /// whose children's styles (an icon's colour) are resolved there,
+    /// not in its style closure.
+    pub fn disabled_if(&self, disabled: bool) -> Self {
+        if disabled {
+            self.status(button::Status::Disabled)
+        } else {
+            self.clone()
+        }
+    }
+
     /// The interaction state iced reports for a slider: dragged is
     /// `:active`.
     pub fn slider_status(&self, status: slider::Status) -> Self {

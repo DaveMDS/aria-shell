@@ -378,7 +378,7 @@ impl Locker {
             let n = auth.child("message");
             fields.push(theme.container(&n, theme.text(&n, text)).into());
         }
-        let button = auth.child("button");
+        let button = auth.child("button").class("primary");
         fields.push(
             theme
                 .button(

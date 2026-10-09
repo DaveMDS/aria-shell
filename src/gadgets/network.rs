@@ -616,7 +616,7 @@ impl NetworkGadget {
             .class_if("expanded", expanded)
             .class_if("failed", failure.is_some())
             .attr("ssid", ap.ssid.clone());
-        let button = node.child("button");
+        let button = node.child("button").class("flat");
         let status = if ap.active {
             Some(locale.tr("network.connected"))
         } else if ap.connecting || attempting {
@@ -758,7 +758,7 @@ impl NetworkGadget {
             .class_if("unplugged", !d.carrier)
             .class_if("expanded", expanded)
             .attr("name", d.iface.clone());
-        let button = node.child("button");
+        let button = node.child("button").class("flat");
         let status = if !d.carrier {
             locale.tr("network.unplugged")
         } else if active {
@@ -1066,10 +1066,7 @@ impl NetworkGadget {
             )
             .on_press_maybe((!busy).then_some(Message::Peek));
         let ready = !busy && !self.password.is_empty();
-        let connect = auth
-            .child("button")
-            .class("connect")
-            .class_if("disabled", !ready);
+        let connect = auth.child("button").class("connect").disabled_if(!ready);
         let connect_button = theme
             .button(
                 &connect,

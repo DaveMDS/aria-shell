@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, row};
+use iced::widget::{Space, row};
 use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
 
@@ -351,7 +351,11 @@ impl PlacesGadget {
 
         // Disabled already here, not only once iced draws it: the icon
         // and the label take their colour from `button:disabled` too.
-        let open = disabled(node.child("button").class("open"), v.open.is_none());
+        let open = node
+            .child("button")
+            .class("open")
+            .class("flat")
+            .disabled_if(v.open.is_none());
         let os = theme.resolve(&open);
         let i = open.child("icon");
         let info = open.child("info");
@@ -396,7 +400,11 @@ impl PlacesGadget {
         ];
 
         if let Some(on_eject) = v.eject {
-            let eject = disabled(node.child("button").class("eject"), on_eject.is_none());
+            let eject = node
+                .child("button")
+                .class("eject")
+                .class("flat")
+                .disabled_if(on_eject.is_none());
             let ei = eject.child("icon");
             let es = chrome(&theme.resolve(&eject));
             let ei_size = padded(
@@ -447,15 +455,6 @@ struct Volume {
     open: Option<Message>,
     /// ⏏: `None` not there, `Some(None)` disabled.
     eject: Option<Option<Message>>,
-}
-
-/// `node` as a disabled button, when it is one.
-fn disabled(node: Node, disabled: bool) -> Node {
-    if disabled {
-        node.status(button::Status::Disabled)
-    } else {
-        node
-    }
 }
 
 /// A section's title.

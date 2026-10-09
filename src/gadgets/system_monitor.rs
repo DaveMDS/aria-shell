@@ -26,6 +26,7 @@ use crate::services::sysmon::{
 };
 use crate::time::aligned_ticks;
 use crate::ui::graph;
+use crate::ui::tabs::{self, Tab};
 use crate::ui::theme::{self, Node, Theme};
 
 /// `[SystemMonitor:<id>]`: a gadget's keys (the sampler's and the
@@ -378,25 +379,16 @@ impl Gadget for SystemMonitor {
         } else {
             self.tab
         };
-        let tabs_node = monitor.child("tabs");
         let tabs = SectionKind::ALL
             .iter()
             .filter(|k| **k != SectionKind::Gpu || has_gpu)
-            .map(|&k| {
-                let n = tabs_node
-                    .child("tab")
-                    .class(k.name())
-                    .class_if("active", k == tab);
-                theme
-                    .button(&n, theme.text(&n.child("text"), locale.tr(k.title())))
-                    .on_press(Message::Tab(k))
-                    .into()
+            .map(|&k| Tab {
+                name: Some(k.name()),
+                label: locale.tr(k.title()),
+                active: k == tab,
+                on_press: Message::Tab(k),
             });
-        let tabs: Element<'a, Message> = theme
-            .row(&tabs_node, tabs)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
-            .into();
+        let tabs = tabs::view(theme, &monitor.child("tabs"), tabs, Length::Fill);
         let node = monitor.child("section").class(tab.name());
         let body: Vec<Element<'a, Message>> = match (tab, sample) {
             (SectionKind::Processes, _) => self.processes(theme, locale, &node, sysmon),

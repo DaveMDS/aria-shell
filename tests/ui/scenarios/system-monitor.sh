@@ -49,27 +49,27 @@ click_widget "$bell"
 assert_surface popup
 settle 1
 for tab in cpu mem disk net processes; do
-    assert_eq "$(count_widgets "monitor tabs tab.$tab")" 1 "tab $tab"
+    assert_eq "$(count_widgets "monitor tabs button.tab.$tab")" 1 "tab $tab"
 done
 case "$info" in
-    *"gpu=0 "*) assert_eq "$(count_widgets 'monitor tabs tab.gpu')" 0 "no gpu, no tab" ;;
-    *) assert_eq "$(count_widgets 'monitor tabs tab.gpu')" 1 "a gpu tab" ;;
+    *"gpu=0 "*) assert_eq "$(count_widgets 'monitor tabs button.tab.gpu')" 0 "no gpu, no tab" ;;
+    *) assert_eq "$(count_widgets 'monitor tabs button.tab.gpu')" 1 "a gpu tab" ;;
 esac
-assert_eq "$(count_widgets 'monitor tabs tab.cpu.active')" 1 "the cpu instance opens on the cpu tab"
+assert_eq "$(count_widgets 'monitor tabs button.tab.cpu.active')" 1 "the cpu instance opens on the cpu tab"
 assert_eq "$(count_widgets 'monitor section')" 1 "one section shown"
 assert_eq "$(count_widgets 'section.cpu cores core')" "$(nproc)" "one meter per core"
 assert_eq "$(count_widgets 'section.cpu graph')" 1
 shot_surface popup-cpu popup
-click_widget 'monitor tabs tab.mem'
-assert_eq "$(count_widgets 'monitor tabs tab.mem.active')" 1
+click_widget 'monitor tabs button.tab.mem'
+assert_eq "$(count_widgets 'monitor tabs button.tab.mem.active')" 1
 assert_eq "$(count_widgets 'section.mem meter.used')" 1
 assert_eq "$(count_widgets 'section.cpu')" 0 "the cpu section is gone"
-click_widget 'monitor tabs tab.disk'
+click_widget 'monitor tabs button.tab.disk'
 [ "$(count_widgets 'section.disk disk')" -ge 1 ] || { echo "no disk row"; exit 1; }
 assert_eq "$(count_widgets 'section.disk disk[mount="/"]')" 1 "the root mount"
-click_widget 'monitor tabs tab.net'
+click_widget 'monitor tabs button.tab.net'
 [ "$(count_widgets 'section.net iface')" -ge 1 ] || { echo "no interface row"; exit 1; }
-click_widget 'monitor tabs tab.processes'
+click_widget 'monitor tabs button.tab.processes'
 settle 1
 assert_eq "$(count_widgets 'table row')" 5 "processes = 5"
 assert_eq "$(count_widgets 'table header column.cpu.sorted')" 1 "sorted by cpu at first"
@@ -170,7 +170,7 @@ assert_no_surface popup
 assert_eq "$(count_widgets 'monitor')" 0
 click_widget 'panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
 assert_surface popup
-assert_eq "$(count_widgets 'monitor tabs tab.mem.active')" 1 "the mem instance opens on the mem tab"
+assert_eq "$(count_widgets 'monitor tabs button.tab.mem.active')" 1 "the mem instance opens on the mem tab"
 assert_eq "$(count_widgets 'section.mem')" 1
 click 300 900
 assert_no_surface popup

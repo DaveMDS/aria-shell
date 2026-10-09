@@ -16,8 +16,9 @@ assert_eq "$(count_widgets 'osd.volume')" 1 "the OSD"
 assert_eq "$(count_widgets 'notification.normal')" 1 "a notification"
 assert_eq "$(count_widgets 'notification.critical')" 1 "a critical one"
 assert_eq "$(count_widgets 'gadget#showcase > button')" 3 "the bar's buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 9 "the other buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button.danger')" 1 "a danger one"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 12 "the other buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button.danger')" 2 "a danger one, and disabled"
+assert_eq "$(count_widgets 'popup#showcase > buttons > tabs > button.tab')" 3 "tabs, one open"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase

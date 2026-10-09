@@ -22,7 +22,8 @@
 //! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
 //! │  ╰─ button > icon | text
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
-//!    ╰─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
+//!    ├─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
+//!    ╰─ tabs > button.tab[.active] > text
 //! ```
 
 use iced::widget::{column, container, mouse_area, row};
@@ -41,6 +42,7 @@ use crate::daemon::view::dialog_surface;
 use crate::gadgets::{AnyGadget, Context};
 use crate::locale::Locale;
 use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
+use crate::ui::tabs::{self, Tab};
 use crate::ui::theme::{self, Node};
 use crate::ui::{popup, toast};
 use crate::{AriaShell, Message as Shell};
@@ -55,19 +57,26 @@ const BAR_BUTTONS: &[(bool, Option<&str>)] = &[
     (false, Some("gadget > button")),
 ];
 
-/// The other buttons: a class, whether it's enabled, and whether it
-/// has an icon, a text (its selector) or both.
+/// The other buttons, in rows of [`BUTTONS_ROW`]: a class, whether it's
+/// enabled, and whether it has an icon, a text (its selector) or both.
 const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
     (None, true, false, true),
     (None, true, true, true),
     (None, true, true, false),
-    (None, false, false, true),
     (Some("flat"), true, false, true),
+    (Some("flat"), true, true, true),
     (Some("flat"), true, true, false),
     (Some("primary"), true, false, true),
     (Some("danger"), true, false, true),
     (Some("active"), true, false, true),
+    (None, false, false, true),
+    (Some("primary"), false, false, true),
+    (Some("danger"), false, false, true),
 ];
+const BUTTONS_ROW: usize = 3;
+
+/// The sample tabs, the first one open.
+const TABS: &[&str] = &["button.tab.active", "button.tab", "button.tab"];
 
 /// The icon the sample buttons draw.
 const BUTTON_ICON: &str = "dialog-information-symbolic";
@@ -405,7 +414,7 @@ impl AriaShell {
         let popup = Node::root("popup").id("showcase");
         let list = popup.child("buttons");
         let count = BUTTONS.len();
-        let buttons = BUTTONS
+        let mut buttons = BUTTONS
             .iter()
             .enumerate()
             .map(|(i, &(class, enabled, icon, text))| {
@@ -423,10 +432,30 @@ impl AriaShell {
                     .button(&node, content)
                     .on_press_maybe(enabled.then(|| nothing(())))
                     .into()
-            });
+            })
+            .collect::<Vec<Element<'_, Shell>>>();
+        let mut rows: Vec<Element<'_, Shell>> = Vec::new();
+        while !buttons.is_empty() {
+            let rest = buttons.split_off(BUTTONS_ROW.min(buttons.len()));
+            let first = std::mem::replace(&mut buttons, rest);
+            rows.push(
+                row(first)
+                    .spacing(BUTTONS_GAP)
+                    .align_y(Alignment::Center)
+                    .into(),
+            );
+        }
+        let tabs = TABS.iter().enumerate().map(|(i, &label)| Tab {
+            name: None,
+            label,
+            active: i == 0,
+            on_press: nothing(()),
+        });
+        let tabs = tabs::view(theme, &list.child("tabs"), tabs, Length::Shrink);
         let content = theme.container(
             &popup,
-            column(buttons)
+            column(rows)
+                .push(tabs)
                 .spacing(BUTTONS_GAP)
                 .padding(BUTTONS_PADDING),
         );

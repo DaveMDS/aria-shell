@@ -173,6 +173,37 @@ button.danger:disabled {
 }
 
 /*
+ * Tabs
+ * ====
+ *
+ * One button per page, the open one .active. The line under them is the
+ * row's (`box-shadow: inset`, as wide as the row), the active tab's mark
+ * its own, drawn over that line.
+ *
+ * tabs                              a row (`gap`)
+ * ╰─ button.tab[.<name>][.active]
+ *    ╰─ text
+ */
+tabs {
+  box-shadow: inset 0 -1px var(--aria-border);
+}
+button.tab {
+  padding: 6px 12px;
+  color: var(--aria-muted);
+  border: none;
+  border-radius: 0;
+}
+button.tab:hover {
+  color: var(--aria-fg);
+}
+button.tab.active,
+button.tab.active:hover {
+  background: transparent;
+  color: var(--aria-accent);
+  box-shadow: inset 0 -2px var(--aria-accent);
+}
+
+/*
  * Toggle
  * ======
  *
@@ -1145,8 +1176,8 @@ gadget.notifications list notification.unseen summary {
  *       ╰─ label
  * popup > gadget.system-monitor
  * ╰─ monitor                    `width` / `height` size the popup
- *    ├─ tabs                    a row (`gap`)
- *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]
+ *    ├─ tabs                    (see `tabs`)
+ *    │  ╰─ button.tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]
  *    │     ╰─ text
  *    ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes  the active tab
  *       ├─ header
@@ -1226,22 +1257,6 @@ gadget.system-monitor monitor {
   height: 460px;
   padding: 12px;
   gap: 16px;
-}
-gadget.system-monitor tabs {
-  gap: 4px;
-}
-gadget.system-monitor tab {
-  padding: 3px 10px;
-  border-radius: 4px;
-  color: var(--aria-muted);
-}
-gadget.system-monitor tab:hover {
-  background: var(--aria-border);
-  color: var(--aria-fg);
-}
-gadget.system-monitor tab.active {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
 }
 gadget.system-monitor section {
   gap: 6px;

@@ -974,9 +974,10 @@ Two things flow between the daemon and the gadgets besides messages:
   so the row inside must not get it again (`theme.row(&node, ..)`
   would: the Workspaces gadget does that, doubling `workspace`
   padding; left as is since the shipped themes are tuned to it).
-- Theme selectors are global: `gadget.tray item` matched the menu
-  rows under `popup > gadget.tray > menu > item` too and won on
-  specificity, so base.css uses `gadget.tray > item` for the bar.
+- Theme selectors are global: `gadget.tray button` would match a
+  button anywhere under a tray gadget, its popup's too; base.css
+  styles the bar's buttons with `gadget > button` (the child
+  combinator), which a popup's content never is.
 - A layer surface's `margin: Some((top, right, bottom, left))` and
   `Message::MarginChange { id, margin }` place it from its anchored
   edges; `exclusive_zone: None` keeps it out of the bars' zones (Sway

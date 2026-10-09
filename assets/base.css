@@ -44,6 +44,8 @@
  *                               the bottom), over the background, under the content and the
  *                               children; takes no room; unblurred, the box square
  *   padding                     1 to 4 values
+ *   padding-top, padding-right, one side
+ *   padding-bottom, padding-left
  *   gap                         space between the children of a row
  *   width, height               <px> | auto | fill (content is centred on a sized axis);
  *                               the whole box, border and padding included (CSS's
@@ -55,6 +57,9 @@
  *                               per glyph (inherited)
  *   font-size                   px (inherited)
  *   font-weight                 normal | bold | 100..900 (inherited)
+ *   line-height                 normal | <number> (times the font size) | <px> (inherited);
+ *                               a whole px height in a box of the same parity keeps the
+ *                               text on whole pixels (iced truncates a fractional one)
  *
  * Elements: every surface, gadget and shared piece (toggle, slider,
  * menu, calendar) has its element tree in a comment above its rules,
@@ -91,12 +96,12 @@
 
 :root {
   --aria-font-xs: 10px;
-  --aria-font-sm: 12px;
-  --aria-font: 14px;
+  --aria-font-sm: 13px;
+  --aria-font: 15px;
   --aria-font-lg: 18px;
   --aria-font-xl: 24px;
   --aria-font-xxl: 64px;
-  font-family: Inter;  /* Inter is embedded in the aria binary */
+  font-family: "Noto Sans Display";  /* embedded in the aria binary */
   font-size: var(--aria-font);
 }
 
@@ -571,14 +576,15 @@ notification button.close:hover {
  *    ╰─ gadget.<kind>[#<instance>]   one per gadget
  */
 panel {
-  min-height: 32px;
+  min-height: 28px;
+  line-height: 28px;
   background: var(--aria-bg);
   color: var(--aria-fg);
+  padding: 0 3px;
 }
 
 panel slot {
-  gap: 8px;
-  padding: 0 8px;
+  gap: 4px;
 }
 
 /*
@@ -597,9 +603,6 @@ popup {
   border: 1px solid var(--aria-border);
 }
 
-
-/* Gadgets */
-
 /*
  * Gadgets
  * =======
@@ -607,21 +610,20 @@ popup {
  * Shared rules for every gadget.
  *
  */
-gadget {
-  gap: 4px;
-}
-gadget > button,
-gadget.tray > item {
-  padding: 0 4px;
+/* gadget {
+  gap: 2px;
+  border: 1px red;
+} */
+
+gadget > button {
+  padding: 0 6px;
   gap: 4px;
   border-radius: 2px;
 }
-gadget > button:hover,
-gadget.tray > item:hover {
+gadget > button:hover {
   background: var(--aria-border);
 }
-gadget > button icon,
-gadget.tray > item icon {
+gadget > button icon {
   height: 16px;
 }
 
@@ -748,14 +750,14 @@ gadget.workspaces title icon {
  * Tray gadget
  * ===========
  *
- * gadget.tray                     a row (`gap`)
- * ╰─ item[.passive][.attention]   a button per status notifier item
- *    ╰─ icon                      drawn at `height` (symbolic: `color`)
+ * gadget.tray                       a row (`gap`)
+ * ╰─ button[.passive][.attention]   one per status notifier item
+ *    ╰─ icon                        drawn at `height` (symbolic: `color`)
  * popup > gadget.tray
- * ╰─ menu                         the item's menu (see `menu`)
- *    ╰─ text                      "…" until the menu is loaded
+ * ╰─ menu                           the item's menu (see `menu`)
+ *    ╰─ text                        "…" until the menu is loaded
  */
-gadget.tray > item.attention icon {
+gadget.tray > button.attention icon {
   color: var(--aria-urgent);
 }
 

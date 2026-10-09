@@ -121,7 +121,7 @@ impl Gadget for TrayGadget {
         let items = ctx.tray.items.iter().enumerate().map(|(n, item)| {
             let node = ctx
                 .node
-                .child("item")
+                .child("button")
                 .class_if("passive", item.props.status == Status::Passive)
                 .class_if("attention", item.props.status == Status::NeedsAttention)
                 .nth(n, count);

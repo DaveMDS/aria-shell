@@ -24,6 +24,8 @@ assert_contains "$(call org.freedesktop.Notifications.GetServerInformation)" "'a
 assert_contains "$(call org.freedesktop.Notifications.GetCapabilities)" "'actions'" "capabilities"
 
 # One notification, on the focused output, below the bar at the top right.
+set -- $(surfaces | tr ';' '\n' | grep 'panel HEADLESS-1 ')
+top=$((${4#*x} + 8))
 id1=$(nsend -p -t 0 -i dialog-information "First summary" "A body that is long enough to wrap onto a second line in the toast")
 wait_for 'notification' 1 "one toast"
 set -- $(toast_geo)
@@ -31,7 +33,7 @@ assert_eq "$2" HEADLESS-1 "on the focused output"
 x=${3%,*}; y=${3#*,}; w=${4%x*}; h=${4#*x}
 assert_eq "$w" 360 "theme width"
 assert_eq "$((x + w))" $((1920 - 8)) "8px from the right edge"
-assert_eq "$y" $((32 + 8)) "under the bar, 8px down"
+assert_eq "$y" "$top" "under the bar, 8px down"
 [ "$h" -gt 40 ] || { echo "toast too short: $h"; exit 1; }
 first_h=$h
 assert_eq "$(count_widgets 'notification#'"$id1"' icon')" 1 "icon drawn"
@@ -48,10 +50,10 @@ set -- $(toast_geo 1)
 y1=${3#*,}
 set -- $(toast_geo 2)
 y2=${3#*,}; h2=${4#*x}
-assert_eq "$y2" 40 "the newest at the corner"
+assert_eq "$y2" "$top" "the newest at the corner"
 assert_eq "$y1" $((y2 + h2 + 8)) "the first pushed down by it, with the gap"
 set -- $(widget 'notification#'"$id2"' summary')
-assert_eq "$2" $((40 + 1 + 10)) "newest on top (summary inside its border and padding)"
+assert_eq "$2" $((top + 1 + 10)) "newest on top (summary inside its border and padding)"
 shot toasts-2 "0,0 1920x300"
 
 # Replacing keeps the id and the place, changes the text and size.
@@ -68,7 +70,7 @@ call org.freedesktop.Notifications.CloseNotification "$id1" > /dev/null
 settle
 assert_eq "$(count_widgets 'notification')" 1
 set -- $(toast_geo)
-assert_eq "${3#*,}" 40 "the survivor took the first place"
+assert_eq "${3#*,}" "$top" "the survivor took the first place"
 
 # A right click dismisses.
 click_widget_with right 'notification#'"$id2"' summary'

@@ -1,8 +1,8 @@
 # The showcase: `aria showcase show` draws every part of the UI (the
-# popups, the launcher, the exit menu, the OSD, two notifications) on
-# one surface between the bars of the focused output, inert; it
-# follows the scheme; Escape, a click beside the parts or the command
-# again close it.
+# popups, the launcher, the exit menu, the OSD, two notifications, every
+# kind of button) on one surface between the bars of the focused
+# output, inert; it follows the scheme; Escape, a click beside the
+# parts or the command again close it.
 
 assert_no_surface showcase
 aria showcase show; settle 1
@@ -15,6 +15,9 @@ assert_eq "$(count_widgets 'exiter > button')" 6 "the exit menu"
 assert_eq "$(count_widgets 'osd.volume')" 1 "the OSD"
 assert_eq "$(count_widgets 'notification.normal')" 1 "a notification"
 assert_eq "$(count_widgets 'notification.critical')" 1 "a critical one"
+assert_eq "$(count_widgets 'gadget#showcase > button')" 3 "the bar's buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 6 "the other buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button.danger')" 1 "a danger one"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase

@@ -237,7 +237,7 @@ impl Panel {
         })
     }
 
-    fn themed_height(theme: &Theme, node: &Node) -> u32 {
+    pub(crate) fn themed_height(theme: &Theme, node: &Node) -> u32 {
         theme
             .resolve(node)
             .min_height

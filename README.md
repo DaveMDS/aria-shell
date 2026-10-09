@@ -285,7 +285,7 @@ is loaded on top, with light and dark colour schemes. Themes are found in
   `assets/fonts/`): the same text on every system, whatever is installed;
   tabular digits, numbers don't shift as they change
 - ✅ Every part at once to compare them and take the theme's picture
-  (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications)
+  (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications, buttons)
 - ✅ CSS box model: the border takes room, a border per side (`border-bottom`, ...),
   boxes sharp on the pixel grid, `box-shadow: inset` (unblurred)
 - 🔲 `margin`, `opacity`, gradients, `@import`, `!important`, `@font-face`, transitions

@@ -9,15 +9,20 @@
 //! output, between its bars: what shows through is the desktop, as on
 //! the real ones. Inert: what the parts would do is dropped, their
 //! hover still shows. Escape, a click beside the parts or the command
-//! again close it; a theme change redraws it like any surface.
+//! again close it; a theme change redraws it like any surface. Its own
+//! layout (the room around the parts and between them) isn't themed.
 //!
 //! ```text
-//! showcase      the surface; `padding` around the parts, `gap` between them
-//! ├─ popup > gadget.clock | gadget.themes     the calendar, a menu
+//! (the surface)                             its own roots, side by side
+//! ├─ popup > gadget.clock | gadget.themes   the calendar, a menu
 //! ├─ launcher
 //! ├─ exiter
 //! ├─ osd.volume
-//! ╰─ notification.normal | notification.critical
+//! ├─ notification.normal | notification.critical
+//! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
+//! │  ╰─ button > icon | text
+//! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
+//!    ╰─ button[.flat|.primary|.danger|.active][:disabled] > text
 //! ```
 
 use iced::widget::{column, container, mouse_area, row};
@@ -31,16 +36,48 @@ use iced_wayland_subscriber::OutputId;
 use crate::components::exiter::Exiter;
 use crate::components::launcher::Launcher;
 use crate::components::osd::{self, Osd};
+use crate::components::panel::Panel;
 use crate::daemon::view::dialog_surface;
 use crate::gadgets::{AnyGadget, Context};
 use crate::locale::Locale;
 use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
-use crate::ui::theme::Node;
+use crate::ui::theme::{self, Node};
 use crate::ui::{popup, toast};
 use crate::{AriaShell, Message as Shell};
 
 /// The gadgets whose popups show, by their config section.
 const GADGETS: &[&str] = &["Clock", "Themes"];
+
+/// The bar's sample buttons: with an icon, a text, or both.
+const BAR_BUTTONS: &[(bool, Option<&str>)] = &[
+    (true, None),
+    (true, Some("gadget > button")),
+    (false, Some("gadget > button")),
+];
+
+/// The other buttons: a class, and whether it's enabled.
+const BUTTONS: &[(Option<&str>, bool)] = &[
+    (None, true),
+    (None, false),
+    (Some("flat"), true),
+    (Some("primary"), true),
+    (Some("danger"), true),
+    (Some("active"), true),
+];
+
+/// The icon the bar's buttons draw.
+const BUTTON_ICON: &str = "dialog-information-symbolic";
+
+/// The room around the parts and between them.
+const PADDING: f32 = 24.0;
+const GAP: f32 = 24.0;
+
+/// The room around the buttons in their popup's box, and between them.
+const BUTTONS_PADDING: f32 = 12.0;
+const BUTTONS_GAP: f32 = 8.0;
+
+/// An icon's size when the theme doesn't say.
+const DEFAULT_ICON_SIZE: f32 = 16.0;
 
 pub(crate) struct Showcase {
     pub window: Id,
@@ -80,6 +117,7 @@ impl Showcase {
             .map(str::to_owned)
             .chain(notifications)
             .chain(self.gadgets.iter().flat_map(|(g, _)| g.icon_names()))
+            .chain([BUTTON_ICON.to_owned()])
     }
 
     /// Desktop ids of the launcher's results, for icon resolution.
@@ -148,10 +186,15 @@ fn nothing<T>(_: T) -> Shell {
 
 /// A part, at its surface's size, taking the presses on it.
 fn part(content: Element<'_, Shell>, (w, h): (u32, u32)) -> Element<'_, Shell> {
-    container(mouse_area(content).on_press(nothing(())))
+    container(inert(content))
         .width(w as f32)
         .height(h as f32)
         .into()
+}
+
+/// `content`, taking the presses on it.
+fn inert(content: Element<'_, Shell>) -> Element<'_, Shell> {
+    mouse_area(content).on_press(nothing(())).into()
 }
 
 impl AriaShell {
@@ -260,8 +303,6 @@ impl AriaShell {
         let shared = self.shared();
         let theme = &self.theme;
         let output = self.output_name(showcase.output);
-        let root = Node::root("showcase");
-        let gap = theme.resolve(&root).gap;
         let popups = showcase.gadgets.iter().map(|(gadget, node)| {
             let ctx = Context {
                 shared,
@@ -308,13 +349,14 @@ impl AriaShell {
             )
         });
         let parts = row![
-            column(popups).spacing(gap),
+            column(popups).spacing(GAP),
             launcher,
-            column![exiter, osd].extend(toasts).spacing(gap),
+            column![exiter, osd].extend(toasts).spacing(GAP),
+            column![inert(self.bar_buttons_view()), inert(self.buttons_view())].spacing(GAP),
         ]
-        .spacing(gap);
-        let content = theme
-            .container(&root, parts)
+        .spacing(GAP);
+        let content = container(parts)
+            .padding(PADDING)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Alignment::Center)
@@ -323,5 +365,86 @@ impl AriaShell {
             .on_press(Shell::Showcase(Message::PressedOutside))
             .on_release(Shell::Showcase(Message::Released))
             .into()
+    }
+
+    /// A bar as thick as the real ones, with the bar's buttons in a
+    /// gadget of no kind: only the rules every gadget gets apply.
+    fn bar_buttons_view(&self) -> Element<'_, Shell> {
+        let theme = &self.theme;
+        let panel = Node::root("panel");
+        let slot = panel.child("slot").class("start");
+        let gadget = slot.child("gadget").id("showcase");
+        let count = BAR_BUTTONS.len();
+        let buttons = BAR_BUTTONS.iter().enumerate().map(|(i, &(icon, label))| {
+            let node = gadget.child("button").nth(i, count);
+            let mut content: Vec<Element<'_, Shell>> = Vec::new();
+            if icon {
+                content.push(self.button_icon(&node.child("icon")));
+            }
+            if let Some(label) = label {
+                content.push(theme.text(&node.child("text"), label).into());
+            }
+            let content = row(content)
+                .spacing(theme.resolve(&node).gap)
+                .align_y(Alignment::Center);
+            theme.button(&node, content).on_press(nothing(())).into()
+        });
+        let buttons = row(buttons)
+            .spacing(theme.resolve(&gadget).gap)
+            .height(Length::Fill)
+            .align_y(Alignment::Center);
+        let slot = theme
+            .row(&slot, [theme.container(&gadget, buttons).into()])
+            .height(Length::Fill)
+            .align_y(Alignment::Center);
+        theme
+            .container(&panel, slot)
+            .height(Panel::themed_height(theme, &panel) as f32)
+            .into()
+    }
+
+    /// The other kinds of buttons, in a popup's box, each labelled by
+    /// the selector that styles it.
+    fn buttons_view(&self) -> Element<'_, Shell> {
+        let theme = &self.theme;
+        let popup = Node::root("popup").id("showcase");
+        let list = popup.child("buttons");
+        let count = BUTTONS.len();
+        let buttons = BUTTONS.iter().enumerate().map(|(i, &(class, enabled))| {
+            let mut node = list.child("button").nth(i, count);
+            let mut label = "button".to_owned();
+            if let Some(class) = class {
+                node = node.class(class);
+                label = format!("{label}.{class}");
+            }
+            if !enabled {
+                label.push_str(":disabled");
+            }
+            let text = theme.text(&node.child("text"), label);
+            theme
+                .button(&node, text)
+                .on_press_maybe(enabled.then(|| nothing(())))
+                .into()
+        });
+        let content = theme.container(
+            &popup,
+            column(buttons)
+                .spacing(BUTTONS_GAP)
+                .padding(BUTTONS_PADDING),
+        );
+        container(content).padding(theme.shadow_room(&popup)).into()
+    }
+
+    /// The bar buttons' icon, at the theme's `height` for `node`.
+    fn button_icon(&self, node: &Node) -> Element<'_, Shell> {
+        let style = self.theme.resolve(node);
+        let size = match style.height.or(style.width) {
+            Some(theme::Length::Px(px)) => px,
+            _ => DEFAULT_ICON_SIZE,
+        };
+        match self.icons.get_name(BUTTON_ICON, None) {
+            Some(icon) => icon.view(size, style.color),
+            None => iced::widget::Space::new().width(size).height(size).into(),
+        }
     }
 }

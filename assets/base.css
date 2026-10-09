@@ -105,6 +105,117 @@
   font-size: var(--aria-font);
 }
 
+/* Shared pieces: in several surfaces and gadgets' popups */
+
+/*
+ * Toggle
+ * ======
+ *
+ * An on/off switch: the track is `height` tall (twice as wide),
+ * `background` with the border; the knob's `background` (the track's
+ * `color` when unset) and border.
+ *
+ * toggle[.on]
+ * ╰─ handle   the knob
+ */
+toggle {
+  height: 18px;
+  background: var(--aria-border);
+}
+toggle.on {
+  background: var(--aria-accent);
+}
+toggle handle {
+  background: var(--aria-popup-bg);
+}
+toggle:hover handle {
+  background: var(--aria-bg);
+}
+
+/*
+ * Slider
+ * ======
+ *
+ * The rail is `height` thick, `color` its filled part, `background` the
+ * rest, with the border; the handle a circle of `width`, `background`,
+ * border.
+ *
+ * slider
+ * ╰─ handle
+ */
+slider {
+  height: 4px;
+  color: var(--aria-accent);
+  background: var(--aria-border);
+  border-radius: 2px;
+}
+slider handle {
+  width: 12px;
+  background: var(--aria-accent);
+}
+
+/*
+ * Menu
+ * ====
+ *
+ * The tray items' and the themes' popups: a column, `gap` between rows.
+ * An unfolded submenu has the same rows, nested; its padding is the
+ * indent.
+ *
+ * menu
+ * ├─ item[.checked][.submenu][.expanded]   a button (:disabled when the app says so)
+ * │  ├─ check                              ✓ / ● / ○ (levels with toggles only)
+ * │  ├─ label
+ * │  ╰─ arrow                              ▸ / ▾ on a submenu
+ * ├─ separator                             sized by `height`
+ * ╰─ submenu                               an unfolded submenu
+ */
+menu {
+  padding: 4px;
+  gap: 2px;
+}
+menu arrow,
+menu check {
+  color: var(--aria-muted);
+}
+menu item.checked check {
+  color: var(--aria-accent);
+}
+menu separator {
+  height: 1px;
+  background: var(--aria-separator);
+}
+menu submenu {
+  padding: 0 0 0 16px;
+  gap: 2px;
+}
+
+/*
+ * Calendar
+ * ========
+ *
+ * calendar                          the clock's month view
+ * ├─ header
+ * │  ├─ button.prev | button.next   previous / next month
+ * │  ╰─ text                        month and year
+ * ├─ weekday                        one per column
+ * ╰─ day[.today]                    one per cell
+ */
+calendar {
+  padding: 12px;
+}
+calendar header button {
+  padding: 0 8px;
+}
+calendar weekday {
+  font-size: var(--aria-font-sm);
+  color: var(--aria-muted);
+}
+calendar day.today {
+  color: var(--aria-accent);
+  font-weight: bold;
+}
+
 /* Surfaces */
 
 /*
@@ -1529,115 +1640,4 @@ gadget.network vpn message {
 /* Classes a script may set: `{"text": "3", "class": "warning"}` */
 gadget.custom > button.warning {
   color: var(--aria-urgent);
-}
-
-/* Shared pieces: in several gadgets' popups */
-
-/*
- * Toggle
- * ======
- *
- * An on/off switch: the track is `height` tall (twice as wide),
- * `background` with the border; the knob's `background` (the track's
- * `color` when unset) and border.
- *
- * toggle[.on]
- * ╰─ handle   the knob
- */
-toggle {
-  height: 18px;
-  background: var(--aria-border);
-}
-toggle.on {
-  background: var(--aria-accent);
-}
-toggle handle {
-  background: var(--aria-popup-bg);
-}
-toggle:hover handle {
-  background: var(--aria-bg);
-}
-
-/*
- * Slider
- * ======
- *
- * The rail is `height` thick, `color` its filled part, `background` the
- * rest, with the border; the handle a circle of `width`, `background`,
- * border.
- *
- * slider
- * ╰─ handle
- */
-slider {
-  height: 4px;
-  color: var(--aria-accent);
-  background: var(--aria-border);
-  border-radius: 2px;
-}
-slider handle {
-  width: 12px;
-  background: var(--aria-accent);
-}
-
-/*
- * Menu
- * ====
- *
- * The tray items' and the themes' popups: a column, `gap` between rows.
- * An unfolded submenu has the same rows, nested; its padding is the
- * indent.
- *
- * menu
- * ├─ item[.checked][.submenu][.expanded]   a button (:disabled when the app says so)
- * │  ├─ check                              ✓ / ● / ○ (levels with toggles only)
- * │  ├─ label
- * │  ╰─ arrow                              ▸ / ▾ on a submenu
- * ├─ separator                             sized by `height`
- * ╰─ submenu                               an unfolded submenu
- */
-menu {
-  padding: 4px;
-  gap: 2px;
-}
-menu arrow,
-menu check {
-  color: var(--aria-muted);
-}
-menu item.checked check {
-  color: var(--aria-accent);
-}
-menu separator {
-  height: 1px;
-  background: var(--aria-separator);
-}
-menu submenu {
-  padding: 0 0 0 16px;
-  gap: 2px;
-}
-
-/*
- * Calendar
- * ========
- *
- * calendar                          the clock's month view
- * ├─ header
- * │  ├─ button.prev | button.next   previous / next month
- * │  ╰─ text                        month and year
- * ├─ weekday                        one per column
- * ╰─ day[.today]                    one per cell
- */
-calendar {
-  padding: 12px;
-}
-calendar header button {
-  padding: 0 8px;
-}
-calendar weekday {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
-}
-calendar day.today {
-  color: var(--aria-accent);
-  font-weight: bold;
 }

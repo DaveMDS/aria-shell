@@ -14,13 +14,13 @@ panel:root {
   font-family: "JetBrains Mono NL", "Roboto Mono", monospace;
 }
 
-panel {
+/* panel {
   min-height: 28px;
-}
+} */
 
 /* Gadgets sit flush against each other and fill the bar height, so a
    background covers the whole cell. */
-slot {
+panel slot {
   padding: 0;
   gap: 0;
 }
@@ -48,18 +48,18 @@ slot.start > gadget.workspaces:first-child {
 }
 
 /* Workspaces gadget */
-workspace {
+gadget.workspaces button.workspace {
   color: var(--aria-accent);
   border: none;
   border-radius: 0;
   padding: 0 6px;
   height: fill;
 }
-workspace.active {
+gadget.workspaces button.workspace.active {
   color: var(--aria-bg);
   background: var(--aria-accent);
 }
-workspace.urgent {
+gadget.workspaces button.workspace.urgent {
   color: var(--aria-on-accent);
   background: var(--aria-urgent);
 }

@@ -4248,6 +4248,7 @@ dependencies = [
  "cssparser",
  "env_logger",
  "iced",
+ "image",
  "log",
  "notify",
  "rustc-hash 2.1.3",

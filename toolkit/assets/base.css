@@ -52,18 +52,50 @@
  *                          Styles: solid, none (the initial one: a border
  *                          with no style isn't there). A width is snapped
  *                          down to whole device pixels, at least one, as
- *                          CSS does
+ *                          CSS does. Sides may differ in width and colour,
+ *                          with or without a radius
  *   border-radius          1 to 4 <length>s; border-top-left-radius, ...
  *   gap                    <length> [<length>]: row-gap, column-gap
  *   flex-direction         row | column; a box's own when not set
  *   align-items            stretch | start | center | end
  *   justify-content        start | center | end
- *   background             <color> | none; background-color
+ *   background             <color> || url() || <repeat>, or none;
+ *                          background-color, and:
+ *   background-image       none | url(): png, jpeg, webp or svg, found
+ *                          from its sheet's directory. Placed in the
+ *                          padding box, clipped to the border box and its
+ *                          corners
+ *   background-size        auto (a pixel of the image a px) | cover |
+ *                          contain | <length> [<length> | auto]
+ *   background-position    left | center | right, top | center | bottom,
+ *                          or lengths; the top left if not set
+ *   background-repeat      repeat | no-repeat | repeat-x | repeat-y
+ *   border-image           url() || <number>{1,4} [fill];
+ *                          border-image-source, -slice: a 9-patch drawn in
+ *                          place of the border, at its widths, stretched
+ *                          (`border-image-repeat: stretch`, the only one);
+ *                          the slices in image pixels, the middle drawn
+ *                          with `fill`
  *   color*                 <color>
+ *   outline                <width> || <style> || <color>; outline-width,
+ *                          -style, -color: drawn around the border box,
+ *                          over the children, taking no room, following
+ *                          the border's corners
+ *   outline-offset         <length>: the gap from the border box
  *   box-shadow             none | [inset] <x> <y> [<blur>] [<color>]: an
  *                          outer shadow and an inset one at most, no
  *                          spread; an inset one isn't blurred
- *   opacity                <number> | <percentage>
+ *   opacity                <number> | <percentage>: unlike CSS, not a
+ *                          group: where children overlap inside a faded
+ *                          box, the lower shows through the upper
+ *   transform              none | translate(), translateX(),
+ *                          translateY(), scale() (one factor, no rotate:
+ *                          iced draws neither), on boxes: painted only,
+ *                          the layout untouched, the pointer following it
+ *   transform-origin       left | center | right, top | center | bottom,
+ *                          or lengths; the border box's centre if not set
+ *   object-fit             fill | contain | cover | none | scale-down: how
+ *                          an image fills its box, centred
  *   font-family*           font names and serif, sans-serif, monospace,
  *                          comma-separated
  *   font-size*             <length>
@@ -157,8 +189,8 @@ button:active {
   background: var(--border);
 }
 button:focus {
-  border-color: var(--accent);
-  box-shadow: inset 0 -2px var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 button:disabled {
   color: var(--muted);

@@ -7,10 +7,12 @@ use std::sync::Arc;
 use iced::{Color, Font};
 
 use super::fonts;
+use super::images::{Nine, Picture};
 use super::value::{
-    Align, ColorValue, Decl, Direction, FamilyName, FontStyle, Justify, LineHeight, LineStyle,
-    MinSize, Prop, Shadows, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow,
-    TextTransform, WeightValue, WhiteSpace, Wide,
+    Align, BackgroundSize, ColorValue, Decl, Direction, FULL_SLICE, FamilyName, FontStyle, Justify,
+    LineHeight, LineStyle, MinSize, ObjectFit, Origin, Prop, Repeat, Shadows, Side, Size,
+    TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WeightValue,
+    WhiteSpace, Wide,
 };
 
 /// Four lengths, one per side.
@@ -108,6 +110,21 @@ pub struct Computed {
     pub text_transform: TextTransform,
     pub text_box_trim: TextBoxTrim,
     pub text_box_edge: TextBoxEdge,
+    /// Whole device pixels; 0 where the style is `none`.
+    pub outline_width: f32,
+    pub outline_color: Color,
+    pub outline_offset: f32,
+    pub transform: Option<Transform>,
+    pub transform_origin: (Origin, Origin),
+    pub background_image: Option<Picture>,
+    pub background_size: BackgroundSize,
+    pub background_position: (Origin, Origin),
+    pub background_repeat: Repeat,
+    pub border_image_source: Option<Picture>,
+    pub border_image_slice: ([f32; 4], bool),
+    /// The source cut at the slices: drawn in place of the border.
+    pub border_image: Option<Arc<Nine>>,
+    pub object_fit: ObjectFit,
     /// The family picked from `font_family`, with the weight and style.
     pub font: Font,
     /// `line-height`, in logical px: whole device pixels.
@@ -155,6 +172,19 @@ impl Computed {
             text_transform: TextTransform::None,
             text_box_trim: TextBoxTrim::default(),
             text_box_edge: TextBoxEdge::AUTO,
+            outline_width: 0.0,
+            outline_color: Color::BLACK,
+            outline_offset: 0.0,
+            transform: None,
+            transform_origin: (Origin::Fraction(0.5), Origin::Fraction(0.5)),
+            background_image: None,
+            background_size: BackgroundSize::Auto,
+            background_position: (Origin::Fraction(0.0), Origin::Fraction(0.0)),
+            background_repeat: Repeat { x: true, y: true },
+            border_image_source: None,
+            border_image_slice: FULL_SLICE,
+            border_image: None,
+            object_fit: ObjectFit::Fill,
             font: Font::DEFAULT,
             line_height_px: 0.0,
             ascent: 0.0,
@@ -191,6 +221,25 @@ impl Computed {
             && self.text_box_edge == other.text_box_edge
     }
 
+    /// Its `transform` as iced draws it, about its origin in the border
+    /// box `bounds`.
+    pub fn transformation(&self, bounds: iced::Rectangle) -> Option<iced::Transformation> {
+        let t = self.transform?;
+        let at = |origin: Origin, start: f32, size: f32| match origin {
+            Origin::Px(v) => start + v,
+            Origin::Fraction(f) => start + f * size,
+        };
+        let (ox, oy) = (
+            at(self.transform_origin.0, bounds.x, bounds.width),
+            at(self.transform_origin.1, bounds.y, bounds.height),
+        );
+        Some(
+            iced::Transformation::translate(ox + t.x, oy + t.y)
+                * iced::Transformation::scale(t.scale)
+                * iced::Transformation::translate(-ox, -oy),
+        )
+    }
+
     /// The gap between the children laid out along `direction`.
     pub fn gap(&self, direction: Direction) -> f32 {
         match direction {
@@ -209,6 +258,8 @@ pub(crate) struct Cascade<'p> {
     border_style: [LineStyle; 4],
     border_color: [ColorValue; 4],
     shadows: Shadows,
+    outline_style: LineStyle,
+    outline_color: ColorValue,
 }
 
 impl<'p> Cascade<'p> {
@@ -225,6 +276,8 @@ impl<'p> Cascade<'p> {
             border_style: [LineStyle::None; 4],
             border_color: [ColorValue::Current; 4],
             shadows: Shadows::default(),
+            outline_style: LineStyle::None,
+            outline_color: ColorValue::Current,
         }
     }
 
@@ -265,6 +318,19 @@ impl<'p> Cascade<'p> {
             Decl::TextTransform(v) => out.text_transform = *v,
             Decl::TextBoxTrim(v) => out.text_box_trim = *v,
             Decl::TextBoxEdge(v) => out.text_box_edge = *v,
+            Decl::OutlineWidth(v) => out.outline_width = *v,
+            Decl::OutlineStyle(v) => self.outline_style = *v,
+            Decl::OutlineColor(v) => self.outline_color = *v,
+            Decl::OutlineOffset(v) => out.outline_offset = *v,
+            Decl::Transform(v) => out.transform = *v,
+            Decl::TransformOrigin(x, y) => out.transform_origin = (*x, *y),
+            Decl::BackgroundImage(v) => out.background_image = v.clone(),
+            Decl::BackgroundSize(v) => out.background_size = *v,
+            Decl::BackgroundPosition(x, y) => out.background_position = (*x, *y),
+            Decl::BackgroundRepeat(v) => out.background_repeat = *v,
+            Decl::BorderImageSource(v) => out.border_image_source = v.clone(),
+            Decl::BorderImageSlice(slices, fill) => out.border_image_slice = (*slices, *fill),
+            Decl::ObjectFit(v) => out.object_fit = *v,
             Decl::Wide(prop, wide) => {
                 let inherit = match wide {
                     Wide::Inherit => true,
@@ -286,6 +352,16 @@ impl<'p> Cascade<'p> {
         // and its width (0 when it had no style) are what inherit.
         match prop {
             Prop::Background => self.background = ColorValue::Rgba(self.parent.background),
+            Prop::OutlineStyle => {
+                self.outline_style = if self.parent.outline_width > 0.0 {
+                    LineStyle::Solid
+                } else {
+                    LineStyle::None
+                }
+            }
+            Prop::OutlineColor => {
+                self.outline_color = ColorValue::Rgba(self.parent.outline_color);
+            }
             Prop::BorderStyle(s) => {
                 self.border_style[s as usize] = if self.parent.border_width.get(s) > 0.0 {
                     LineStyle::Solid
@@ -321,6 +397,8 @@ impl<'p> Cascade<'p> {
         copy(prop, &Computed::initial(), &mut self.out);
         match prop {
             Prop::Background => self.background = ColorValue::Rgba(Color::TRANSPARENT),
+            Prop::OutlineStyle => self.outline_style = LineStyle::None,
+            Prop::OutlineColor => self.outline_color = ColorValue::Current,
             Prop::BorderStyle(s) => self.border_style[s as usize] = LineStyle::None,
             Prop::BorderColor(s) => self.border_color[s as usize] = ColorValue::Current,
             Prop::BoxShadow => self.shadows = Shadows::default(),
@@ -337,6 +415,8 @@ impl<'p> Cascade<'p> {
             border_style,
             border_color,
             shadows,
+            outline_style,
+            outline_color,
             ..
         } = self;
         let color = out.color;
@@ -345,6 +425,12 @@ impl<'p> Cascade<'p> {
             ColorValue::Current => color,
         };
         out.background = resolve(background);
+        out.outline_width = match outline_style {
+            LineStyle::None => 0.0,
+            LineStyle::Solid => snap_border(out.outline_width, scale),
+        };
+        out.outline_color = resolve(outline_color);
+        out.outline_offset = (out.outline_offset * scale).round() / scale;
         for side in [Side::Top, Side::Right, Side::Bottom, Side::Left] {
             let i = side as usize;
             let width = match border_style[i] {
@@ -364,6 +450,10 @@ impl<'p> Cascade<'p> {
             x: s.x,
             y: s.y,
             color: resolve(s.color),
+        });
+        out.border_image = out.border_image_source.as_ref().and_then(|source| {
+            let (slices, fill) = out.border_image_slice;
+            source.nine(slices.map(|s| s.min(u32::MAX as f32) as u32), fill)
         });
         out.font = fonts::font(&out.font_family, out.font_weight, out.font_style);
         let m = fonts::metrics(out.font);
@@ -467,5 +557,18 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::TextTransform => to.text_transform = from.text_transform,
         Prop::TextBoxTrim => to.text_box_trim = from.text_box_trim,
         Prop::TextBoxEdge => to.text_box_edge = from.text_box_edge,
+        Prop::OutlineWidth => to.outline_width = from.outline_width,
+        Prop::OutlineStyle => {}
+        Prop::OutlineColor => to.outline_color = from.outline_color,
+        Prop::OutlineOffset => to.outline_offset = from.outline_offset,
+        Prop::Transform => to.transform = from.transform,
+        Prop::TransformOrigin => to.transform_origin = from.transform_origin,
+        Prop::BackgroundImage => to.background_image = from.background_image.clone(),
+        Prop::BackgroundSize => to.background_size = from.background_size,
+        Prop::BackgroundPosition => to.background_position = from.background_position,
+        Prop::BackgroundRepeat => to.background_repeat = from.background_repeat,
+        Prop::BorderImageSource => to.border_image_source = from.border_image_source.clone(),
+        Prop::BorderImageSlice => to.border_image_slice = from.border_image_slice,
+        Prop::ObjectFit => to.object_fit = from.object_fit,
     }
 }

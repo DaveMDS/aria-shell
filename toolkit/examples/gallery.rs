@@ -36,6 +36,8 @@ struct Gallery {
     scale: f32,
     star: IconFile,
     picture: IconFile,
+    /// A landscape, for `object-fit`.
+    photo: image::Handle,
     /// The last button pressed, and how many times in a row.
     pressed: Option<(&'static str, u32)>,
 }
@@ -65,6 +67,16 @@ fn picture() -> image::Handle {
     image::Handle::from_rgba(SIDE, SIDE, rgba)
 }
 
+/// The landscape of the examples' assets, decoded as an app would.
+fn photo() -> image::Handle {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/assets/photo.png");
+    let photo = ::image::open(path)
+        .expect("the photo is there")
+        .into_rgba8();
+    let (width, height) = photo.dimensions();
+    image::Handle::from_rgba(width, height, photo.into_raw())
+}
+
 /// Long enough to wrap, or to be cut.
 const LONG: &str = "A text long enough to wrap at its box's width, \
     words kept whole, lines a whole number of device pixels apart.";
@@ -89,6 +101,7 @@ impl Gallery {
                 symbolic: true,
             },
             picture: IconFile::Image(picture()),
+            photo: photo(),
             pressed: None,
         }
     }
@@ -135,6 +148,8 @@ impl Gallery {
             [
                 self.buttons(root),
                 self.boxes(root),
+                self.painting(root),
+                self.images(root),
                 self.texts(root),
                 self.flex(root),
                 self.icons(root),
@@ -178,6 +193,7 @@ impl Gallery {
                         button("flat", "Flat", false),
                         button("primary", "Primary", false),
                         button("danger", "Danger", false),
+                        button("grow", "Grows", false),
                         button("", "Disabled", true),
                     ],
                 )
@@ -243,6 +259,80 @@ impl Gallery {
             ],
         );
         self.section(section, "Boxes", content.into())
+    }
+
+    fn painting<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let row = section.child("row");
+        let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
+            let node = row.child("box").class(class);
+            tk::row(node, [tk::text(node.child("label"), label).into()]).into()
+        };
+        let faded = row.child("box").class("faded");
+        let aligned = section.child("aligned");
+        let line = |class: &str, text: &'static str| -> Element<'a, Message> {
+            tk::text(aligned.child("label").class(class), text).into()
+        };
+        let content = tk::column(
+            section.child("painting"),
+            [
+                tk::row(
+                    row,
+                    [
+                        boxed("tab", "Tab"),
+                        boxed("four", "Four sides"),
+                        boxed("ring", "Ring"),
+                        boxed("outlined", "Outline"),
+                        boxed("scaled", "Scaled 80%"),
+                        boxed("moved", "Moved"),
+                        tk::row(
+                            faded,
+                            [
+                                tk::icon(faded.child("icon"), self.star.clone()).into(),
+                                tk::text(faded.child("label"), "Opacity 50%").into(),
+                            ],
+                        )
+                        .into(),
+                    ],
+                )
+                .into(),
+                tk::column(
+                    aligned,
+                    [
+                        line("left", "Aligned left"),
+                        line("center", "Centred"),
+                        line("right", "Aligned right"),
+                        line("italic", "Italic, as the theme says"),
+                    ],
+                )
+                .into(),
+            ],
+        );
+        self.section(section, "Painting and text", content.into())
+    }
+
+    fn images<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let row = section.child("row");
+        let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
+            let node = row.child("box").class(class);
+            tk::row(node, [tk::text(node.child("label"), label).into()]).into()
+        };
+        let fitted = |class: &str| -> Element<'a, Message> {
+            tk::image(row.child("picture").class(class), self.photo.clone()).into()
+        };
+        let content = tk::row(
+            row,
+            [
+                boxed("textured", "Tiled"),
+                boxed("framed", "9-patch"),
+                boxed("scenery", "Cover"),
+                fitted("fill"),
+                fitted("contain"),
+                fitted("cover"),
+            ],
+        );
+        self.section(section, "Images", content.into())
     }
 
     fn texts<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
@@ -378,9 +468,14 @@ fn load(theme: Option<&Path>, scheme: Scheme) -> Result<Sheet, String> {
     let mut sources = vec![Source {
         name: "gallery.css",
         text: GALLERY,
+        dir: Some(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/examples"))),
     }];
     if let (Some(name), Some(text)) = (&name, &text) {
-        sources.push(Source { name, text });
+        sources.push(Source {
+            name,
+            text,
+            dir: theme.and_then(Path::parent),
+        });
     }
     let (sheet, warnings) = Sheet::load(&sources, scheme).map_err(|e| e.to_string())?;
     for warning in &warnings {

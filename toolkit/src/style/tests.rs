@@ -7,7 +7,11 @@ use super::*;
 fn load_scheme(sources: &[(&str, &str)], scheme: Scheme) -> (Sheet, Vec<Warning>) {
     let sources: Vec<Source> = sources
         .iter()
-        .map(|(name, text)| Source { name, text })
+        .map(|(name, text)| Source {
+            name,
+            text,
+            dir: None,
+        })
         .collect();
     Sheet::load(&sources, scheme).expect("loads")
 }
@@ -376,6 +380,7 @@ fn syntax_errors_reject_the_file() {
             &[Source {
                 name: "t",
                 text: css,
+                dir: None,
             }],
             Scheme::Light,
         )
@@ -426,4 +431,159 @@ fn styles_are_resolved_once() {
     }
     let stats = sheet.stats();
     assert_eq!((stats.nodes, stats.styles), (2, 3));
+}
+
+/// A directory with `name`, a `width` x `height` png of colour
+/// `rgba`, for `url()`s to find.
+fn images(test: &str, name: &str, width: u32, height: u32, rgba: [u8; 4]) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("tk-{}-{test}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temporary directory");
+    ::image::RgbaImage::from_pixel(width, height, ::image::Rgba(rgba))
+        .save(dir.join(name))
+        .expect("the png written");
+    dir
+}
+
+fn load_from(css: &str, dir: &std::path::Path) -> (Sheet, Vec<Warning>) {
+    Sheet::load(
+        &[Source {
+            name: "t.css",
+            text: css,
+            dir: Some(dir),
+        }],
+        Scheme::Light,
+    )
+    .expect("loads")
+}
+
+#[test]
+fn outlines_snap_and_default_to_currentcolor() {
+    let (sheet, warnings) = load(
+        "a { color: red; outline: 1px solid; outline-offset: 2px; } b { outline-width: 3px; }",
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let a = sheet.root("t", 1.5).child("a").base();
+    assert!((a.outline_width - 2.0 / 3.0).abs() < 1e-6);
+    assert_eq!(a.outline_color, RED);
+    assert!((a.outline_offset * 1.5 - (a.outline_offset * 1.5).round()).abs() < 1e-5);
+    // No style, no outline.
+    assert_eq!(style(&sheet, "t > b").outline_width, 0.0);
+}
+
+#[test]
+fn transforms_compose_as_css_does() {
+    let (sheet, warnings) = load(
+        "a { transform: translate(4px, 6px) scale(2); } \
+         b { transform: scale(2) translateX(4px); } \
+         c { transform: scale(1, 2); } d { transform: rotate(10deg); } \
+         e { transform-origin: top left; } f { transform-origin: bottom; } \
+         g { transform-origin: 10px 20px; }",
+    );
+    let t = |kind: &str| style(&sheet, &format!("t > {kind}")).transform;
+    assert_eq!(
+        t("a"),
+        Some(Transform {
+            scale: 2.0,
+            x: 4.0,
+            y: 6.0
+        })
+    );
+    // The last function first: the translation scaled too.
+    assert_eq!(
+        t("b"),
+        Some(Transform {
+            scale: 2.0,
+            x: 8.0,
+            y: 0.0
+        })
+    );
+    assert_eq!(t("c"), None);
+    assert_eq!(t("d"), None);
+    let messages: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+    assert!(messages[0].contains("uniform"), "{messages:?}");
+    assert!(
+        messages[1].contains("`rotate()` isn't supported"),
+        "{messages:?}"
+    );
+    let origin = |kind: &str| style(&sheet, &format!("t > {kind}")).transform_origin;
+    assert_eq!(origin("e"), (Origin::Fraction(0.0), Origin::Fraction(0.0)));
+    assert_eq!(origin("f"), (Origin::Fraction(0.5), Origin::Fraction(1.0)));
+    assert_eq!(origin("g"), (Origin::Px(10.0), Origin::Px(20.0)));
+    // Drawn about the origin: the centre stays where it was.
+    let bounds = iced::Rectangle::new(iced::Point::new(10.0, 10.0), iced::Size::new(20.0, 20.0));
+    let scaled = load("x { transform: scale(2); }").0;
+    let transformation = style(&scaled, "t > x").transformation(bounds).expect("one");
+    let centre = iced::Point::new(20.0, 20.0) * transformation;
+    assert_eq!(centre, iced::Point::new(20.0, 20.0));
+    let corner = iced::Point::new(10.0, 10.0) * transformation;
+    assert_eq!(corner, iced::Point::new(0.0, 0.0));
+}
+
+#[test]
+fn backgrounds_load_their_images_from_the_sheets_directory() {
+    let dir = images("background", "dot.png", 4, 2, [0, 0, 255, 255]);
+    let (sheet, warnings) = load_from(
+        "a { background: url(dot.png) red no-repeat; } \
+         b { background-image: url(\"dot.png\"); background-size: 10px auto; \
+             background-position: center bottom; } \
+         c { background-size: cover; } d { background: url(missing.png); }",
+        &dir,
+    );
+    let a = style(&sheet, "t > a");
+    assert_eq!(a.background, RED);
+    assert_eq!(a.background_repeat, Repeat { x: false, y: false });
+    let picture = a.background_image.clone().expect("an image");
+    assert!(matches!(
+        picture.drawn(),
+        Drawn::Raster {
+            width: 4,
+            height: 2,
+            ..
+        }
+    ));
+    let b = style(&sheet, "t > b");
+    // The same file, loaded once.
+    assert_eq!(b.background_image, Some(picture));
+    assert_eq!(b.background_size, BackgroundSize::Px(Some(10.0), None));
+    assert_eq!(
+        b.background_position,
+        (Origin::Fraction(0.5), Origin::Fraction(1.0))
+    );
+    assert_eq!(b.background_repeat, Repeat { x: true, y: true });
+    assert_eq!(
+        style(&sheet, "t > c").background_size,
+        BackgroundSize::Cover
+    );
+    assert!(warnings[0].message.contains("missing.png"), "{warnings:?}");
+    // Without a directory, a relative url() has nowhere to be found.
+    let (_, warnings) = load("x { background-image: url(dot.png); }");
+    assert!(warnings[0].message.contains("directory"), "{warnings:?}");
+}
+
+#[test]
+fn a_border_image_is_cut_in_nine() {
+    let dir = images("nine", "frame.png", 6, 6, [255, 0, 0, 255]);
+    let (sheet, warnings) = load_from(
+        "a { border-image: url(frame.png) 1 2; } b { border-image: url(frame.png) fill 2; } \
+         c { border-image-source: url(frame.png); }",
+        &dir,
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let nine = style(&sheet, "t > a").border_image.clone().expect("cut");
+    assert_eq!(nine.slices, [1, 2, 1, 2]);
+    assert!(nine.parts[4].is_none(), "no middle without `fill`");
+    assert_eq!(nine.parts.iter().filter(|p| p.is_some()).count(), 8);
+    let filled = style(&sheet, "t > b").border_image.clone().expect("cut");
+    assert!(filled.parts[4].is_some());
+    // The initial slice is CSS's 100%: the whole image in a corner.
+    let whole = style(&sheet, "t > c").border_image.clone().expect("cut");
+    assert_eq!(whole.slices, [6, 0, 0, 6]);
+}
+
+#[test]
+fn object_fit() {
+    let (sheet, _) = load("a { object-fit: cover; } b { object-fit: scale-down; }");
+    assert_eq!(style(&sheet, "t > a").object_fit, ObjectFit::Cover);
+    assert_eq!(style(&sheet, "t > b").object_fit, ObjectFit::ScaleDown);
+    assert_eq!(style(&sheet, "t > c").object_fit, ObjectFit::Fill);
 }

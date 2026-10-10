@@ -628,9 +628,9 @@ the headless harness and the query with them.
    images, and `benches/` from here on.
 3. ✅ States and events: hover, press, focus, disabled, the ancestors'
    states through `Theme`; buttons, `focus_scope`. 🔲 The query.
-4. The rest of painting and text: borders whose sides differ, outline,
-   opacity, transform, background images and 9-patches; `text-align`,
-   italic, `text-transform`; images.
+4. ✅ The rest of painting and text: borders whose sides differ,
+   outline, opacity, transform, background images and 9-patches;
+   `text-align`, italic, `text-transform`; images.
 5. Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle, slider, input, scroll, menu,
    calendar, tabs, meter, gauge, graphs, tooltip, surface; select last.
@@ -638,6 +638,7 @@ the headless harness and the query with them.
 ## Limits (iced 0.14)
 
 - `rotate` only on svgs and images; `scale` uniform only.
+- A transform is a box's: a text or an icon moves with its box.
 - Opacity isn't a group (above).
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.

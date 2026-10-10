@@ -360,6 +360,7 @@ mod tests {
             &[Source {
                 name: "t.css",
                 text: css,
+                dir: None,
             }],
             Scheme::Light,
         )

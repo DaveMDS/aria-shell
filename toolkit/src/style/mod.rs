@@ -10,6 +10,7 @@
 mod cascade;
 mod computed;
 mod fonts;
+mod images;
 mod node;
 mod parse;
 mod selector;
@@ -19,10 +20,11 @@ mod tests;
 mod value;
 
 pub use computed::{Computed, InsetShadow, Shadow, Sides};
+pub use images::{Drawn, Nine, Picture};
 pub use node::{Ancestors, Node, Sensitivity, States};
 pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
 pub use value::{
-    Align, Corner, Direction, EdgeOver, EdgeUnder, FamilyName, FontStyle, Justify, LineHeight,
-    MinSize, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform,
-    WhiteSpace,
+    Align, BackgroundSize, Corner, Direction, EdgeOver, EdgeUnder, FamilyName, FontStyle, Justify,
+    LineHeight, MinSize, ObjectFit, Origin, Repeat, Side, Size, TextAlign, TextBoxEdge,
+    TextBoxTrim, TextOverflow, TextTransform, Transform, WhiteSpace,
 };

@@ -5,9 +5,12 @@
  * gallery                    the window
  * ╰─ section                 one kind of widget
  *    ├─ heading
- *    ├─ buttons > row > button[.flat|.primary|.danger], card, grow; status
+ *    ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
  *    ├─ row                  boxes, side by side
  *    │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
+ *    ├─ painting > row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
+ *    ├─ row > box.textured|.framed|.scenery, picture.fill|.contain|.cover
+ *    │             aligned > label.left|.center|.right|.italic
  *    ├─ texts                texts, one under the other
  *    │  ├─ label.small|.large|.bold|.muted|.caps
  *    │  ├─ box.wrap > label, box.cut > label
@@ -36,6 +39,9 @@ heading {
 }
 
 /* Buttons and states */
+button.grow:hover {
+  transform: scale(1.15);
+}
 buttons {
   gap: 8px;
 }
@@ -100,6 +106,101 @@ box.inset {
 box.sides {
   border-left: 4px solid var(--accent);
   border-bottom: 1px solid var(--border);
+}
+
+/* Painting and text */
+painting {
+  gap: 10px;
+}
+box.tab {
+  border: 1px solid var(--border);
+  border-bottom: 3px solid var(--accent);
+  border-radius: 8px 8px 0 0;
+}
+box.four {
+  border-style: solid;
+  border-width: 4px 2px 6px 3px;
+  border-color: #e05050 #50a050 #4070e0 #e0a030;
+  border-radius: 12px;
+}
+box.ring {
+  border: 2px solid var(--accent);
+  border-left-width: 8px;
+  border-radius: 10px;
+}
+box.outlined {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+box.scaled {
+  background: var(--border);
+  transform: scale(0.8);
+}
+box.moved {
+  border: 1px solid var(--border);
+  transform: translate(4px, 6px);
+}
+box.faded {
+  gap: 6px;
+  align-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  opacity: 0.5;
+}
+box.faded > icon {
+  height: 16px;
+}
+aligned {
+  width: 300px;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+label.center {
+  text-align: center;
+}
+label.right {
+  text-align: right;
+}
+label.italic {
+  font-style: italic;
+}
+
+/* Images */
+box.textured,
+box.scenery {
+  width: 120px;
+  height: 56px;
+  border-radius: 10px;
+}
+box.textured {
+  background: url(assets/dots.png) var(--border);
+}
+box.framed {
+  padding: 2px 8px;
+  border: 10px solid;
+  border-image: url(assets/frame.png) 10 fill;
+  color: #1f1f23;
+}
+box.scenery {
+  background-image: url(assets/photo.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: white;
+}
+picture {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+}
+picture.contain {
+  object-fit: contain;
+}
+picture.cover {
+  object-fit: cover;
 }
 
 /* Text */

@@ -9,19 +9,21 @@
 //! unthemed box asks no frame. A disabled box is never `:hover` or
 //! `:active`, unlike CSS: there's nothing to press.
 
+use std::cell::Cell;
 use std::sync::Arc;
 use std::time::Instant;
 
+use iced::advanced::Renderer as _;
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::Focusable;
 use iced::advanced::widget::{Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell, mouse};
 use iced::keyboard::{self, key};
-use iced::{Event, Length, Rectangle, Size, touch};
+use iced::{Event, Length, Rectangle, Size, Transformation, touch};
 
 use crate::layout::{flex, length, snap};
-use crate::paint::{draw_box, fade};
+use crate::paint::{draw_box, draw_outline, fade};
 use crate::style::{Ancestors, Computed, Direction, Node, States};
 use crate::{Element, Renderer, Theme};
 
@@ -96,97 +98,23 @@ impl<'a, Message> Flex<'a, Message> {
     }
 }
 
-#[derive(Debug, Default)]
-struct State {
-    states: States,
-    /// When its states last changed.
-    since: Option<Instant>,
-}
-
-impl Focusable for State {
-    fn is_focused(&self) -> bool {
-        self.states.contains(States::FOCUS)
-    }
-
-    fn focus(&mut self) {
-        self.states = self.states.with(States::FOCUS, true);
-        self.since = Some(Instant::now());
-    }
-
-    fn unfocus(&mut self) {
-        if self.is_focused() {
-            self.states = self.states.with(States::FOCUS, false);
-            self.since = Some(Instant::now());
-        }
-    }
-}
-
-/// The border box of a margin box.
-pub(crate) fn border_box(bounds: Rectangle, s: &Computed, scale: f32) -> Rectangle {
-    let m = s.margin;
-    let (left, top) = (snap(m.left, scale), snap(m.top, scale));
-    Rectangle {
-        x: bounds.x + left,
-        y: bounds.y + top,
-        width: (bounds.width - left - snap(m.right, scale)).max(0.0),
-        height: (bounds.height - top - snap(m.bottom, scale)).max(0.0),
-    }
-}
-
-impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
-    fn size(&self) -> Size<Length> {
-        let m = self.style.margin;
-        Size::new(
-            length(self.style.width, m.horizontal()),
-            length(self.style.height, m.vertical()),
-        )
-    }
-
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(State::default())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
-    }
-
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let style = self.layout_style(tree.state.downcast_ref::<State>().states);
-        let direction = style.flex_direction.unwrap_or(self.direction);
-        flex(
-            &style,
-            direction,
-            self.node.scale(),
-            &mut self.children,
-            &mut tree.children,
-            renderer,
-            limits,
-        )
-    }
-
-    fn draw(
+impl<Message: Clone> Flex<'_, Message> {
+    /// Its box, its children, its outline.
+    #[allow(clippy::too_many_arguments)]
+    fn paint(
         &self,
         tree: &Tree,
+        s: &Computed,
+        bounds: Rectangle,
         renderer: &mut Renderer,
         theme: &Theme,
-        _style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State>();
-        let s = self.node.resolve(state.states, &theme.ancestors);
         let opacity = theme.opacity * s.opacity;
-        let bounds = border_box(layout.bounds(), &s, self.node.scale());
-        draw_box(renderer, &s, bounds, opacity);
+        draw_box(renderer, s, bounds, opacity);
 
         // What its children get: its states, where a descendant's style
         // can see them; its opacity.
@@ -213,9 +141,11 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
                 .as_widget()
                 .draw(tree, renderer, theme, &style, layout, cursor, viewport);
         }
+        draw_outline(renderer, s, bounds, opacity);
     }
 
-    fn update(
+    #[allow(clippy::too_many_arguments)]
+    fn handle(
         &mut self,
         tree: &mut Tree,
         event: &Event,
@@ -300,6 +230,138 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
             }
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct State {
+    states: States,
+    /// When its states last changed.
+    since: Option<Instant>,
+    /// The `transform` it was last drawn with (an ancestor's state may
+    /// set it, which only draw sees): the pointer is taken back through
+    /// it, so that hit testing follows what's drawn.
+    drawn: Cell<Option<Transformation>>,
+}
+
+impl State {
+    /// `cursor` where the box's layout is, before its transform.
+    fn local(&self, cursor: mouse::Cursor) -> mouse::Cursor {
+        match self.drawn.get() {
+            Some(transformation) => cursor * transformation.inverse(),
+            None => cursor,
+        }
+    }
+}
+
+impl Focusable for State {
+    fn is_focused(&self) -> bool {
+        self.states.contains(States::FOCUS)
+    }
+
+    fn focus(&mut self) {
+        self.states = self.states.with(States::FOCUS, true);
+        self.since = Some(Instant::now());
+    }
+
+    fn unfocus(&mut self) {
+        if self.is_focused() {
+            self.states = self.states.with(States::FOCUS, false);
+            self.since = Some(Instant::now());
+        }
+    }
+}
+
+/// The border box of a margin box.
+pub(crate) fn border_box(bounds: Rectangle, s: &Computed, scale: f32) -> Rectangle {
+    let m = s.margin;
+    let (left, top) = (snap(m.left, scale), snap(m.top, scale));
+    Rectangle {
+        x: bounds.x + left,
+        y: bounds.y + top,
+        width: (bounds.width - left - snap(m.right, scale)).max(0.0),
+        height: (bounds.height - top - snap(m.bottom, scale)).max(0.0),
+    }
+}
+
+impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
+    fn size(&self) -> Size<Length> {
+        let m = self.style.margin;
+        Size::new(
+            length(self.style.width, m.horizontal()),
+            length(self.style.height, m.vertical()),
+        )
+    }
+
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        self.children.iter().map(Tree::new).collect()
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(&self.children);
+    }
+
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
+        let style = self.layout_style(tree.state.downcast_ref::<State>().states);
+        let direction = style.flex_direction.unwrap_or(self.direction);
+        flex(
+            &style,
+            direction,
+            self.node.scale(),
+            &mut self.children,
+            &mut tree.children,
+            renderer,
+            limits,
+        )
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        _style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let state = tree.state.downcast_ref::<State>();
+        let s = self.node.resolve(state.states, &theme.ancestors);
+        let bounds = border_box(layout.bounds(), &s, self.node.scale());
+        let transformation = s.transformation(bounds);
+        state.drawn.set(transformation);
+        let cursor = state.local(cursor);
+        match transformation {
+            Some(transformation) => renderer.with_transformation(transformation, |renderer| {
+                self.paint(tree, &s, bounds, renderer, theme, layout, cursor, viewport);
+            }),
+            None => self.paint(tree, &s, bounds, renderer, theme, layout, cursor, viewport),
+        }
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) {
+        let cursor = tree.state.downcast_ref::<State>().local(cursor);
+        self.handle(
+            tree, event, layout, cursor, renderer, clipboard, shell, viewport,
+        );
+    }
 
     fn mouse_interaction(
         &self,
@@ -309,6 +371,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
+        let cursor = tree.state.downcast_ref::<State>().local(cursor);
         let inner = self
             .children
             .iter()

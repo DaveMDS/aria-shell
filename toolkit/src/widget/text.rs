@@ -18,8 +18,8 @@ use iced::{Length, Pixels, Point, Rectangle, Size};
 use crate::layout::{snap, snap_up};
 use crate::paint::fade;
 use crate::style::{
-    Computed, EdgeOver, EdgeUnder, Node, Size as Len, States, TextOverflow, TextTransform,
-    WhiteSpace,
+    Computed, EdgeOver, EdgeUnder, Node, Size as Len, States, TextAlign, TextOverflow,
+    TextTransform, WhiteSpace,
 };
 use crate::{Element, Renderer, Theme};
 
@@ -77,14 +77,22 @@ struct State {
     cut: RefCell<Option<(f32, Plain<Paragraph>)>>,
 }
 
-fn spec<C>(content: C, s: &Computed, width: f32) -> iced::advanced::Text<C> {
+/// What a paragraph is shaped from: `width` to wrap at, aligned within
+/// it by `text-align` when `aligned` (when it's the box's own width).
+fn spec<C>(content: C, s: &Computed, width: f32, aligned: bool) -> iced::advanced::Text<C> {
     iced::advanced::Text {
         content,
         bounds: Size::new(width, f32::INFINITY),
         size: Pixels(s.font_size),
         line_height: LineHeight::Absolute(Pixels(s.line_height_px)),
         font: s.font,
-        align_x: text::Alignment::Default,
+        align_x: match s.text_align {
+            _ if !aligned => text::Alignment::Default,
+            TextAlign::Start => text::Alignment::Default,
+            TextAlign::Left => text::Alignment::Left,
+            TextAlign::Center => text::Alignment::Center,
+            TextAlign::End | TextAlign::Right => text::Alignment::Right,
+        },
         align_y: Vertical::Top,
         shaping: Shaping::Advanced,
         wrapping: match s.white_space {
@@ -152,7 +160,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
-            paragraph: Plain::new(spec(self.content.to_string(), &self.style, f32::INFINITY)),
+            paragraph: Plain::new(spec(
+                self.content.to_string(),
+                &self.style,
+                f32::INFINITY,
+                false,
+            )),
             trim: (0.0, 0.0),
             baseline: 0.0,
             cut: RefCell::new(None),
@@ -163,11 +176,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         let s = &self.style;
         let scale = self.node.scale();
         let state = tree.state.downcast_mut::<State>();
-        let width = match s.white_space {
-            WhiteSpace::Normal => limits.max().width,
-            WhiteSpace::Nowrap => f32::INFINITY,
+        // Its width when it isn't its content's: its own, its share, the
+        // one it's stretched to. Shaped at it, it wraps and aligns there,
+        // in one go.
+        let known = match s.width {
+            Len::Px(v) => Some(snap(v, scale)),
+            Len::Fill if !limits.compression().width => Some(limits.max().width),
+            _ if limits.min().width > 0.0 => Some(limits.min().width),
+            _ => None,
         };
-        if state.paragraph.update(spec(&self.content, s, width)) {
+        let shaped = match (known, s.white_space) {
+            (Some(width), _) => width,
+            (None, WhiteSpace::Normal) => limits.max().width,
+            (None, WhiteSpace::Nowrap) => f32::INFINITY,
+        };
+        if state
+            .paragraph
+            .update(spec(&self.content, s, shaped, known.is_some()))
+        {
             *state.cut.get_mut() = None;
         }
         (state.trim, state.baseline) = trims(state.paragraph.raw(), s);
@@ -181,11 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
                 snap_up(bounds.height - state.trim.0 - state.trim.1, scale),
             )
         };
-        let mut width = match s.width {
-            Len::Px(v) => snap(v, scale),
-            Len::Fill if !limits.compression().width => limits.max().width,
-            _ => natural.width,
-        };
+        let mut width = known.unwrap_or(natural.width);
         if self.ellipsis() {
             // Cut to fit, down to nothing: CSS's `overflow: hidden`.
             width = width.min(limits.max().width);
@@ -224,9 +246,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         let mut y = bounds.y - state.trim.0;
         let baseline = y + state.baseline;
         y += snap(baseline, scale) - baseline;
-        let position = Point::new(bounds.x, y);
+        // iced aligns a paragraph's lines among themselves; where the
+        // paragraph goes in its box is the widget's to say.
+        let anchor = |paragraph: &Plain<Paragraph>| {
+            let free = bounds.width - paragraph.min_bounds().width;
+            let x = match paragraph.align_x() {
+                text::Alignment::Center => bounds.x + free / 2.0,
+                text::Alignment::Right => bounds.x + free,
+                _ => bounds.x,
+            };
+            Point::new(snap(x, scale), y)
+        };
 
         if !self.ellipsis() || state.paragraph.min_bounds().width <= bounds.width + 0.5 {
+            let position = anchor(&state.paragraph);
             renderer.fill_paragraph(state.paragraph.raw(), position, color, *viewport);
             return;
         }
@@ -235,7 +268,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
             *cut = Some((bounds.width, self.cut(&state.paragraph, bounds.width)));
         }
         let (_, paragraph) = cut.as_ref().expect("just made");
-        renderer.fill_paragraph(paragraph.raw(), position, color, *viewport);
+        renderer.fill_paragraph(paragraph.raw(), anchor(paragraph), color, *viewport);
     }
 }
 
@@ -244,7 +277,7 @@ impl Text<'_> {
     /// cut found with the shaped line's hit test.
     fn cut(&self, full: &Plain<Paragraph>, width: f32) -> Plain<Paragraph> {
         let s = &self.style;
-        let ellipsis = Plain::<Paragraph>::new(spec("…".to_string(), s, f32::INFINITY));
+        let ellipsis = Plain::<Paragraph>::new(spec("…".to_string(), s, f32::INFINITY, false));
         let room = (width - ellipsis.min_bounds().width).max(0.0);
         let middle = full.min_bounds().height / 2.0;
         let mut at = full
@@ -256,7 +289,7 @@ impl Text<'_> {
             at -= 1;
         }
         let kept = format!("{}…", self.content[..at].trim_end());
-        Plain::new(spec(kept, s, f32::INFINITY))
+        Plain::new(spec(kept, s, width, true))
     }
 }
 

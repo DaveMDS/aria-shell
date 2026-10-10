@@ -4,6 +4,7 @@
 
 use std::cell::RefCell;
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
@@ -12,17 +13,19 @@ use super::computed::Computed;
 use super::node::{Ancestors, Names, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step};
 use super::parse::{self, Loc};
 use super::selector::{Ctx, Nth, Selector};
-use super::value::{self, Decl};
+use super::value::{self, Assets, Decl};
 
 /// The toolkit's base stylesheet: every element, class and property,
 /// documented, with neutral defaults. Always first.
 const BASE: &str = include_str!("../../assets/base.css");
 
-/// A stylesheet to load: a name for the messages, and its text.
+/// A stylesheet to load: a name for the messages, its text, and the
+/// directory its relative `url()`s are found in.
 #[derive(Debug, Clone, Copy)]
 pub struct Source<'a> {
     pub name: &'a str,
     pub text: &'a str,
+    pub dir: Option<&'a Path>,
 }
 
 /// The colour scheme a sheet is compiled for: the variables of
@@ -152,6 +155,7 @@ impl Sheet {
         let base = Source {
             name: "tk:base.css",
             text: BASE,
+            dir: None,
         };
         let mut files = Vec::new();
         for source in std::iter::once(&base).chain(sources) {
@@ -169,7 +173,7 @@ impl Sheet {
                 },
             )?;
             warnings.extend(found.into_iter().map(|(at, m)| warning(source.name, at, m)));
-            files.push((source.name, file));
+            files.push((source.name, source.dir, file));
         }
 
         // Later files override earlier variables, and every file sees
@@ -181,20 +185,25 @@ impl Sheet {
             Scheme::Dark => 2,
         };
         let mut vars: FxHashMap<String, String> = FxHashMap::default();
-        for (_, file) in &files {
+        for (_, _, file) in &files {
             for (name, value) in file.vars[0].iter().chain(&file.vars[slot]) {
                 vars.insert(name.clone(), value.clone());
             }
         }
 
         let mut rules = Vec::new();
-        for (index, (source, file)) in files.into_iter().enumerate() {
+        let mut assets = Assets {
+            dir: None,
+            loaded: FxHashMap::default(),
+        };
+        for (index, (source, dir, file)) in files.into_iter().enumerate() {
             let origin = u8::from(index > 0);
+            assets.dir = dir.map(Path::to_path_buf);
             for raw in file.rules {
                 let mut decls = Vec::new();
                 for d in raw.decls {
                     let parsed = parse::substitute(&d.value, &vars)
-                        .and_then(|value| value::parse(&d.name, &value));
+                        .and_then(|value| value::parse(&d.name, &value, &mut assets));
                     match parsed {
                         Ok(longhands) => decls.extend(longhands),
                         Err(message) => warnings.push(warning(

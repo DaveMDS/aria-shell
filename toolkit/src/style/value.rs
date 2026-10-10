@@ -2,10 +2,14 @@
 //! once its `var()`s are substituted. Shorthands expand to longhands
 //! here, so the cascade only ever sees longhands.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use cssparser::{BasicParseErrorKind, ParseError, ParseErrorKind, Parser, ToCss, Token, color};
 use iced::Color;
+use rustc_hash::FxHashMap;
+
+use super::images::Picture;
 
 pub(crate) type Error = ParseError<String>;
 
@@ -234,6 +238,76 @@ impl TextBoxEdge {
     };
 }
 
+/// `transform`: a uniform scale, then a translation, about the
+/// `transform-origin` (iced's `Transformation` has nothing else).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transform {
+    pub scale: f32,
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Transform {
+    pub const IDENTITY: Self = Self {
+        scale: 1.0,
+        x: 0.0,
+        y: 0.0,
+    };
+
+    /// `self` applied after `inner`: CSS composes a list's functions
+    /// that way, the last one applied first.
+    fn then(self, inner: Self) -> Self {
+        Self {
+            scale: self.scale * inner.scale,
+            x: self.scale * inner.x + self.x,
+            y: self.scale * inner.y + self.y,
+        }
+    }
+}
+
+/// One coordinate of `transform-origin`: a length from the border
+/// box's left or top, or a fraction of its size (the keywords).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Origin {
+    Px(f32),
+    Fraction(f32),
+}
+
+/// `background-size`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BackgroundSize {
+    /// The image's own: a pixel of it a logical pixel.
+    Auto,
+    Cover,
+    Contain,
+    /// A width and a height, `None` for `auto` (the image's ratio kept).
+    Px(Option<f32>, Option<f32>),
+}
+
+/// `background-repeat`: whether the image tiles across, down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Repeat {
+    pub x: bool,
+    pub y: bool,
+}
+
+/// `object-fit`: how an image fills its box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectFit {
+    Fill,
+    Contain,
+    Cover,
+    None,
+    ScaleDown,
+}
+
+/// What `url()`s are loaded from: the sheet's directory, and what's
+/// been loaded already (each file once a load).
+pub(crate) struct Assets {
+    pub dir: Option<PathBuf>,
+    pub loaded: FxHashMap<PathBuf, Picture>,
+}
+
 /// A longhand property, as a CSS-wide keyword (`inherit`, `initial`,
 /// `unset`) names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +344,19 @@ pub(crate) enum Prop {
     TextTransform,
     TextBoxTrim,
     TextBoxEdge,
+    OutlineWidth,
+    OutlineStyle,
+    OutlineColor,
+    OutlineOffset,
+    Transform,
+    TransformOrigin,
+    BackgroundImage,
+    BackgroundSize,
+    BackgroundPosition,
+    BackgroundRepeat,
+    BorderImageSource,
+    BorderImageSlice,
+    ObjectFit,
 }
 
 impl Prop {
@@ -334,6 +421,20 @@ pub(crate) enum Decl {
     TextTransform(TextTransform),
     TextBoxTrim(TextBoxTrim),
     TextBoxEdge(TextBoxEdge),
+    OutlineWidth(f32),
+    OutlineStyle(LineStyle),
+    OutlineColor(ColorValue),
+    OutlineOffset(f32),
+    Transform(Option<Transform>),
+    TransformOrigin(Origin, Origin),
+    BackgroundImage(Option<Picture>),
+    BackgroundSize(BackgroundSize),
+    BackgroundPosition(Origin, Origin),
+    BackgroundRepeat(Repeat),
+    BorderImageSource(Option<Picture>),
+    /// Top, right, bottom, left, in image pixels; `fill` keeps the middle.
+    BorderImageSlice([f32; 4], bool),
+    ObjectFit(ObjectFit),
     Wide(Prop, Wide),
 }
 
@@ -379,7 +480,22 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "flex-direction" => vec![Prop::FlexDirection],
         "align-items" => vec![Prop::AlignItems],
         "justify-content" => vec![Prop::JustifyContent],
-        "background" | "background-color" => vec![Prop::Background],
+        "background" => vec![
+            Prop::Background,
+            Prop::BackgroundImage,
+            Prop::BackgroundSize,
+            Prop::BackgroundPosition,
+            Prop::BackgroundRepeat,
+        ],
+        "background-color" => vec![Prop::Background],
+        "background-image" => vec![Prop::BackgroundImage],
+        "background-size" => vec![Prop::BackgroundSize],
+        "background-position" => vec![Prop::BackgroundPosition],
+        "background-repeat" => vec![Prop::BackgroundRepeat],
+        "border-image" => vec![Prop::BorderImageSource, Prop::BorderImageSlice],
+        "border-image-source" => vec![Prop::BorderImageSource],
+        "border-image-slice" => vec![Prop::BorderImageSlice],
+        "object-fit" => vec![Prop::ObjectFit],
         "color" => vec![Prop::Color],
         "box-shadow" => vec![Prop::BoxShadow],
         "opacity" => vec![Prop::Opacity],
@@ -395,6 +511,13 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "text-box" => vec![Prop::TextBoxTrim, Prop::TextBoxEdge],
         "text-box-trim" => vec![Prop::TextBoxTrim],
         "text-box-edge" => vec![Prop::TextBoxEdge],
+        "outline" => vec![Prop::OutlineWidth, Prop::OutlineStyle, Prop::OutlineColor],
+        "outline-width" => vec![Prop::OutlineWidth],
+        "outline-style" => vec![Prop::OutlineStyle],
+        "outline-color" => vec![Prop::OutlineColor],
+        "outline-offset" => vec![Prop::OutlineOffset],
+        "transform" => vec![Prop::Transform],
+        "transform-origin" => vec![Prop::TransformOrigin],
         _ => {
             // margin-top, padding-left, border-bottom, border-left-width, ...
             let (head, rest) = name.split_once('-')?;
@@ -419,8 +542,9 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
     })
 }
 
-/// The longhand declarations of `name: value`.
-pub(crate) fn parse(name: &str, value: &str) -> Result<Vec<Decl>, String> {
+/// The longhand declarations of `name: value`; `url()`s loaded from
+/// `assets`.
+pub(crate) fn parse(name: &str, value: &str, assets: &mut Assets) -> Result<Vec<Decl>, String> {
     let name = name.to_ascii_lowercase();
     let Some(props) = longhands(&name) else {
         return Err(format!("unknown property `{name}`"));
@@ -428,7 +552,7 @@ pub(crate) fn parse(name: &str, value: &str) -> Result<Vec<Decl>, String> {
     let mut p = Parser::new(value);
     let decls = match p.try_parse(wide) {
         Ok(wide) => props.iter().map(|&prop| Decl::Wide(prop, wide)).collect(),
-        Err(_) => value_of(&name, &props, &mut p).map_err(describe)?,
+        Err(_) => value_of(&name, &props, &mut p, assets).map_err(describe)?,
     };
     let rest = p.position();
     while p.next_including_whitespace_and_comments().is_ok() {}
@@ -451,7 +575,12 @@ fn wide(p: &mut Parser) -> Result<Wide, Error> {
     )
 }
 
-fn value_of(name: &str, props: &[Prop], p: &mut Parser) -> Result<Vec<Decl>, Error> {
+fn value_of(
+    name: &str,
+    props: &[Prop],
+    p: &mut Parser,
+    assets: &mut Assets,
+) -> Result<Vec<Decl>, Error> {
     // One value, for each of the props: margin-top, border-left-width, ...
     let each = |p: &mut Parser, prop: Prop| -> Result<Decl, Error> {
         Ok(match prop {
@@ -565,12 +694,85 @@ fn value_of(name: &str, props: &[Prop], p: &mut Parser) -> Result<Vec<Decl>, Err
             ],
         )?)],
         "background" => {
-            if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
-                vec![Decl::Background(ColorValue::Rgba(Color::TRANSPARENT))]
-            } else {
-                vec![Decl::Background(color_value(p)?)]
+            // `<color> || <image> || <repeat>`: what's left out is its
+            // initial value, as a CSS shorthand has it.
+            let (mut color, mut image, mut repeat) = (None, None, None);
+            for _ in 0..3 {
+                if image.is_none()
+                    && let Ok(i) = p.try_parse(|p| url(p, assets))
+                {
+                    image = Some(i);
+                } else if color.is_none()
+                    && let Ok(c) = p.try_parse(color_value)
+                {
+                    color = Some(c);
+                } else if repeat.is_none()
+                    && let Ok(r) = p.try_parse(background_repeat)
+                {
+                    repeat = Some(r);
+                } else {
+                    break;
+                }
             }
+            if color.is_none() && image.is_none() && repeat.is_none() {
+                color_value(p)?;
+            }
+            vec![
+                Decl::Background(color.unwrap_or(ColorValue::Rgba(Color::TRANSPARENT))),
+                Decl::BackgroundImage(image.flatten()),
+                Decl::BackgroundSize(BackgroundSize::Auto),
+                Decl::BackgroundPosition(Origin::Fraction(0.0), Origin::Fraction(0.0)),
+                Decl::BackgroundRepeat(repeat.unwrap_or(Repeat { x: true, y: true })),
+            ]
         }
+        "background-image" => vec![Decl::BackgroundImage(url(p, assets)?)],
+        "background-size" => vec![Decl::BackgroundSize(background_size(p)?)],
+        "background-position" => {
+            let (x, y) = transform_origin(p)?;
+            vec![Decl::BackgroundPosition(x, y)]
+        }
+        "background-repeat" => vec![Decl::BackgroundRepeat(background_repeat(p)?)],
+        "border-image" => {
+            let mut source = None;
+            let mut slice = None;
+            for _ in 0..2 {
+                if source.is_none()
+                    && let Ok(s) = p.try_parse(|p| url(p, assets))
+                {
+                    source = Some(s);
+                } else if slice.is_none()
+                    && let Ok(s) = p.try_parse(border_image_slice)
+                {
+                    slice = Some(s);
+                } else {
+                    break;
+                }
+            }
+            if source.is_none() && slice.is_none() {
+                url(p, assets)?;
+            }
+            let (slices, fill) = slice.unwrap_or(FULL_SLICE);
+            vec![
+                Decl::BorderImageSource(source.flatten()),
+                Decl::BorderImageSlice(slices, fill),
+            ]
+        }
+        "border-image-source" => vec![Decl::BorderImageSource(url(p, assets)?)],
+        "border-image-slice" => {
+            let (slices, fill) = border_image_slice(p)?;
+            vec![Decl::BorderImageSlice(slices, fill)]
+        }
+        "object-fit" => vec![Decl::ObjectFit(keyword(
+            p,
+            "an object fit",
+            &[
+                ("fill", ObjectFit::Fill),
+                ("contain", ObjectFit::Contain),
+                ("cover", ObjectFit::Cover),
+                ("none", ObjectFit::None),
+                ("scale-down", ObjectFit::ScaleDown),
+            ],
+        )?)],
         "background-color" => vec![Decl::Background(color_value(p)?)],
         "color" => vec![Decl::Color(color_value(p)?)],
         "box-shadow" => vec![Decl::BoxShadow(shadows(p)?)],
@@ -669,9 +871,229 @@ fn value_of(name: &str, props: &[Prop], p: &mut Parser) -> Result<Vec<Decl>, Err
                 ]
             }
         }
+        "outline" => {
+            let (width, style, color) = border(p)?;
+            vec![
+                Decl::OutlineWidth(width),
+                Decl::OutlineStyle(style),
+                Decl::OutlineColor(color),
+            ]
+        }
+        "outline-width" => vec![Decl::OutlineWidth(border_width(p)?)],
+        "outline-style" => vec![Decl::OutlineStyle(line_style(p)?)],
+        "outline-color" => vec![Decl::OutlineColor(color_value(p)?)],
+        "outline-offset" => vec![Decl::OutlineOffset(length(p)?)],
+        "transform" => vec![Decl::Transform(transform(p)?)],
+        "transform-origin" => {
+            let (x, y) = transform_origin(p)?;
+            vec![Decl::TransformOrigin(x, y)]
+        }
         "text-box-trim" => vec![Decl::TextBoxTrim(text_box_trim(p)?)],
         "text-box-edge" => vec![Decl::TextBoxEdge(text_box_edge(p)?)],
         _ => vec![each(p, props[0])?],
+    })
+}
+
+/// CSS's initial `border-image-slice`, 100%: the whole image in the
+/// corners. Infinite here, cut to the image's size.
+pub(crate) const FULL_SLICE: ([f32; 4], bool) = ([f32::INFINITY; 4], false);
+
+/// `none`, or `url(path)`: the image loaded, from the sheet's directory
+/// when the path is relative.
+fn url(p: &mut Parser, assets: &mut Assets) -> Result<Option<Picture>, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+        return Ok(None);
+    }
+    let text = match p.next()?.clone() {
+        Token::UnquotedUrl(url) => url.to_string(),
+        Token::Function(name) if name.eq_ignore_ascii_case("url") => {
+            p.parse_nested_block(|p| Ok(p.expect_string()?.to_string()))?
+        }
+        t => {
+            return fail(format!(
+                "expected `url()` or `none`, found `{}`",
+                t.to_css_string()
+            ));
+        }
+    };
+    let path = Path::new(&text);
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        match &assets.dir {
+            Some(dir) => dir.join(path),
+            None => {
+                return fail(format!(
+                    "`{text}`: a relative url() needs its sheet's directory"
+                ));
+            }
+        }
+    };
+    if let Some(picture) = assets.loaded.get(&path) {
+        return Ok(Some(picture.clone()));
+    }
+    let picture = Picture::load(&path).map_err(ParseError::custom)?;
+    assets.loaded.insert(path, picture.clone());
+    Ok(Some(picture))
+}
+
+/// `auto`, `cover`, `contain`, or a width and an optional height
+/// (lengths or `auto`).
+fn background_size(p: &mut Parser) -> Result<BackgroundSize, Error> {
+    if let Ok(size) = p.try_parse(|p| {
+        keyword(
+            p,
+            "a size",
+            &[
+                ("cover", BackgroundSize::Cover),
+                ("contain", BackgroundSize::Contain),
+            ],
+        )
+    }) {
+        return Ok(size);
+    }
+    let side = |p: &mut Parser| -> Result<Option<f32>, Error> {
+        if p.try_parse(|p| p.expect_ident_matching("auto")).is_ok() {
+            return Ok(None);
+        }
+        Ok(Some(non_negative(p)?))
+    };
+    let width = side(p)?;
+    let height = p.try_parse(side).unwrap_or(None);
+    Ok(match (width, height) {
+        (None, None) => BackgroundSize::Auto,
+        (w, h) => BackgroundSize::Px(w, h),
+    })
+}
+
+fn background_repeat(p: &mut Parser) -> Result<Repeat, Error> {
+    let first = keyword(
+        p,
+        "a repeat",
+        &[
+            ("repeat", (true, true)),
+            ("no-repeat", (false, false)),
+            ("repeat-x", (true, false)),
+            ("repeat-y", (false, true)),
+        ],
+    )?;
+    // Two values: one per axis, `repeat` or `no-repeat`.
+    if let Ok(y) =
+        p.try_parse(|p| keyword(p, "a repeat", &[("repeat", true), ("no-repeat", false)]))
+    {
+        return Ok(Repeat { x: first.0, y });
+    }
+    Ok(Repeat {
+        x: first.0,
+        y: first.1,
+    })
+}
+
+/// 1 to 4 numbers (image pixels) and an optional `fill`, either side.
+fn border_image_slice(p: &mut Parser) -> Result<([f32; 4], bool), Error> {
+    let fill_first = p.try_parse(|p| p.expect_ident_matching("fill")).is_ok();
+    let number = |p: &mut Parser| -> Result<f32, Error> {
+        match p.next()?.clone() {
+            Token::Number { value, .. } if value >= 0.0 => Ok(value),
+            Token::Percentage { .. } => fail("slices are numbers here: image pixels"),
+            t => fail(format!("expected a slice, found `{}`", t.to_css_string())),
+        }
+    };
+    let slices = four(p, number)?;
+    let fill = fill_first || p.try_parse(|p| p.expect_ident_matching("fill")).is_ok();
+    Ok((slices, fill))
+}
+
+/// `none`, or `translate()`, `translateX()`, `translateY()` and
+/// `scale()` (one factor: no `scaleX`, `scaleY`, `rotate`: iced draws
+/// neither).
+fn transform(p: &mut Parser) -> Result<Option<Transform>, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+        return Ok(None);
+    }
+    let mut total = Transform::IDENTITY;
+    loop {
+        let name = match p.next() {
+            Ok(Token::Function(name)) => name.to_ascii_lowercase(),
+            Ok(t) => {
+                let t = t.clone();
+                return fail(format!(
+                    "expected a transform function, found `{}`",
+                    t.to_css_string()
+                ));
+            }
+            Err(_) => break,
+        };
+        let step = p.parse_nested_block(|p| match &*name {
+            "translate" => {
+                let x = length(p)?;
+                let y = if p.try_parse(|p| p.expect_comma()).is_ok() {
+                    length(p)?
+                } else {
+                    0.0
+                };
+                Ok(Transform { scale: 1.0, x, y })
+            }
+            "translatex" => Ok(Transform {
+                x: length(p)?,
+                ..Transform::IDENTITY
+            }),
+            "translatey" => Ok(Transform {
+                y: length(p)?,
+                ..Transform::IDENTITY
+            }),
+            "scale" => {
+                let factor = p.expect_number()?;
+                if p.try_parse(|p| p.expect_comma()).is_ok() && p.expect_number()? != factor {
+                    return fail("a scale is uniform here: one factor for both axes");
+                }
+                if factor <= 0.0 {
+                    return fail("a scale is a positive number");
+                }
+                Ok(Transform {
+                    scale: factor,
+                    ..Transform::IDENTITY
+                })
+            }
+            "scalex" | "scaley" | "rotate" | "skew" | "skewx" | "skewy" | "matrix" => fail(
+                format!("`{name}()` isn't supported: translate() and scale() only"),
+            ),
+            _ => fail(format!("`{name}()` isn't a transform function")),
+        })?;
+        total = total.then(step);
+    }
+    Ok(Some(total))
+}
+
+/// `<x> [<y>]`: `left`, `center`, `right` or a length; `top`, `center`,
+/// `bottom` or a length.
+fn transform_origin(p: &mut Parser) -> Result<(Origin, Origin), Error> {
+    let coordinate = |p: &mut Parser| -> Result<(Origin, Option<bool>), Error> {
+        if let Ok(word) = p.try_parse(|p| p.expect_ident_cloned()) {
+            let at = |f: f32, horizontal: Option<bool>| Ok((Origin::Fraction(f), horizontal));
+            return match &*word.to_ascii_lowercase() {
+                "left" => at(0.0, Some(true)),
+                "right" => at(1.0, Some(true)),
+                "top" => at(0.0, Some(false)),
+                "bottom" => at(1.0, Some(false)),
+                "center" => at(0.5, None),
+                other => fail(format!("`{other}` isn't an origin")),
+            };
+        }
+        Ok((Origin::Px(length(p)?), None))
+    };
+    let (first, first_horizontal) = coordinate(p)?;
+    let Ok((second, _)) = p.try_parse(coordinate) else {
+        // One value: `top` and `bottom` are vertical, the rest horizontal.
+        return Ok(match first_horizontal {
+            Some(false) => (Origin::Fraction(0.5), first),
+            _ => (first, Origin::Fraction(0.5)),
+        });
+    };
+    // `top left` names them the other way round.
+    Ok(match first_horizontal {
+        Some(false) => (second, first),
+        _ => (first, second),
     })
 }
 

@@ -21,9 +21,11 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
   no Wayland. A popup, a toast, a dialog are widgets it draws (box,
   shadow, content); the surfaces they live in are Aria's to open.
 - **Performance matters**: styles resolved once, not at every `view`;
-  no allocations while drawing; layout only when something changed; an
-  idle UI costs nothing (no frame without a change); an animation asks
-  for frames only while it runs. Measured, before and after a change.
+  no allocations while drawing; what a layout costs (shaped text) kept
+  from one layout to the next, since iced lays out a surface's whole
+  tree at every rebuild, changed or not (a limit); an idle UI costs
+  nothing (no frame without a change); an animation asks for frames
+  only while it runs. Measured, before and after a change.
 - **No workarounds of any kind**: what iced can't do cleanly is a
   proper widget of the toolkit, or a limit written here; never a trick
   in a view.
@@ -74,7 +76,7 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | transparent / rounded surfaces | ✅ | |
 | opacity | 🔲 | yes |
 | transform: translate, scale (painted only, layout untouched as in CSS) | 🔲 | yes (§6: a pulse, a shake, a toast sliding in) |
-| transform: rotate | 🔲 limit: iced's `Transformation` has only translate and scale; an svg or an image rotates (a spinner) | |
+| transform: rotate | 🔲 limit: iced's `Transformation` has only translate and a uniform scale (no `scaleX` / `scaleY`); an svg or an image rotates (a spinner) | |
 | gradients | 🔲 | no |
 | background-image / 9-patch | 🔲 | yes |
 | outline | 🔲 | yes |

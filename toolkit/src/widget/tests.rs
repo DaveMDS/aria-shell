@@ -30,6 +30,8 @@ enum Message {
     Toggled(bool),
     Value(f32),
     Released,
+    Typed(String),
+    Submitted,
 }
 
 /// A row of buttons, each `name` at 40x20, no gap.
@@ -505,4 +507,83 @@ fn a_meter_fills_its_fraction_under_its_label() {
     assert_eq!(ui.find(&sheet, "meter > fill")[0].width, 96.0);
     ui.rebuild(view(f32::NAN));
     assert_eq!(ui.find(&sheet, "meter > fill")[0].width, 0.0);
+}
+
+/// A search input in a focus scope, 200px wide.
+fn search<'a>(root: Node<'a>, value: &str, disabled: bool) -> Element<'a, Message> {
+    crate::focus_scope(crate::row(
+        root,
+        [
+            crate::input(root.child("input").disabled_if(disabled), "Search", value)
+                .on_input(Message::Typed)
+                .on_submit(Message::Submitted)
+                .into(),
+        ],
+    ))
+    .into()
+}
+
+/// The base's border colours of an input, at rest and focused.
+const BORDER: [u8; 4] = [201, 201, 208, 255];
+const FOCUSED: [u8; 4] = [52, 102, 214, 255];
+
+#[test]
+fn an_input_takes_the_focus_and_the_keys() {
+    let sheet = sheet("input { transition: none; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(search(root, "", false), Size::new(240.0, 40.0), 1.0);
+    let now = Instant::now();
+    ui.frame(now);
+    assert_eq!(ui.pixels(Color::WHITE).at(100, 0), BORDER);
+    // A press on its padding, off the field, puts the focus in it.
+    ui.click(Point::new(3.0, 16.0));
+    ui.frame(now);
+    assert_eq!(ui.pixels(Color::WHITE).at(100, 0), FOCUSED);
+    ui.type_text("hi");
+    ui.key(Named::Enter);
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Typed("h".into()),
+            Message::Typed("hi".into()),
+            Message::Submitted
+        ]
+    );
+    // A press elsewhere takes it away; Tab brings it back.
+    ui.click(Point::new(230.0, 30.0));
+    ui.frame(now);
+    assert_eq!(ui.pixels(Color::WHITE).at(100, 0), BORDER);
+    ui.key(Named::Tab);
+    ui.frame(now);
+    assert_eq!(ui.pixels(Color::WHITE).at(100, 0), FOCUSED);
+}
+
+#[test]
+fn a_disabled_input_is_out_of_reach() {
+    let sheet = sheet("input { transition: none; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(search(root, "", true), Size::new(240.0, 40.0), 1.0);
+    let now = Instant::now();
+    let field = ui.find(&sheet, "input > field")[0];
+    ui.click(field.center());
+    ui.click(Point::new(3.0, 16.0));
+    ui.key(Named::Tab);
+    ui.type_text("hi");
+    ui.frame(now);
+    assert!(ui.messages.is_empty());
+    assert_eq!(ui.pixels(Color::WHITE).at(100, 0), BORDER);
+}
+
+#[test]
+fn an_inputs_field_is_centred_on_its_letters() {
+    let sheet =
+        sheet("input { width: 200px; height: 30px; min-height: 0; padding: 0 8px; border: none; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(search(root, "", false), Size::new(240.0, 40.0), 1.0);
+    // Its box is its capitals' height, centred as a label's would be.
+    let field = ui.find(&sheet, "input > field")[0];
+    let cap = root.child("input").child("field").base().cap_height;
+    assert!((field.height - cap).abs() <= 1.0, "{field:?}, cap {cap}");
+    assert!((field.center_y() - 15.0).abs() <= 0.5, "{field:?}");
+    assert_eq!((field.x, field.width), (8.0, 184.0));
 }

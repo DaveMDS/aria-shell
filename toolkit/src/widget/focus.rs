@@ -1,7 +1,9 @@
 //! Keyboard focus within a scope: Tab and Shift+Tab move it among the
-//! buttons inside, a press of the pointer takes it away (`:focus` shows
-//! for the keyboard's sake). Per scope, so per surface: an iced task
-//! would operate on every window an app has.
+//! buttons, sliders and inputs inside; a press of the pointer takes it
+//! away before what it presses sees it (`:focus` shows for the
+//! keyboard's sake, but a text field pressed takes it back). Per scope,
+//! so per surface: an iced task would operate on every window an app
+//! has.
 
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
@@ -101,6 +103,21 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if let Event::Mouse(mouse::Event::ButtonPressed(_)) = event {
+            let mut count = focusable::count();
+            self.content.as_widget_mut().operate(
+                &mut tree.children[0],
+                layout,
+                renderer,
+                &mut operation::black_box(&mut count),
+            );
+            if let Outcome::Some(count) = count.finish()
+                && count.focused.is_some()
+            {
+                self.run(tree, layout, renderer, focusable::unfocus());
+                shell.request_redraw();
+            }
+        }
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -111,36 +128,20 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
             shell,
             viewport,
         );
-        match event {
-            Event::Keyboard(keyboard::Event::KeyPressed {
-                key: keyboard::Key::Named(key::Named::Tab),
-                modifiers,
-                ..
-            }) if !shell.is_event_captured() => {
-                if modifiers.shift() {
-                    self.run(tree, layout, renderer, focusable::focus_previous());
-                } else {
-                    self.run(tree, layout, renderer, focusable::focus_next());
-                }
-                shell.capture_event();
-                shell.request_redraw();
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(key::Named::Tab),
+            modifiers,
+            ..
+        }) = event
+            && !shell.is_event_captured()
+        {
+            if modifiers.shift() {
+                self.run(tree, layout, renderer, focusable::focus_previous());
+            } else {
+                self.run(tree, layout, renderer, focusable::focus_next());
             }
-            Event::Mouse(mouse::Event::ButtonPressed(_)) => {
-                let mut count = focusable::count();
-                self.content.as_widget_mut().operate(
-                    &mut tree.children[0],
-                    layout,
-                    renderer,
-                    &mut operation::black_box(&mut count),
-                );
-                if let Outcome::Some(count) = count.finish()
-                    && count.focused.is_some()
-                {
-                    self.run(tree, layout, renderer, focusable::unfocus());
-                    shell.request_redraw();
-                }
-            }
-            _ => {}
+            shell.capture_event();
+            shell.request_redraw();
         }
     }
 

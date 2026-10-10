@@ -48,6 +48,11 @@ struct Gallery {
     airplane: bool,
     /// 0 to 100.
     volume: f32,
+    search: String,
+    password: String,
+    /// The password shown.
+    peek: bool,
+    eye: IconFile,
 }
 
 #[derive(Debug, Clone)]
@@ -67,10 +72,16 @@ enum Message {
     Wifi(bool),
     Airplane(bool),
     Volume(f32),
+    Search(String),
+    Password(String),
+    Peek,
 }
 
 /// A symbolic icon: one colour, the element's.
 const STAR: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 1l2.1 4.5 4.9.6-3.6 3.4.9 4.9L8 12l-4.3 2.4.9-4.9L1 6.1l4.9-.6z" fill="#000"/></svg>"##;
+
+/// An eye, to peek at a password.
+const EYE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 3C4.4 3 1.7 5.6 1 8c.7 2.4 3.4 5 7 5s6.3-2.6 7-5c-.7-2.4-3.4-5-7-5zm0 8.2A3.2 3.2 0 1 1 8 4.8a3.2 3.2 0 0 1 0 6.4zM8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="#000"/></svg>"##;
 
 /// A picture: a gradient, square.
 fn picture() -> image::Handle {
@@ -125,6 +136,13 @@ impl Gallery {
             wifi: true,
             airplane: false,
             volume: 40.0,
+            search: String::new(),
+            password: "hunter2".into(),
+            peek: false,
+            eye: IconFile::Svg {
+                handle: svg::Handle::from_memory(EYE.as_bytes()),
+                symbolic: true,
+            },
         }
     }
 
@@ -158,6 +176,9 @@ impl Gallery {
             Message::Wifi(on) => self.wifi = on,
             Message::Airplane(on) => self.airplane = on,
             Message::Volume(volume) => self.volume = volume,
+            Message::Search(text) => self.search = text,
+            Message::Password(text) => self.password = text,
+            Message::Peek => self.peek = !self.peek,
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -280,6 +301,12 @@ impl Gallery {
         let section = root.child("section");
         let controls = section.child("controls");
         let line = controls.child("line");
+        let search = line.child("input");
+        let password = line.child("input");
+        let peek = password
+            .child("button")
+            .class("peek")
+            .class_if("active", self.peek);
         let label =
             |text: String| -> Element<'a, Message> { tk::text(line.child("label"), text).into() };
         let content = tk::column(
@@ -318,6 +345,30 @@ impl Gallery {
                         )
                         .into(),
                         label("Disabled".into()),
+                    ],
+                )
+                .into(),
+                tk::row(
+                    line,
+                    [
+                        tk::input(search, "Search", &self.search)
+                            .on_input(Message::Search)
+                            .leading(tk::icon(search.child("icon"), self.star.clone()))
+                            .into(),
+                        tk::input(password, "Password", &self.password)
+                            .on_input(Message::Password)
+                            .secure(!self.peek)
+                            .trailing(
+                                tk::button(
+                                    peek,
+                                    [tk::icon(peek.child("icon"), self.eye.clone()).into()],
+                                )
+                                .on_press(Message::Peek),
+                            )
+                            .into(),
+                        tk::input(line.child("input").disabled_if(true), "Disabled", "")
+                            .on_input(Message::Search)
+                            .into(),
                     ],
                 )
                 .into(),

@@ -163,6 +163,7 @@
   --on-accent: #ffffff;
   --border: #c9c9d0;
   --danger: #c62f2f;
+  --selection: rgba(52, 102, 214, 0.25);
 }
 :root.dark {
   --bg: #1e1e22;
@@ -172,6 +173,7 @@
   --on-accent: #12141a;
   --border: #3d3d45;
   --danger: #f06262;
+  --selection: rgba(122, 162, 247, 0.3);
 }
 
 * {
@@ -366,4 +368,64 @@ meter > fill {
 meter > label {
   font-size: 11px;
   white-space: nowrap;
+}
+
+/*
+ * Inputs
+ * ======
+ *
+ * A line of text to edit (`tk::input`): iced's text input in a box, with
+ * the app's children before and after it (an icon, a button to peek at
+ * a password). The box is `:focus` while its field has the focus (CSS's
+ * `:focus-within`); a press on it puts the focus in the field. The
+ * field takes the free room, its text centred on its letters as a
+ * label's is; iced draws it, so its colours don't transition.
+ *
+ * input
+ * ├─ …                 the app's: an icon
+ * ├─ field             the text: its colour, its font
+ * │  ├─ placeholder    its colour: the text shown while it's empty
+ * │  ╰─ selection      its background: the selected text's
+ * ╰─ …                 the app's: a button (.peek)
+ */
+input {
+  width: 200px;
+  min-height: 32px;
+  padding: 4px 8px;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  transition: border-color 120ms;
+}
+input:hover {
+  border-color: var(--muted);
+}
+input:focus {
+  border-color: var(--accent);
+}
+input:disabled {
+  color: var(--muted);
+}
+input > icon {
+  color: var(--muted);
+}
+input > button {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+input > button > icon {
+  height: 16px;
+}
+input > button:hover {
+  background: var(--border);
+}
+field > placeholder {
+  color: var(--muted);
+}
+field > selection {
+  background: var(--selection);
 }

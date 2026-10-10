@@ -462,3 +462,42 @@ fn golden_controls_focused_and_dragged() {
         },
     );
 }
+
+#[test]
+fn golden_inputs() {
+    scene(
+        "inputs",
+        "column { gap: 6px; } input { transition: none; }",
+        None,
+        Size::new(230.0, 160.0),
+        |root| {
+            let input = root.child("input");
+            let peek = input.child("button").class("peek");
+            crate::column(
+                root,
+                [
+                    crate::input(input, "Placeholder", "")
+                        .on_input(|_| ())
+                        .into(),
+                    crate::input(input, "Search", "A value")
+                        .on_input(|_| ())
+                        .leading(crate::icon(input.child("icon"), star()))
+                        .into(),
+                    crate::input(input, "Password", "secret")
+                        .on_input(|_| ())
+                        .secure(true)
+                        .trailing(
+                            crate::button(peek, [crate::icon(peek.child("icon"), star()).into()])
+                                .on_press(()),
+                        )
+                        .into(),
+                    crate::input(input.disabled_if(true), "Disabled", "")
+                        .on_input(|_| ())
+                        .into(),
+                ],
+            )
+            .into()
+        },
+        |_, _| {},
+    );
+}

@@ -1,12 +1,16 @@
 //! The toolkit's iced `Theme`: not a palette, the draw-time context a
-//! parent hands its children (TOOLKIT.md, "The draw-time context").
+//! parent hands its children (TOOLKIT.md, "The draw-time context"); and
+//! the `Catalog`s of the stock widgets the toolkit embeds, which read
+//! their styles from the sheet through it.
 
 use std::time::Instant;
 
-use iced::Color;
 use iced::theme::{Base, Mode, Palette, Style};
+use iced::widget::text_input;
+use iced::{Background, Border, Color};
 
-use crate::style::{Ancestors, States};
+use crate::paint::fade;
+use crate::style::{Ancestors, Node, States};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
@@ -88,5 +92,60 @@ impl Base for Theme {
 
     fn name(&self) -> &str {
         "tk"
+    }
+}
+
+/// What a text input's colours come from: its field's node, and the
+/// nodes of its placeholder and selection.
+#[derive(Clone, Copy)]
+pub struct FieldClass<'a> {
+    pub(crate) field: Node<'a>,
+    pub(crate) placeholder: Node<'a>,
+    pub(crate) selection: Node<'a>,
+}
+
+impl<'a> FieldClass<'a> {
+    pub(crate) fn new(field: Node<'a>) -> Self {
+        Self {
+            field,
+            placeholder: field.child("placeholder"),
+            selection: field.child("selection"),
+        }
+    }
+}
+
+/// iced's text input, as `tk::input` embeds it: no box of its own (the
+/// input's is), its colours its nodes', under the states of its
+/// ancestors. Without a class (an iced text input used directly), black
+/// on nothing.
+impl text_input::Catalog for Theme {
+    type Class<'a> = Option<FieldClass<'a>>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        None
+    }
+
+    fn style(&self, class: &Self::Class<'_>, _status: text_input::Status) -> text_input::Style {
+        let color = |node: Node<'_>, background: bool| {
+            let s = node.resolve(States::NONE, &self.ancestors);
+            let color = if background { s.background } else { s.color };
+            fade(color, self.opacity * s.opacity)
+        };
+        let (value, placeholder, selection) = match class {
+            Some(class) => (
+                color(class.field, false),
+                color(class.placeholder, false),
+                color(class.selection, true),
+            ),
+            None => (Color::BLACK, Color::BLACK, Color::TRANSPARENT),
+        };
+        text_input::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            icon: value,
+            placeholder,
+            value,
+            selection,
+        }
     }
 }

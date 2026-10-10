@@ -553,7 +553,7 @@ UI.md §7:
 | `button` | a box with `on_press`, the `button` element, its variants as classes |
 | `toggle` | a button holding its `knob`, `.on` when it is; the knob slid by the theme's transform |
 | `slider` | its track a meter, its `knob` centred on the value; dragged, clicked, scrolled, keys when focused |
-| `input` | iced's `text_input` under our `Catalog`, in a box; the peek button |
+| `input` | iced's `text_input` under our `Catalog`, in a box with the app's children before and after it (an icon, the peek button); `:focus` while its field has it |
 | `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar`, `thumb`) |
 | `menu` | checks, radios, submenus, separators |
 | `calendar` | day and month names given by the app (no locale in the toolkit) |
@@ -649,7 +649,7 @@ the headless harness and the query with them.
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
-   surface ✅ (with step 2), input, scroll, menu, calendar, tabs,
+   surface ✅ (with step 2), input ✅, scroll, menu, calendar, tabs,
    graphs, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
@@ -667,7 +667,9 @@ the headless harness and the query with them.
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.
 - Layout runs on every rebuild of a surface's tree, changed or not.
-- A stock widget needs our `Catalog` impl before it can be used.
+- A stock widget needs our `Catalog` impl before it can be used; its
+  colours (an input's text, placeholder and selection) are asked at
+  draw, so they don't transition.
 - Layout gets no context from the parent: nodes are explicit.
 - A descendant's layout can't follow an ancestor's state.
 - Operations run on every window (`iced_exwlshell`): ids are unique per

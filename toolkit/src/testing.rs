@@ -175,6 +175,24 @@ impl<'a, Message> Harness<'a, Message> {
         })])
     }
 
+    /// `text` typed, a key per character.
+    pub fn type_text(&mut self, text: &str) {
+        for c in text.chars() {
+            let c = c.to_string();
+            let key = keyboard::Key::Character(c.as_str().into());
+            let physical = key::Physical::Unidentified(key::NativeCode::Unidentified);
+            self.send(&[Event::Keyboard(keyboard::Event::KeyPressed {
+                key: key.clone(),
+                modified_key: key,
+                physical_key: physical,
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::default(),
+                text: Some(c.into()),
+                repeat: false,
+            })]);
+        }
+    }
+
     /// A frame at `now`, as a surface gets one: `RedrawRequested`, then
     /// the drawing. What the widgets asked for in it.
     pub fn frame(&mut self, now: Instant) -> window::RedrawRequest {

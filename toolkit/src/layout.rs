@@ -718,10 +718,10 @@ mod tests {
     #[test]
     fn a_surface_leaves_room_for_its_shadow() {
         let sheet =
-            sheet("menu { box-shadow: 0 3px 8px black; } cell { width: 100px; height: 40px; }");
-        let menu = sheet.root("menu", 1.0);
+            sheet("popup { box-shadow: 0 3px 8px black; } cell { width: 100px; height: 40px; }");
+        let popup = sheet.root("popup", 1.0);
         let node = lay(
-            crate::surface(menu, crate::row(menu, [cell(menu, "a")])).into(),
+            crate::surface(popup, crate::row(popup, [cell(popup, "a")])).into(),
             MAX,
         );
         // Blur 8 on every side, the offset moving 3 of it down.

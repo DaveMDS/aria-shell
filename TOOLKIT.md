@@ -555,7 +555,7 @@ UI.md §7:
 | `slider` | its track a meter, its `knob` centred on the value; dragged, clicked, scrolled, keys when focused |
 | `input` | iced's `text_input` under our `Catalog`, in a box with the app's children before and after it (an icon, the peek button); `:focus` while its field has it |
 | `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar.vertical`, `.horizontal`, `thumb`); no box of its own, its sizes its node's (`max-height`: it grows, then scrolls); sideways, it takes the wheel sideways |
-| `menu` | checks, radios, submenus, separators |
+| `menu` | checks, radios, icons, shortcuts, separators, submenus unfolded in place; each item the app's message, a submenu unfolded as the app says; its marks the theme's `content`; Up and Down among its items |
 | `calendar` | day and month names given by the app (no locale in the toolkit) |
 | `tabs` | |
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
@@ -618,13 +618,18 @@ theme is written and where the golden images come from.
 | measured, before and after | `benches/`: view, layout, update, draw of fixed trees with the headless renderer; Aria's CPU at rest in the nested Sway, as ARCHITECTURE.md measured it |
 
 Measured (`cargo bench -p tk --features testing`, this laptop, 2026-10,
-µs): a theme's load (the base and the gallery's) 374.
+µs): a theme's load (the base and the gallery's) 500.
 
 | tree | view | rebuild (view, diff, layout) | update | frame |
 |---|---|---|---|---|
-| a bar, 12 gadgets | 1.6 | 4.2 | 0.8 | 3.2 |
-| a menu, 20 items | 3.8 | 17 | 1.4 | 6.1 |
-| a list, 500 rows | 56 | 198 | 22 | 80 |
+| a bar, 12 gadgets | 1.6 | 4.3 | 1.0 | 3.5 |
+| a menu (`tk::menu`), 20 items | 4.6 | 15 | 2.0 | 7.1 |
+| a list, 500 rows | 55 | 200 | 32 | 92 |
+
+At every event and every frame iced asks the whole tree for overlays,
+as its own containers have it, and ours pass the question on (else an
+iced widget's overlay inside them wouldn't show): ~6ns a widget, a
+third of the list's update.
 
 Not the toolkit's to fix: `iced_exwlshell` 0.20 rebuilds every
 surface after every message (0.21: only the drawn ones), and a frame
@@ -651,7 +656,7 @@ the headless harness and the query with them.
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
-   surface ✅ (with step 2), input ✅, scroll ✅, menu, calendar,
+   surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, calendar,
    tabs, graphs, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation

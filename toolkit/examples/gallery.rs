@@ -13,7 +13,7 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, keyboard, window};
-use tk::{Element, IconFile, Node, Scheme, Sheet, Source, Theme};
+use tk::{Element, IconFile, MenuItem, Node, Scheme, Sheet, Source, Theme};
 
 /// The gallery's own elements.
 const GALLERY: &str = include_str!("gallery.css");
@@ -52,6 +52,12 @@ struct Gallery {
     password: String,
     /// The password shown.
     peek: bool,
+    /// The menu's last item picked.
+    picked: Option<&'static str>,
+    hidden: bool,
+    by_date: bool,
+    /// The menu's submenu, unfolded.
+    more: bool,
     eye: IconFile,
 }
 
@@ -75,6 +81,10 @@ enum Message {
     Search(String),
     Password(String),
     Peek,
+    Picked(&'static str),
+    Hidden,
+    ByDate(bool),
+    More,
 }
 
 /// A symbolic icon: one colour, the element's.
@@ -139,6 +149,10 @@ impl Gallery {
             search: String::new(),
             password: "hunter2".into(),
             peek: false,
+            picked: None,
+            hidden: false,
+            by_date: false,
+            more: false,
             eye: IconFile::Svg {
                 handle: svg::Handle::from_memory(EYE.as_bytes()),
                 symbolic: true,
@@ -179,6 +193,10 @@ impl Gallery {
             Message::Search(text) => self.search = text,
             Message::Password(text) => self.password = text,
             Message::Peek => self.peek = !self.peek,
+            Message::Picked(label) => self.picked = Some(label),
+            Message::Hidden => self.hidden = !self.hidden,
+            Message::ByDate(by_date) => self.by_date = by_date,
+            Message::More => self.more = !self.more,
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -215,6 +233,7 @@ impl Gallery {
                         self.images(page),
                         self.texts(page),
                         self.flex(page),
+                        self.menus(page),
                         self.scrolls(page),
                         self.icons(page),
                     ],
@@ -603,27 +622,6 @@ impl Gallery {
             )
             .into()
         };
-        let menu = flex.child("menu");
-        let entries = [
-            ("Open", "Ctrl+O"),
-            ("A label far too long for its menu, cut short", "Ctrl+L"),
-            ("Save", "Ctrl+S"),
-        ];
-        let menu = tk::column(
-            menu,
-            entries.iter().map(|&(label, shortcut)| {
-                let item = menu.child("item");
-                tk::row(
-                    item,
-                    [
-                        tk::icon(item.child("icon"), self.star.clone()).into(),
-                        tk::text(item.child("label"), label).into(),
-                        tk::text(item.child("shortcut"), shortcut).into(),
-                    ],
-                )
-                .into()
-            }),
-        );
         let content = tk::column(
             flex,
             [
@@ -631,10 +629,50 @@ impl Gallery {
                 lane("center", &["fixed", "fixed"]),
                 lane("end", &["fixed", "fixed"]),
                 lane("align-center", &["tall", "mid", "short"]),
-                menu.into(),
             ],
         );
         self.section(section, "Flex", content.into())
+    }
+
+    fn menus<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let menus = section.child("menus");
+        let picked = match self.picked {
+            Some(label) => format!("Picked: {label}"),
+            None => "Nothing picked yet: click, or Tab to an item then Up, Down, Enter".into(),
+        };
+        let item = |label: &'static str| MenuItem::new(label).on_press(Message::Picked(label));
+        let menu = tk::menu(
+            menus.child("menu"),
+            [
+                item("Open").icon(self.star.clone()).shortcut("Ctrl+O"),
+                item("A label far too long for its menu, cut short").shortcut("Ctrl+L"),
+                MenuItem::new("Paste, disabled").shortcut("Ctrl+V"),
+                MenuItem::separator(),
+                MenuItem::new("Show hidden files")
+                    .check(self.hidden)
+                    .on_press(Message::Hidden),
+                MenuItem::new("Sort by name")
+                    .radio(!self.by_date)
+                    .on_press(Message::ByDate(false)),
+                MenuItem::new("Sort by date")
+                    .radio(self.by_date)
+                    .on_press(Message::ByDate(true)),
+                MenuItem::separator(),
+                MenuItem::new("More").on_press(Message::More).submenu(
+                    self.more,
+                    [
+                        item("Rename").icon(self.star.clone()),
+                        item("Delete").class("danger"),
+                    ],
+                ),
+            ],
+        );
+        let content = tk::column(
+            menus,
+            [menu, tk::text(menus.child("status"), picked).into()],
+        );
+        self.section(section, "Menu", content.into())
     }
 
     fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {

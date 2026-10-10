@@ -142,34 +142,35 @@ fn the_root_carries_the_scheme_as_a_class() {
 #[test]
 fn own_states_and_ancestors_states() {
     let (sheet, _) = load(
-        "item:hover { color: red; } menu:hover item { background: blue; } \
-         menu > item:active:hover { padding: 3px; }",
+        "entry:hover { color: red; } list:hover entry { background: blue; } \
+         list > entry:active:hover { padding: 3px; }",
     );
-    let item = node(&sheet, "menu > item", 1.0);
+    let entry = node(&sheet, "list > entry", 1.0);
     let none = Ancestors::default();
-    assert_eq!(item.base().color, plain(&sheet));
-    assert_eq!(item.resolve(States::HOVER, &none).color, RED);
-    assert_eq!(item.resolve(States::ACTIVE, &none).padding.left, 0.0);
+    assert_eq!(entry.base().color, plain(&sheet));
+    assert_eq!(entry.resolve(States::HOVER, &none).color, RED);
+    assert_eq!(entry.resolve(States::ACTIVE, &none).padding.left, 0.0);
     assert_eq!(
-        item.resolve(States::ACTIVE | States::HOVER, &none)
+        entry
+            .resolve(States::ACTIVE | States::HOVER, &none)
             .padding
             .left,
         3.0
     );
-    let hovered_menu = none.push(0, States::HOVER);
+    let hovered_list = none.push(0, States::HOVER);
     assert_eq!(
-        item.resolve(States::NONE, &hovered_menu).background,
+        entry.resolve(States::NONE, &hovered_list).background,
         rgb(0, 0, 255)
     );
     assert_eq!(
-        item.sensitivity(),
+        entry.sensitivity(),
         Sensitivity {
             own: States::HOVER | States::ACTIVE,
             descendants: States::NONE,
         }
     );
     assert_eq!(
-        node(&sheet, "menu", 1.0).sensitivity(),
+        node(&sheet, "list", 1.0).sensitivity(),
         Sensitivity {
             own: States::NONE,
             descendants: States::HOVER,
@@ -194,19 +195,19 @@ fn ancestors_keep_their_depths() {
 
 #[test]
 fn positions_split_only_the_rows_the_sheet_tells_apart() {
-    let (plain, _) = load("item { color: red; }");
-    let menu = node(&plain, "menu", 1.0);
+    let (plain, _) = load("entry { color: red; }");
+    let list = node(&plain, "list", 1.0);
     for i in 0..50 {
-        assert_eq!(menu.child_at("item", i, 50).base().color, RED);
+        assert_eq!(list.child_at("entry", i, 50).base().color, RED);
     }
     assert_eq!(plain.stats().nodes, 2);
 
     let (sheet, _) = load(
-        "item:first-child { color: red; } item:last-child { color: blue; } \
-         item:nth-child(2n) { padding: 1px; }",
+        "entry:first-child { color: red; } entry:last-child { color: blue; } \
+         entry:nth-child(2n) { padding: 1px; }",
     );
-    let menu = node(&sheet, "menu", 1.0);
-    let at = |i| menu.child_at("item", i, 5).base();
+    let list = node(&sheet, "list", 1.0);
+    let at = |i| list.child_at("entry", i, 5).base();
     assert_eq!(at(0).color, RED);
     assert_eq!(at(4).color, rgb(0, 0, 255));
     assert_eq!(at(1).padding.left, 1.0);
@@ -645,4 +646,20 @@ fn keyframes_keep_what_moves() {
         messages[1].contains("a step is `from`, `to` or a percentage"),
         "{messages:?}"
     );
+}
+
+#[test]
+fn content_is_strings_or_nothing() {
+    let (sheet, warnings) = load(
+        "a { content: \"✓\"; } b { content: \"one\" ' two'; } c { content: none; } \
+         d { content: normal; } e { content: 12px; }",
+    );
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    let content = |path: &str| style(&sheet, path).content.as_deref().map(str::to_owned);
+    assert_eq!(content("a").as_deref(), Some("✓"));
+    assert_eq!(content("b").as_deref(), Some("one two"));
+    assert_eq!(content("c"), None);
+    assert_eq!(content("d"), None);
+    // Not inherited, as in CSS.
+    assert_eq!(content("a > x"), None);
 }

@@ -104,6 +104,10 @@
  *                          an image fills its box, centred
  *   rotate                 none | <angle>: an icon's or an image's turn
  *                          (a box doesn't turn: iced can't rotate it)
+ *   content                none | normal | <string>...: a mark's text (a
+ *                          menu item's check, its arrow). Read where the
+ *                          widget is built: it follows the element's
+ *                          classes, not its states
  *   transition             [<property> | all | none] || <time> || <easing>
  *                          || <time>, comma-separated (the first time the
  *                          duration, the second the delay);
@@ -470,4 +474,86 @@ scrollbar:hover > thumb {
 }
 scrollbar:active > thumb {
   background: var(--accent);
+}
+
+/*
+ * Menus
+ * =====
+ *
+ * A column of items to press (`tk::menu`), each with a mark, an icon,
+ * a shortcut; separators; submenus unfolded in place, under their item.
+ * Up and Down move the focus among the items once one has it. The marks
+ * are text: their `content`, picked by the item's classes, the toolkit's
+ * a check, a radio's dot and an arrow.
+ *
+ * menu
+ * ├─ item[.check|.radio][.checked][.submenu][.expanded][.<app's>]
+ * │  │                  a button; :disabled without a message
+ * │  ├─ check           a check's or a radio's mark: on every item of a
+ * │  │                  level where one has one, so labels line up
+ * │  ├─ icon            the same: empty on an item without one
+ * │  ├─ label
+ * │  ├─ shortcut
+ * │  ╰─ arrow           a submenu's
+ * ├─ separator
+ * ╰─ submenu            an unfolded submenu's items, under its item
+ *    ╰─ item …
+ */
+menu {
+  min-width: 160px;
+  padding: 4px;
+}
+menu item {
+  gap: 8px;
+  padding: 6px 8px;
+  align-items: center;
+  border-radius: 4px;
+  transition: background-color 80ms;
+}
+menu item:hover,
+menu item:focus {
+  background: var(--border);
+}
+menu item:disabled {
+  color: var(--muted);
+}
+menu item > check {
+  width: 12px;
+  text-align: center;
+}
+menu item > icon {
+  width: 16px;
+  height: 16px;
+}
+menu item > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+menu item > shortcut {
+  color: var(--muted);
+  white-space: nowrap;
+}
+menu item.check.checked > check {
+  content: "✓";
+}
+menu item.radio > check {
+  content: "○";
+}
+menu item.radio.checked > check {
+  content: "●";
+}
+menu item.submenu > arrow {
+  content: "▸";
+}
+menu item.expanded > arrow {
+  content: "▾";
+}
+menu separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+menu submenu {
+  padding-left: 12px;
 }

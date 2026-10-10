@@ -70,23 +70,15 @@ fn bar<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
 
 /// A menu: twenty items, an icon, a label and a shortcut each.
 fn menu<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
-    tk::column(
+    tk::menu(
         root,
         (0..20).map(|i| {
-            let item = root.child("item");
-            tk::button(
-                item,
-                [
-                    tk::icon(item.child("icon"), icon.clone()).into(),
-                    tk::text(item.child("label"), format!("Menu item number {i}")).into(),
-                    tk::text(item.child("shortcut"), "Ctrl+K").into(),
-                ],
-            )
-            .on_press(())
-            .into()
+            tk::MenuItem::new(format!("Menu item number {i}"))
+                .icon(icon.clone())
+                .shortcut("Ctrl+K")
+                .on_press(())
         }),
     )
-    .into()
 }
 
 /// A list: five hundred rows of a label.

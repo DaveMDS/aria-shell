@@ -18,9 +18,8 @@
  *       │  ├─ label.small|.large|.bold|.muted|.caps
  *       │  ├─ box.wrap > label, box.cut > label
  *       │  ╰─ pair[.untrimmed] > icon, label
- *       ├─ flex
- *       │  ├─ lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
- *       │  ╰─ menu > item > icon, label, shortcut
+ *       ├─ flex > lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
+ *       ├─ menus > menu (item.danger), status
  *       ├─ scrolls > scroll.list > rows > label; scroll.strip > cells > cell > label
  *       ╰─ icons > icon[.small|.large|.accent], avatar
  */
@@ -397,30 +396,20 @@ cell.tall {
 cell.mid {
   height: 32px;
 }
-menu {
-  max-width: 260px;
-  padding: 4px;
+
+/* Menu */
+menus {
+  gap: 8px;
+}
+menus > menu {
+  max-width: 280px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
-item {
-  gap: 8px;
-  padding: 6px 8px;
-  align-items: center;
-  border-radius: 4px;
-}
-item > icon {
-  height: 16px;
-}
-item > label {
-  width: fill;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-shortcut {
-  color: var(--muted);
+menu item.danger {
+  color: var(--danger);
 }
 
 /* Scroll */

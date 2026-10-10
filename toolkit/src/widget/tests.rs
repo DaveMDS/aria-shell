@@ -297,16 +297,16 @@ fn widgets_are_found_by_selector() {
     // No positional pseudo-class in the sheet: the rows share their node,
     // the query still tells them apart.
     let sheet = sheet(
-        "menu { width: 100px; } item { height: 20px; } \
+        "list { width: 100px; } entry { height: 20px; } \
          label { width: 10px; height: 10px; }",
     );
-    let menu = sheet.root("menu", 1.0);
+    let list = sheet.root("list", 1.0);
     let view = || -> Element<'_, Message> {
         crate::column(
-            menu,
+            list,
             ["a", "b", "c"].map(|name| {
-                let item = menu.child("item").class_if("active", name == "b");
-                crate::button(item, [crate::text(item.child("label"), name).into()])
+                let entry = list.child("entry").class_if("active", name == "b");
+                crate::button(entry, [crate::text(entry.child("label"), name).into()])
                     .on_press(Message::Pressed(name))
                     .into()
             }),
@@ -316,16 +316,16 @@ fn widgets_are_found_by_selector() {
     let mut ui = Harness::new(view(), Size::new(100.0, 60.0), 1.0);
     let rect = |y: f32| iced::Rectangle::new(Point::new(0.0, y), Size::new(100.0, 20.0));
     assert_eq!(
-        ui.find(&sheet, "menu > item"),
+        ui.find(&sheet, "list > entry"),
         [rect(0.0), rect(20.0), rect(40.0)]
     );
-    assert_eq!(ui.find(&sheet, "item:nth-child(2)"), [rect(20.0)]);
-    assert_eq!(ui.find(&sheet, "item:last-child"), [rect(40.0)]);
-    assert_eq!(ui.find(&sheet, "item.active"), [rect(20.0)]);
-    assert_eq!(ui.find(&sheet, "menu label").len(), 3);
-    assert_eq!(ui.find(&sheet, "item:first-child label").len(), 1);
+    assert_eq!(ui.find(&sheet, "entry:nth-child(2)"), [rect(20.0)]);
+    assert_eq!(ui.find(&sheet, "entry:last-child"), [rect(40.0)]);
+    assert_eq!(ui.find(&sheet, "entry.active"), [rect(20.0)]);
+    assert_eq!(ui.find(&sheet, "list label").len(), 3);
+    assert_eq!(ui.find(&sheet, "entry:first-child label").len(), 1);
     assert!(ui.find(&sheet, "nothing").is_empty());
-    ui.click_on(&sheet, "item:nth-child(3)");
+    ui.click_on(&sheet, "entry:nth-child(3)");
     assert_eq!(ui.messages, [Message::Pressed("c")]);
 }
 
@@ -669,5 +669,82 @@ fn a_scrollbar_shows_its_states() {
     assert_eq!(
         ui.pixels(Color::WHITE).at_point(thumb.x, 80.0, 1.0),
         [255, 255, 255, 255]
+    );
+}
+
+const MENU: &str = "menu item { transition: none; }";
+
+/// A menu: two items, a disabled one, a check, a submenu unfolded or not.
+fn file_menu(root: Node<'_>, expanded: bool) -> Element<'_, Message> {
+    use crate::MenuItem;
+    crate::focus_scope(crate::column(
+        root,
+        [crate::menu(
+            root.child("menu"),
+            [
+                MenuItem::new("Open").on_press(Message::Pressed("open")),
+                MenuItem::new("Save").on_press(Message::Pressed("save")),
+                MenuItem::new("Paste"),
+                MenuItem::separator(),
+                MenuItem::new("Hidden")
+                    .check(true)
+                    .on_press(Message::Pressed("hidden")),
+                MenuItem::new("More")
+                    .on_press(Message::Pressed("more"))
+                    .submenu(
+                        expanded,
+                        [MenuItem::new("Rename").on_press(Message::Pressed("rename"))],
+                    ),
+            ],
+        )],
+    ))
+    .into()
+}
+
+#[test]
+fn a_menu_presses_its_items_and_unfolds_in_place() {
+    let sheet = sheet(MENU);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(file_menu(root, false), Size::new(300.0, 300.0), 1.0);
+    let labels = ui.find(&sheet, "menu > item > label");
+    assert_eq!(labels.len(), 5);
+    // Every label in one column, the marks' and the arrow's before and
+    // after it.
+    assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
+    assert_eq!(ui.find(&sheet, "menu > item > check").len(), 5);
+    assert_eq!(ui.find(&sheet, "menu > item.submenu > arrow").len(), 1);
+    for label in ["menu > item:nth-child(2)", "menu > item:nth-child(3)"] {
+        ui.click_on(&sheet, label);
+    }
+    assert_eq!(ui.messages, [Message::Pressed("save")]);
+    assert!(ui.find(&sheet, "submenu").is_empty());
+    ui.rebuild(file_menu(root, true));
+    assert_eq!(ui.find(&sheet, "menu > item.expanded").len(), 1);
+    ui.click_on(&sheet, "submenu > item");
+    assert_eq!(
+        ui.messages,
+        [Message::Pressed("save"), Message::Pressed("rename")]
+    );
+}
+
+#[test]
+fn up_and_down_move_the_focus_among_a_menus_items() {
+    let sheet = sheet(MENU);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(file_menu(root, false), Size::new(300.0, 300.0), 1.0);
+    // Nothing focused: the arrows wait for Tab.
+    ui.key(Named::ArrowDown);
+    ui.key(Named::Enter);
+    assert!(ui.messages.is_empty());
+    ui.key(Named::Tab);
+    // Down past the disabled one, then back up.
+    ui.key(Named::ArrowDown);
+    ui.key(Named::ArrowDown);
+    ui.key(Named::Enter);
+    ui.key(Named::ArrowUp);
+    ui.key(Named::Space);
+    assert_eq!(
+        ui.messages,
+        [Message::Pressed("hidden"), Message::Pressed("save")]
     );
 }

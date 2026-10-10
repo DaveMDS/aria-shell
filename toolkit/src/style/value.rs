@@ -480,6 +480,7 @@ pub(crate) enum Prop {
     AnimationIterationCount,
     AnimationDirection,
     AnimationFillMode,
+    Content,
 }
 
 impl Prop {
@@ -574,6 +575,8 @@ pub(crate) enum Decl {
     AnimationIterationCount(Arc<[f32]>),
     AnimationDirection(Arc<[AnimationDirection]>),
     AnimationFillMode(Arc<[FillMode]>),
+    /// `None` for `none` and `normal`.
+    Content(Option<Arc<str>>),
     Wide(Prop, Wide),
 }
 
@@ -684,6 +687,7 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "outline-offset" => vec![Prop::OutlineOffset],
         "transform" => vec![Prop::Transform],
         "transform-origin" => vec![Prop::TransformOrigin],
+        "content" => vec![Prop::Content],
         _ => {
             // margin-top, padding-left, border-bottom, border-left-width, ...
             let (head, rest) = name.split_once('-')?;
@@ -892,6 +896,7 @@ fn value_of(
             ]
         }
         "background-image" => vec![Decl::BackgroundImage(url(p, assets)?)],
+        "content" => vec![Decl::Content(content(p)?)],
         "background-size" => vec![Decl::BackgroundSize(background_size(p)?)],
         "background-position" => {
             let (x, y) = transform_origin(p)?;
@@ -1628,6 +1633,20 @@ fn text_box_edge(p: &mut Parser) -> Result<TextBoxEdge, Error> {
 }
 
 /// One of `options`, by its keyword.
+/// `content`: `none`, `normal`, or strings, one after the other.
+fn content(p: &mut Parser) -> Result<Option<Arc<str>>, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok()
+        || p.try_parse(|p| p.expect_ident_matching("normal")).is_ok()
+    {
+        return Ok(None);
+    }
+    let mut text = p.expect_string()?.to_string();
+    while let Ok(more) = p.try_parse(|p| p.expect_string_cloned()) {
+        text.push_str(&more);
+    }
+    Ok(Some(text.into()))
+}
+
 fn keyword<T: Copy>(p: &mut Parser, what: &str, options: &[(&str, T)]) -> Result<T, Error> {
     let token = p.next()?.clone();
     if let Token::Ident(name) = &token

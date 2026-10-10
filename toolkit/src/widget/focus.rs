@@ -3,7 +3,8 @@
 //! away before what it presses sees it (`:focus` shows for the
 //! keyboard's sake, but a text field pressed takes it back). Per scope,
 //! so per surface: an iced task would operate on every window an app
-//! has.
+//! has. A scope of the arrows (a menu's) moves it with Up and Down
+//! instead, among its own, once one of them has it.
 
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
@@ -17,6 +18,8 @@ use crate::{Element, Renderer, Theme};
 
 pub struct FocusScope<'a, Message> {
     content: Element<'a, Message>,
+    /// Up and Down, not Tab and the pointer.
+    arrows: bool,
 }
 
 pub fn focus_scope<'a, Message>(
@@ -24,10 +27,34 @@ pub fn focus_scope<'a, Message>(
 ) -> FocusScope<'a, Message> {
     FocusScope {
         content: content.into(),
+        arrows: false,
+    }
+}
+
+/// A scope of the arrows: Up and Down move the focus among what's
+/// inside, once one of them has it.
+pub(crate) fn arrow_scope<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> FocusScope<'a, Message> {
+    FocusScope {
+        content: content.into(),
+        arrows: true,
     }
 }
 
 impl<Message> FocusScope<'_, Message> {
+    /// Whether something inside has the focus.
+    fn focused(&mut self, tree: &mut Tree, layout: Layout<'_>, renderer: &Renderer) -> bool {
+        let mut count = focusable::count();
+        self.content.as_widget_mut().operate(
+            &mut tree.children[0],
+            layout,
+            renderer,
+            &mut operation::black_box(&mut count),
+        );
+        matches!(count.finish(), Outcome::Some(count) if count.focused.is_some())
+    }
+
     /// Runs `operation` on the content, its chained ones too.
     fn run(
         &mut self,
@@ -103,20 +130,12 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Event::Mouse(mouse::Event::ButtonPressed(_)) = event {
-            let mut count = focusable::count();
-            self.content.as_widget_mut().operate(
-                &mut tree.children[0],
-                layout,
-                renderer,
-                &mut operation::black_box(&mut count),
-            );
-            if let Outcome::Some(count) = count.finish()
-                && count.focused.is_some()
-            {
-                self.run(tree, layout, renderer, focusable::unfocus());
-                shell.request_redraw();
-            }
+        if let Event::Mouse(mouse::Event::ButtonPressed(_)) = event
+            && !self.arrows
+            && self.focused(tree, layout, renderer)
+        {
+            self.run(tree, layout, renderer, focusable::unfocus());
+            shell.request_redraw();
         }
         self.content.as_widget_mut().update(
             &mut tree.children[0],
@@ -128,21 +147,30 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
             shell,
             viewport,
         );
-        if let Event::Keyboard(keyboard::Event::KeyPressed {
-            key: keyboard::Key::Named(key::Named::Tab),
+        let Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(named),
             modifiers,
             ..
         }) = event
-            && !shell.is_event_captured()
-        {
-            if modifiers.shift() {
-                self.run(tree, layout, renderer, focusable::focus_previous());
-            } else {
-                self.run(tree, layout, renderer, focusable::focus_next());
-            }
-            shell.capture_event();
-            shell.request_redraw();
+        else {
+            return;
+        };
+        let back = match (self.arrows, named) {
+            (false, key::Named::Tab) => modifiers.shift(),
+            (true, key::Named::ArrowUp) => true,
+            (true, key::Named::ArrowDown) => false,
+            _ => return,
+        };
+        if shell.is_event_captured() || (self.arrows && !self.focused(tree, layout, renderer)) {
+            return;
         }
+        if back {
+            self.run(tree, layout, renderer, focusable::focus_previous());
+        } else {
+            self.run(tree, layout, renderer, focusable::focus_next());
+        }
+        shell.capture_event();
+        shell.request_redraw();
     }
 
     fn mouse_interaction(

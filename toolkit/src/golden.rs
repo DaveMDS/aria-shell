@@ -286,10 +286,10 @@ fn golden_flex() {
          track.center { justify-content: center; } track.align { align-items: center; } \
          cell { padding: 4px 8px; background: #ddd; } cell.fill { width: fill; } \
          cell.fixed { width: 60px; } cell.tall { height: 40px; } \
-         menu { max-width: 200px; padding: 4px; border: 1px solid #999; border-radius: 6px; \
+         list { max-width: 200px; padding: 4px; border: 1px solid #999; border-radius: 6px; \
                 box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25); background: white; } \
-         item { gap: 8px; padding: 5px 8px; align-items: center; } item > icon { height: 14px; } \
-         item > label { width: fill; white-space: nowrap; text-overflow: ellipsis; } \
+         entry { gap: 8px; padding: 5px 8px; align-items: center; } entry > icon { height: 14px; } \
+         entry > label { width: fill; white-space: nowrap; text-overflow: ellipsis; } \
          shortcut { color: #888; }",
         None,
         Size::new(320.0, 230.0),
@@ -305,7 +305,7 @@ fn golden_flex() {
                 )
                 .into()
             };
-            let menu = root.child("menu");
+            let menu = root.child("list");
             let items = [
                 ("Open", "Ctrl+O"),
                 ("A label far too long for its menu", "Ctrl+L"),
@@ -319,7 +319,7 @@ fn golden_flex() {
                     crate::column(
                         menu,
                         items.map(|(label, key)| {
-                            let item = menu.child("item");
+                            let item = menu.child("entry");
                             crate::row(
                                 item,
                                 [
@@ -552,6 +552,59 @@ fn golden_scroll() {
                 delta: iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -20.0 },
             })]);
             ui.move_to(Point::new(300.0, 90.0));
+        },
+    );
+}
+
+#[test]
+fn golden_menu() {
+    scene(
+        "menu",
+        // Marks the test fonts have.
+        "menu { max-width: 220px; border: 1px solid #999; border-radius: 6px; \
+                box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25); background: white; } \
+         menu item { transition: none; } \
+         menu item.check.checked > check { content: \"x\"; } \
+         menu item.radio > check { content: \"o\"; } \
+         menu item.radio.checked > check { content: \"*\"; } \
+         menu item.submenu > arrow { content: \">\"; } \
+         menu item.expanded > arrow { content: \"v\"; }",
+        None,
+        Size::new(240.0, 320.0),
+        |root| {
+            use crate::MenuItem;
+            crate::focus_scope(crate::column(
+                root,
+                [crate::menu(
+                    root.child("menu"),
+                    [
+                        MenuItem::new("Open")
+                            .icon(star())
+                            .shortcut("Ctrl+O")
+                            .on_press(()),
+                        MenuItem::new("A label far too long for its menu")
+                            .shortcut("Ctrl+L")
+                            .on_press(()),
+                        MenuItem::new("Disabled"),
+                        MenuItem::separator(),
+                        MenuItem::new("Checked").check(true).on_press(()),
+                        MenuItem::new("Unchecked").check(false).on_press(()),
+                        MenuItem::new("Radio on").radio(true).on_press(()),
+                        MenuItem::new("Radio off").radio(false).on_press(()),
+                        MenuItem::separator(),
+                        MenuItem::new("More")
+                            .on_press(())
+                            .submenu(true, [MenuItem::new("Inside").icon(star()).on_press(())]),
+                        MenuItem::new("Folded").on_press(()).submenu(false, []),
+                    ],
+                )],
+            ))
+            .into()
+        },
+        |ui, _| {
+            // The focus on the second item.
+            ui.key(Named::Tab);
+            ui.key(Named::ArrowDown);
         },
     );
 }

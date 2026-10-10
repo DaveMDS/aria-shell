@@ -192,6 +192,8 @@ pub struct Computed {
     pub rotate: f32,
     pub transitions: Transitions,
     pub animations: Animations,
+    /// What a mark shows: a menu item's check, its arrow.
+    pub content: Option<Arc<str>>,
     /// The family picked from `font_family`, with the weight and style.
     pub font: Font,
     /// `line-height`, in logical px: whole device pixels.
@@ -255,6 +257,7 @@ impl Computed {
             rotate: 0.0,
             transitions: Transitions::initial(),
             animations: Animations::initial(),
+            content: None,
             font: Font::DEFAULT,
             line_height_px: 0.0,
             ascent: 0.0,
@@ -413,6 +416,7 @@ impl<'p> Cascade<'p> {
             Decl::AnimationIterationCount(v) => out.animations.count = v.clone(),
             Decl::AnimationDirection(v) => out.animations.direction = v.clone(),
             Decl::AnimationFillMode(v) => out.animations.fill = v.clone(),
+            Decl::Content(v) => out.content = v.clone(),
             Decl::Wide(prop, wide) => {
                 let inherit = match wide {
                     Wide::Inherit => true,
@@ -664,5 +668,6 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::AnimationIterationCount => to.animations.count = from.animations.count.clone(),
         Prop::AnimationDirection => to.animations.direction = from.animations.direction.clone(),
         Prop::AnimationFillMode => to.animations.fill = from.animations.fill.clone(),
+        Prop::Content => to.content = from.content.clone(),
     }
 }

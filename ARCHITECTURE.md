@@ -1471,6 +1471,17 @@ theme, the PAM conversation refusing visible prompts (no second prompt
 such as a one-time code), the GPU readers (amdgpu, nvidia) never run
 on a machine that has one (this one is Intel).
 
+Text is centred on its line box (ascent + descent), as CSS and GTK do,
+not on its letters: with a font whose ascent leaves room for accents
+above the capitals and a short descent, the text sits low next to an
+icon centred in the same box. Noto Sans Display (ascent 1069, descent
+293, cap height 714, x-height 536 per 1000) at 15px in the 28px bar:
+the capitals about 1px under the icons' centre (0.46px, plus the
+baseline rounded from 19.8 to 20), the lowercase about 2px. CSS's
+answer is `text-box: trim-both cap alphabetic` (the line box cut to
+the capitals' top and the baseline): the font's metrics, from iced's
+font system, and a shift of the text by the difference. Not done.
+
 ## Verified where
 
 Every interactive piece has a scenario in `tests/ui/scenarios/`, run in

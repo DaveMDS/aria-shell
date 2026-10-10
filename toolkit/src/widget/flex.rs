@@ -27,6 +27,7 @@ use iced::{Event, Length, Rectangle, Size, Transformation, touch};
 use crate::anim::Animated;
 use crate::layout::{flex, length, snap};
 use crate::paint::{draw_box, draw_outline, fade};
+use crate::query::Reported;
 use crate::style::{Ancestors, Computed, Direction, Node, States};
 use crate::{Element, Renderer, Theme};
 
@@ -428,6 +429,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     ) {
         let bounds = border_box(layout.bounds(), &self.style, self.node.scale());
         operation.container(None, bounds);
+        operation.custom(None, bounds, &mut Reported::new(self.node));
         if self.pressable() {
             operation.focusable(None, bounds, tree.state.downcast_mut::<State>());
         }

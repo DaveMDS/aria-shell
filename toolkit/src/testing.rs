@@ -8,12 +8,14 @@ use std::time::Instant;
 
 use iced::advanced::clipboard;
 use iced::advanced::renderer::{self, Headless as _};
+use iced::advanced::widget::operation::{self, Operation};
 use iced::keyboard::{self, key};
-use iced::{Color, Event, Point, Size, mouse, window};
+use iced::{Color, Event, Point, Rectangle, Size, mouse, window};
 use iced_runtime::user_interface::{self, UserInterface};
 
 use crate::measure::headless;
-use crate::{Element, Renderer, Theme};
+use crate::query::Report;
+use crate::{Element, Renderer, Sheet, Theme};
 
 pub struct Harness<'a, Message> {
     ui: Option<UserInterface<'a, Message, Theme, Renderer>>,
@@ -130,6 +132,25 @@ impl<'a, Message> Harness<'a, Message> {
         self.move_to(point);
         self.press();
         self.release()
+    }
+
+    /// The border boxes of the widgets `selector` matches, in tree
+    /// order.
+    pub fn find(&mut self, sheet: &Sheet, selector: &str) -> Vec<Rectangle> {
+        let mut report = Report::default();
+        let ui = self.ui.as_mut().expect("built");
+        ui.operate(&self.renderer, &mut operation::black_box(&mut report));
+        let _ = report.finish();
+        sheet.select(selector, &report.found).expect("a selector")
+    }
+
+    /// A click in the middle of the first widget `selector` matches.
+    pub fn click_on(&mut self, sheet: &Sheet, selector: &str) -> window::RedrawRequest {
+        let found = self.find(sheet, selector);
+        let bounds = found
+            .first()
+            .unwrap_or_else(|| panic!("nothing matches `{selector}`"));
+        self.click(bounds.center())
     }
 
     /// A named key, pressed and released.

@@ -222,6 +222,33 @@ fn draw_background(
         first(x, bounds.x, size.width, s.background_repeat.x),
         first(y, bounds.y, size.height, s.background_repeat.y),
     );
+    // Clipped by a layer too: tiny-skia ignores an image's own clip.
+    renderer.with_layer(bounds, |renderer| {
+        tile(
+            renderer,
+            s,
+            &drawn,
+            (x0, y0),
+            size,
+            bounds,
+            corners,
+            opacity,
+        );
+    });
+}
+
+/// The tiles of a background image, from `(x0, y0)` over `bounds`.
+#[allow(clippy::too_many_arguments)]
+fn tile(
+    renderer: &mut Renderer,
+    s: &Computed,
+    drawn: &Drawn,
+    (x0, y0): (f32, f32),
+    size: Size,
+    bounds: Rectangle,
+    corners: [f32; 4],
+    opacity: f32,
+) {
     const MOST: usize = 4096;
     let mut tiles = 0;
     let mut ty = y0;
@@ -229,7 +256,7 @@ fn draw_background(
         let mut tx = x0;
         while tx < bounds.x + bounds.width && tiles < MOST {
             let tile = Rectangle::new(Point::new(tx, ty), size);
-            match &drawn {
+            match drawn {
                 Drawn::Raster { handle, .. } => {
                     let mut image = image::Image::new(handle.clone());
                     image.opacity = opacity;

@@ -4,10 +4,15 @@
 
 use std::sync::Arc;
 
+use cssparser::Parser;
+use iced::Rectangle;
+
 use super::computed::{Cascade, Computed};
 use super::node::{Ancestors, Name, NodeId, Sensitivity, States};
-use super::selector::StateCheck;
+use super::selector::{self, Ctx, StateCheck};
 use super::sheet::{Rule, Sheet};
+use super::value::describe;
+use crate::query::{Found, family};
 
 impl Sheet {
     /// The style at rest.
@@ -115,5 +120,61 @@ impl Sheet {
         }
         self.tree.borrow_mut().sensitivity.insert(id, s);
         s
+    }
+}
+
+impl Sheet {
+    /// The border boxes of the widgets of this sheet `selector` (a list,
+    /// states aside) matches among `found`, in tree order.
+    pub fn select(&self, selector: &str, found: &[Found]) -> Result<Vec<Rectangle>, String> {
+        let me = std::ptr::from_ref(self) as usize;
+        let mut positional = Vec::new();
+        let selectors = {
+            let mut tree = self.tree.borrow_mut();
+            let mut ctx = Ctx {
+                names: &mut tree.names,
+                positional: &mut positional,
+            };
+            let mut p = Parser::new(selector);
+            let list = selector::parse_list(&mut p, &mut ctx).map_err(describe)?;
+            if !p.is_exhausted() {
+                return Err(format!("`{selector}` isn't a selector"));
+            }
+            list
+        };
+        let family = family(found);
+        let mut out = Vec::new();
+        for (i, f) in found.iter().enumerate() {
+            if f.sheet != me {
+                continue;
+            }
+            let mut chain = self
+                .tree
+                .borrow()
+                .nodes
+                .chain(NodeId(f.node), self.scheme_class);
+            // Positions from where the widgets are, up the chain while
+            // the report and the nodes agree.
+            let mut at = Some(i);
+            for k in (0..chain.len()).rev() {
+                let Some(j) = at.filter(|&j| found[j].depth as usize == k) else {
+                    break;
+                };
+                let (parent, index, count) = family[j];
+                chain[k].position = positional
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, nth)| nth.matches(index, count))
+                    .fold(0, |bits, (bit, _)| bits | 1 << bit);
+                at = parent;
+            }
+            if selectors
+                .iter()
+                .any(|s| s.matches(&chain, StateCheck::Ignore))
+            {
+                out.push(f.bounds);
+            }
+        }
+        Ok(out)
     }
 }

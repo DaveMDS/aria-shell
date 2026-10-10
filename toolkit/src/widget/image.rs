@@ -5,17 +5,19 @@
 
 use std::sync::Arc;
 
+use iced::advanced::Renderer as _;
 use iced::advanced::image::{self, Renderer as _};
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::mouse;
 use iced::advanced::renderer;
-use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::widget::{Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
 use iced::{Event, Length, Point, Radians, Rectangle, Size};
 
 use crate::anim::Animated;
 use crate::layout::snap;
+use crate::query::Reported;
 use crate::style::{Computed, Node, ObjectFit, Size as Len, States};
 use crate::{Element, Renderer, Theme};
 
@@ -42,6 +44,16 @@ impl Image<'_> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
+    fn operate(
+        &mut self,
+        _tree: &mut Tree,
+        layout: Layout<'_>,
+        _renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
+    }
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<Animated>()
     }
@@ -151,7 +163,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
             bottom_right: s.border_radius[2],
             bottom_left: s.border_radius[3],
         };
-        renderer.draw_image(image, drawn, bounds);
+        if bounds.contains(drawn.position())
+            && bounds.contains(Point::new(drawn.x + drawn.width, drawn.y + drawn.height))
+        {
+            renderer.draw_image(image, drawn, bounds);
+        } else {
+            // Larger than its box (`cover`, `none`): clipped by a layer,
+            // which every renderer honours (tiny-skia ignores an image's
+            // own clip).
+            renderer.with_layer(bounds, |renderer| renderer.draw_image(image, drawn, bounds));
+        }
     }
 }
 

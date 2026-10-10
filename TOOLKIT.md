@@ -613,6 +613,15 @@ theme is written and where the golden images come from.
 | an animation asks frames only while it runs | above |
 | measured, before and after | `benches/`: view, layout, update, draw of fixed trees with the headless renderer; Aria's CPU at rest in the nested Sway, as ARCHITECTURE.md measured it |
 
+Measured (`cargo bench -p tk --features testing`, this laptop, 2026-10,
+µs): a theme's load (the base and the gallery's) 374.
+
+| tree | view | rebuild (view, diff, layout) | update | frame |
+|---|---|---|---|---|
+| a bar, 12 gadgets | 1.6 | 4.2 | 0.8 | 3.2 |
+| a menu, 20 items | 3.8 | 17 | 1.4 | 6.1 |
+| a list, 500 rows | 56 | 198 | 22 | 80 |
+
 Not the toolkit's to fix: `iced_exwlshell` 0.20 rebuilds every
 surface after every message (0.21: only the drawn ones), and a frame
 is always a full redraw (no damage in iced).
@@ -629,10 +638,10 @@ the headless harness and the query with them.
    changes.
 2. ✅ Boxes, text and icons: the box model, the flex subset, the scale,
    painting (background, border, radius, shadow), wrapping, ellipsis
-   and trim; `Measure`; the headless harness (`testing`). 🔲 The first
-   golden images, and `benches/` from here on.
+   and trim; `Measure`; the headless harness (`testing`), the golden
+   images, `benches/`.
 3. ✅ States and events: hover, press, focus, disabled, the ancestors'
-   states through `Theme`; buttons, `focus_scope`. 🔲 The query.
+   states through `Theme`; buttons, `focus_scope`, the query.
 4. ✅ The rest of painting and text: borders whose sides differ,
    outline, opacity, transform, background images and 9-patches;
    `text-align`, italic, `text-transform`; images.
@@ -644,6 +653,10 @@ the headless harness and the query with them.
 
 - `rotate` only on svgs and images; `scale` uniform only.
 - A transform is a box's: a text or an icon moves with its box.
+- On tiny-skia (the CPU renderer), a stretched image is placed on a grid
+  as coarse as its stretch, and an image's corners aren't rounded: a
+  9-patch, a stretched background or a rounded picture are right on
+  wgpu only. The golden images keep to images at their own size.
 - Opacity isn't a group (above).
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.

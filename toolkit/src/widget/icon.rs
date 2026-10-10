@@ -11,7 +11,7 @@ use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::mouse;
 use iced::advanced::renderer;
 use iced::advanced::svg::{self, Renderer as _};
-use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::widget::{Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
 use iced::{Event, Length, Radians, Rectangle, Size};
@@ -19,6 +19,7 @@ use iced::{Event, Length, Radians, Rectangle, Size};
 use crate::anim::Animated;
 use crate::layout::snap;
 use crate::paint::fade;
+use crate::query::Reported;
 use crate::style::{Computed, Node, Size as Len, States};
 use crate::{Element, Renderer, Theme};
 
@@ -101,6 +102,16 @@ impl Icon<'_> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
+    fn operate(
+        &mut self,
+        _tree: &mut Tree,
+        layout: Layout<'_>,
+        _renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
+    }
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<Animated>()
     }

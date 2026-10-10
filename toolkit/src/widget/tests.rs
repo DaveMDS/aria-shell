@@ -286,3 +286,40 @@ fn an_idle_ui_asks_for_nothing() {
     // A pointer over nothing any rule sees: still nothing.
     assert_eq!(ui.move_to(Point::new(200.0, 200.0)), RedrawRequest::Wait);
 }
+
+#[test]
+fn widgets_are_found_by_selector() {
+    // No positional pseudo-class in the sheet: the rows share their node,
+    // the query still tells them apart.
+    let sheet = sheet(
+        "menu { width: 100px; } item { height: 20px; } \
+         label { width: 10px; height: 10px; }",
+    );
+    let menu = sheet.root("menu", 1.0);
+    let view = || -> Element<'_, Message> {
+        crate::column(
+            menu,
+            ["a", "b", "c"].map(|name| {
+                let item = menu.child("item").class_if("active", name == "b");
+                crate::button(item, [crate::text(item.child("label"), name).into()])
+                    .on_press(Message::Pressed(name))
+                    .into()
+            }),
+        )
+        .into()
+    };
+    let mut ui = Harness::new(view(), Size::new(100.0, 60.0), 1.0);
+    let rect = |y: f32| iced::Rectangle::new(Point::new(0.0, y), Size::new(100.0, 20.0));
+    assert_eq!(
+        ui.find(&sheet, "menu > item"),
+        [rect(0.0), rect(20.0), rect(40.0)]
+    );
+    assert_eq!(ui.find(&sheet, "item:nth-child(2)"), [rect(20.0)]);
+    assert_eq!(ui.find(&sheet, "item:last-child"), [rect(40.0)]);
+    assert_eq!(ui.find(&sheet, "item.active"), [rect(20.0)]);
+    assert_eq!(ui.find(&sheet, "menu label").len(), 3);
+    assert_eq!(ui.find(&sheet, "item:first-child label").len(), 1);
+    assert!(ui.find(&sheet, "nothing").is_empty());
+    ui.click_on(&sheet, "item:nth-child(3)");
+    assert_eq!(ui.messages, [Message::Pressed("c")]);
+}

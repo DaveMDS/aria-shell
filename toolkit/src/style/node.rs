@@ -184,7 +184,7 @@ impl Sensitivity {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct NodeId(u32);
+pub(crate) struct NodeId(pub(crate) u32);
 
 /// One step of a path: an element, or something about the last one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

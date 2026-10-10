@@ -2,9 +2,12 @@
 //! See TOOLKIT.md for its design, UI.md for what it's for.
 
 mod anim;
+#[cfg(test)]
+mod golden;
 mod layout;
 mod measure;
 mod paint;
+pub mod query;
 pub mod style;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

@@ -36,6 +36,8 @@ for, TOOLKIT.md how it's built and how far it got. Its gallery shows
 every widget, styled by a theme reloaded when its file changes:
 ```bash
 cargo run -p tk --example gallery [-- theme.css]   # `d`: light/dark
+cargo test -p tk                                   # golden images too: TK_GOLDEN=bless accepts a change meant to show
+cargo bench -p tk --features testing               # what it costs, before and after a change
 ```
 
 With arguments the binary is a client of the running shell:

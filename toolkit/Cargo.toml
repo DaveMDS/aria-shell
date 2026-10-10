@@ -1,0 +1,20 @@
+[package]
+# A provisional name, as `tk::` in TOOLKIT.md: the crate's name is still
+# to decide.
+name = "tk"
+version = "0.0.1"
+edition = "2024"
+description = "CSS-styled widgets on iced"
+publish = false
+
+[dependencies]
+iced = { version = "0.14", features = ["advanced", "svg", "image-without-codecs", "canvas"] }
+cssparser = "0.38"
+rustc-hash = "2"
+log = "0.4"
+
+[dev-dependencies]
+iced = { version = "0.14", features = ["tokio"] }
+tokio = { version = "1", features = ["time"] }
+notify = "8.2"
+env_logger = "0.11"

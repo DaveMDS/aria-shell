@@ -30,6 +30,14 @@ support. There's no mock mode, but there is a headless one: `tests/ui/`
 runs the shell inside a nested `sway` with no display output (see
 "Verifying").
 
+`toolkit/` is the UI toolkit being written for the shell, a crate of
+its own (`tk` for now) that knows nothing of it: UI.md says what it's
+for, TOOLKIT.md how it's built and how far it got. Its gallery shows
+every widget, styled by a theme reloaded when its file changes:
+```bash
+cargo run -p tk --example gallery [-- theme.css]   # `d`: light/dark
+```
+
 With arguments the binary is a client of the running shell:
 ```bash
 aria-shell launcher toggle          # what a compositor keybind runs

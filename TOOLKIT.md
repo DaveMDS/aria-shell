@@ -133,7 +133,10 @@ examples/gallery.rs the gallery
 
 `Sheet::load(sources, scheme) -> (Sheet, Vec<Warning>)`: the toolkit's
 `base.css`, then the app's base (Aria's elements), then the user theme,
-one cascade. Variables (`:root { --x }`, `var(--x, fallback)`) and
+one cascade. The toolkit's base is under the others as CSS's user-agent
+stylesheet is: any rule of the app's or the theme's wins over its,
+whatever their specificity (else its `:root { color }` would beat a
+theme's `panel { color }`). Variables (`:root { --x }`, `var(--x, fallback)`) and
 schemes (`:root.light` / `:root.dark` folded over the plain ones, the
 root elements carrying the scheme as a class) work as Aria's do today:
 a sheet is compiled for one scheme; switching scheme or reloading the
@@ -172,8 +175,8 @@ fn view<'a>(&'a self, menu: tk::Node<'a>) -> tk::Element<'a, Message> {
 }
 ```
 
-A surface's tree starts from its root node, `sheet.root(scale)`: the
-scale is carried by every node under it (see Scale). Each call interns
+A surface's tree starts from its root element, `sheet.root(kind,
+scale)`: the scale is carried by every node under it (see Scale). Each call interns
 one step (`(previous id, Kind | Class | Id | Attr | Position)` → id),
 so a node is a chain of steps with a canonical id.
 Static names are `&'static str`; ids and attribute values are interned
@@ -260,7 +263,7 @@ scale enters at the root, as the device pixel ratio enters CSS's
 computed values:
 
 - the app makes a surface's root node with its scale
-  (`sheet.root(scale)`); every node under it carries it, and the
+  (`sheet.root(kind, scale)`); every node under it carries it, and the
   computed styles are made for it (a second scale, a second set of
   cached styles);
 - border widths are snapped in the computed style, as CSS snaps them
@@ -612,17 +615,19 @@ is always a full redraw (no damage in iced).
 ## Order of work
 
 Each step ends in the gallery and in `cargo test`, measured where
-UI.md's rules ask it:
+UI.md's rules ask it. The tests come once a step's look is agreed on,
+the headless harness and the query with them.
 
-1. The crate, the gallery window, the style engine (sheets, selectors,
-   cascade, variables, schemes, nodes, computed styles, warnings): the
-   gallery loads a theme, and reloads it when the file changes.
-2. Boxes, text and icons: the box model, the flex subset, the scale,
+1. ✅ The crate, the gallery window, the style engine (sheets,
+   selectors, cascade, variables, schemes, nodes, computed styles,
+   warnings): the gallery loads a theme, and reloads it when the file
+   changes.
+2. ✅ Boxes, text and icons: the box model, the flex subset, the scale,
    painting (background, border, radius, shadow), wrapping, ellipsis
-   and trim; `Measure`, the headless harness, the first golden images,
-   and `benches/` from here on.
-3. States and events: hover, press, focus, disabled, the ancestors'
-   states through `Theme`; buttons, `focus_scope`, the query.
+   and trim; `Measure`. 🔲 The headless harness, the first golden
+   images, and `benches/` from here on.
+3. ✅ States and events: hover, press, focus, disabled, the ancestors'
+   states through `Theme`; buttons, `focus_scope`. 🔲 The query.
 4. The rest of painting and text: borders whose sides differ, outline,
    opacity, transform, background images and 9-patches; `text-align`,
    italic, `text-transform`; images.

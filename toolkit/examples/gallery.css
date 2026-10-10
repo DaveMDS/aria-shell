@@ -1,0 +1,237 @@
+/*
+ * The gallery's own elements, loaded after the toolkit's base and before
+ * the theme given on the command line.
+ *
+ * gallery                    the window
+ * ╰─ section                 one kind of widget
+ *    ├─ heading
+ *    ├─ buttons > row > button[.flat|.primary|.danger], card, grow; status
+ *    ├─ row                  boxes, side by side
+ *    │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
+ *    ├─ texts                texts, one under the other
+ *    │  ├─ label.small|.large|.bold|.muted|.caps
+ *    │  ├─ box.wrap > label, box.cut > label
+ *    │  ╰─ pair[.untrimmed] > icon, label
+ *    ├─ flex
+ *    │  ├─ track[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
+ *    │  ╰─ menu > item > icon, label, shortcut
+ *    ╰─ icons > icon[.small|.large|.accent], avatar
+ */
+
+gallery {
+  background: var(--bg);
+  padding: 16px;
+  gap: 16px;
+  width: fill;
+  height: fill;
+}
+section {
+  gap: 8px;
+  align-items: start;
+}
+heading {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--muted);
+}
+
+/* Buttons and states */
+buttons {
+  gap: 8px;
+}
+status {
+  color: var(--muted);
+}
+card {
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--border);
+}
+card > icon {
+  height: 16px;
+}
+card:hover {
+  background: var(--bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+card:hover label,
+card:hover icon {
+  color: var(--accent);
+}
+grow {
+  padding: 8px 12px;
+  align-items: center;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+}
+grow:hover {
+  padding: 14px 24px;
+}
+
+/* Boxes */
+section > row {
+  gap: 12px;
+}
+box {
+  padding: 12px 16px;
+}
+box.plain {
+  background: var(--border);
+}
+box.bordered {
+  border: 1px solid var(--border);
+}
+box.rounded {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 8px;
+}
+box.shadow {
+  background: var(--bg);
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+box.inset {
+  background: var(--border);
+  box-shadow: inset 0 -3px var(--accent);
+}
+box.sides {
+  border-left: 4px solid var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Text */
+texts {
+  gap: 6px;
+}
+label.small {
+  font-size: 12px;
+}
+label.large {
+  font-size: 20px;
+}
+label.bold {
+  font-weight: bold;
+}
+label.muted {
+  color: var(--muted);
+}
+label.caps {
+  text-transform: uppercase;
+}
+box.wrap,
+box.cut {
+  border: 1px solid var(--border);
+  padding: 8px;
+}
+box.wrap {
+  width: 320px;
+}
+box.cut {
+  width: 220px;
+}
+box.cut label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+pair {
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  align-items: center;
+  background: var(--border);
+}
+pair > icon {
+  height: 16px;
+}
+pair.untrimmed label {
+  text-box: normal;
+}
+
+/* Flex */
+flex {
+  width: fill;
+  gap: 6px;
+  align-items: start;
+}
+track {
+  width: fill;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+track.center {
+  justify-content: center;
+}
+track.end {
+  justify-content: end;
+}
+track.align-center {
+  align-items: center;
+}
+cell {
+  padding: 6px 10px;
+  background: var(--border);
+}
+cell.fill {
+  width: fill;
+}
+cell.fixed {
+  width: 80px;
+}
+cell.tall {
+  height: 48px;
+}
+cell.mid {
+  height: 32px;
+}
+menu {
+  max-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+item {
+  gap: 8px;
+  padding: 6px 8px;
+  align-items: center;
+  border-radius: 4px;
+}
+item > icon {
+  height: 16px;
+}
+item > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+shortcut {
+  color: var(--muted);
+}
+
+/* Icons */
+icons {
+  gap: 12px;
+  align-items: center;
+}
+icons > icon {
+  height: 24px;
+}
+icon.small {
+  height: 16px;
+}
+icon.large {
+  height: 48px;
+}
+icon.accent {
+  color: var(--accent);
+}
+avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+}

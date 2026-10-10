@@ -1,0 +1,186 @@
+/*
+ * Toolkit base stylesheet
+ * =======================
+ * Always loaded first, before an app's own stylesheet and a user theme:
+ * one cascade. Neutral defaults, not a look: a theme overrides them.
+ *
+ * Syntax: CSS, a subset of it. Where ours differs from CSS, it says so
+ * here.
+ *   - comments; `selector, selector { property: value; }`. A selector
+ *     list with one bad selector skips the whole rule, as in CSS
+ *   - selectors: type, .class, #id, [attr], [attr="value"], *,
+ *     descendant (a space), child (>); the pseudo-classes :hover :active
+ *     :focus :disabled :root :first-child :last-child :nth-child(an+b)
+ *     :nth-last-child(an+b)
+ *   - `:root` matches the root element of every surface
+ *   - variables: `--name: value` in `:root`, used as
+ *     `var(--name[, fallback])`. `:root.light { }` / `:root.dark { }`
+ *     hold the variables of one colour scheme, applied over the plain
+ *     ones when the sheet is for that scheme; root elements carry the
+ *     scheme as a class (`menu.dark { }`). Unlike CSS, variables are
+ *     global: set in those three only, never on other elements
+ *   - the CSS-wide keywords: inherit, initial, unset
+ *   - cascade: this file's rules first and under every other: an app's
+ *     or a theme's rule wins over them whatever their specificity (CSS's
+ *     user-agent origin); then specificity, then source order
+ *   - not supported: other @-rules, !important, the `+` and `~`
+ *     combinators, pseudo-elements, % and em
+ *   - a syntax error (a bracket never closed, a comment never ended, a
+ *     rule without a block) rejects the whole file; anything else that
+ *     can't be used is a warning with its file:line:col, and is skipped
+ *
+ * Values:
+ *   <length>   px, or a unitless 0
+ *   <color>    #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba(), hsl(),
+ *              hsla(), a CSS colour name, transparent, currentcolor
+ *
+ * Properties (* inherited):
+ *   width, height          <length> | auto | fill; the border box (CSS's
+ *                          `box-sizing: border-box`, the only one).
+ *                          `fill` is ours: the free room on a box's main
+ *                          axis, shared with the other `fill`s (CSS's
+ *                          `flex: 1 1 0`), stretched on its cross axis
+ *                          (`align-self: stretch`)
+ *   min-width, min-height  <length> | auto (CSS's automatic minimum)
+ *   max-width, max-height  <length> | none
+ *   margin                 1 to 4 <length>s; margin-top, -right, ...
+ *                          Never `auto`: `fill` pushes instead
+ *   padding                1 to 4 <length>s; padding-top, -right, ...
+ *   border                 <width> || <style> || <color>; border-top,
+ *                          -right, ...; border-width, -style, -color,
+ *                          1 to 4 values; border-top-width, ...
+ *                          Styles: solid, none (the initial one: a border
+ *                          with no style isn't there). A width is snapped
+ *                          down to whole device pixels, at least one, as
+ *                          CSS does
+ *   border-radius          1 to 4 <length>s; border-top-left-radius, ...
+ *   gap                    <length> [<length>]: row-gap, column-gap
+ *   flex-direction         row | column; a box's own when not set
+ *   align-items            stretch | start | center | end
+ *   justify-content        start | center | end
+ *   background             <color> | none; background-color
+ *   color*                 <color>
+ *   box-shadow             none | [inset] <x> <y> [<blur>] [<color>]: an
+ *                          outer shadow and an inset one at most, no
+ *                          spread; an inset one isn't blurred
+ *   opacity                <number> | <percentage>
+ *   font-family*           font names and serif, sans-serif, monospace,
+ *                          comma-separated
+ *   font-size*             <length>
+ *   font-weight*           normal | bold | bolder | lighter | 1 to 1000
+ *   font-style*            normal | italic | oblique
+ *   line-height*           normal | <number> (times the font size) |
+ *                          <length>
+ *   white-space*           normal (wraps at words) | nowrap
+ *   text-overflow          clip | ellipsis
+ *   text-align*            start | end | left | right | center
+ *   text-transform*        none | uppercase | lowercase | capitalize
+ *   text-box               normal | <trim> || <edge>; text-box-trim (none,
+ *                          trim-start, trim-end, trim-both) and
+ *                          text-box-edge* (auto | text, cap or ex, then
+ *                          text or alphabetic): a text's box cut to its
+ *                          letters. Every element's is `trim-both cap
+ *                          alphabetic` (below): a text is centred on its
+ *                          capitals and its baseline, not on its line box
+ *
+ * States: :hover, :active and :focus follow the pointer and the
+ * keyboard; :disabled is set where a widget is built. Unlike CSS, a
+ * disabled element is never :hover or :active. A state may change any
+ * property of its own element and of its descendants, except the
+ * descendants' sizes (width, padding, font, ...): those follow only an
+ * element's own states.
+ *
+ * Elements: every widget has its element tree in a comment above its
+ * rules, below: its element types, the classes and attributes they
+ * carry, what each part is.
+ */
+
+:root.light {
+  --bg: #f4f4f5;
+  --fg: #1f1f23;
+  --muted: #6e6e78;
+  --accent: #3466d6;
+  --on-accent: #ffffff;
+  --border: #c9c9d0;
+  --danger: #c62f2f;
+}
+:root.dark {
+  --bg: #1e1e22;
+  --fg: #e4e4e8;
+  --muted: #8d8d97;
+  --accent: #7aa2f7;
+  --on-accent: #12141a;
+  --border: #3d3d45;
+  --danger: #f06262;
+}
+
+* {
+  text-box: trim-both cap alphabetic;
+}
+
+:root {
+  color: var(--fg);
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+/*
+ * Buttons
+ * =======
+ *
+ * A box to press (`tk::button`): a row. Its element is the app's to
+ * name; `button` is the toolkit's own, with these variants as classes.
+ * Tab moves the focus among the buttons of a focus scope.
+ *
+ * button[.flat|.primary|.danger]
+ * ├─ icon
+ * ╰─ label
+ *
+ * button            bordered
+ * button.flat       no border, a background on hover
+ * button.primary    the action a dialog suggests
+ * button.danger     an action not to take lightly
+ */
+button {
+  padding: 5px 10px;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+button:hover {
+  border-color: var(--accent);
+}
+button:active {
+  background: var(--border);
+}
+button:focus {
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+button:disabled {
+  color: var(--muted);
+}
+button > label {
+  white-space: nowrap;
+}
+button.flat {
+  border-color: transparent;
+  background: transparent;
+}
+button.flat:hover {
+  background: var(--border);
+}
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+button.primary:active {
+  background: var(--fg);
+}
+button.danger {
+  color: var(--danger);
+}

@@ -9,7 +9,7 @@
 
 use iced::advanced::layout::{self, Limits};
 use iced::advanced::widget::Tree;
-use iced::{Length, Point, Size};
+use iced::{Length, Point, Rectangle, Size};
 
 use crate::style::{Align, Computed, Direction, Justify, MinSize, Size as Len};
 use crate::{Element, Renderer};
@@ -109,6 +109,110 @@ impl Axis {
     }
 }
 
+/// A box's model on its parent's limits: its two axes, its margins,
+/// where its content box starts. What `flex` lays children out in, and
+/// what a widget placing its children its own way (a meter's fill, a
+/// slider's knob) sizes itself with.
+pub(crate) struct Sizing {
+    width: Axis,
+    height: Axis,
+    /// Both sides of each axis.
+    margins: Size,
+    /// The content box's corner in the margin box.
+    origin: Point,
+}
+
+impl Sizing {
+    pub fn new(s: &Computed, scale: f32, limits: &Limits) -> Self {
+        let sn = |v: f32| snap(v, scale);
+        let (m, b, p) = (s.margin, s.border_width, s.padding);
+        let (margin_left, margin_top) = (sn(m.left), sn(m.top));
+        let margins = Size::new(margin_left + sn(m.right), margin_top + sn(m.bottom));
+        let (start_x, start_y) = (b.left + sn(p.left), b.top + sn(p.top));
+        let edges = Size::new(
+            start_x + b.right + sn(p.right),
+            start_y + b.bottom + sn(p.bottom),
+        );
+        let (lmin, lmax, compressed) = (limits.min(), limits.max(), limits.compression());
+        let width = Axis::new(
+            s.width,
+            s.min_width,
+            s.max_width,
+            (lmin.width - margins.width).max(0.0),
+            (lmax.width - margins.width).max(0.0),
+            compressed.width,
+            edges.width,
+            scale,
+        );
+        let height = Axis::new(
+            s.height,
+            s.min_height,
+            s.max_height,
+            (lmin.height - margins.height).max(0.0),
+            (lmax.height - margins.height).max(0.0),
+            compressed.height,
+            edges.height,
+            scale,
+        );
+        Self {
+            width,
+            height,
+            margins,
+            origin: Point::new(margin_left + start_x, margin_top + start_y),
+        }
+    }
+
+    /// The most room its content gets: its own size when it has one,
+    /// else what its parent offers, less its border and padding.
+    pub fn room(&self) -> Size {
+        Size::new(
+            (self.width.room() - self.width.edges).max(0.0),
+            (self.height.room() - self.height.edges).max(0.0),
+        )
+    }
+
+    /// Whether its width and height are its own (a length, `fill`), not
+    /// its content's.
+    pub fn definite(&self) -> (bool, bool) {
+        (self.width.target.is_some(), self.height.target.is_some())
+    }
+
+    /// Its margin box around content `content` big, and its content
+    /// box in it.
+    pub fn around(&self, content: Size) -> (Size, Rectangle) {
+        let width = self.width.size(content.width + self.width.edges);
+        let height = self.height.size(content.height + self.height.edges);
+        let inner = Size::new(
+            (width - self.width.edges).max(0.0),
+            (height - self.height.edges).max(0.0),
+        );
+        (
+            Size::new(width + self.margins.width, height + self.margins.height),
+            Rectangle::new(self.origin, inner),
+        )
+    }
+}
+
+/// The content box of a box styled `s` whose margin box is `size` big.
+pub(crate) fn content_box(size: Size, s: &Computed, scale: f32) -> Rectangle {
+    let sn = |v: f32| snap(v, scale);
+    let (m, b, p) = (s.margin, s.border_width, s.padding);
+    let (x, y) = (
+        sn(m.left) + b.left + sn(p.left),
+        sn(m.top) + b.top + sn(p.top),
+    );
+    let (right, bottom) = (
+        sn(m.right) + b.right + sn(p.right),
+        sn(m.bottom) + b.bottom + sn(p.bottom),
+    );
+    Rectangle {
+        x,
+        y,
+        width: (size.width - x - right).max(0.0),
+        height: (size.height - y - bottom).max(0.0),
+    }
+}
+
 /// A box's children laid out on its main axis, the box sized around
 /// them: its margin box, the children placed in it.
 #[allow(clippy::too_many_arguments)]
@@ -133,39 +237,11 @@ pub(crate) fn flex<M>(
     };
     let sn = |v: f32| snap(v, scale);
 
-    let (m, b, p) = (s.margin, s.border_width, s.padding);
-    let (margin_left, margin_top) = (sn(m.left), sn(m.top));
-    let margins = Size::new(margin_left + sn(m.right), margin_top + sn(m.bottom));
-    let (start_x, start_y) = (b.left + sn(p.left), b.top + sn(p.top));
-    let edges = Size::new(
-        start_x + b.right + sn(p.right),
-        start_y + b.bottom + sn(p.bottom),
-    );
-    let (lmin, lmax, compressed) = (limits.min(), limits.max(), limits.compression());
-    let width = Axis::new(
-        s.width,
-        s.min_width,
-        s.max_width,
-        (lmin.width - margins.width).max(0.0),
-        (lmax.width - margins.width).max(0.0),
-        compressed.width,
-        edges.width,
-        scale,
-    );
-    let height = Axis::new(
-        s.height,
-        s.min_height,
-        s.max_height,
-        (lmin.height - margins.height).max(0.0),
-        (lmax.height - margins.height).max(0.0),
-        compressed.height,
-        edges.height,
-        scale,
-    );
+    let sizing = Sizing::new(s, scale, limits);
     let (main, cross) = if row {
-        (&width, &height)
+        (&sizing.width, &sizing.height)
     } else {
-        (&height, &width)
+        (&sizing.height, &sizing.width)
     };
 
     let n = children.len();
@@ -309,9 +385,9 @@ pub(crate) fn flex<M>(
         _ => 0.0,
     };
     let (origin_main, origin_cross) = if row {
-        (margin_left + start_x, margin_top + start_y)
+        (sizing.origin.x, sizing.origin.y)
     } else {
-        (margin_top + start_y, margin_left + start_x)
+        (sizing.origin.y, sizing.origin.x)
     };
     for node in &mut nodes {
         let size = cross_of(node.size());
@@ -326,7 +402,10 @@ pub(crate) fn flex<M>(
     }
     let size = pack(main_size, cross_size);
     layout::Node::with_children(
-        Size::new(size.width + margins.width, size.height + margins.height),
+        Size::new(
+            size.width + sizing.margins.width,
+            size.height + sizing.margins.height,
+        ),
         nodes,
     )
 }

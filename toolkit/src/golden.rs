@@ -383,3 +383,82 @@ fn golden_images() {
         |_, _| {},
     );
 }
+
+fn controls(root: Node<'_>) -> Element<'_, ()> {
+    let line = root.child("line");
+    crate::focus_scope(crate::column(
+        root,
+        [
+            crate::row(
+                line,
+                [
+                    crate::toggle(line.child("toggle"), false, |_| ()).into(),
+                    crate::toggle(line.child("toggle"), true, |_| ()).into(),
+                    crate::toggle(line.child("toggle").disabled_if(true), true, |_| ()).into(),
+                ],
+            )
+            .into(),
+            crate::row(
+                line,
+                [
+                    crate::slider(line.child("slider"), 0.0..=100.0, 30.0, |_| ()).into(),
+                    crate::slider(
+                        line.child("slider").disabled_if(true),
+                        0.0..=1.0,
+                        0.7,
+                        |_| (),
+                    )
+                    .into(),
+                ],
+            )
+            .into(),
+            crate::row(
+                line,
+                [
+                    crate::meter(line.child("meter"), 0.6).into(),
+                    crate::meter(line.child("meter").class("gauge"), 0.42)
+                        .label("CPU 42%")
+                        .into(),
+                ],
+            )
+            .into(),
+        ],
+    ))
+    .into()
+}
+
+const CONTROLS: &str = "toggle, toggle > knob, slider > knob { transition: none; } \
+                        line { gap: 10px; align-items: center; } \
+                        meter.gauge { width: 100px; height: 16px; }";
+
+#[test]
+fn golden_controls() {
+    scene(
+        "controls",
+        CONTROLS,
+        None,
+        Size::new(360.0, 90.0),
+        controls,
+        |_, _| {},
+    );
+}
+
+#[test]
+fn golden_controls_focused_and_dragged() {
+    scene(
+        "controls-states",
+        CONTROLS,
+        None,
+        Size::new(360.0, 90.0),
+        controls,
+        |ui, sheet| {
+            // The slider's knob pressed, then the focus on the second
+            // toggle (a press takes the focus away, a key brings it).
+            let knob = ui.find(sheet, "slider > knob")[0];
+            ui.move_to(knob.center());
+            ui.press();
+            ui.key(Named::Tab);
+            ui.key(Named::Tab);
+        },
+    );
+}

@@ -44,6 +44,10 @@ struct Gallery {
     shaking: bool,
     /// The toast, shown: `true` while it leaves.
     toast: Option<bool>,
+    wifi: bool,
+    airplane: bool,
+    /// 0 to 100.
+    volume: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +64,9 @@ enum Message {
     Dismiss,
     /// The toast's animation ended: in, or out.
     Toasted,
+    Wifi(bool),
+    Airplane(bool),
+    Volume(f32),
 }
 
 /// A symbolic icon: one colour, the element's.
@@ -115,6 +122,9 @@ impl Gallery {
             pressed: None,
             shaking: false,
             toast: None,
+            wifi: true,
+            airplane: false,
+            volume: 40.0,
         }
     }
 
@@ -145,6 +155,9 @@ impl Gallery {
                     self.toast = None;
                 }
             }
+            Message::Wifi(on) => self.wifi = on,
+            Message::Airplane(on) => self.airplane = on,
+            Message::Volume(volume) => self.volume = volume,
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -168,6 +181,7 @@ impl Gallery {
             root,
             [
                 self.buttons(root),
+                self.controls(root),
                 self.animation(root),
                 self.boxes(root),
                 self.painting(root),
@@ -260,6 +274,67 @@ impl Gallery {
             [tk::text(section.child("heading"), title).into(), content],
         )
         .into()
+    }
+
+    fn controls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let controls = section.child("controls");
+        let line = controls.child("line");
+        let label =
+            |text: String| -> Element<'a, Message> { tk::text(line.child("label"), text).into() };
+        let content = tk::column(
+            controls,
+            [
+                tk::row(
+                    line,
+                    [
+                        tk::toggle(line.child("toggle"), self.wifi, Message::Wifi).into(),
+                        label("Wi-Fi".into()),
+                        tk::toggle(line.child("toggle"), self.airplane, Message::Airplane).into(),
+                        label("Airplane mode".into()),
+                        tk::toggle(line.child("toggle").disabled_if(true), true, Message::Wifi)
+                            .into(),
+                        label("Disabled".into()),
+                    ],
+                )
+                .into(),
+                tk::row(
+                    line,
+                    [
+                        tk::slider(
+                            line.child("slider"),
+                            0.0..=100.0,
+                            self.volume,
+                            Message::Volume,
+                        )
+                        .step(1.0)
+                        .into(),
+                        label(format!("Volume {:.0}%", self.volume)),
+                        tk::slider(
+                            line.child("slider").disabled_if(true),
+                            0.0..=1.0,
+                            0.3,
+                            Message::Volume,
+                        )
+                        .into(),
+                        label("Disabled".into()),
+                    ],
+                )
+                .into(),
+                tk::row(
+                    line,
+                    [
+                        tk::meter(line.child("meter"), self.volume / 100.0).into(),
+                        tk::meter(line.child("meter").class("warning"), 0.85).into(),
+                        tk::meter(line.child("meter").class("gauge"), 0.42)
+                            .label("CPU 42%")
+                            .into(),
+                    ],
+                )
+                .into(),
+            ],
+        );
+        self.section(section, "Controls", content.into())
     }
 
     fn animation<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
@@ -456,8 +531,8 @@ impl Gallery {
     fn flex<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
         let section = root.child("section");
         let flex = section.child("flex");
-        let track = |class: &str, cells: &[&'static str]| -> Element<'a, Message> {
-            let node = flex.child("track").class(class);
+        let lane = |class: &str, cells: &[&'static str]| -> Element<'a, Message> {
+            let node = flex.child("lane").class(class);
             tk::row(
                 node,
                 cells.iter().map(|&cell| {
@@ -491,10 +566,10 @@ impl Gallery {
         let content = tk::column(
             flex,
             [
-                track("plain", &["fill", "fixed", "fill"]),
-                track("center", &["fixed", "fixed"]),
-                track("end", &["fixed", "fixed"]),
-                track("align-center", &["tall", "mid", "short"]),
+                lane("plain", &["fill", "fixed", "fill"]),
+                lane("center", &["fixed", "fixed"]),
+                lane("end", &["fixed", "fixed"]),
+                lane("align-center", &["tall", "mid", "short"]),
                 menu.into(),
             ],
         );

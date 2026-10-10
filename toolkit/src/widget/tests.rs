@@ -4,7 +4,7 @@
 use std::time::Instant;
 
 use iced::keyboard::key::Named;
-use iced::{Color, Point, Size};
+use iced::{Color, Event, Point, Rectangle, Size, mouse};
 
 use crate::testing::Harness;
 use crate::{Element, Node, Scheme, Sheet, Source};
@@ -27,6 +27,9 @@ fn sheet(css: &str) -> Sheet {
 enum Message {
     Pressed(&'static str),
     Ended,
+    Toggled(bool),
+    Value(f32),
+    Released,
 }
 
 /// A row of buttons, each `name` at 40x20, no gap.
@@ -322,4 +325,184 @@ fn widgets_are_found_by_selector() {
     assert!(ui.find(&sheet, "nothing").is_empty());
     ui.click_on(&sheet, "item:nth-child(3)");
     assert_eq!(ui.messages, [Message::Pressed("c")]);
+}
+
+/// The base's controls, without their transitions.
+const CONTROLS: &str = "toggle, toggle > knob, slider > knob { transition: none; }";
+
+#[test]
+fn a_toggle_asks_for_the_other_state() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let view = |on: bool| -> Element<'_, Message> {
+        crate::focus_scope(crate::row(
+            root,
+            [crate::toggle(root.child("toggle"), on, Message::Toggled).into()],
+        ))
+        .into()
+    };
+    let mut ui = Harness::new(view(false), Size::new(100.0, 40.0), 1.0);
+    assert!(ui.find(&sheet, "toggle.on").is_empty());
+    ui.click_on(&sheet, "toggle");
+    assert_eq!(ui.messages, [Message::Toggled(true)]);
+    ui.rebuild(view(true));
+    assert_eq!(ui.find(&sheet, "toggle.on > knob").len(), 1);
+    // From the keyboard: Tab to it, then Space.
+    ui.key(Named::Tab);
+    ui.key(Named::Space);
+    assert_eq!(
+        ui.messages,
+        [Message::Toggled(true), Message::Toggled(false)]
+    );
+}
+
+/// A slider from 0 to 100 at `value`: 160px wide, its track from 8 to
+/// 152 (the base's padding, half its knob).
+fn slider(root: Node<'_>, value: f32, disabled: bool) -> Element<'_, Message> {
+    crate::focus_scope(crate::row(
+        root,
+        [crate::slider(
+            root.child("slider").disabled_if(disabled),
+            0.0..=100.0,
+            value,
+            Message::Value,
+        )
+        .step(1.0)
+        .on_release(Message::Released)
+        .into()],
+    ))
+    .into()
+}
+
+#[test]
+fn a_slider_puts_its_knob_on_the_value() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(slider(root, 40.0, false), Size::new(200.0, 40.0), 1.0);
+    let track = ui.find(&sheet, "slider > track")[0];
+    assert_eq!((track.x, track.width), (8.0, 144.0));
+    // 40% of the track, on a whole pixel; the fill up to it.
+    assert_eq!(ui.find(&sheet, "slider > knob")[0].center_x(), 66.0);
+    assert_eq!(ui.find(&sheet, "track > fill")[0].width, 58.0);
+    // At the ends, the knob overhangs the track by half its width.
+    ui.rebuild(slider(root, 0.0, false));
+    assert_eq!(ui.find(&sheet, "slider > knob")[0].x, 0.0);
+    ui.rebuild(slider(root, 100.0, false));
+    assert_eq!(ui.find(&sheet, "slider > knob")[0].x, 144.0);
+}
+
+#[test]
+fn a_slider_follows_the_pointer() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(slider(root, 40.0, false), Size::new(200.0, 40.0), 1.0);
+    // Pressed at a quarter of the track, dragged to half, then past
+    // its end, let go.
+    ui.move_to(Point::new(8.0 + 36.0, 8.0));
+    ui.press();
+    ui.move_to(Point::new(8.0 + 72.0, 30.0));
+    ui.move_to(Point::new(190.0, 8.0));
+    ui.release();
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Value(25.0),
+            Message::Value(50.0),
+            Message::Value(100.0),
+            Message::Released
+        ]
+    );
+}
+
+#[test]
+fn a_slider_steps_with_the_wheel_and_the_keys() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(slider(root, 40.0, false), Size::new(200.0, 40.0), 1.0);
+    let wheel = |delta| Event::Mouse(mouse::Event::WheelScrolled { delta });
+    ui.move_to(Point::new(80.0, 8.0));
+    // Two lines, then a touchpad's pixels: a step every 10.
+    ui.send(&[wheel(mouse::ScrollDelta::Lines { x: 0.0, y: 2.0 })]);
+    ui.send(&[wheel(mouse::ScrollDelta::Pixels { x: 0.0, y: 15.0 })]);
+    ui.send(&[wheel(mouse::ScrollDelta::Pixels { x: 0.0, y: 5.0 })]);
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Value(42.0),
+            Message::Value(43.0),
+            Message::Value(44.0)
+        ]
+    );
+    ui.messages.clear();
+    // The keys, once it has the focus.
+    ui.key(Named::ArrowRight);
+    assert!(ui.messages.is_empty());
+    ui.key(Named::Tab);
+    for key in [
+        Named::ArrowRight,
+        Named::PageUp,
+        Named::Home,
+        Named::End,
+        Named::ArrowLeft,
+    ] {
+        ui.key(key);
+    }
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Value(45.0),
+            Message::Value(55.0),
+            Message::Value(0.0),
+            Message::Value(100.0),
+            Message::Value(99.0)
+        ]
+    );
+}
+
+#[test]
+fn a_disabled_slider_takes_nothing() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(slider(root, 40.0, true), Size::new(200.0, 40.0), 1.0);
+    ui.click(Point::new(100.0, 8.0));
+    ui.send(&[Event::Mouse(mouse::Event::WheelScrolled {
+        delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    })]);
+    ui.key(Named::Tab);
+    ui.key(Named::ArrowRight);
+    assert!(ui.messages.is_empty());
+}
+
+#[test]
+fn a_meter_fills_its_fraction_under_its_label() {
+    let sheet = sheet("meter { width: 100px; height: 20px; padding: 2px; }");
+    let root = sheet.root("root", 1.0);
+    let view = |fraction: f32| -> Element<'_, Message> {
+        crate::row(
+            root,
+            [crate::meter(root.child("meter"), fraction)
+                .label("25%")
+                .into()],
+        )
+        .into()
+    };
+    let mut ui = Harness::new(view(0.25), Size::new(200.0, 40.0), 1.0);
+    assert_eq!(
+        ui.find(&sheet, "meter > fill")[0],
+        Rectangle {
+            x: 2.0,
+            y: 2.0,
+            width: 24.0,
+            height: 16.0
+        }
+    );
+    // Centred, as the base places it.
+    let label = ui.find(&sheet, "meter > label")[0];
+    assert!((label.center_x() - 50.0).abs() <= 0.5, "{label:?}");
+    assert!((label.center_y() - 10.0).abs() <= 0.5, "{label:?}");
+    // Out of range, it's full or empty.
+    ui.rebuild(view(1.5));
+    assert_eq!(ui.find(&sheet, "meter > fill")[0].width, 96.0);
+    ui.rebuild(view(f32::NAN));
+    assert_eq!(ui.find(&sheet, "meter > fill")[0].width, 0.0);
 }

@@ -551,13 +551,15 @@ UI.md §7:
 | `text` | paragraph, ellipsis, trim |
 | `icon`, `image` | above |
 | `button` | a box with `on_press`, the `button` element, its variants as classes |
-| `toggle`, `slider` | ours: `track`, `knob`, `fill` elements, every state themeable |
+| `toggle` | a button holding its `knob`, `.on` when it is; the knob slid by the theme's transform |
+| `slider` | its track a meter, its `knob` centred on the value; dragged, clicked, scrolled, keys when focused |
 | `input` | iced's `text_input` under our `Catalog`, in a box; the peek button |
 | `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar`, `thumb`) |
 | `menu` | checks, radios, submenus, separators |
 | `calendar` | day and month names given by the app (no locale in the toolkit) |
 | `tabs` | |
-| `meter`, `gauge`, `sparkline`, `graph` | boxes and canvas paths |
+| `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
+| `sparkline`, `graph` | canvas paths |
 | `tooltip`, `select` | above (select later) |
 | `surface` | a surface's root: the shadow's room around its box, clicks on the room ignored |
 | `focus_scope` | above |
@@ -646,8 +648,12 @@ the headless harness and the query with them.
    outline, opacity, transform, background images and 9-patches;
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
-6. The widgets of UI.md §7: toggle, slider, input, scroll, menu,
-   calendar, tabs, meter, gauge, graphs, tooltip, surface; select last.
+6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
+   surface ✅ (with step 2), input, scroll, menu, calendar, tabs,
+   graphs, tooltip; select last.
+   A widget placing its children its own way (a meter's fill, a
+   slider's knob) shares the box's states, painting and animation
+   (`widget/boxed.rs`) and its box model (`layout::Sizing`).
 
 ## Limits (iced 0.14)
 

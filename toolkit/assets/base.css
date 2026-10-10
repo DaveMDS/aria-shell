@@ -150,7 +150,9 @@
  *
  * Elements: every widget has its element tree in a comment above its
  * rules, below: its element types, the classes and attributes they
- * carry, what each part is.
+ * carry, what each part is. A type is global, as in CSS: a rule for an
+ * app's own `track` reaches a slider's too, unless its selector says
+ * whose (`lanes > track`).
  */
 
 :root.light {
@@ -242,4 +244,126 @@ button.primary:active {
 }
 button.danger {
   color: var(--danger);
+}
+
+/*
+ * Toggles
+ * =======
+ *
+ * A switch (`tk::toggle`): a button holding its knob, `.on` when it is.
+ * The knob slides with a transform: its travel is the toggle's width
+ * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
+ *
+ * toggle[.on]
+ * ╰─ knob
+ */
+toggle {
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--border);
+  transition: background-color 120ms;
+}
+toggle.on {
+  background: var(--accent);
+}
+toggle:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+toggle:disabled {
+  opacity: 0.5;
+}
+toggle > knob {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--bg);
+  transition: transform 120ms;
+}
+toggle.on > knob {
+  transform: translateX(16px);
+}
+
+/*
+ * Sliders
+ * =======
+ *
+ * A value in a range (`tk::slider`): dragged, clicked, scrolled, or with
+ * the keys while focused (the arrows, Page Up and Down, Home, End);
+ * `:active` while dragged. Its track is a meter across its content box,
+ * filled up to the value; the knob is centred on the value, from the
+ * track's start to its end: the slider's padding is the room the knob
+ * overhangs into (half the knob's width).
+ *
+ * slider
+ * ├─ track          a meter (see Meters)
+ * │  ╰─ fill        up to the value
+ * ╰─ knob
+ */
+slider {
+  width: 160px;
+  padding: 0 8px;
+}
+slider > track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+slider > track > fill {
+  border-radius: 2px;
+  background: var(--accent);
+}
+slider > knob {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  transition: border-color 120ms, background-color 120ms;
+}
+slider:hover > knob {
+  border-color: var(--accent);
+}
+slider:active > knob {
+  background: var(--accent);
+}
+slider:focus > knob {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+slider:disabled > track > fill {
+  opacity: 0.4;
+}
+
+/*
+ * Meters
+ * ======
+ *
+ * A bar filled to a fraction (`tk::meter`): a battery's charge, a disk's
+ * use; with a label over it, a gauge. The fill is the fraction of the
+ * meter's content box wide, as tall as it; the label is placed as in a
+ * row. Its states are the app's to give, as classes (`.warning`,
+ * `.critical`).
+ *
+ * meter
+ * ├─ fill
+ * ╰─ label          a gauge's
+ */
+meter {
+  min-width: 80px;
+  min-height: 8px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  background: var(--border);
+}
+meter > fill {
+  border-radius: 4px;
+  background: var(--accent);
+}
+meter > label {
+  font-size: 11px;
+  white-space: nowrap;
 }

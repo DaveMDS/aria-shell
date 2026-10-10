@@ -6,6 +6,7 @@
  * ╰─ section                 one kind of widget
  *    ├─ heading
  *    ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
+ *    ├─ controls > line > toggle, slider, meter[.warning|.gauge], label
  *    ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
  *    ├─ row                  boxes, side by side
  *    │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
@@ -17,7 +18,7 @@
  *    │  ├─ box.wrap > label, box.cut > label
  *    │  ╰─ pair[.untrimmed] > icon, label
  *    ├─ flex
- *    │  ├─ track[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
+ *    │  ├─ lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
  *    │  ╰─ menu > item > icon, label, shortcut
  *    ╰─ icons > icon[.small|.large|.accent], avatar
  */
@@ -82,6 +83,22 @@ grow {
 }
 grow:hover {
   padding: 14px 24px;
+}
+
+/* Controls */
+controls {
+  gap: 12px;
+}
+line {
+  gap: 10px;
+  align-items: center;
+}
+meter.warning > fill {
+  background: #e0a030;
+}
+meter.gauge {
+  width: 120px;
+  height: 18px;
 }
 
 /* Animation */
@@ -338,19 +355,19 @@ flex {
   gap: 6px;
   align-items: start;
 }
-track {
+lane {
   width: fill;
   gap: 6px;
   padding: 6px;
   border: 1px solid var(--border);
 }
-track.center {
+lane.center {
   justify-content: center;
 }
-track.end {
+lane.end {
   justify-content: end;
 }
-track.align-center {
+lane.align-center {
   align-items: center;
 }
 cell {

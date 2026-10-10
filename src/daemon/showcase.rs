@@ -8,10 +8,10 @@
 //! side by side on one transparent layer surface over the focused
 //! output, between its bars: what shows through is the desktop, as on
 //! the real ones. Inert: what the parts would do is dropped, their
-//! hover still shows; only the sample radios and tabs follow a click.
-//! Escape, a click beside the parts or the command again close it; a
-//! theme change redraws it like any surface. Its own layout (the room
-//! around the parts and between them) isn't themed.
+//! hover still shows; only the sample plain buttons, radios and tabs
+//! follow a click. Escape, a click beside the parts or the command
+//! again close it; a theme change redraws it like any surface. Its own
+//! layout (the room around the parts and between them) isn't themed.
 //!
 //! ```text
 //! (the surface)                             its own roots, side by side
@@ -24,6 +24,7 @@
 //! │  ╰─ button > icon | text
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
 //!    ├─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
+//!    ├─ button.plain[.active] > icon | text
 //!    ├─ button.radio[.active] > check, label
 //!    ╰─ tabs > button.tab[.active] > text
 //! ```
@@ -78,6 +79,10 @@ const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
 ];
 const BUTTONS_ROW: usize = 3;
 
+/// The sample plain buttons, a click turns one on and off: whether it
+/// has an icon, a text (its selector) or both.
+const PLAINS: [(bool, bool); 3] = [(false, true), (true, true), (true, false)];
+
 /// How many sample radios and tabs: a click chooses one.
 const RADIOS: usize = 2;
 const TABS: usize = 3;
@@ -107,7 +112,9 @@ pub(crate) struct Showcase {
     osd: osd::Content,
     /// A press landed beside the parts: the release closes.
     pressed_outside: bool,
-    /// The chosen sample radio, the open sample tab.
+    /// The sample plain buttons that are on, the chosen sample radio,
+    /// the open sample tab.
+    plains: [bool; PLAINS.len()],
     radio: usize,
     tab: usize,
 }
@@ -121,7 +128,9 @@ pub(crate) enum Message {
     Released,
     /// Escape, on window `Id`.
     Escape(Id),
-    /// A sample radio chosen, a sample tab opened.
+    /// A sample plain button turned on or off, a sample radio chosen,
+    /// a sample tab opened.
+    Plain(usize),
     Radio(usize),
     Tab(usize),
 }
@@ -265,6 +274,7 @@ impl AriaShell {
                 outputs: None,
             },
             pressed_outside: false,
+            plains: [false, true, false],
             radio: 0,
             tab: 0,
         });
@@ -307,6 +317,10 @@ impl AriaShell {
         };
         match message {
             Message::Nothing => Task::none(),
+            Message::Plain(i) => {
+                showcase.plains[i] = !showcase.plains[i];
+                Task::none()
+            }
             Message::Radio(i) => {
                 showcase.radio = i;
                 Task::none()
@@ -469,6 +483,32 @@ impl AriaShell {
                     .into(),
             );
         }
+        let plains = PLAINS.iter().enumerate().map(|(i, &(icon, text))| {
+            let on = showcase.plains[i];
+            let node = list
+                .child("button")
+                .class("plain")
+                .class_if("active", on)
+                .nth(i, PLAINS.len());
+            let label = if on {
+                "button.plain.active"
+            } else {
+                "button.plain"
+            };
+            let content = self.button_content(&node, icon, text.then(|| label.to_owned()));
+            theme
+                .button(&node, content)
+                .on_press(Shell::Showcase(Message::Plain(i)))
+                .into()
+        });
+        // After the flat ones.
+        rows.insert(
+            2,
+            row(plains)
+                .spacing(BUTTONS_GAP)
+                .align_y(Alignment::Center)
+                .into(),
+        );
         let radios = (0..RADIOS).map(|i| {
             let on = i == showcase.radio;
             let node = list

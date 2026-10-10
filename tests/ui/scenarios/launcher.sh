@@ -76,7 +76,7 @@ aria-test 2" "usage file"
 aria launcher show; settle 0.8
 type_text "aria test"
 assert_eq "$(count_widgets 'item.action')" 0 "closed at first"
-assert_eq "$(count_widgets 'launcher chevron')" 1 "only Zzz has a chevron"
+assert_eq "$(count_widgets 'launcher button.chevron')" 1 "only Zzz has a chevron"
 key Right
 assert_eq "$(count_widgets 'item.action')" 2 "two action rows"
 assert_eq "$(count_widgets 'item.action.selected:nth-child(2)')" 1 "the first action selected"
@@ -97,7 +97,7 @@ assert_eq "$(count_widgets 'item.selected:nth-child(1)')" 1 "Zzz selected again"
 assert_eq "$(count_widgets 'launcher item')" 2 "the two results"
 
 # The chevron opens them with a click, a click on an action runs it.
-click_widget 'launcher chevron'
+click_widget 'launcher button.chevron'
 assert_surface launcher
 assert_eq "$(count_widgets 'item.action')" 2 "opened by the chevron"
 click_widget 'item.action'

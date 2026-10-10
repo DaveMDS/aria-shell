@@ -114,7 +114,7 @@
  * an icon's height; the bar's buttons are under Gadgets. A disabled
  * button's icon is muted too.
  *
- * button[.flat|.primary|.danger|.active|.peek|.radio]
+ * button[.flat|.primary|.danger|.active|.plain|.radio]
  * ├─ icon      drawn at `height` (symbolic: `color`)
  * ├─ text
  * ╰─ check, label   (.radio)
@@ -124,8 +124,8 @@
  * button.primary    the action a dialog suggests: Unlock, Save
  * button.danger     an action not to take lightly: Reboot, Kill
  * button.active     a toggle that is on: do-not-disturb, mute, the power profile
- * button.peek       the eye by a password field: just its colour, .active while
- *                   the password shows
+ * button.plain      just its colour: muted, the text's when hovered or .active;
+ *                   a password's peek (.active: shown), a row's chevron (.active: open)
  * button.radio      one of a group, .active the chosen one: `check` (● / ○,
  *                   accent on the chosen one) and its `label`
  */
@@ -176,13 +176,13 @@ button.danger:disabled {
   background: transparent;
   border-color: var(--aria-border);
 }
-button.peek {
+button.plain {
   padding: 4px;
   border: none;
   color: var(--aria-muted);
 }
-button.peek:hover,
-button.peek.active {
+button.plain:hover,
+button.plain.active {
   background: transparent;
   color: var(--aria-fg);
 }
@@ -365,7 +365,7 @@ calendar day.today {
  *       ├─ icon                    the app icon, drawn at `height`
  *       ├─ title                   the app name (the action's, on .action)
  *       ├─ subtitle                its description, when it has one
- *       ╰─ chevron[.open] > text   a button, › or ⌄
+ *       ╰─ button.chevron.plain[.active] > text   › / ⌄ (.active: open)
  */
 launcher {
   width: 520px;
@@ -423,12 +423,11 @@ launcher subtitle {
 launcher item.selected subtitle {
   color: var(--aria-on-accent);
 }
-launcher chevron {
+launcher button.chevron {
   padding: 0 8px;
   font-size: var(--aria-font-lg);
-  color: var(--aria-muted);
 }
-launcher item.selected chevron {
+launcher item.selected button.chevron {
   color: var(--aria-on-accent);
 }
 /* indented by the parent's icon and gap: under its text */
@@ -566,7 +565,7 @@ wallpaper {
  *    ╰─ auth[.error][.busy]   the password block (`gap`)
  *       ├─ field              a row (`gap`)
  *       │  ├─ input           the password field (:focus)
- *       │  ╰─ button.peek[.active]   the eye (see `button.peek`)
+ *       │  ╰─ button.peek.plain[.active]   the eye (.active: the password shows)
  *       │     ╰─ icon         drawn at `height`, `color`
  *       ├─ message            what PAM said, "Unlocking…"
  *       ╰─ button.primary > text   Unlock (:disabled while checking)
@@ -1498,14 +1497,14 @@ gadget.audio player controls button icon {
  *    │  │  ├─ name > text
  *    │  │  ├─ icon.badge                         the lock (.secured)
  *    │  │  ├─ status                             "Connected" / "Connecting…"
- *    │  │  ╰─ chevron[.open] > text              ▾ / ▴, a button
+ *    │  │  ╰─ button.chevron.plain[.active] > text   ▾ / ▴ (.active: open)
  *    │  ├─ details
  *    │  │  ╰─ line                               addresses, gateway, DNS, band...
  *    │  ├─ actions
  *    │  │  ╰─ button.disconnect|.connect|.forget > text
  *    │  ├─ auth[.busy]                           the password
  *    │  │  ├─ input                              the field (:focus)
- *    │  │  ├─ button.peek[.active] > icon        the eye (see `button.peek`)
+ *    │  │  ├─ button.peek.plain[.active] > icon   the eye (.active: shown)
  *    │  │  ╰─ button.connect > text              :disabled: nothing typed yet
  *    │  ╰─ message                               "Wrong password", the enterprise hint
  *    ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
@@ -1559,18 +1558,15 @@ gadget.network device.unplugged > button icon,
 gadget.network device.unplugged > button name {
   color: var(--aria-muted);
 }
-gadget.network status,
-gadget.network chevron {
+gadget.network status {
   color: var(--aria-muted);
+}
+gadget.network status,
+gadget.network button.chevron {
   font-size: var(--aria-font-sm);
 }
-gadget.network chevron {
+gadget.network button.chevron {
   padding: 2px 6px;
-  border-radius: 4px;
-}
-gadget.network chevron:hover {
-  color: var(--aria-accent);
-  background: var(--aria-popup-bg);
 }
 gadget.network details {
   padding: 0 8px 4px 34px;

@@ -959,10 +959,15 @@ impl NetworkGadget {
             height = height.max(padded(theme, &st, theme.line_height(&st)));
         }
         if let Some((expanded, toggle)) = chevron {
-            let c = button.child("chevron").class_if("open", expanded);
-            let glyph = theme.text(&c, if expanded { "▴" } else { "▾" });
+            let c = button
+                .child("button")
+                .class("chevron")
+                .class("plain")
+                .class_if("active", expanded);
+            let t = c.child("text");
+            let glyph = theme.text(&t, if expanded { "▴" } else { "▾" });
             parts.push(theme.button(&c, glyph).on_press(toggle).into());
-            height = height.max(padded(theme, &c, theme.line_height(&c)));
+            height = height.max(padded(theme, &c, theme.line_height(&t)));
         }
         let content = row(parts)
             .spacing(theme.resolve(button).gap)
@@ -1057,6 +1062,7 @@ impl NetworkGadget {
         let peek = auth
             .child("button")
             .class("peek")
+            .class("plain")
             .class_if("active", self.peek);
         let eye = theme
             .button(

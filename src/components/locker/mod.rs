@@ -341,6 +341,7 @@ impl Locker {
             let peek = field
                 .child("button")
                 .class("peek")
+                .class("plain")
                 .class_if("active", self.peek);
             let icon_node = peek.child("icon");
             let icon_style = theme.resolve(&icon_node);

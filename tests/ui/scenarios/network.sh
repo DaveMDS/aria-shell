@@ -127,7 +127,7 @@ assert_eq "$(count_widgets "$list ap[ssid=\"Guest\"].known")" 1 "Guest is known 
 wait_for 'gadget.network > button.wifi.disconnected' 2 "the bars offline"
 # A known one that's not connected: its chevron unfolds Connect / Forget
 # (a click on the row itself would join it).
-click_widget "$list ap[ssid=\"Casa\"] > button chevron"
+click_widget "$list ap[ssid=\"Casa\"] > button button.chevron"
 wait_for "$list ap[ssid=\"Casa\"].expanded actions button.connect" 1 "Connect under a known network"
 assert_eq "$(count_widgets "$list ap[ssid=\"Casa\"].expanded actions button.forget")" 1 "and Forget"
 nm_idle

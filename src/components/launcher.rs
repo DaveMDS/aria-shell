@@ -552,8 +552,12 @@ impl Launcher {
                     }
                     if !entry.actions.is_empty() {
                         let open = self.expanded == Some(r);
-                        let c = node.child("chevron").class_if("open", open);
-                        let glyph = theme.text(&c, if open { "⌄" } else { "›" });
+                        let c = node
+                            .child("button")
+                            .class("chevron")
+                            .class("plain")
+                            .class_if("active", open);
+                        let glyph = theme.text(&c.child("text"), if open { "⌄" } else { "›" });
                         chevron = Some(theme.button(&c, glyph).on_press(Message::Toggle(r)).into());
                     }
                 }

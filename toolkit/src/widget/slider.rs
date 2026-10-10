@@ -11,9 +11,9 @@ use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::Focusable;
 use iced::advanced::widget::{Operation, Tree, Widget, tree};
-use iced::advanced::{Clipboard, Shell, mouse};
+use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
-use iced::{Event, Length, Point, Rectangle, Size, touch};
+use iced::{Event, Length, Point, Rectangle, Size, Vector, touch};
 
 use super::boxed::{BoxState, Boxed};
 use super::flex::row;
@@ -351,6 +351,24 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
         } else {
             mouse::Interaction::None
         }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        overlay::from_children(
+            &mut self.children,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn operate(

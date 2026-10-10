@@ -6,13 +6,14 @@
 //! widget's parent is the last one before it a level up, whatever stock
 //! widgets lie between; its position among its siblings comes from there,
 //! so `:nth-child()` matches even where the sheet has none (its nodes
-//! then share no position).
+//! then share no position). A widget's box is where it's shown: moved as
+//! the scrolls around it are scrolled.
 
 use std::any::Any;
 
-use iced::Rectangle;
 use iced::advanced::widget::Id;
-use iced::advanced::widget::operation::{Operation, Outcome};
+use iced::advanced::widget::operation::{Operation, Outcome, Scrollable};
+use iced::{Rectangle, Vector};
 
 use crate::style::Node;
 
@@ -47,11 +48,31 @@ pub struct Found {
 #[derive(Debug, Default)]
 pub struct Report {
     pub found: Vec<Found>,
+    /// How far the scrolls around the widgets reported now move them.
+    offset: Vector,
+    /// A scroll's own move, for the content it traverses next.
+    scrolled: Option<Vector>,
 }
 
 impl Operation<Vec<Found>> for Report {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Vec<Found>>)) {
+        let outside = self.offset;
+        if let Some(translation) = self.scrolled.take() {
+            self.offset -= translation;
+        }
         operate(self);
+        self.offset = outside;
+    }
+
+    fn scrollable(
+        &mut self,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        _content_bounds: Rectangle,
+        translation: Vector,
+        _state: &mut dyn Scrollable,
+    ) {
+        self.scrolled = Some(translation);
     }
 
     fn custom(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn Any) {
@@ -60,7 +81,7 @@ impl Operation<Vec<Found>> for Report {
                 sheet: reported.sheet,
                 node: reported.node,
                 depth: reported.depth,
-                bounds,
+                bounds: bounds + self.offset,
             });
         }
     }

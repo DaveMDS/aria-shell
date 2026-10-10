@@ -9,9 +9,9 @@ use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::{self, Operation, Outcome, focusable};
 use iced::advanced::widget::{Tree, Widget};
-use iced::advanced::{Clipboard, Shell, mouse};
+use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
-use iced::{Event, Length, Rectangle, Size};
+use iced::{Event, Length, Rectangle, Size, Vector};
 
 use crate::{Element, Renderer, Theme};
 
@@ -159,6 +159,23 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
             cursor,
             viewport,
             renderer,
+        )
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout,
+            renderer,
+            viewport,
+            translation,
         )
     }
 

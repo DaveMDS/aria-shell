@@ -501,3 +501,57 @@ fn golden_inputs() {
         |_, _| {},
     );
 }
+
+#[test]
+fn golden_scroll() {
+    scene(
+        "scroll",
+        "scrolls { gap: 12px; align-items: start; } \
+         scroll.list { width: 120px; max-height: 80px; } \
+         scroll.strip { width: 150px; } \
+         rows { padding: 4px 12px 4px 4px; gap: 6px; border: 1px solid #999; } \
+         cells { gap: 4px; padding: 0 0 10px 0; } cell { padding: 4px 8px; background: #ddd; }",
+        None,
+        Size::new(320.0, 100.0),
+        |root| {
+            let scrolls = root.child("scrolls");
+            let list = scrolls.child("scroll").class("list");
+            let rows = list.child("rows");
+            let strip = scrolls.child("scroll").class("strip");
+            let cells = strip.child("cells");
+            let scrolls = crate::row(
+                scrolls,
+                [
+                    crate::scroll(
+                        list,
+                        crate::column(
+                            rows,
+                            ["One", "Two", "Three", "Four", "Five", "Six", "Seven"]
+                                .map(|label| crate::text(rows.child("label"), label).into()),
+                        ),
+                    )
+                    .into(),
+                    crate::scroll(
+                        strip,
+                        crate::row(
+                            cells,
+                            ["A", "B", "C", "D", "E", "F", "G", "H"]
+                                .map(|label| boxed(cells, "cell", "", label)),
+                        ),
+                    )
+                    .horizontal()
+                    .into(),
+                ],
+            );
+            crate::column(root, [scrolls.into()]).into()
+        },
+        |ui, _| {
+            // The list a little down.
+            ui.move_to(Point::new(48.0, 48.0));
+            ui.send(&[iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+                delta: iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -20.0 },
+            })]);
+            ui.move_to(Point::new(300.0, 90.0));
+        },
+    );
+}

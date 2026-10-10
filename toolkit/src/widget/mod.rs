@@ -8,6 +8,7 @@ mod icon;
 mod image;
 mod input;
 mod meter;
+mod scroll;
 mod slider;
 mod surface;
 #[cfg(test)]
@@ -21,6 +22,7 @@ pub use icon::{Icon, IconFile, IconSource, Icons, icon};
 pub use image::{Image, image};
 pub use input::{Input, input};
 pub use meter::{Meter, meter};
+pub use scroll::{Scroll, scroll};
 pub use slider::{Slider, slider};
 pub use surface::{Surface, surface};
 pub use text::{Text, text};

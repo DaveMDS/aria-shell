@@ -198,19 +198,29 @@ impl Gallery {
 
     fn view(&self) -> Element<'_, Message> {
         let root = self.sheet.root("gallery", self.scale);
+        let scroll = root.child("scroll");
+        let page = scroll.child("page");
         tk::focus_scope(tk::column(
             root,
-            [
-                self.buttons(root),
-                self.controls(root),
-                self.animation(root),
-                self.boxes(root),
-                self.painting(root),
-                self.images(root),
-                self.texts(root),
-                self.flex(root),
-                self.icons(root),
-            ],
+            [tk::scroll(
+                scroll,
+                tk::column(
+                    page,
+                    [
+                        self.buttons(page),
+                        self.controls(page),
+                        self.animation(page),
+                        self.boxes(page),
+                        self.painting(page),
+                        self.images(page),
+                        self.texts(page),
+                        self.flex(page),
+                        self.scrolls(page),
+                        self.icons(page),
+                    ],
+                ),
+            )
+            .into()],
         ))
         .into()
     }
@@ -625,6 +635,51 @@ impl Gallery {
             ],
         );
         self.section(section, "Flex", content.into())
+    }
+
+    fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let row = section.child("scrolls");
+        let list = row.child("scroll").class("list");
+        let rows = list.child("rows");
+        let strip = row.child("scroll").class("strip");
+        let cells = strip.child("cells");
+        let content = tk::row(
+            row,
+            [
+                tk::scroll(
+                    list,
+                    tk::column(
+                        rows,
+                        (1..=30).map(|i| {
+                            tk::text(
+                                rows.child("label"),
+                                format!("Row {i} of a list that scrolls"),
+                            )
+                            .into()
+                        }),
+                    ),
+                )
+                .into(),
+                tk::scroll(
+                    strip,
+                    tk::row(
+                        cells,
+                        (1..=20).map(|i| {
+                            let cell = cells.child("cell");
+                            tk::row(
+                                cell,
+                                [tk::text(cell.child("label"), format!("Cell {i}")).into()],
+                            )
+                            .into()
+                        }),
+                    ),
+                )
+                .horizontal()
+                .into(),
+            ],
+        );
+        self.section(section, "Scroll", content.into())
     }
 
     fn icons<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {

@@ -587,3 +587,87 @@ fn an_inputs_field_is_centred_on_its_letters() {
     assert!((field.center_y() - 15.0).abs() <= 0.5, "{field:?}");
     assert_eq!((field.x, field.width), (8.0, 184.0));
 }
+
+const SCROLL: &str = "scroll { width: 100px; max-height: 100px; } \
+                      line { gap: 0; } line > cell { width: 20px; height: 20px; }";
+
+/// `n` cells of 20px, one under the other (or side by side), in a
+/// scroll at most 100px tall (or 100px wide).
+fn cells(root: Node<'_>, n: usize, sideways: bool) -> Element<'_, Message> {
+    let scroll = root.child("scroll");
+    let line = scroll.child("line");
+    let content = (0..n).map(|_| crate::row(line.child("cell"), []).into());
+    let scroll = if sideways {
+        crate::scroll(scroll, crate::row(line, content)).horizontal()
+    } else {
+        crate::scroll(scroll, crate::column(line, content))
+    };
+    crate::column(root, [scroll.into()]).into()
+}
+
+#[test]
+fn a_scroll_grows_with_its_content_up_to_its_max() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 3, false), Size::new(200.0, 200.0), 1.0);
+    assert_eq!(ui.find(&sheet, "scroll")[0].height, 60.0);
+    ui.rebuild(cells(root, 10, false));
+    assert_eq!(ui.find(&sheet, "scroll")[0].height, 100.0);
+}
+
+/// A turn of the wheel, `lines` up (or down, below zero).
+fn wheel(lines: f32) -> Event {
+    Event::Mouse(mouse::Event::WheelScrolled {
+        delta: mouse::ScrollDelta::Lines { x: 0.0, y: lines },
+    })
+}
+
+#[test]
+fn the_wheel_scrolls_and_the_query_follows() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    assert_eq!(ui.find(&sheet, "cell")[0].y, 0.0);
+    // A line down is iced's 60px.
+    ui.move_to(Point::new(10.0, 50.0));
+    ui.send(&[wheel(-1.0)]);
+    let found = ui.find(&sheet, "cell");
+    assert_eq!((found[0].y, found[3].y), (-60.0, 0.0));
+    // The scroll itself stays where it is.
+    assert_eq!(ui.find(&sheet, "scroll")[0].y, 0.0);
+}
+
+#[test]
+fn a_sideways_scroll_takes_the_wheel_sideways() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, true), Size::new(200.0, 200.0), 1.0);
+    ui.move_to(Point::new(50.0, 10.0));
+    ui.send(&[wheel(-1.0)]);
+    assert_eq!(ui.find(&sheet, "cell")[0].x, -60.0);
+}
+
+#[test]
+fn a_scrollbar_shows_its_states() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    let now = Instant::now();
+    // The base's bar: 6px at 2px from the scroll's end, its thumb half
+    // its height (the content is twice the room).
+    let thumb = Point::new(100.0 - 5.0, 20.0);
+    let colour = |ui: &mut Harness<'_, Message>| {
+        ui.frame(now);
+        ui.pixels(Color::WHITE).at_point(thumb.x, thumb.y, 1.0)
+    };
+    assert_eq!(colour(&mut ui), [201, 201, 208, 255]);
+    ui.move_to(thumb);
+    assert_eq!(colour(&mut ui), [110, 110, 120, 255]);
+    ui.press();
+    assert_eq!(colour(&mut ui), [52, 102, 214, 255]);
+    // Below the thumb, the rail shows the cells under it.
+    assert_eq!(
+        ui.pixels(Color::WHITE).at_point(thumb.x, 80.0, 1.0),
+        [255, 255, 255, 255]
+    );
+}

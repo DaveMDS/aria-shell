@@ -554,7 +554,7 @@ UI.md §7:
 | `toggle` | a button holding its `knob`, `.on` when it is; the knob slid by the theme's transform |
 | `slider` | its track a meter, its `knob` centred on the value; dragged, clicked, scrolled, keys when focused |
 | `input` | iced's `text_input` under our `Catalog`, in a box with the app's children before and after it (an icon, the peek button); `:focus` while its field has it |
-| `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar`, `thumb`) |
+| `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar.vertical`, `.horizontal`, `thumb`); no box of its own, its sizes its node's (`max-height`: it grows, then scrolls); sideways, it takes the wheel sideways |
 | `menu` | checks, radios, submenus, separators |
 | `calendar` | day and month names given by the app (no locale in the toolkit) |
 | `tabs` | |
@@ -570,7 +570,9 @@ look is the theme's, the surface Aria's.
 ## Querying the tree
 
 Every widget reports its node and border box through `operate`
-(`Operation::custom` with the node as state). `query.rs` runs a CSS
+(`Operation::custom` with the node as state), where it's shown: the
+report moves a scroll's content as it's scrolled (iced's scrollable
+gives operations its translation, and lays its content out unmoved). `query.rs` runs a CSS
 selector over that: Aria's `debug widgets 'launcher item:nth-child(2)'`
 on top of it, and an `iced_test::Selector` impl so a test clicks
 "`menu item.active`". Every widget is found, text and canvas included
@@ -649,8 +651,8 @@ the headless harness and the query with them.
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
-   surface ✅ (with step 2), input ✅, scroll, menu, calendar, tabs,
-   graphs, tooltip; select last.
+   surface ✅ (with step 2), input ✅, scroll ✅, menu, calendar,
+   tabs, graphs, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).
@@ -668,8 +670,10 @@ the headless harness and the query with them.
 - No damage tracking: a frame redraws its whole surface.
 - Layout runs on every rebuild of a surface's tree, changed or not.
 - A stock widget needs our `Catalog` impl before it can be used; its
-  colours (an input's text, placeholder and selection) are asked at
-  draw, so they don't transition.
+  colours (an input's text, placeholder and selection, a scrollbar's)
+  are asked at draw, so they don't transition. A scrollbar's sizes are
+  set at the view, so they follow no state, and the query doesn't find
+  it.
 - Layout gets no context from the parent: nodes are explicit.
 - A descendant's layout can't follow an ancestor's state.
 - Operations run on every window (`iced_exwlshell`): ids are unique per

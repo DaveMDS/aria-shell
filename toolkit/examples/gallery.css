@@ -3,32 +3,40 @@
  * the theme given on the command line.
  *
  * gallery                    the window
- * ╰─ section                 one kind of widget
- *    ├─ heading
- *    ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
- *    ├─ controls > line > toggle, slider, input, meter[.warning|.gauge], label
- *    ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
- *    ├─ row                  boxes, side by side
- *    │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
- *    ├─ painting > row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
- *    ├─ row > box.textured|.framed|.scenery, picture.fill|.contain|.cover
- *    │             aligned > label.left|.center|.right|.italic
- *    ├─ texts                texts, one under the other
- *    │  ├─ label.small|.large|.bold|.muted|.caps
- *    │  ├─ box.wrap > label, box.cut > label
- *    │  ╰─ pair[.untrimmed] > icon, label
- *    ├─ flex
- *    │  ├─ lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
- *    │  ╰─ menu > item > icon, label, shortcut
- *    ╰─ icons > icon[.small|.large|.accent], avatar
+ * ╰─ scroll > page           the sections, scrolled
+ *    ╰─ section              one kind of widget
+ *       ├─ heading
+ *       ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
+ *       ├─ controls > line > toggle, slider, input, meter[.warning|.gauge], label
+ *       ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
+ *       ├─ row                  boxes, side by side
+ *       │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
+ *       ├─ painting > row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
+ *       ├─ row > box.textured|.framed|.scenery, picture.fill|.contain|.cover
+ *       │             aligned > label.left|.center|.right|.italic
+ *       ├─ texts                texts, one under the other
+ *       │  ├─ label.small|.large|.bold|.muted|.caps
+ *       │  ├─ box.wrap > label, box.cut > label
+ *       │  ╰─ pair[.untrimmed] > icon, label
+ *       ├─ flex
+ *       │  ├─ lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
+ *       │  ╰─ menu > item > icon, label, shortcut
+ *       ├─ scrolls > scroll.list > rows > label; scroll.strip > cells > cell > label
+ *       ╰─ icons > icon[.small|.large|.accent], avatar
  */
 
 gallery {
   background: var(--bg);
-  padding: 16px;
-  gap: 16px;
   width: fill;
   height: fill;
+}
+gallery > scroll {
+  width: fill;
+  height: fill;
+}
+page {
+  padding: 16px;
+  gap: 16px;
 }
 section {
   gap: 8px;
@@ -413,6 +421,32 @@ item > label {
 }
 shortcut {
   color: var(--muted);
+}
+
+/* Scroll */
+scrolls {
+  gap: 12px;
+  align-items: start;
+}
+scroll.list {
+  width: 260px;
+  max-height: 140px;
+}
+rows {
+  gap: 6px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid var(--border);
+}
+scroll.strip {
+  width: 320px;
+}
+cells {
+  gap: 6px;
+  padding: 0 0 12px 0;
+}
+cells > cell {
+  padding: 8px 12px;
+  background: var(--border);
 }
 
 /* Icons */

@@ -9,8 +9,8 @@ use std::borrow::Cow;
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::{Operation, Tree, Widget, tree};
-use iced::advanced::{Clipboard, Shell, mouse};
-use iced::{Event, Length, Rectangle, Size};
+use iced::advanced::{Clipboard, Shell, mouse, overlay};
+use iced::{Event, Length, Rectangle, Size, Vector};
 
 use super::boxed::{BoxState, Boxed};
 use super::flex::row;
@@ -166,6 +166,24 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Meter<'_, Message> {
         let over = cursor.is_over(self.boxed.border_box(layout.bounds()));
         let tracked = self.boxed.tracked(States::NONE);
         self.boxed.settle(state, before, tracked, over, shell);
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        overlay::from_children(
+            &mut self.children,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn operate(

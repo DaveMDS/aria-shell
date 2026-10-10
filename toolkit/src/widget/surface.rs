@@ -6,8 +6,8 @@
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::{Operation, Tree, Widget};
-use iced::advanced::{Clipboard, Shell, mouse};
-use iced::{Event, Length, Point, Rectangle, Size};
+use iced::advanced::{Clipboard, Shell, mouse, overlay};
+use iced::{Event, Length, Point, Rectangle, Size, Vector};
 
 use crate::layout::snap_up;
 use crate::style::Node;
@@ -125,6 +125,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Surface<'_, Message> {
             cursor,
             viewport,
             renderer,
+        )
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout.children().next().expect("one child"),
+            renderer,
+            viewport,
+            translation,
         )
     }
 

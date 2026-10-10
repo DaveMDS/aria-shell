@@ -3,6 +3,12 @@
 What the UI needs from iced and from our theme engine: what we have and
 what is missing, the starting point for rethinking how we use iced.
 
+The toolkit is a new crate, written from scratch, with its own tests
+and gallery from the start, Aria untouched meanwhile: today's widgets
+and theme engine in Aria are not moved into it, only learned from.
+"State" is what Aria has today; "Needed?" is what the new toolkit must
+have.
+
 Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 "Needed?": yes / no / ? (to decide).
 
@@ -11,16 +17,20 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 - **A toolkit of its own**: a set of reusable widgets, styled by CSS,
   built on iced. Completely separate from Aria (its own crate): Aria
   uses it, it knows nothing of Aria (no config, services, locale or
-  texts of the shell).
-- **Performance matters**: styles resolved once, not at every frame; no
-  allocations while drawing; layout only when something changed; an
-  idle bar costs nothing (no frame without a change); an animation asks
+  texts of the shell). Its only UI dependency is iced: no layer-shell,
+  no Wayland. A popup, a toast, a dialog are widgets it draws (box,
+  shadow, content); the surfaces they live in are Aria's to open.
+- **Performance matters**: styles resolved once, not at every `view`;
+  no allocations while drawing; layout only when something changed; an
+  idle UI costs nothing (no frame without a change); an animation asks
   for frames only while it runs. Measured, before and after a change.
 - **No workarounds of any kind**: what iced can't do cleanly is a
   proper widget of the toolkit, or a limit written here; never a trick
   in a view.
 - **One source of truth for sizes**: a widget's size comes from its own
-  layout, never measured again by hand somewhere else.
+  layout, never measured again by hand somewhere else. Today a
+  surface's size breaks it, the source of most workarounds (§9): the
+  toolkit gives a tree's size without a surface.
 - **CSS means CSS**: a property has its CSS name, units and behaviour;
   where ours differs, it's written in the reference, or it gets another
   name.
@@ -41,7 +51,7 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | Feature | State | Needed? |
 |---|---|---|
 | padding (per side too) | ✅ | |
-| border (width, colour, radius, per side) | 🟡 sides that differ take no radius | |
+| border (width, colour, radius, per side) | 🟡 sides that differ take no radius | yes |
 | gap between children | ✅ | |
 | width / height: px, auto, fill | ✅ | |
 | box-sizing border-box | ✅ | |
@@ -51,7 +61,7 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | alignment of a box's content | 🟡 automatic (centred), not configurable | yes |
 | justify-content / align-self / flex-grow | 🔲 (`width: fill` on the child that stretches, see Rules) | no |
 | `%` / `em` units | 🔲 | no |
-| `fill` inside a box that shrinks to its content | 🟡 grows to the maximum | |
+| `fill` inside a box that shrinks to its content | 🟡 grows to the maximum, not to its widest sibling as in CSS | yes |
 
 ## 2. Box painting
 
@@ -59,10 +69,12 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 |---|---|---|
 | colour / transparent background | ✅ | |
 | borders sharp on the pixel grid | ✅ | |
-| box-shadow | ✅ (a surface grows around its root's, not to cut it) | |
+| box-shadow | ✅ (a surface grows around its root's shadow, so it isn't cut) | |
 | inset box-shadow | ✅ (unblurred) | |
 | transparent / rounded surfaces | ✅ | |
 | opacity | 🔲 | yes |
+| transform: translate, scale (painted only, layout untouched as in CSS) | 🔲 | yes (§6: a pulse, a shake, a toast sliding in) |
+| transform: rotate | 🔲 limit: iced's `Transformation` has only translate and scale; an svg or an image rotates (a spinner) | |
 | gradients | 🔲 | no |
 | background-image / 9-patch | 🔲 | yes |
 | outline | 🔲 | yes |
@@ -73,10 +85,10 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 |---|---|---|
 | font-family with per-glyph fallback, embedded font | ✅ | |
 | font-size, font-weight, inherited colour | ✅ | |
-| line-height | 🟡 needs the pixel parity | |
+| line-height | 🟡 sharp only as a whole px height in a box of the same parity (iced truncates a fractional position) | |
 | tabular digits | ✅ | |
 | word wrapping | ✅ | |
-| vertically centred on its letters | 🔲 (1-2 px low) | yes |
+| vertically centred on its letters | 🔲 (1-2 px low; `text-box` trim, see ARCHITECTURE.md) | yes |
 | italic | 🔲 | yes |
 | text-align | 🔲 | yes |
 | ellipsis (`text-overflow`) | 🔲 | yes |
@@ -100,8 +112,8 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 |---|---|---|
 | `:hover` / `:active` on buttons, `:focus` on inputs | ✅ | |
 | `:disabled` | 🟡 icons need `disabled_if` | yes |
-| `:hover` on any element | 🟡 a `mouse_area` case by case | no |
-| an ancestor's state styling its descendants | 🟡 only the inherited text colour | no |
+| `:hover` on any element | 🟡 a `mouse_area` case by case | yes |
+| an ancestor's state styling its descendants | 🟡 only the inherited text colour | yes (a button's icon on its `:hover` / `:disabled`, §4) |
 | right and middle click, wheel | ✅ | |
 | keyboard (launcher, exiter, popups) | ✅ per component | |
 | keyboard focus across widgets (Tab, `:focus` on any widget) | 🔲 (iced: only the text input takes focus) | ? |
@@ -114,7 +126,7 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 |---|---|---|
 | transitions (hover, `.active`, ...) | 🔲 | yes |
 | show / hide animations (OSD, toasts, popups) | 🔲 | yes |
-| keyframes | 🔲 | yes, something simple |
+| keyframes: `@keyframes` on opacity, transform and an svg's or image's rotation, `animation` with duration, easing, count (once or infinite: a spinner, a pulse, a shake on an error) | 🔲 | yes |
 
 ## 7. Widgets (the toolkit's pieces)
 
@@ -126,8 +138,8 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | calendar, tabs | ✅ | |
 | calendar without Aria's `Locale` (the app gives the day and month names) | 🟡 uses Aria's `Locale` | yes |
 | meter, gauge, graphs (sparkline) | ✅ | |
-| scrolling lists | 🟡 the scrollbar isn't themed | |
-| popup, toast, dialog | ✅ | |
+| scrolling lists | 🟡 the scrollbar isn't themed | yes |
+| popup, toast, dialog (drawn; their surfaces are Aria's) | ✅ | |
 | tooltip | 🔲 | yes |
 | select / dropdown | 🔲 | yes, but later |
 
@@ -141,25 +153,28 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | variables with fallback | ✅ | |
 | light / dark schemes | ✅ | |
 | theme and scheme switched at runtime, reload when the file changes | ✅ | |
+| `@keyframes` | 🔲 | yes (§6) |
 | `@media` / other @-rules, `!important` | 🔲 | no |
 
-## 9. Surfaces
+## 9. Size and scale
+
+The surfaces themselves (layer-shell, the output's scale through
+iced_exwlshell) are Aria's; the toolkit gives them what they need.
 
 | Feature | State | Needed? |
 |---|---|---|
-| layer-shell bar per output, anchored popups, dialogs, lock screen, OSD, toasts, wallpaper, screenshot picker | ✅ | |
-| room around a surface for its shadow | ✅ | |
-| HiDPI: each surface at its output's scale, fractional too (`wp-fractional-scale`, `wp-viewporter`) | 🟡 done by iced_exwlshell, never tried on a scaled output: a scenario at scale 2 and 1.5 | yes |
-| a scale of the whole UI (`[general] ui_scale`, over the output's) | 🔲 (iced's `scale_factor`, unused) | yes |
-| a surface's size before layout | 🟡 measured by hand, duplicating the layout: the source of most workarounds | yes |
+| a widget tree's size computed without a surface (what a surface opens at) | 🟡 measured by hand, duplicating the layout: the source of most workarounds | yes |
+| a root's size includes its shadow, so it isn't cut | ✅ | yes |
+| drawn right at any scale, fractional too (borders, text, icons on whole device pixels) | 🟡 never tried on a scaled output | yes |
+| a scale of the whole UI over the output's, given by the app | 🔲 (iced's `scale_factor`, unused) | yes |
 
 ## 10. Tools
 
 | Feature | State | Needed? |
 |---|---|---|
-| `debug widgets/surfaces/cursor` with the theme's selectors | ✅ | |
-| showcase, headless scenarios | ✅ | |
-| warnings on theme errors | ✅ | |
+| widget rects queried by the theme's selectors (Aria's `debug widgets` on it) | ✅ | yes |
+| layout and style tested without a window | 🟡 the theme unit tested; layout only through Aria's headless scenarios | yes |
+| warnings on theme errors | ✅ | yes |
 
 ## 11. Structure
 
@@ -168,4 +183,5 @@ Legend: ✅ there · 🟡 there, but limited or worked around · 🔲 missing.
 | the toolkit as its own crate | 🔲 | yes |
 | base stylesheet split: the toolkit's (its widgets' defaults) and Aria's (the shell's elements), loaded in that order; a theme stays one file, styling both in one cascade | 🔲 | yes |
 | the toolkit's gallery, in a plain iced window (no layer-shell) | 🔲 | yes |
-| performance measurements (layout and draw times, CPU of an idle bar) | 🔲 | yes |
+| styles resolved once, not at every `view` | 🔲 (each widget's style resolved again at every `view`, walking its path) | yes |
+| performance measurements (layout and draw times, CPU when idle) | 🔲 | yes |

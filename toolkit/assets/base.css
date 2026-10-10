@@ -594,3 +594,88 @@ tabs > tab:focus {
 tabs > tab > label {
   white-space: nowrap;
 }
+
+/*
+ * Calendars
+ * =========
+ *
+ * A month (`tk::calendar`): its days in six weeks under the names of the
+ * days of the week, its title between the buttons to the months before
+ * and after. The title and the names are the app's (no locale here),
+ * the first day of the week too. The days around the month fill the
+ * grid, `.other`; the month's days are buttons when the app says what a
+ * press sends.
+ *
+ * calendar
+ * ├─ header
+ * │  ├─ button.previous > arrow      its mark: its content
+ * │  ├─ title
+ * │  ╰─ button.next > arrow
+ * ├─ weekdays
+ * │  ╰─ weekday > label              seven
+ * ╰─ days
+ *    ╰─ week                         six
+ *       ╰─ day[.other][.today][.selected] > label
+ */
+calendar {
+  gap: 4px;
+}
+calendar > header {
+  gap: 4px;
+  align-items: center;
+}
+calendar > header > title {
+  width: fill;
+  text-align: center;
+  font-weight: bold;
+}
+calendar > header > button {
+  padding: 6px 10px;
+  border-color: transparent;
+  background: transparent;
+}
+calendar > header > button:hover {
+  background: var(--border);
+}
+calendar > header > button.previous > arrow {
+  content: "‹";
+}
+calendar > header > button.next > arrow {
+  content: "›";
+}
+calendar weekday,
+calendar day {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  align-items: center;
+}
+calendar weekday {
+  color: var(--muted);
+  font-size: 12px;
+}
+calendar day {
+  border-radius: 16px;
+  transition: background-color 80ms;
+}
+calendar day:hover {
+  background: var(--border);
+}
+calendar day:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+calendar day.other {
+  color: var(--muted);
+  opacity: 0.5;
+}
+calendar day.other:hover {
+  background: transparent;
+}
+calendar day.today {
+  border: 1px solid var(--accent);
+}
+calendar day.selected {
+  background: var(--accent);
+  color: var(--on-accent);
+}

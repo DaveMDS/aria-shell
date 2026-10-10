@@ -15,7 +15,7 @@ use std::borrow::Cow;
 use super::flex::{button, column, row};
 use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
-use super::text::text;
+use super::text::{mark, text};
 use crate::Element;
 use crate::style::Node;
 
@@ -199,10 +199,4 @@ fn level<'a, Message: Clone + 'a>(
         }
     }
     out
-}
-
-/// A mark: the text its `content` says, if any.
-fn mark<'a, Message>(node: Node<'a>) -> Element<'a, Message> {
-    let content = node.base().content.clone();
-    text(node, content.as_deref().unwrap_or("").to_owned()).into()
 }

@@ -635,3 +635,38 @@ fn golden_tabs() {
         },
     );
 }
+
+#[test]
+fn golden_calendar() {
+    scene(
+        "calendar",
+        "calendar day { transition: none; } \
+         calendar > header > button.previous > arrow { content: \"<\"; } \
+         calendar > header > button.next > arrow { content: \">\"; }",
+        None,
+        Size::new(240.0, 300.0),
+        |root| {
+            crate::column(
+                root,
+                [crate::calendar(
+                    root.child("calendar"),
+                    crate::Month::new(2026, 10),
+                    "October 2026",
+                    ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+                )
+                .today(2026, 10, 10)
+                .selected(2026, 10, 15)
+                .on_previous(())
+                .on_next(())
+                .on_select(|_| ())
+                .into()],
+            )
+            .into()
+        },
+        |ui, sheet| {
+            // The pointer over the 20th.
+            let day = ui.find(sheet, "week:nth-child(4) > day:nth-child(2)")[0];
+            ui.move_to(day.center());
+        },
+    );
+}

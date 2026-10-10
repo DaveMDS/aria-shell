@@ -563,7 +563,7 @@ UI.md §7:
 | `input` | iced's `text_input` under our `Catalog`, in a box with the app's children before and after it (an icon, the peek button); `:focus` while its field has it |
 | `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar.vertical`, `.horizontal`, `thumb`); no box of its own, its sizes its node's (`max-height`: it grows, then scrolls); sideways, it takes the wheel sideways |
 | `menu` | checks, radios, icons, shortcuts, separators, submenus unfolded in place; each item the app's message, a submenu unfolded as the app says; its marks the theme's `content`; Up and Down among its items |
-| `calendar` | day and month names given by the app (no locale in the toolkit) |
+| `calendar` | a month in six weeks; its title, the days' names and the week's first day the app's (no locale in the toolkit); days `.other`, `.today`, `.selected`, buttons when the app says what a press sends; `tk::Month` for the app's own reckoning |
 | `tabs` | a row of buttons, one per page, the page shown `.active`; each tab the app's message; Left and Right among them |
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
 | `sparkline`, `graph` | canvas paths |
@@ -664,7 +664,7 @@ the headless harness and the query with them.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
    surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, tabs ✅,
-   calendar, graphs, tooltip; select last.
+   calendar ✅, graphs, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).

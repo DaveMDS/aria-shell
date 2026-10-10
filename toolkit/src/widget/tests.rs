@@ -820,3 +820,55 @@ fn a_childs_inherited_colour_follows_its_parents_state() {
     ui.frame(now);
     assert_eq!(at(&mut ui), [255, 0, 0, 255]);
 }
+
+/// October 2026, its weeks from `first`, today the 10th.
+fn october(root: Node<'_>, first: u32) -> Element<'_, Message> {
+    crate::calendar(
+        root.child("calendar"),
+        crate::Month::new(2026, 10),
+        "October 2026",
+        ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+    )
+    .first_weekday(first)
+    .today(2026, 10, 10)
+    .selected(2026, 9, 30)
+    .on_previous(Message::Pressed("previous"))
+    .on_next(Message::Pressed("next"))
+    .on_select(|day| Message::Value(day as f32))
+    .into()
+}
+
+#[test]
+fn a_calendar_shows_its_month_and_picks_a_day() {
+    let sheet = sheet("calendar day { transition: none; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(october(root, 0), Size::new(300.0, 300.0), 1.0);
+    // Monday first: the 1st, a Thursday, after three days of September;
+    // eight of November end the sixth week.
+    assert_eq!(ui.find(&sheet, "week > day").len(), 42);
+    assert_eq!(ui.find(&sheet, "day.other").len(), 11);
+    let first_week = ui.find(&sheet, "week:first-child > day");
+    let today = ui.find(&sheet, "day.today");
+    assert_eq!(today.len(), 1);
+    // The 10th: a Saturday, the sixth of the second week.
+    assert_eq!(today[0].x, first_week[5].x);
+    // September's 30th is shown, but not as the month's.
+    assert!(ui.find(&sheet, "day.selected").is_empty());
+    ui.click_on(&sheet, "day.today");
+    ui.click_on(&sheet, "week:first-child > day:first-child");
+    ui.click_on(&sheet, "button.previous");
+    ui.click_on(&sheet, "button.next");
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Value(10.0),
+            Message::Pressed("previous"),
+            Message::Pressed("next")
+        ]
+    );
+    // Sunday first: four days of September before the 1st.
+    ui.rebuild(october(root, 6));
+    assert_eq!(ui.find(&sheet, "day.other").len(), 11);
+    let first_week = ui.find(&sheet, "week:first-child > day");
+    assert_eq!(ui.find(&sheet, "day.today")[0].x, first_week[6].x);
+}

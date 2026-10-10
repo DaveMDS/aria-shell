@@ -21,6 +21,7 @@
  *       ├─ flex > lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
  *       ├─ menus > menu (item.danger), status
  *       ├─ pages > tabs, page
+ *       ├─ calendar
  *       ├─ scrolls > scroll.list > rows > label; scroll.strip > cells > cell > label
  *       ╰─ icons > icon[.small|.large|.accent], avatar
  */

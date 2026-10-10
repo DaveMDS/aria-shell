@@ -45,6 +45,13 @@ pub fn text<'a>(node: Node<'a>, content: impl Into<Cow<'a, str>>) -> Text<'a> {
     }
 }
 
+/// A mark: the text its node's `content` says (a menu item's check, a
+/// calendar's arrows), if any.
+pub(crate) fn mark<'a, Message>(node: Node<'a>) -> Element<'a, Message> {
+    let content = node.base().content.clone();
+    text(node, content.as_deref().unwrap_or("").to_owned()).into()
+}
+
 fn transform(content: Cow<'_, str>, how: TextTransform) -> Cow<'_, str> {
     match how {
         TextTransform::None => content,

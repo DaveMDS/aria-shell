@@ -13,7 +13,7 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, keyboard, window};
-use tk::{Element, IconFile, MenuItem, Node, Scheme, Sheet, Source, Tab, Theme};
+use tk::{Element, IconFile, MenuItem, Month, Node, Scheme, Sheet, Source, Tab, Theme};
 
 /// The gallery's own elements.
 const GALLERY: &str = include_str!("gallery.css");
@@ -60,6 +60,10 @@ struct Gallery {
     more: bool,
     /// The tab shown.
     tab: usize,
+    /// The calendar's month, today, the day picked.
+    month: Month,
+    today: (i32, u32, u32),
+    day: Option<(i32, u32, u32)>,
     eye: IconFile,
 }
 
@@ -88,6 +92,9 @@ enum Message {
     ByDate(bool),
     More,
     Tab(usize),
+    PreviousMonth,
+    NextMonth,
+    Day(u32),
 }
 
 /// A symbolic icon: one colour, the element's.
@@ -124,6 +131,7 @@ const LONG: &str = "A text long enough to wrap at its box's width, \
 
 impl Gallery {
     fn new() -> Self {
+        let today = today();
         let theme = std::env::args_os()
             .nth(1)
             .map(|p| std::path::absolute(PathBuf::from(p)).expect("a path"));
@@ -157,6 +165,9 @@ impl Gallery {
             by_date: false,
             more: false,
             tab: 0,
+            month: Month::new(today.0, today.1),
+            today,
+            day: None,
             eye: IconFile::Svg {
                 handle: svg::Handle::from_memory(EYE.as_bytes()),
                 symbolic: true,
@@ -202,6 +213,9 @@ impl Gallery {
             Message::ByDate(by_date) => self.by_date = by_date,
             Message::More => self.more = !self.more,
             Message::Tab(tab) => self.tab = tab,
+            Message::PreviousMonth => self.month = self.month.previous(),
+            Message::NextMonth => self.month = self.month.next(),
+            Message::Day(day) => self.day = Some((self.month.year, self.month.month, day)),
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -240,6 +254,7 @@ impl Gallery {
                         self.flex(page),
                         self.menus(page),
                         self.tabs(page),
+                        self.calendar(page),
                         self.scrolls(page),
                         self.icons(page),
                     ],
@@ -707,6 +722,44 @@ impl Gallery {
         self.section(section, "Tabs", content.into())
     }
 
+    fn calendar<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        const MONTHS: [&str; 12] = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        let section = root.child("section");
+        let title = format!(
+            "{} {}",
+            MONTHS[self.month.month as usize - 1],
+            self.month.year
+        );
+        let (year, month, day) = self.today;
+        let mut calendar = tk::calendar(
+            section.child("calendar"),
+            self.month,
+            title,
+            ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+        )
+        .today(year, month, day)
+        .on_previous(Message::PreviousMonth)
+        .on_next(Message::NextMonth)
+        .on_select(Message::Day);
+        if let Some((year, month, day)) = self.day {
+            calendar = calendar.selected(year, month, day);
+        }
+        self.section(section, "Calendar", calendar.into())
+    }
+
     fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
         let section = root.child("section");
         let row = section.child("scrolls");
@@ -784,6 +837,29 @@ impl Gallery {
             None => Subscription::batch([keys, windows]),
         }
     }
+}
+
+/// Today's date, in UTC: (year, month, day).
+fn today() -> (i32, u32, u32) {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    // Howard Hinnant's `civil_from_days`.
+    let days = (seconds / 86_400) as i64 + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_from_march = (5 * day_of_year + 2) / 153;
+    let day = (day_of_year - (153 * month_from_march + 2) / 5 + 1) as u32;
+    let month = if month_from_march < 10 {
+        month_from_march + 3
+    } else {
+        month_from_march - 9
+    } as u32;
+    let year = (year_of_era + era * 400 + i64::from(month <= 2)) as i32;
+    (year, month, day)
 }
 
 /// The toolkit's base, the gallery's, then `theme` if any, for `scheme`.

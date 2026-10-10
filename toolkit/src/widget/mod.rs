@@ -2,6 +2,7 @@
 //! its node. See TOOLKIT.md, "Widgets".
 
 mod boxed;
+mod calendar;
 mod flex;
 mod focus;
 mod icon;
@@ -18,6 +19,7 @@ mod tests;
 mod text;
 mod toggle;
 
+pub use calendar::{Calendar, Month, calendar};
 pub use flex::{Flex, button, column, row};
 pub use focus::{FocusScope, focus_scope};
 pub use icon::{Icon, IconFile, IconSource, Icons, icon};

@@ -3,12 +3,16 @@
 //! away before what it presses sees it (`:focus` shows for the
 //! keyboard's sake, but a text field pressed takes it back). Per scope,
 //! so per surface: an iced task would operate on every window an app
-//! has. A scope of the arrows (a menu's) moves it with Up and Down
-//! instead, among its own, once one of them has it.
+//! has. A scope of the arrows moves it with Up and Down (a menu's) or
+//! Left and Right (tabs') instead, among its own, once one of them has
+//! it, round from one end to the other (Tab leaves the scope at its
+//! ends, as iced has it).
 
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
-use iced::advanced::widget::operation::{self, Operation, Outcome, focusable};
+use iced::advanced::widget::Id;
+use iced::advanced::widget::operation::focusable::{self, Count, Focusable};
+use iced::advanced::widget::operation::{self, Operation, Outcome};
 use iced::advanced::widget::{Tree, Widget};
 use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
@@ -18,8 +22,17 @@ use crate::{Element, Renderer, Theme};
 
 pub struct FocusScope<'a, Message> {
     content: Element<'a, Message>,
-    /// Up and Down, not Tab and the pointer.
-    arrows: bool,
+    /// The keys that move the focus: Tab, or a pair of arrows (and then
+    /// the pointer leaves it alone).
+    keys: Keys,
+}
+
+/// What moves the focus in a scope: the keys back, the keys on.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Keys {
+    Tab,
+    UpDown,
+    LeftRight,
 }
 
 pub fn focus_scope<'a, Message>(
@@ -27,18 +40,19 @@ pub fn focus_scope<'a, Message>(
 ) -> FocusScope<'a, Message> {
     FocusScope {
         content: content.into(),
-        arrows: false,
+        keys: Keys::Tab,
     }
 }
 
-/// A scope of the arrows: Up and Down move the focus among what's
-/// inside, once one of them has it.
+/// A scope of the arrows: `keys` move the focus among what's inside,
+/// once one of them has it.
 pub(crate) fn arrow_scope<'a, Message>(
+    keys: Keys,
     content: impl Into<Element<'a, Message>>,
 ) -> FocusScope<'a, Message> {
     FocusScope {
         content: content.into(),
-        arrows: true,
+        keys,
     }
 }
 
@@ -131,7 +145,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         viewport: &Rectangle,
     ) {
         if let Event::Mouse(mouse::Event::ButtonPressed(_)) = event
-            && !self.arrows
+            && self.keys == Keys::Tab
             && self.focused(tree, layout, renderer)
         {
             self.run(tree, layout, renderer, focusable::unfocus());
@@ -155,19 +169,33 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         else {
             return;
         };
-        let back = match (self.arrows, named) {
-            (false, key::Named::Tab) => modifiers.shift(),
-            (true, key::Named::ArrowUp) => true,
-            (true, key::Named::ArrowDown) => false,
+        let back = match (self.keys, named) {
+            (Keys::Tab, key::Named::Tab) => modifiers.shift(),
+            (Keys::UpDown, key::Named::ArrowUp) | (Keys::LeftRight, key::Named::ArrowLeft) => true,
+            (Keys::UpDown, key::Named::ArrowDown) | (Keys::LeftRight, key::Named::ArrowRight) => {
+                false
+            }
             _ => return,
         };
-        if shell.is_event_captured() || (self.arrows && !self.focused(tree, layout, renderer)) {
+        let arrows = self.keys != Keys::Tab;
+        if shell.is_event_captured() || (arrows && !self.focused(tree, layout, renderer)) {
             return;
         }
-        if back {
-            self.run(tree, layout, renderer, focusable::focus_previous());
-        } else {
-            self.run(tree, layout, renderer, focusable::focus_next());
+        match (arrows, back) {
+            (false, true) => self.run(tree, layout, renderer, focusable::focus_previous()),
+            (false, false) => self.run(tree, layout, renderer, focusable::focus_next()),
+            (true, true) => self.run(
+                tree,
+                layout,
+                renderer,
+                operation::then(focusable::count(), Round::back),
+            ),
+            (true, false) => self.run(
+                tree,
+                layout,
+                renderer,
+                operation::then(focusable::count(), Round::on),
+            ),
         }
         shell.capture_event();
         shell.request_redraw();
@@ -223,5 +251,53 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
 impl<'a, Message: 'a> From<FocusScope<'a, Message>> for Element<'a, Message> {
     fn from(scope: FocusScope<'a, Message>) -> Self {
         Element::new(scope)
+    }
+}
+
+/// The focus a step on or back, round from one end to the other.
+struct Round {
+    focused: Option<usize>,
+    target: Option<usize>,
+    current: usize,
+}
+
+impl Round {
+    fn on(count: Count) -> Self {
+        let target = match count.focused {
+            Some(i) => Some((i + 1) % count.total),
+            None => (count.total > 0).then_some(0),
+        };
+        Self {
+            focused: count.focused,
+            target,
+            current: 0,
+        }
+    }
+
+    fn back(count: Count) -> Self {
+        let target = match count.focused {
+            Some(i) => Some((i + count.total - 1) % count.total),
+            None => count.total.checked_sub(1),
+        };
+        Self {
+            focused: count.focused,
+            target,
+            current: 0,
+        }
+    }
+}
+
+impl Operation<()> for Round {
+    fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+        if Some(self.current) == self.target {
+            state.focus();
+        } else if Some(self.current) == self.focused {
+            state.unfocus();
+        }
+        self.current += 1;
+    }
+
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+        operate(self);
     }
 }

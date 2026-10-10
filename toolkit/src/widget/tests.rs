@@ -748,3 +748,75 @@ fn up_and_down_move_the_focus_among_a_menus_items() {
         [Message::Pressed("hidden"), Message::Pressed("save")]
     );
 }
+
+/// Three tabs, the second shown.
+fn pages(root: Node<'_>) -> Element<'_, Message> {
+    crate::focus_scope(crate::column(
+        root,
+        [crate::tabs(
+            root.child("tabs"),
+            ["one", "two", "three"]
+                .map(|name| crate::Tab::new(name, Message::Pressed(name)).active(name == "two")),
+        )],
+    ))
+    .into()
+}
+
+#[test]
+fn tabs_press_and_take_the_arrows() {
+    let sheet = sheet("tabs > tab { transition: none; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(pages(root), Size::new(300.0, 60.0), 1.0);
+    assert_eq!(ui.find(&sheet, "tabs > tab").len(), 3);
+    assert_eq!(
+        ui.find(&sheet, "tab.active")[0],
+        ui.find(&sheet, "tab:nth-child(2)")[0]
+    );
+    ui.click_on(&sheet, "tab:nth-child(3)");
+    // Tab to the first, Right to the second, Left and Left again: back
+    // round to the third.
+    ui.key(Named::Tab);
+    ui.key(Named::ArrowRight);
+    ui.key(Named::Enter);
+    ui.key(Named::ArrowLeft);
+    ui.key(Named::ArrowLeft);
+    ui.key(Named::Space);
+    assert_eq!(
+        ui.messages,
+        [
+            Message::Pressed("three"),
+            Message::Pressed("two"),
+            Message::Pressed("three")
+        ]
+    );
+}
+
+#[test]
+fn a_childs_inherited_colour_follows_its_parents_state() {
+    let sheet = sheet(
+        "button { width: 40px; height: 20px; transition: none; } \
+         button:hover { color: rgb(255 0 0); } label { width: 40px; }",
+    );
+    let root = sheet.root("root", 1.0);
+    let view = crate::row(
+        root,
+        [crate::button(
+            root.child("button"),
+            [crate::text(root.child("button").child("label"), "████").into()],
+        )
+        .on_press(Message::Ended)
+        .into()],
+    );
+    let mut ui = Harness::new(view, Size::new(40.0, 20.0), 1.0);
+    let now = Instant::now();
+    let label = ui.find(&sheet, "label")[0];
+    ui.frame(now);
+    let at = |ui: &mut Harness<'_, Message>| {
+        ui.pixels(Color::WHITE)
+            .at_point(label.x + 4.0, label.center_y(), 1.0)
+    };
+    assert_ne!(at(&mut ui), [255, 0, 0, 255]);
+    ui.move_to(Point::new(10.0, 10.0));
+    ui.frame(now);
+    assert_eq!(at(&mut ui), [255, 0, 0, 255]);
+}

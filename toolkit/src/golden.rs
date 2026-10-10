@@ -608,3 +608,30 @@ fn golden_menu() {
         },
     );
 }
+
+#[test]
+fn golden_tabs() {
+    scene(
+        "tabs",
+        "tabs { width: 260px; } tabs > tab { transition: none; }",
+        None,
+        Size::new(280.0, 44.0),
+        |root| {
+            crate::focus_scope(crate::column(
+                root,
+                [crate::tabs(
+                    root.child("tabs"),
+                    ["Overview", "Details", "Settings"]
+                        .map(|title| crate::Tab::new(title, ()).active(title == "Details")),
+                )],
+            ))
+            .into()
+        },
+        |ui, sheet| {
+            // The focus on the first, the pointer over the third.
+            ui.key(Named::Tab);
+            let third = ui.find(sheet, "tab:nth-child(3)")[0];
+            ui.move_to(third.center());
+        },
+    );
+}

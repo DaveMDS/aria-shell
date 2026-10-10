@@ -158,8 +158,9 @@ impl<'a> Boxed<'a> {
             let opacity = theme.opacity * s.opacity;
             draw_box(renderer, s, bounds, opacity);
             // What its children get: its states, where a descendant's
-            // style can see them; its opacity.
-            let seen = state.states & self.node.sensitivity().descendants;
+            // style can see them or inherits what they change (a
+            // `color`); its opacity.
+            let seen = state.states & self.node.sensitivity().any();
             let since = state.animated.since;
             let derived;
             let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity {

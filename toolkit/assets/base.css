@@ -557,3 +557,40 @@ menu separator {
 menu submenu {
   padding-left: 12px;
 }
+
+/*
+ * Tabs
+ * ====
+ *
+ * A row of buttons, one per page (`tk::tabs`), the page shown `.active`:
+ * the row draws the line under them, a tab its own mark. Left and Right
+ * move the focus among the tabs once one has it.
+ *
+ * tabs
+ * ╰─ tab[.active][.<app's>]    a button
+ *    ╰─ label
+ */
+tabs {
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+tabs > tab {
+  padding: 6px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  transition: color 120ms, border-color 120ms;
+}
+tabs > tab:hover {
+  color: var(--fg);
+}
+tabs > tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+}
+tabs > tab:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+tabs > tab > label {
+  white-space: nowrap;
+}

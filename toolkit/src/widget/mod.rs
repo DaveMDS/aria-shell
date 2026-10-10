@@ -12,6 +12,7 @@ mod meter;
 mod scroll;
 mod slider;
 mod surface;
+mod tabs;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -27,5 +28,6 @@ pub use meter::{Meter, meter};
 pub use scroll::{Scroll, scroll};
 pub use slider::{Slider, slider};
 pub use surface::{Surface, surface};
+pub use tabs::{Tab, tabs};
 pub use text::{Text, text};
 pub use toggle::toggle;

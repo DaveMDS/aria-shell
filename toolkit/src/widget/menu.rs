@@ -13,7 +13,7 @@
 use std::borrow::Cow;
 
 use super::flex::{button, column, row};
-use super::focus::arrow_scope;
+use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
 use super::text::text;
 use crate::Element;
@@ -118,7 +118,11 @@ pub fn menu<'a, Message: Clone + 'a>(
     node: Node<'a>,
     items: impl IntoIterator<Item = MenuItem<'a, Message>>,
 ) -> Element<'a, Message> {
-    arrow_scope(column(node, level(node, items.into_iter().collect()))).into()
+    arrow_scope(
+        Keys::UpDown,
+        column(node, level(node, items.into_iter().collect())),
+    )
+    .into()
 }
 
 /// A level's elements: its items and separators, its unfolded submenus

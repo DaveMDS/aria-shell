@@ -13,7 +13,7 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, keyboard, window};
-use tk::{Element, IconFile, MenuItem, Node, Scheme, Sheet, Source, Theme};
+use tk::{Element, IconFile, MenuItem, Node, Scheme, Sheet, Source, Tab, Theme};
 
 /// The gallery's own elements.
 const GALLERY: &str = include_str!("gallery.css");
@@ -58,6 +58,8 @@ struct Gallery {
     by_date: bool,
     /// The menu's submenu, unfolded.
     more: bool,
+    /// The tab shown.
+    tab: usize,
     eye: IconFile,
 }
 
@@ -85,6 +87,7 @@ enum Message {
     Hidden,
     ByDate(bool),
     More,
+    Tab(usize),
 }
 
 /// A symbolic icon: one colour, the element's.
@@ -153,6 +156,7 @@ impl Gallery {
             hidden: false,
             by_date: false,
             more: false,
+            tab: 0,
             eye: IconFile::Svg {
                 handle: svg::Handle::from_memory(EYE.as_bytes()),
                 symbolic: true,
@@ -197,6 +201,7 @@ impl Gallery {
             Message::Hidden => self.hidden = !self.hidden,
             Message::ByDate(by_date) => self.by_date = by_date,
             Message::More => self.more = !self.more,
+            Message::Tab(tab) => self.tab = tab,
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -234,6 +239,7 @@ impl Gallery {
                         self.texts(page),
                         self.flex(page),
                         self.menus(page),
+                        self.tabs(page),
                         self.scrolls(page),
                         self.icons(page),
                     ],
@@ -673,6 +679,32 @@ impl Gallery {
             [menu, tk::text(menus.child("status"), picked).into()],
         );
         self.section(section, "Menu", content.into())
+    }
+
+    fn tabs<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        const PAGES: [(&str, &str); 3] = [
+            (
+                "Overview",
+                "The first page: Left and Right move among the tabs once one has the focus.",
+            ),
+            ("Details", "The second page, its tab marked by the theme."),
+            ("Settings", "The third page."),
+        ];
+        let section = root.child("section");
+        let pages = section.child("pages");
+        let content = tk::column(
+            pages,
+            [
+                tk::tabs(
+                    pages.child("tabs"),
+                    PAGES.iter().enumerate().map(|(i, (title, _))| {
+                        Tab::new(*title, Message::Tab(i)).active(i == self.tab)
+                    }),
+                ),
+                tk::text(pages.child("page"), PAGES[self.tab].1).into(),
+            ],
+        );
+        self.section(section, "Tabs", content.into())
     }
 
     fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {

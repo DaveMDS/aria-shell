@@ -216,7 +216,11 @@ own or ancestors'. Layout properties (sizes, padding, margin, border
 widths, gap, font) under the node's own states: a change relayouts
 (`shell.invalidate_layout()`). Under an ancestor's state they're not
 applied, and the sheet says so at load: the descendant has no way to
-ask its own relayout at draw time.
+ask its own relayout at draw time. What a state changes, its
+descendants inherit (a button's `color` under `:hover` is its label's):
+a box hands its states down to its children whenever some rule sees
+them; an inherited layout property (`font-size`) reaches only their
+paint.
 
 ## The draw-time context: `Theme`
 
@@ -484,7 +488,10 @@ child), so that a list whose items move keeps each item's tree state
   and Shift+Tab and runs the operation on its own subtree from
   `update`, so focus stays per surface (an app `Task` would run on
   every window under `iced_exwlshell`). Enter/Space press the focused
-  box; `:focus` and `outline` show it.
+  box; `:focus` and `outline` show it. Tab leaves the scope at its
+  ends, as iced's operations have it; a menu's and tabs' scopes move
+  it with the arrows instead, round from one end to the other (an
+  operation of ours), once one of theirs has it.
 - **Accessibility**: none in iced 0.14 (no AccessKit). A limit.
 - **Tooltips, menus, selects**: the toolkit draws them; where they
   appear is the app's. A tooltip widget publishes "show this tip at
@@ -557,7 +564,7 @@ UI.md §7:
 | `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar.vertical`, `.horizontal`, `thumb`); no box of its own, its sizes its node's (`max-height`: it grows, then scrolls); sideways, it takes the wheel sideways |
 | `menu` | checks, radios, icons, shortcuts, separators, submenus unfolded in place; each item the app's message, a submenu unfolded as the app says; its marks the theme's `content`; Up and Down among its items |
 | `calendar` | day and month names given by the app (no locale in the toolkit) |
-| `tabs` | |
+| `tabs` | a row of buttons, one per page, the page shown `.active`; each tab the app's message; Left and Right among them |
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
 | `sparkline`, `graph` | canvas paths |
 | `tooltip`, `select` | above (select later) |
@@ -656,8 +663,8 @@ the headless harness and the query with them.
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
-   surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, calendar,
-   tabs, graphs, tooltip; select last.
+   surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, tabs ✅,
+   calendar, graphs, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).

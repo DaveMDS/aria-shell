@@ -20,6 +20,7 @@
  *       │  ╰─ pair[.untrimmed] > icon, label
  *       ├─ flex > lane[.center|.end|.align-center] > cell.fill|.fixed|.tall|.mid > label
  *       ├─ menus > menu (item.danger), status
+ *       ├─ pages > tabs, page
  *       ├─ scrolls > scroll.list > rows > label; scroll.strip > cells > cell > label
  *       ╰─ icons > icon[.small|.large|.accent], avatar
  */
@@ -410,6 +411,12 @@ menus > menu {
 }
 menu item.danger {
   color: var(--danger);
+}
+
+/* Tabs */
+pages {
+  width: 420px;
+  gap: 12px;
 }
 
 /* Scroll */

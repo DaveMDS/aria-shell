@@ -1,5 +1,5 @@
 //! The style engine: sheets of CSS, the element tree's nodes, computed
-//! styles. See TOOLKIT.md, "The style engine".
+//! styles. See the crate's ARCHITECTURE.md, "The style engine".
 //!
 //! A [`Sheet`] is loaded once from its sources for one [`Scheme`]; a
 //! view builds the [`Node`]s of its widgets from a surface's root

@@ -1,5 +1,5 @@
 //! The widgets: each a real iced widget on the advanced API, styled by
-//! its node. See TOOLKIT.md, "Widgets".
+//! its node. See the crate's ARCHITECTURE.md, "Widgets".
 
 mod boxed;
 mod calendar;

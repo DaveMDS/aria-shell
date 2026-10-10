@@ -1,5 +1,5 @@
 //! The layout: a CSS flexbox subset on iced's `Limits` protocol, shared
-//! by the boxes. See TOOLKIT.md, "Layout".
+//! by the boxes. See the crate's ARCHITECTURE.md, "Layout".
 //!
 //! A box's node is its margin box. On the main axis a child is `fill`
 //! (CSS's `flex: 1 1 0`) or not (`flex: 0 1 auto`); a toolkit widget

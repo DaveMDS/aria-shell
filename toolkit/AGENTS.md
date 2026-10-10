@@ -2,12 +2,48 @@
 
 `toolkit/` is a crate of CSS-styled widgets on iced 0.14, knowing nothing
 of Aria: `tk` for now (a provisional name, still to decide; `tk::` below
-stands for it). What it's for is UI.md; how it's built, and why, is
-TOOLKIT.md; every element, class and property, with its neutral default,
-is `assets/base.css`. Read this first, then those where you need them.
+stands for it). How it's built, and why, is ARCHITECTURE.md beside this
+file; every element, class and property, with its neutral default, is
+`assets/base.css`. Read this first, then those where you need them.
 
-Everything here was learned building it: the patterns that work, what
-things cost, and the traps already fallen into once.
+Everything here was learned building it: the rules it keeps, the
+patterns that work, what things cost, and the traps already fallen into
+once.
+
+## The rules
+
+What the toolkit holds to; a change that breaks one is the wrong change.
+
+- **A toolkit of its own**: reusable widgets styled by CSS, built on
+  iced, knowing nothing of any app (no config, services, locale or texts
+  of Aria's). Its only UI dependency is iced: no layer-shell, no
+  Wayland. A popup, a toast, a dialog are widgets it draws (box, shadow,
+  content); the surfaces they live in are the app's to open.
+- **Performance matters**: styles resolved once, not at every view; no
+  allocations while drawing; what a layout costs (shaped text) kept from
+  one layout to the next, since iced lays out a surface's whole tree at
+  every rebuild; an idle UI costs nothing (no frame without a change);
+  an animation asks for frames only while it runs. Measured, before and
+  after a change.
+- **No workarounds of any kind**: what iced can't do cleanly is a proper
+  widget of the toolkit, or a limit written in ARCHITECTURE.md; never a
+  trick in a view.
+- **One source of truth for sizes**: a widget's size comes from its own
+  layout, never measured again by hand somewhere else. A surface's size
+  is `Measure`'s: the real layout, run headlessly.
+- **CSS means CSS**: a property has its CSS name, units and behaviour;
+  where ours differs, it's written in the reference, or it gets another
+  name.
+- **Everything is styleable and documented**: no colour, size or font in
+  the code of a widget or a view; every element, class and property has
+  its line in the reference, and a neutral default in the base.
+- **No `Space` fillers**: in a row, the child that takes the free room
+  has `width: fill` (as `flex-grow: 1` does), set in the theme.
+- **Every widget is in the gallery and tested**: shown in its states;
+  its layout, style and behaviour tested without a compositor, its look
+  by golden images at two scales.
+- **Vanilla iced, public API only**: no fork; anything vendored is
+  temporary and marked.
 
 ## Commands
 
@@ -155,7 +191,7 @@ surface closes.
   may follow any state, own or an ancestor's. Layout (sizes, padding,
   font) follows only the element's own states: under an ancestor's
   state it isn't applied. The sheet doesn't warn about it yet, though
-  TOOLKIT.md says it should. What a state changes, the descendants
+  it should (ARCHITECTURE.md, "Not done yet"). What a state changes, the descendants
   inherit (`button:hover { color }` reaches its label).
 - **Classes are the view's, states the widget's.** State a widget owns
   at runtime shows as a pseudo-class: an open select is `:active`.
@@ -181,14 +217,15 @@ surface closes.
 
 ## What things cost
 
-Measured on this laptop in release (`benches/costs.rs`; see TOOLKIT.md's
-table for all of it):
+Measured with `cargo bench -p tk --features testing` (`benches/costs.rs`:
+fixed trees on the headless renderer; this laptop, release, 2026-10).
+Update these numbers when a change moves them:
 
-| tree | rebuild (view, diff, layout) | update (pointer) | frame |
-|---|---|---|---|
-| a bar, 12 gadgets | 4.3 µs | 1.0 µs | 3.5 µs |
-| a menu, 20 items | 15 µs | 2.0 µs | 7.1 µs |
-| a list, 500 rows | 200 µs | 32 µs | 92 µs |
+| tree | view | rebuild (view, diff, layout) | update (pointer) | frame (update, draw) |
+|---|---|---|---|---|
+| a bar, 12 gadgets | 1.6 µs | 4.3 µs | 1.0 µs | 3.5 µs |
+| a menu (`tk::menu`), 20 items | 4.6 µs | 15 µs | 2.0 µs | 7.1 µs |
+| a list, 500 rows | 55 µs | 200 µs | 32 µs | 92 µs |
 
 Loading a theme (the base and the gallery's) takes 0.5 ms.
 
@@ -305,8 +342,9 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
    scene in `golden.rs` at both scales, a bench row if it's on a hot
    path.
 5. Look at it in the gallery on wgpu at scale 1.5, light and dark (see
-   "Verifying"), then update TOOLKIT.md (the widget table, the order of
-   work, the limits).
+   "Verifying"); then the docs: its calls in the table above,
+   ARCHITECTURE.md where its design adds something (a kind of widget, a
+   limit, what's not done), the costs here if a bench moved.
 
 ### Adding a property
 
@@ -401,6 +439,7 @@ Code, comments, docs and commits in English. Comments are terse and say
 why. Every item has a doc comment saying what it is in a phrase. Commit
 subjects look like `Toolkit: the menu`: informal, no Conventional
 Commits, no attribution lines. Run `cargo fmt` before committing; never
-push. Keep TOOLKIT.md (design, order of work, limits, costs), `base.css`
-(the reference) and the gallery's tree comment current with every
-change.
+push. Keep this file (rules, calls, costs, traps), ARCHITECTURE.md
+(design and reasons, limits, what's not done, what's to decide),
+`base.css` (the reference) and the gallery's tree comment current with
+every change.

@@ -1,19 +1,18 @@
 # Toolkit architecture
 
-How the toolkit UI.md asks for is built: a crate of CSS-styled widgets
-on iced, knowing nothing of Aria. UI.md has the rules and the features
-needed; this is the design that meets them, and why. Every claim about
-iced (0.14, the version `iced_exwlshell` 0.20/0.21 runs on) was checked
-in its source in `~/.cargo/registry`; every number was measured on a
-throwaway prototype (2026-10, this laptop, release build) that drew a
-themed menu headlessly and in a real wgpu window inside a nested
-headless Sway at scale 1.5.
+How the toolkit is built, and why: a crate of CSS-styled widgets on
+iced, knowing nothing of Aria. How to use it and work on it (its calls,
+costs, invariants and traps, how to verify) is AGENTS.md, beside this;
+every element, class and property is `assets/base.css`.
 
-"The toolkit" and `tk::` in the examples stand for the crate until it
-has a name.
+Every claim about iced (0.14, the version `iced_exwlshell` 0.20/0.21
+runs on) was checked in its source in `~/.cargo/registry`. The numbers
+were measured on a throwaway prototype first (2026-10, this laptop,
+release build), which drew a themed menu headlessly and in a real wgpu
+window inside a nested headless Sway at scale 1.5, and then on the
+crate itself (AGENTS.md, "What things cost").
 
-This plan is the toolkit and its gallery; how Aria moves onto it is
-decided afterwards, Aria untouched meanwhile (UI.md).
+`tk::` in the examples stands for the crate until it has a name.
 
 ## Decisions at a glance
 
@@ -33,8 +32,8 @@ decided afterwards, Aria untouched meanwhile (UI.md).
   A view pays a hash lookup per node; matching runs once per distinct
   key.
 - **Nodes are explicit in the view** (`menu.child("item")`), as Aria's
-  are today: iced's `layout` gets no context from the parent, so the
-  path, with the surface's scale at its root, has to be known where the
+  are: iced's `layout` gets no context from the parent, so the path,
+  with the surface's scale at its root, has to be known where the
   widget is built.
 - **The scale enters at the root node**, as the device pixel ratio
   enters CSS's computed values: border widths, sizes and positions on
@@ -59,14 +58,14 @@ decided afterwards, Aria untouched meanwhile (UI.md).
 
 ## The road: three shapes weighed
 
-1. **Stock iced widgets, styled by closures** (Aria today). Measured in
-   the prototype: iced's `column` of `fill` items inside a shrinking
-   `container` takes the whole 800px offered, not the widest item
-   (UI.md §1); containers have no hover state (the `mouse_area`
+1. **Stock iced widgets, styled by closures** (Aria before the
+   toolkit). Measured in the prototype: iced's `column` of `fill` items
+   inside a shrinking `container` takes the whole 800px offered, not the
+   widest item; containers have no hover state (Aria's `mouse_area`
    workarounds); a widget's status lives in the widget and dies with
-   every rebuild (ARCHITECTURE.md: the late hover); a border takes no
-   room; an ancestor's state can only reach the text colour. Each of
-   these is a rule of UI.md broken, so: no.
+   every rebuild (Aria's ARCHITECTURE.md: the late hover); a border
+   takes no room; an ancestor's state can only reach the text colour.
+   Each of these breaks one of the rules in AGENTS.md, so: no.
 2. **A tree of our own inside one iced widget** (a mini retained-mode
    engine per surface). Full control of cascade and layout, but
    events, focus, overlays, operations, text editing and scrolling all
@@ -75,57 +74,40 @@ decided afterwards, Aria untouched meanwhile (UI.md).
    stock widgets, tree kept, is 5.8µs, 0.3µs an item. No reason to
    leave it.
 3. **Our widgets on iced's advanced API**, with our `Theme` type.
-   Prototyped: everything UI.md marks "yes" in §1-§6 that was tried
-   works through public API (below). This is the road.
+   Prototyped first, then built: everything needed goes through public
+   API. This is the road taken.
 
 Measured on a bar-sized tree (12 gadgets, ~70 nodes, a sheet of ~280
 rules), per rebuild: prototype view 5.6µs, diff+layout 4.6µs, update
 2.2µs, draw 4.1µs; the same bar in stock iced widgets 4.3 / 3.9 / 2.1 /
-2.2µs. Both are noise next to a frame; the prototype's draw resolves its
-style again per widget, which a real one keeps from the view.
+2.2µs. Both are noise next to a frame.
 
 ## Crate
 
 A workspace member (`toolkit/`), its own `Cargo.toml`, depending on:
 
-- `iced` 0.14 with `wgpu`, `tiny-skia` (the headless renderer: measuring
-  and tests; also the CPU fallback a GPU-less CI lacked), `advanced`,
-  `svg`, `image-without-codecs`, `canvas` (paths: borders with sides
-  that differ, graphs), `crisp` (quads snapped to the pixel grid). With
-  `tiny-skia` on, `iced::Renderer` is iced's fallback enum (wgpu first,
-  tiny-skia second) for the whole app: a `match` per call, nothing else.
-  `iced_runtime` 0.14 directly, for `UserInterface` in the headless
-  harness (iced doesn't re-export it; it's a published iced crate).
+- `iced` 0.14 with its defaults (`wgpu`, `tiny-skia`, `crisp`: quads
+  snapped to the pixel grid) and `advanced`, `svg`,
+  `image-without-codecs`, `canvas` (paths: borders with sides that
+  differ, graphs). With `tiny-skia` on, `iced::Renderer` is iced's
+  fallback enum (wgpu first, tiny-skia second) for the whole app: a
+  `match` per call, nothing else. tiny-skia is also the headless
+  renderer: measuring and tests. `iced_runtime` 0.14 directly, for
+  `UserInterface` in the headless harness (iced doesn't re-export it;
+  it's in iced's tree anyway).
 - `cssparser` (Servo's CSS Syntax Level 3 tokenizer, MPL-2.0: compatible
   with GPL-3): correct tokens, escapes, comments, numbers with units and
   error recovery, our grammar on top. "CSS means CSS" starts at the
   tokenizer.
+- `image` 0.25 (png, jpeg, webp) for a theme's images, decoded at load:
+  iced draws whole images, so a 9-patch is cut here.
 - `rustc-hash` for the interner and caches (a node lookup: 65ns with
-  std's SipHash, 32ns with FxHash, measured).
-- dev: `iced_test` 0.14 (its `Simulator` and `Selector` trait), `png`.
+  std's SipHash, 32ns with FxHash, measured); `log`.
+- dev: `iced` with `tokio`, `tokio`, `notify` and `env_logger`, for the
+  gallery (its theme file watched).
 
 `iced` is pinned to what `iced_exwlshell` runs on; the toolkit moves
-when Aria can.
-
-Modules:
-
-```
-style/      the sheet: parse.rs (cssparser → rules, warnings with file:line:col),
-            selector.rs, value.rs (lengths, colours, times, easing), cascade.rs,
-            computed.rs (the computed style), node.rs (interner, Node), sheet.rs
-theme.rs    the draw-time context (iced's Theme parameter), Catalog impls
-layout.rs   the flex subset, shared by the containers
-paint.rs    boxes: quads, paths, shadows, outline, transforms, opacity
-anim.rs     transitions, keyframes, easing
-widget/     box, text, icon, image, toggle, slider, input (iced's text_input),
-            scroll (iced's scrollable), menu, calendar, tabs, graph, tooltip, surface
-measure.rs  a tree laid out with no surface
-query.rs    widgets by selector (debug and tests)
-testing.rs  the headless harness (feature `testing`)
-assets/base.css     the toolkit's base stylesheet: every element, class and
-                    property, documented, with neutral defaults
-examples/gallery.rs the gallery
-```
+when Aria can. The modules are mapped in AGENTS.md.
 
 ## The style engine
 
@@ -136,36 +118,35 @@ examples/gallery.rs the gallery
 one cascade. The toolkit's base is under the others as CSS's user-agent
 stylesheet is: any rule of the app's or the theme's wins over its,
 whatever their specificity (else its `:root { color }` would beat a
-theme's `panel { color }`). Variables (`:root { --x }`, `var(--x, fallback)`) and
-schemes (`:root.light` / `:root.dark` folded over the plain ones, the
-root elements carrying the scheme as a class) work as Aria's do today:
-a sheet is compiled for one scheme; switching scheme or reloading the
-file is a new `Sheet`, and the views are rebuilt. Bad selectors and
-declarations are warnings, skipped; a syntax error rejects the file
-(the caller keeps the last good sheet).
+theme's `panel { color }`). Variables (`:root { --x }`, `var(--x,
+fallback)`) and schemes (`:root.light` / `:root.dark` folded over the
+plain ones, the root elements carrying the scheme as a class) work as
+Aria's did: a sheet is compiled for one scheme; switching scheme or
+reloading the file is a new `Sheet`, and the views are rebuilt. Bad
+selectors and declarations are warnings, skipped; a syntax error
+rejects the file (the caller keeps the last good sheet).
 
 Rules are indexed by the type of their rightmost compound (rules naming
 no type kept apart, merged back in cascade order): trying all ~280 on
-every node was 46% of Aria's CPU with the pointer moving
-(ARCHITECTURE.md).
+every node was 46% of Aria's CPU with the pointer moving (Aria's
+ARCHITECTURE.md).
 
 Selectors: type, `.class`, `#id`, `[attr="value"]`, `*`, descendant,
 child (`>`), `:hover :active :focus :disabled :first-child :last-child
-:nth-child() :root`. Specificity then source order. No `!important`, no
-`@media`; `@keyframes` yes (see Animation).
+:nth-child() :nth-last-child() :root`. Specificity then source order.
+No `!important`, no `@media`; `@keyframes` yes (see Animation).
 
 ### Nodes
 
 A widget's place is a `Node<'a>`: `Copy`, a reference to the sheet and
-an interned id. The view builds them top-down, as Aria's `theme::Node`
-paths are built today, without allocating:
+an interned id. The view builds them top-down, without allocating:
 
 ```rust
 fn view<'a>(&'a self, menu: tk::Node<'a>) -> tk::Element<'a, Message> {
     tk::column(menu, self.items.iter().enumerate().map(|(i, it)| {
         let item = menu.child("item").class_if("active", it.active);
-        tk::row(item, [
-            tk::icon(item.child("icon"), &it.icon).into(),
+        tk::button(item, [
+            tk::icon(item.child("icon"), it.icon.clone()).into(),
             tk::text(item.child("label"), &it.label).into(),
         ])
         .on_press(Message::Pick(i))
@@ -176,23 +157,22 @@ fn view<'a>(&'a self, menu: tk::Node<'a>) -> tk::Element<'a, Message> {
 ```
 
 A surface's tree starts from its root element, `sheet.root(kind,
-scale)`: the scale is carried by every node under it (see Scale). Each call interns
-one step (`(previous id, Kind | Class | Id | Attr | Position)` → id),
-so a node is a chain of steps with a canonical id.
-Static names are `&'static str`; ids and attribute values are interned
-strings, looked up without allocating. A position step (`child_at(kind,
-i, n)`) is only kept when the sheet has positional pseudo-classes:
-otherwise the 500 rows of a list share one node, and one style (measured:
-1500 node lookups of a 500-row list resolve 8 styles, 60µs cold, 48µs
-warm).
+scale)`: the scale is carried by every node under it (see Scale). Each
+call interns one step (`(previous id, Kind | Class | Id | Attr |
+Position | Disabled)` → id), so a node is a chain of steps with a
+canonical id. Names, ids and attribute values are interned strings,
+looked up without allocating. A position step (`child_at(kind, i, n)`)
+is only kept when the sheet has positional pseudo-classes, and then
+only as the set of them the row matches: otherwise the 500 rows of a
+list share one node, and one style (measured: 1500 node lookups of a
+500-row list resolve 8 styles, 60µs cold, 48µs warm).
 
 Why explicit: iced's `layout(&mut self, tree, renderer, limits)` gets
 nothing from the parent but limits, and `draw` only a `&Theme`; a style
 needs its ancestors and its scale at layout already (padding, font
-size, border widths). Passing
-context through the children's `Tree` states would break at the first
-stock container in between. The explicit node is the price, and Aria
-pays it today.
+size, border widths). Passing context through the children's `Tree`
+states would break at the first stock container in between. The
+explicit node is the price, and Aria already paid it.
 
 ### Computed styles
 
@@ -216,11 +196,11 @@ own or ancestors'. Layout properties (sizes, padding, margin, border
 widths, gap, font) under the node's own states: a change relayouts
 (`shell.invalidate_layout()`). Under an ancestor's state they're not
 applied, and the sheet is to say so at load (not done yet): the
-descendant has no way to ask its own relayout at draw time. What a state changes, its
-descendants inherit (a button's `color` under `:hover` is its label's):
-a box hands its states down to its children whenever some rule sees
-them; an inherited layout property (`font-size`) reaches only their
-paint.
+descendant has no way to ask its own relayout at draw time. What a
+state changes, its descendants inherit (a button's `color` under
+`:hover` is its label's): a box hands its states down to its children
+whenever some rule sees them; an inherited layout property
+(`font-size`) reaches only their paint.
 
 ## The draw-time context: `Theme`
 
@@ -244,11 +224,12 @@ copy mustn't allocate. The scale isn't here: layout needs it too, and
 gets no `Theme` (see Scale).
 
 It implements `iced::theme::Base` (all `iced_exwlshell` asks) and the
-`Catalog` traits of the stock widgets the toolkit embeds: `scrollable`
-(prototyped: `scrollbar`, `scrollbar > thumb`, `:hover`/`:active` on
-the bar reaching the thumb), `text_input`. Every other stock widget
-needs a `Catalog` impl before it can be used: that's deliberate, an
-unthemed widget can't slip in.
+`Catalog` traits of the stock widgets the toolkit embeds: `text_input`
+(`tk::input`'s field: its colours from `field`, `field > placeholder`,
+`field > selection`) and `scrollable` (`tk::scroll`: `scrollbar`,
+`scrollbar > thumb`, `:hover`/`:active` as iced reports them). Every
+other stock widget needs a `Catalog` impl before it can be used: that's
+deliberate, an unthemed widget can't slip in.
 
 Inherited colours keep iced's own channel too: the `renderer::Style
 { text_color }` a parent passes is the current (state-resolved) colour,
@@ -302,12 +283,12 @@ own containers understand it.
 ### The flex subset
 
 A box lays its children out on one line (no `flex-wrap`), in a row or
-a column (`flex-direction`; the constructor gives the default, the
+a column (`flex-direction`: the constructor gives the default, the
 theme may change it), `gap` between them. On the main axis a child is
 `fill` (CSS's `flex: 1 1 0`) or not (`flex: 0 1 auto`, CSS's initial
-value): no other `flex` values, no `flex-grow` factors (UI.md's "no").
-Four passes, on iced's `Limits` (min, max, and "compressed": the
-parent's size is the content's):
+value): no other `flex` values, no `flex-grow` factors. Four passes, on
+iced's `Limits` (min, max, and "compressed": the parent's size is the
+content's):
 
 1. **content**: the children not `fill` on the main axis laid out at
    their content size (`max-content`, within the room the box can
@@ -333,10 +314,9 @@ parent's size is the content's):
    CSS's.
 
 The room left on the main axis when no child is `fill` goes where
-`justify-content` says: `start`, `center`, `end` (UI.md's "alignment of
-a box's content"; no `space-*`, no `align-self` but `fill`'s). Margins
-are lengths, never `auto` (CSS's way to push an item over: `fill` does
-that here).
+`justify-content` says: `start`, `center`, `end` (no `space-*`, no
+`align-self` but `fill`'s). Margins are lengths, never `auto` (CSS's way
+to push an item over: `fill` does that here).
 
 A child's **minimum** on the main axis is CSS's automatic minimum
 (`min-width: auto`, the initial value) unless a length sets it: a
@@ -346,7 +326,8 @@ offered, and what doesn't fit overflows the box, painted as it is
 longest word as its minimum; one that doesn't (`white-space: nowrap`),
 its whole line; one cut with an ellipsis, zero (as CSS's `overflow:
 hidden` makes it); a box, its children's with its gaps, padding and
-border. A stock widget clamps to what it's offered (iced's
+border; an empty box, zero, so it's the first to give way when a box
+is squeezed. A stock widget clamps to what it's offered (iced's
 `Limits::resolve`): its minimum is zero.
 
 So a `fill` item in a menu that shrinks to its content is as wide as
@@ -360,6 +341,11 @@ nothing of the child but iced's `size()` and its layout.
 Sizes and positions are rounded to whole device pixels (see Scale),
 line boxes too (`line-height` resolved and rounded), which ends Aria's
 "parity" trick.
+
+A widget placing its children its own way (a meter's fill at its
+fraction, a slider's knob on its value) sizes its own box with the same
+model (`layout::Sizing`, `content_box`) and shares the box's states,
+painting and animation (`widget/boxed.rs`).
 
 ### Why not taffy
 
@@ -376,43 +362,35 @@ ours, and fast.
 
 A layer surface needs its size before the first frame. The toolkit lays
 the element out headlessly, with the real widgets and the real layout:
-`tk::Measure` holds a tiny-skia renderer (`iced::Renderer::Secondary`,
-made by `renderer::Headless::new(.., Some("tiny-skia"))`: CPU, no
-window) and a widget tree kept per surface, so text is shaped once.
-Text is measured by the same cosmic-text paragraphs either renderer
-uses. Cost, the prototype's five-item menu: 28µs with a fresh tree
-(every text shaped), 1.1µs with a kept one. The root `surface` widget
-adds the room its shadow needs, so the measured size is the surface's
-(rounded up to whole logical pixels, as a layer surface's size is).
-One source of truth: the element is measured at the scale it will be
-shown at, its root node's, and what was measured is what the window
-lays out.
-
-### Keyed children
-
-iced diffs children by position. A box can be keyed (`.keyed(key)` per
-child), so that a list whose items move keeps each item's tree state
-(its hover, its transition) with the item.
+`tk::Measure` holds a tiny-skia renderer (`renderer::Headless::new(..,
+Some("tiny-skia"))`: CPU, no window) and a widget tree kept per surface,
+so text is shaped once. Text is measured by the same cosmic-text
+paragraphs either renderer uses. The root `surface` widget adds the room
+its shadow needs, so the measured size is the surface's (rounded up to
+whole logical pixels, as a layer surface's size is). One source of
+truth: the element is measured at the scale it will be shown at, its
+root node's, and what was measured is what the window lays out.
 
 ## Painting
 
 - **Background, border, radius, box-shadow**: one iced `Quad` (outer
   shadow with blur and offset). Linear gradients are in iced's
   `Background` if a theme ever needs them.
-- **Borders whose sides differ, with a radius**: a path (outer rounded
-  rectangle, inner one inset per side, even-odd fill) through the
-  `canvas` geometry renderer from inside the widget (prototyped).
-  Per-side colours the same way.
+- **Borders whose sides differ, with a radius**: paths through the
+  `canvas` geometry renderer, from inside the widget: a ring (the outer
+  rounded rectangle and the inner one inset per side, even-odd) when
+  the sides that show share a colour, a region per side otherwise,
+  split at the corners along their diagonal as CSS does.
 - **Pixel grid**: quads are snapped by iced's wgpu shader (`crisp`, in
   physical pixels: edges sharp at 1.5); border *widths* aren't, so a
-  1px border is 1.5 device pixels at scale 1.5 and blurs on one side
-  (seen in the nested Sway). The toolkit puts widths, sizes and
+  1px border would be 1.5 device pixels at scale 1.5 and blur on one
+  side (seen in the nested Sway). The toolkit puts widths, sizes and
   positions on whole device pixels before drawing (see Scale), as
   browsers do; tiny-skia doesn't snap, and with everything on the grid
   it needn't.
-- **Inset shadow**: unblurred bands inside the border, as Aria's today.
+- **Inset shadow**: unblurred bands inside the border.
 - **Outline**: a border-only quad around the border box, taking no room
-  (the focus ring).
+  (the focus ring), following the border's corners.
 - **Opacity**: iced has no layer opacity (only images and svgs carry
   one). The toolkit multiplies alpha down the tree through `Theme`:
   every colour, image and svg of the subtree fades. Unlike CSS, it
@@ -427,12 +405,17 @@ child), so that a list whose items move keeps each item's tree state
   image rotates (its own `rotation`), which is what a spinner needs.
 - **Background images and 9-patches**: CSS's `background-image` and
   `border-image`, the image sliced at load (iced draws whole images:
-  no source rectangle), the slices drawn stretched.
+  no source rectangle), the slices drawn stretched; an image larger
+  than its box drawn in a layer that clips it.
+- **Paths** (a graph's series): painted as SVG's (`fill`, `stroke`,
+  `stroke-width`), kept in iced's geometry cache until the values, the
+  size or the paint change.
 
 ### Text
 
 - A paragraph kept in the tree state (`paragraph::Plain`), shaped again
-  only when the content or its style changes; `Shaping::Advanced` for
+  only when the content, its style or its width changes (a line that
+  doesn't wrap is shaped once, at any width); `Shaping::Advanced` for
   per-glyph fallback.
 - `white-space`: `normal` wraps at words (iced's `Wrapping::Word`: a
   word longer than the line overflows it, as in CSS), `nowrap` keeps
@@ -448,50 +431,58 @@ child), so that a list whose items move keeps each item's tree state
   in `layout`, shaped twice per pass (the menu's layout 17µs; at draw,
   1.1µs). CSS also asks `overflow: hidden`, which ours doesn't have: a
   cut text is its own clip.
-- `text-align`, `font-style: italic` (iced's `Font::style`),
-  `text-transform` (the string, before shaping), `font-weight`.
-  `letter-spacing`: cosmic-text has it, iced doesn't pass it; UI.md
-  says no.
+- `text-align` (iced aligns a paragraph's lines among themselves; where
+  the paragraph goes in its box is the widget's to say), `font-style:
+  italic` (iced's `Font::style`), `text-transform` (the string, before
+  shaping), `font-weight`. No `letter-spacing`: cosmic-text has it,
+  iced doesn't pass it.
 - **Centred on its letters**: CSS's `text-box: trim-both cap
   alphabetic`. The font's ascent, descent and cap height are reachable
   (`iced::advanced::graphics::text::font_system()` → cosmic-text's
-  fontdb and font metrics: verified), cached per font; the line box is
-  trimmed to the capitals' top and the baseline.
+  fontdb and font metrics), cached per font; the line box is trimmed to
+  the capitals' top and the baseline, the baseline put on a whole
+  device pixel. An input's field, iced's, is laid out the same way:
+  its box trimmed, its line box moved so the baseline lands where a
+  label's would.
 
 ### Icons and images
 
-- `icon(node, source)`: its size from the theme (`height`), reserved
-  before the file is found: no `Space` placeholders anywhere.
+- `icon(node, source)`: its size from the theme (`width`, `height`, one
+  of them for both, else the font size), reserved before the file is
+  found: no `Space` placeholders anywhere.
 - Symbolic svgs take `color` at draw, so a button's `:hover` and
   `:disabled` reach its icon through the ancestors' states.
-- HiDPI: the widget asks an app-provided `IconResolver` for (name,
-  size, scale) at draw time, with its node's scale, so a png theme's
-  `@2` directories are used on a scale-2 output. The freedesktop index
-  stays the app's (Aria has one); the toolkit defines the trait.
-- Images: `border-radius` is iced's own (round avatars), `opacity` too.
+- HiDPI: a named icon is looked up at draw time through the app's
+  `Icons` (`lookup(name, size, scale)`), with its node's scale, so a png
+  theme's `@2` directories are used on a scale-2 output. The
+  freedesktop index stays the app's (Aria has one); the toolkit defines
+  the trait.
+- Images: `object-fit`, `border-radius` (iced's own: round avatars),
+  `opacity`.
 
 ## States and events
 
 - State lives in `Tree::state`: hover, press, focus, the transition in
-  progress, the last frame's time. It survives the rebuild after every
-  message, so a hover shows on the first frame, not a rebuild later.
+  progress. It survives the rebuild after every message, so a hover
+  shows on the first frame, not a rebuild later.
 - `update` sets the states from the events, and asks a frame
   (`shell.request_redraw()`) only when a state changed on a sensitive
   node (and the one after, for the transitions the change starts: see
   Animation). Draw reads them.
 - A box with `on_press` is a button: `:active` while pressed, the
   message on release over it, `mouse::Interaction::Pointer`.
-  `:disabled` when it has none and is marked so.
-- **Keyboard focus** (UI.md: "?"): iced 0.14 has the `Focusable` trait
-  and the `focus_next`/`focus_previous` operations. A focusable box
-  reports itself through `operate`; a `focus_scope` widget takes Tab
-  and Shift+Tab and runs the operation on its own subtree from
-  `update`, so focus stays per surface (an app `Task` would run on
-  every window under `iced_exwlshell`). Enter/Space press the focused
-  box; `:focus` and `outline` show it. Tab leaves the scope at its
-  ends, as iced's operations have it; a menu's and tabs' scopes move
-  it with the arrows instead, round from one end to the other (an
-  operation of ours), once one of theirs has it.
+  `:disabled` when its node is marked so: nothing to press then.
+- **Keyboard focus**: iced 0.14 has the `Focusable` trait and the
+  `focus_next`/`focus_previous` operations. A focusable widget reports
+  itself through `operate`; a `focus_scope` widget takes Tab and
+  Shift+Tab and runs the operation on its own subtree from `update`, so
+  focus stays per surface (an app `Task` would run on every window
+  under `iced_exwlshell`). Enter/Space press the focused box; `:focus`
+  and `outline` show it. A press of the pointer drops the focus before
+  the content sees it, so a pressed text field takes it back. Tab
+  leaves the scope at its ends, as iced's operations have it; a menu's
+  and tabs' scopes move it with the arrows instead, round from one end
+  to the other (an operation of ours), once one of theirs has it.
 - **Accessibility**: none in iced 0.14 (no AccessKit). A limit.
 - **Tooltips, menus, selects**: the toolkit draws them; where they
   appear may be the app's. A tooltip shows its tip after the pointer
@@ -501,7 +492,10 @@ child), so that a list whose items move keeps each item's tree state
   `on_tip` the tooltip publishes the rectangle to show it by, then that
   it's gone, and the app opens a popup surface with `tk::tip` in it.
   The rectangle is where it's shown: the overlay pass tells the widget
-  how far the scrolls around it moved it. The same for a select's list.
+  how far the scrolls around it moved it. The same for a select's
+  options (`on_open`). Every container hands its children's overlays
+  up (`overlay::from_children`), or an iced overlay inside it would
+  never show.
 
 ## Animation
 
@@ -550,128 +544,79 @@ child), so that a list whose items move keeps each item's tree state
 
 ## Widgets
 
-Each has its element tree in `assets/base.css`, every element and
-class with its line, and neutral defaults there. The first set, from
-UI.md §7:
+Each has its element tree in `assets/base.css`, every element and class
+with its line, and neutral defaults there; AGENTS.md has their calls.
+They come in a few kinds:
 
-| Widget | What it is |
-|---|---|
-| `row`, `column` (box) | the box model and the flex subset; `on_press` makes it a button |
-| `stack` | children on top of each other (a badge on an icon) |
-| `text` | paragraph, ellipsis, trim |
-| `icon`, `image` | above |
-| `button` | a box with `on_press`, the `button` element, its variants as classes |
-| `toggle` | a button holding its `knob`, `.on` when it is; the knob slid by the theme's transform |
-| `slider` | its track a meter, its `knob` centred on the value; dragged, clicked, scrolled, keys when focused |
-| `input` | iced's `text_input` under our `Catalog`, in a box with the app's children before and after it (an icon, the peek button); `:focus` while its field has it |
-| `scroll` | iced's `scrollable` under our `Catalog` (`scrollbar.vertical`, `.horizontal`, `thumb`); no box of its own, its sizes its node's (`max-height`: it grows, then scrolls); sideways, it takes the wheel sideways |
-| `menu` | checks, radios, icons, shortcuts, separators, submenus unfolded in place; each item the app's message, a submenu unfolded as the app says; its marks the theme's `content`; Up and Down among its items |
-| `calendar` | a month in six weeks; its title, the days' names and the week's first day the app's (no locale in the toolkit); days `.other`, `.today`, `.selected`, buttons when the app says what a press sends; `tk::Month` for the app's own reckoning |
-| `tabs` | a row of buttons, one per page, the page shown `.active`; each tab the app's message; Left and Right among them |
-| `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
-| `graph` | series as lines with the area under them, painted as SVG's (`stroke`, `stroke-width`, `fill`), the newest at the right edge; a grid; a label over it; its paths kept in iced's geometry cache until the values, the size or the paint change. A sparkline is a graph |
-| `tooltip` | a tip after a rest, in an overlay or the app's surface (`on_tip`, `tk::tip`); made anew each time, so its entry animation runs |
-| `select` | one of a list of options, in a box with an arrow; its options a menu in an overlay, or the app's surface (`on_open`); `:active` while open (a class is the view's, this state the widget's); Up and Down choose on it closed |
-| `surface` | a surface's root: the shadow's room around its box, clicks on the room ignored |
-| `focus_scope` | above |
+- **Boxes** (`row`, `column`, `button`, and what's made of them: a
+  toggle is a button holding its knob; tabs are buttons in a row; a
+  menu is a column of buttons; a calendar is boxes and texts). Their
+  states, painting and animation are `widget/boxed.rs`'s.
+- **Boxes placing their children their own way**: a meter's fill at
+  its fraction, a slider's knob on its value (its track a meter), a
+  graph's paths in its content box. Their box model is `layout::Sizing`.
+- **Stock widgets under our `Catalog`**: an input's field (iced's
+  `text_input`, in a box of ours), a scroll (iced's `scrollable`, no box
+  of its own).
+- **Widgets with an overlay**: a tooltip's tip, a select's options;
+  the app's surface instead where an overlay can't go.
+- **A surface's root** (`surface`): the room its shadow needs around
+  its box. Popups, toasts and dialogs are `surface` roots with their
+  content: the look is the theme's, the surface the app's.
 
-Popups, toasts and dialogs are `surface` roots with their content: the
-look is the theme's, the surface Aria's.
+Controlled throughout: the app holds every value and each widget sends
+its messages. A widget keeps only what the pointer and the keyboard do
+(hover, press, focus, transitions, an open tooltip or select); state it
+owns at runtime shows as a pseudo-class (an open select is `:active`),
+since classes are the view's.
 
 ## Querying the tree
 
 Every widget reports its node and border box through `operate`
 (`Operation::custom` with the node as state), where it's shown: the
 report moves a scroll's content as it's scrolled (iced's scrollable
-gives operations its translation, and lays its content out unmoved). `query.rs` runs a CSS
-selector over that: Aria's `debug widgets 'launcher item:nth-child(2)'`
-on top of it, and an `iced_test::Selector` impl so a test clicks
-"`menu item.active`". Every widget is found, text and canvas included
-(today only the theme helpers' containers are).
+gives operations its translation, and lays its content out unmoved).
+`query.rs` runs a CSS selector over that, `:nth-child()` included even
+where the sheet has none (positions come from the report's tree): the
+harness's `find` and `click_on`, and Aria's `debug widgets 'launcher
+item:nth-child(2)'` on top of it. Every widget is found, text and paths
+included; iced's own scrollbars aren't.
 
 ## Testing
 
-All without a compositor, in `cargo test`:
-
-- **Style engine**: parsing, selectors, cascade, variables, warnings.
-- **Layout**: an element measured headlessly, its nodes' rectangles
-  asserted (the prototype printed exact rectangles this way).
-- **Events and pixels**: `testing::Harness` drives iced's
-  `UserInterface` with the tiny-skia renderer: pointer moves, presses,
-  keys, frames at chosen times (a transition sampled frame by frame),
-  and RGBA screenshots at any scale (1, 1.5, 2: what Aria never tried
-  on a scaled output). `iced_test::Simulator` works too, at its fixed
-  scale 2.
-- **Golden images** per widget and state, with an embedded font so
-  system fonts don't change them; tiny-skia only (wgpu draws
-  differently by a few levels).
-- **The wgpu path**: the gallery in a nested headless Sway (an output at
-  scale 1.5, input through `tests/ui/inject`, `grim`), as the
-  prototype was checked; and Aria's own scenarios.
+All without a compositor, in `cargo test`: the style engine (parsing,
+selectors, cascade, variables, warnings); layout (an element measured
+headlessly, its nodes' rectangles asserted); events and pixels
+(`testing::Harness` drives iced's `UserInterface` with the tiny-skia
+renderer: pointer moves, presses, keys, text, frames at chosen times,
+RGBA screenshots at any scale); golden images per widget and state, at
+scale 1 and 1.5, with embedded fonts so the system's don't change them,
+tiny-skia only (wgpu draws differently by a few levels). The wgpu path
+is checked with the gallery in a nested headless Sway. How, and the
+traps: AGENTS.md, "Verifying".
 
 ## The gallery
 
 `examples/gallery.rs`, a plain `iced::application` window (no
-layer-shell): every widget in every state side by side (states can be
-forced on a box, as a browser's devtools do), the theme file given on
-the command line and reloaded on change, light and dark. It's where a
-theme is written and where the golden images come from.
+layer-shell): every widget in its states side by side, the theme file
+given on the command line and reloaded on change, light and dark. It's
+where a theme is written and looked at.
 
 ## Performance
 
-| UI.md rule | How |
+| Rule | How |
 |---|---|
 | styles resolved once | interned nodes, cached computed styles; a view pays ~32ns a node |
-| no allocations while drawing | styles held as `Arc`s, paragraphs in the tree, the context copied inline and only where it changes; the ellipsis cut the one exception, once per new width or text |
-| what a layout costs kept from one layout to the next | shaped text and ellipsis cuts kept in the tree: ~0.3µs an item; the layout itself runs on every rebuild of a surface's tree, changed or not (a limit) |
+| no allocations while drawing | styles held as `Arc`s, paragraphs and path geometry in the tree, the context copied inline and only where it changes; the ellipsis cut the one exception, once per new width or text |
+| what a layout costs kept from one layout to the next | shaped text and ellipsis cuts kept in the tree; the layout itself runs on every rebuild of a surface's tree, changed or not (a limit) |
 | an idle UI costs nothing | frames only on a state change of a sensitive node, or an animation running |
 | an animation asks frames only while it runs | above |
-| measured, before and after | `benches/`: view, layout, update, draw of fixed trees with the headless renderer; Aria's CPU at rest in the nested Sway, as ARCHITECTURE.md measured it |
-
-Measured (`cargo bench -p tk --features testing`, this laptop, 2026-10,
-µs): a theme's load (the base and the gallery's) 500.
-
-| tree | view | rebuild (view, diff, layout) | update | frame |
-|---|---|---|---|---|
-| a bar, 12 gadgets | 1.6 | 4.3 | 1.0 | 3.5 |
-| a menu (`tk::menu`), 20 items | 4.6 | 15 | 2.0 | 7.1 |
-| a list, 500 rows | 55 | 200 | 32 | 92 |
-
-At every event and every frame iced asks the whole tree for overlays,
-as its own containers have it, and ours pass the question on (else an
-iced widget's overlay inside them wouldn't show): ~6ns a widget, a
-third of the list's update.
+| measured, before and after | `benches/costs.rs`: view, layout, update, draw of fixed trees with the headless renderer; the numbers in AGENTS.md, "What things cost" |
 
 Not the toolkit's to fix: `iced_exwlshell` 0.20 rebuilds every
-surface after every message (0.21: only the drawn ones), and a frame
-is always a full redraw (no damage in iced).
-
-## Order of work
-
-Each step ends in the gallery and in `cargo test`, measured where
-UI.md's rules ask it. The tests come once a step's look is agreed on,
-the headless harness and the query with them.
-
-1. ✅ The crate, the gallery window, the style engine (sheets,
-   selectors, cascade, variables, schemes, nodes, computed styles,
-   warnings): the gallery loads a theme, and reloads it when the file
-   changes.
-2. ✅ Boxes, text and icons: the box model, the flex subset, the scale,
-   painting (background, border, radius, shadow), wrapping, ellipsis
-   and trim; `Measure`; the headless harness (`testing`), the golden
-   images, `benches/`.
-3. ✅ States and events: hover, press, focus, disabled, the ancestors'
-   states through `Theme`; buttons, `focus_scope`, the query.
-4. ✅ The rest of painting and text: borders whose sides differ,
-   outline, opacity, transform, background images and 9-patches;
-   `text-align`, italic, `text-transform`; images.
-5. ✅ Animation: transitions, keyframes, exit animations.
-6. ✅ The widgets of UI.md §7: toggle, slider, meter and gauge,
-   surface (with step 2), input, scroll, menu, tabs, calendar, graphs,
-   tooltip, select.
-   A widget placing its children its own way (a meter's fill, a
-   slider's knob) shares the box's states, painting and animation
-   (`widget/boxed.rs`) and its box model (`layout::Sizing`).
+surface after every message (0.21: only the drawn ones), a frame is
+always a full redraw (no damage in iced), and iced asks the whole tree
+for overlays at every event and every frame.
 
 ## Limits (iced 0.14)
 
@@ -695,16 +640,26 @@ the headless harness and the query with them.
 - Operations run on every window (`iced_exwlshell`): ids are unique per
   instance, focus moves inside a scope.
 
+## Not done yet
+
+- The sheet's warning at load for a layout property under an
+  ancestor's state (see "What a state may change").
+- Keyed children: iced diffs children by position, so a list whose
+  items move would keep each place's tree state (its hover, its
+  transition), not each item's. A box keyed per child (`.keyed(key)`)
+  would carry them along.
+- `stack`: children on top of each other (a badge on an icon).
+- States forced on a box in the gallery, as a browser's devtools do.
+
 ## To decide
 
 - The crate's name, and its licence (GPL-3 like Aria, or a laxer one
   for a toolkit others may use).
-- `flex-direction` in the theme or only in the code (proposed: the
-  constructor's default, the theme may change it).
 - Where the freedesktop icon index lives: Aria (proposed), the toolkit,
   or a small crate of its own.
 - How Aria learns a surface's scale for its root node when it's
   fractional (with Aria's move, later): sctk's `OutputInfo` has the
   integer `scale_factor`; the fractional one (`wp-fractional-scale`)
   only reaches `iced_exwlshell`'s viewport, and no event tells the app
-  (0.20 and 0.21: no `Rescaled`).
+  (0.20 and 0.21: no `Rescaled`). Whether `iced_exwlshell` honours a
+  `RedrawRequest::At` (a tooltip's delay) is to check then too.

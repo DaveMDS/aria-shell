@@ -1,6 +1,6 @@
 [package]
-# A provisional name, as `tk::` in TOOLKIT.md: the crate's name is still
-# to decide.
+# A provisional name, as `tk::` in ARCHITECTURE.md: the crate's name is
+# still to decide.
 name = "tk"
 version = "0.0.1"
 edition = "2024"

@@ -1,7 +1,7 @@
 //! What the toolkit costs, headless: a theme's load, and for fixed trees
 //! (a bar, a menu, a long list) the view, the diff and layout of a
 //! rebuild, an update, a frame. Numbers to compare before and after a
-//! change (UI.md: "Measured, before and after a change"):
+//! change, kept in AGENTS.md ("What things cost"):
 //!
 //!     cargo bench -p tk --features testing
 

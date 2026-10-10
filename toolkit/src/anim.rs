@@ -1,6 +1,6 @@
 //! Animation: easing, the values that move (paint only: layout never
 //! animates), and what a widget keeps of them between frames. See
-//! TOOLKIT.md, "Animation".
+//! the crate's ARCHITECTURE.md, "Animation".
 //!
 //! A transition starts at draw, where a widget's target style is
 //! resolved (its own states, its node, its ancestors' through `Theme`),

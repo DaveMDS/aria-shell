@@ -1,5 +1,6 @@
 //! A toolkit of CSS-styled widgets on iced, knowing nothing of any app.
-//! See TOOLKIT.md for its design, UI.md for what it's for.
+//! See the crate's ARCHITECTURE.md for its design, its AGENTS.md for
+//! how to use it and work on it.
 
 mod anim;
 #[cfg(test)]

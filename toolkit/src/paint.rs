@@ -1,5 +1,5 @@
 //! Painting a box: its outer shadow, background, border, inset shadow
-//! and outline. See TOOLKIT.md, "Painting".
+//! and outline. See the crate's ARCHITECTURE.md, "Painting".
 //!
 //! A border whose sides are all alike is a quad's; one whose sides
 //! differ is drawn as paths (the canvas's geometry, from inside the

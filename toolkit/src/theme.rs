@@ -1,7 +1,7 @@
 //! The toolkit's iced `Theme`: not a palette, the draw-time context a
-//! parent hands its children (TOOLKIT.md, "The draw-time context"); and
-//! the `Catalog`s of the stock widgets the toolkit embeds, which read
-//! their styles from the sheet through it.
+//! parent hands its children (the crate's ARCHITECTURE.md, "The
+//! draw-time context"); and the `Catalog`s of the stock widgets the
+//! toolkit embeds, which read their styles from the sheet through it.
 
 use std::time::Instant;
 

@@ -739,3 +739,33 @@ fn golden_tooltip() {
         },
     );
 }
+
+#[test]
+fn golden_select() {
+    scene(
+        "select",
+        "scene { align-items: start; } select { transition: none; width: 150px; } \
+         menu item { transition: none; } \
+         select > arrow { content: \"v\"; } menu item.check.checked > check { content: \"x\"; }",
+        None,
+        Size::new(220.0, 160.0),
+        |root| {
+            crate::focus_scope(crate::column(
+                root,
+                [crate::select(
+                    root.child("select"),
+                    ["Follow the system", "Light", "Dark"],
+                    Some(2),
+                    |_| (),
+                )
+                .into()],
+            ))
+            .into()
+        },
+        |ui, sheet| {
+            ui.click_on(sheet, "select");
+            let light = ui.find(sheet, "select > menu > item")[1];
+            ui.move_to(light.center());
+        },
+    );
+}

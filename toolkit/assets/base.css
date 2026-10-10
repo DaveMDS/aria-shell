@@ -755,3 +755,62 @@ tooltip {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   animation: tooltip-in 120ms ease-out;
 }
+
+/*
+ * Selects
+ * =======
+ *
+ * One of a list of options (`tk::select`), shown in a box with an arrow:
+ * pressed, its options open under it (over it where there's no room) as
+ * a menu, the one chosen checked; `:active` while they're open. Up and
+ * Down on the closed select, focused, choose the option before or
+ * after. In a window the options are drawn over everything; an app with
+ * surfaces of its own shows them in one. Their margins are their
+ * distance from the select.
+ *
+ * select
+ * ├─ label[.placeholder]   the choice, or what's shown while there's none
+ * ├─ arrow                 its mark: its content
+ * ╰─ menu                  the options (see Menus), as wide as the
+ *                          select at least
+ */
+select {
+  min-width: 120px;
+  min-height: 32px;
+  padding: 5px 10px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  transition: border-color 120ms;
+}
+select:hover,
+select:active {
+  border-color: var(--accent);
+}
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+select:disabled {
+  color: var(--muted);
+}
+select > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+select > label.placeholder {
+  color: var(--muted);
+}
+select > arrow {
+  content: "▾";
+}
+select > menu {
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}

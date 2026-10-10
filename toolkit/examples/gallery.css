@@ -7,7 +7,7 @@
  *    ╰─ section              one kind of widget
  *       ├─ heading
  *       ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
- *       ├─ controls > line > toggle, slider, input, meter[.warning|.gauge], label
+ *       ├─ controls > line > toggle, slider, input, select, meter[.warning|.gauge], label
  *       ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
  *       ├─ row                  boxes, side by side
  *       │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
@@ -102,6 +102,9 @@ controls {
 line {
   gap: 10px;
   align-items: center;
+}
+line > select {
+  width: 200px;
 }
 button.peek.active > icon {
   color: var(--accent);

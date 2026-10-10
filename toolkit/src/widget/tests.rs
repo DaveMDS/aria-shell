@@ -976,3 +976,107 @@ fn an_app_can_show_a_tip_itself() {
         [Message::Pressed("shown"), Message::Pressed("hidden")]
     );
 }
+
+/// A select of three in a focus scope, `chosen` if any.
+fn chooser(root: Node<'_>, chosen: Option<usize>, disabled: bool) -> Element<'_, Message> {
+    crate::focus_scope(crate::column(
+        root,
+        [crate::select(
+            root.child("select").disabled_if(disabled),
+            ["one", "two", "three"],
+            chosen,
+            |i| Message::Value(i as f32),
+        )
+        .placeholder("none yet")
+        .into()],
+    ))
+    .into()
+}
+
+const CHOOSER: &str = "root { padding: 10px; align-items: start; } \
+                       select { transition: none; } menu item { transition: none; }";
+
+#[test]
+fn a_select_opens_its_options_and_picks_one() {
+    let sheet = sheet(CHOOSER);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(chooser(root, None, false), Size::new(300.0, 200.0), 1.0);
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    ui.click_on(&sheet, "select");
+    let select = ui.find(&sheet, "select")[0];
+    let items = ui.find(&sheet, "select > menu > item");
+    assert_eq!(items.len(), 3);
+    // Under it, as wide at least.
+    let list = ui.find(&sheet, "select > menu")[0];
+    assert!(list.y >= select.y + select.height, "{list:?} {select:?}");
+    assert!(list.width >= select.width);
+    ui.click(items[1].center());
+    assert_eq!(ui.messages, [Message::Value(1.0)]);
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    // Escape closes it, and so does a press elsewhere.
+    ui.click_on(&sheet, "select");
+    ui.key(Named::Escape);
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    ui.click_on(&sheet, "select");
+    ui.click(Point::new(290.0, 190.0));
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    assert_eq!(ui.messages.len(), 1);
+}
+
+#[test]
+fn up_and_down_choose_on_a_closed_select() {
+    let sheet = sheet(CHOOSER);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(chooser(root, Some(1), false), Size::new(300.0, 200.0), 1.0);
+    ui.key(Named::Tab);
+    ui.key(Named::ArrowDown);
+    ui.key(Named::ArrowDown);
+    ui.key(Named::ArrowUp);
+    // Enter opens it.
+    ui.key(Named::Enter);
+    assert_eq!(ui.find(&sheet, "select > menu > item").len(), 3);
+    assert_eq!(ui.messages, [Message::Value(2.0), Message::Value(1.0)]);
+}
+
+#[test]
+fn a_disabled_select_stays_shut() {
+    let sheet = sheet(CHOOSER);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(chooser(root, Some(0), true), Size::new(300.0, 200.0), 1.0);
+    ui.click_on(&sheet, "select");
+    ui.key(Named::Tab);
+    ui.key(Named::ArrowDown);
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    assert!(ui.messages.is_empty());
+}
+
+#[test]
+fn an_app_can_show_a_selects_options_itself() {
+    let sheet = sheet(CHOOSER);
+    let root = sheet.root("root", 1.0);
+    let view = |opened: bool| -> Element<'_, Message> {
+        crate::column(
+            root,
+            [
+                crate::select(root.child("select"), ["one", "two"], None, |i| {
+                    Message::Value(i as f32)
+                })
+                .on_open(opened, |at| match at {
+                    Some(_) => Message::Pressed("open"),
+                    None => Message::Pressed("close"),
+                })
+                .into(),
+            ],
+        )
+        .into()
+    };
+    let mut ui = Harness::new(view(false), Size::new(300.0, 200.0), 1.0);
+    ui.click_on(&sheet, "select");
+    assert!(ui.find(&sheet, "select > menu").is_empty());
+    ui.rebuild(view(true));
+    ui.click_on(&sheet, "select");
+    assert_eq!(
+        ui.messages,
+        [Message::Pressed("open"), Message::Pressed("close")]
+    );
+}

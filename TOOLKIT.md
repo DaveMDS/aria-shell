@@ -571,7 +571,7 @@ UI.md §7:
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
 | `graph` | series as lines with the area under them, painted as SVG's (`stroke`, `stroke-width`, `fill`), the newest at the right edge; a grid; a label over it; its paths kept in iced's geometry cache until the values, the size or the paint change. A sparkline is a graph |
 | `tooltip` | a tip after a rest, in an overlay or the app's surface (`on_tip`, `tk::tip`); made anew each time, so its entry animation runs |
-| `select` | above (later) |
+| `select` | one of a list of options, in a box with an arrow; its options a menu in an overlay, or the app's surface (`on_open`); `:active` while open (a class is the view's, this state the widget's); Up and Down choose on it closed |
 | `surface` | a surface's root: the shadow's room around its box, clicks on the room ignored |
 | `focus_scope` | above |
 
@@ -666,9 +666,9 @@ the headless harness and the query with them.
    outline, opacity, transform, background images and 9-patches;
    `text-align`, italic, `text-transform`; images.
 5. ✅ Animation: transitions, keyframes, exit animations.
-6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
-   surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, tabs ✅,
-   calendar ✅, graphs ✅, tooltip ✅; select last.
+6. ✅ The widgets of UI.md §7: toggle, slider, meter and gauge,
+   surface (with step 2), input, scroll, menu, tabs, calendar, graphs,
+   tooltip, select.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).

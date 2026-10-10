@@ -60,6 +60,8 @@ struct Gallery {
     more: bool,
     /// The tab shown.
     tab: usize,
+    /// The select's choice.
+    choice: Option<usize>,
     /// The calendar's month, today, the day picked.
     month: Month,
     today: (i32, u32, u32),
@@ -92,6 +94,7 @@ enum Message {
     ByDate(bool),
     More,
     Tab(usize),
+    Choose(usize),
     PreviousMonth,
     NextMonth,
     Day(u32),
@@ -165,6 +168,7 @@ impl Gallery {
             by_date: false,
             more: false,
             tab: 0,
+            choice: None,
             month: Month::new(today.0, today.1),
             today,
             day: None,
@@ -213,6 +217,7 @@ impl Gallery {
             Message::ByDate(by_date) => self.by_date = by_date,
             Message::More => self.more = !self.more,
             Message::Tab(tab) => self.tab = tab,
+            Message::Choose(choice) => self.choice = Some(choice),
             Message::PreviousMonth => self.month = self.month.previous(),
             Message::NextMonth => self.month = self.month.next(),
             Message::Day(day) => self.day = Some((self.month.year, self.month.month, day)),
@@ -420,6 +425,32 @@ impl Gallery {
                         tk::input(line.child("input").disabled_if(true), "Disabled", "")
                             .on_input(Message::Search)
                             .into(),
+                    ],
+                )
+                .into(),
+                tk::row(
+                    line,
+                    [
+                        tk::select(
+                            line.child("select"),
+                            [
+                                "Follow the system",
+                                "Light",
+                                "Dark",
+                                "A choice far too long for its box",
+                            ],
+                            self.choice,
+                            Message::Choose,
+                        )
+                        .placeholder("Pick a scheme")
+                        .into(),
+                        tk::select(
+                            line.child("select").disabled_if(true),
+                            ["Disabled"],
+                            Some(0),
+                            Message::Choose,
+                        )
+                        .into(),
                     ],
                 )
                 .into(),

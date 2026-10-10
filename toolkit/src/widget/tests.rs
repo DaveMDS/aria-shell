@@ -872,3 +872,46 @@ fn a_calendar_shows_its_month_and_picks_a_day() {
     let first_week = ui.find(&sheet, "week:first-child > day");
     assert_eq!(ui.find(&sheet, "day.today")[0].x, first_week[6].x);
 }
+
+/// A graph 100x50 with no border or padding, its series filled red.
+const GRAPH: &str = "graph { width: 100px; height: 50px; padding: 0; border: none; } \
+                     graph > series { fill: rgb(255 0 0); stroke: none; } \
+                     graph > grid { stroke: none; }";
+
+#[test]
+fn a_graph_draws_its_series_from_the_right() {
+    let sheet = sheet(GRAPH);
+    let root = sheet.root("root", 1.0);
+    // Half its capacity, rising from nothing to its top.
+    let view = |values: Vec<f32>| -> Element<'_, Message> {
+        crate::column(
+            root,
+            [crate::graph(root.child("graph"), 11)
+                .series(values)
+                .max(10.0)
+                .label("10")
+                .into()],
+        )
+        .into()
+    };
+    let mut ui = Harness::new(
+        view((5..=10).map(|v| v as f32).collect()),
+        Size::new(100.0, 50.0),
+        1.0,
+    );
+    let now = Instant::now();
+    ui.frame(now);
+    let pixels = ui.pixels(Color::WHITE);
+    let red = [255, 0, 0, 255];
+    // The newest at the right edge, full; the series starts half way.
+    assert_eq!(pixels.at(97, 5), red);
+    assert_eq!(pixels.at(55, 45), red);
+    assert_eq!(pixels.at(45, 45), [255, 255, 255, 255]);
+    assert_eq!(pixels.at(55, 5), [255, 255, 255, 255]);
+    assert_eq!(ui.find(&sheet, "graph > series").len(), 1);
+    assert_eq!(ui.find(&sheet, "graph > label")[0].x, 0.0);
+    // New values, drawn anew.
+    ui.rebuild(view(vec![0.0; 11]));
+    ui.frame(now);
+    assert_eq!(ui.pixels(Color::WHITE).at(97, 5), [255, 255, 255, 255]);
+}

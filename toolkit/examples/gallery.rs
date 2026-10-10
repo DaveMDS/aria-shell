@@ -255,6 +255,7 @@ impl Gallery {
                         self.menus(page),
                         self.tabs(page),
                         self.calendar(page),
+                        self.graphs(page),
                         self.scrolls(page),
                         self.icons(page),
                     ],
@@ -758,6 +759,44 @@ impl Gallery {
             calendar = calendar.selected(year, month, day);
         }
         self.section(section, "Calendar", calendar.into())
+    }
+
+    fn graphs<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        // Two made-up series: a load, and traffic in and out.
+        let load = (0..60).map(|i| {
+            let t = i as f32 / 6.0;
+            50.0 + 30.0 * t.sin() + 10.0 * (t * 3.1).cos()
+        });
+        let down = (0..40).map(|i| {
+            let t = i as f32 / 4.0;
+            (400.0 + 300.0 * (t * 0.7).sin()).max(0.0)
+        });
+        let up = (0..40).map(|i| {
+            let t = i as f32 / 4.0;
+            (120.0 + 90.0 * (t * 1.3).cos()).max(0.0)
+        });
+        let section = root.child("section");
+        let graphs = section.child("graphs");
+        let content = tk::row(
+            graphs,
+            [
+                tk::graph(graphs.child("graph"), 60)
+                    .series(load)
+                    .max(100.0)
+                    .label("100%")
+                    .into(),
+                tk::graph(graphs.child("graph").class("traffic"), 60)
+                    .series_class("down", down)
+                    .series_class("up", up)
+                    .label("1 MB/s")
+                    .into(),
+                tk::graph(graphs.child("sparkline"), 30)
+                    .series((0..30).map(|i| 5.0 + 4.0 * (i as f32 / 3.0).sin()))
+                    .label("CPU 42%")
+                    .into(),
+            ],
+        );
+        self.section(section, "Graphs", content.into())
     }
 
     fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {

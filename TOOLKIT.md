@@ -566,7 +566,7 @@ UI.md §7:
 | `calendar` | a month in six weeks; its title, the days' names and the week's first day the app's (no locale in the toolkit); days `.other`, `.today`, `.selected`, buttons when the app says what a press sends; `tk::Month` for the app's own reckoning |
 | `tabs` | a row of buttons, one per page, the page shown `.active`; each tab the app's message; Left and Right among them |
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
-| `sparkline`, `graph` | canvas paths |
+| `graph` | series as lines with the area under them, painted as SVG's (`stroke`, `stroke-width`, `fill`), the newest at the right edge; a grid; a label over it; its paths kept in iced's geometry cache until the values, the size or the paint change. A sparkline is a graph |
 | `tooltip`, `select` | above (select later) |
 | `surface` | a surface's root: the shadow's room around its box, clicks on the room ignored |
 | `focus_scope` | above |
@@ -664,7 +664,7 @@ the headless harness and the query with them.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
    surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, tabs ✅,
-   calendar ✅, graphs, tooltip; select last.
+   calendar ✅, graphs ✅, tooltip; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).

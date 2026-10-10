@@ -670,3 +670,39 @@ fn golden_calendar() {
         },
     );
 }
+
+#[test]
+fn golden_graphs() {
+    scene(
+        "graphs",
+        "graph { width: 140px; height: 60px; } graph > series.second { stroke: #c33; fill: none; } \
+         sparkline { width: 70px; height: 20px; justify-content: center; align-items: center; \
+                     background: #ddd; } \
+         sparkline > series { stroke: #4a7bd6; fill: rgba(74, 123, 214, 0.3); }",
+        None,
+        Size::new(250.0, 76.0),
+        |root| {
+            let wave = |phase: f32, n: usize| {
+                (0..n).map(move |i| 50.0 + 40.0 * (i as f32 / 5.0 + phase).sin())
+            };
+            crate::row(
+                root,
+                [
+                    crate::graph(root.child("graph"), 40)
+                        .series(wave(0.0, 40))
+                        .series_class("second", wave(1.5, 25))
+                        .max(100.0)
+                        .label("100")
+                        .into(),
+                    crate::graph(root.child("sparkline"), 20)
+                        .series(wave(0.5, 20))
+                        .max(100.0)
+                        .label("42%")
+                        .into(),
+                ],
+            )
+            .into()
+        },
+        |_, _| {},
+    );
+}

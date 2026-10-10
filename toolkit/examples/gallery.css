@@ -22,6 +22,7 @@
  *       ├─ menus > menu (item.danger), status
  *       ├─ pages > tabs, page
  *       ├─ calendar
+ *       ├─ graphs > graph[.traffic] > series.down|.up; sparkline
  *       ├─ scrolls > scroll.list > rows > label; scroll.strip > cells > cell > label
  *       ╰─ icons > icon[.small|.large|.accent], avatar
  */
@@ -418,6 +419,36 @@ menu item.danger {
 pages {
   width: 420px;
   gap: 12px;
+}
+
+/* Graphs */
+graphs {
+  gap: 12px;
+  align-items: center;
+}
+graphs > graph {
+  width: 220px;
+  height: 80px;
+}
+graph.traffic > series.up {
+  stroke: var(--danger);
+  fill: transparent;
+}
+sparkline {
+  width: 80px;
+  height: 22px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  background: var(--border);
+}
+sparkline > series {
+  stroke: var(--accent);
+  stroke-width: 1px;
+  fill: var(--accent-soft);
+}
+sparkline > label {
+  font-size: 11px;
 }
 
 /* Scroll */

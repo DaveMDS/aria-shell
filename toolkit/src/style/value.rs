@@ -481,6 +481,9 @@ pub(crate) enum Prop {
     AnimationDirection,
     AnimationFillMode,
     Content,
+    Fill,
+    Stroke,
+    StrokeWidth,
 }
 
 impl Prop {
@@ -498,6 +501,9 @@ impl Prop {
                 | Prop::TextAlign
                 | Prop::TextTransform
                 | Prop::TextBoxEdge
+                | Prop::Fill
+                | Prop::Stroke
+                | Prop::StrokeWidth
         )
     }
 }
@@ -577,6 +583,10 @@ pub(crate) enum Decl {
     AnimationFillMode(Arc<[FillMode]>),
     /// `None` for `none` and `normal`.
     Content(Option<Arc<str>>),
+    /// `none` is transparent.
+    Fill(ColorValue),
+    Stroke(ColorValue),
+    StrokeWidth(f32),
     Wide(Prop, Wide),
 }
 
@@ -688,6 +698,9 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "transform" => vec![Prop::Transform],
         "transform-origin" => vec![Prop::TransformOrigin],
         "content" => vec![Prop::Content],
+        "fill" => vec![Prop::Fill],
+        "stroke" => vec![Prop::Stroke],
+        "stroke-width" => vec![Prop::StrokeWidth],
         _ => {
             // margin-top, padding-left, border-bottom, border-left-width, ...
             let (head, rest) = name.split_once('-')?;
@@ -897,6 +910,9 @@ fn value_of(
         }
         "background-image" => vec![Decl::BackgroundImage(url(p, assets)?)],
         "content" => vec![Decl::Content(content(p)?)],
+        "fill" => vec![Decl::Fill(paint(p)?)],
+        "stroke" => vec![Decl::Stroke(paint(p)?)],
+        "stroke-width" => vec![Decl::StrokeWidth(non_negative(p)?)],
         "background-size" => vec![Decl::BackgroundSize(background_size(p)?)],
         "background-position" => {
             let (x, y) = transform_origin(p)?;
@@ -1633,6 +1649,14 @@ fn text_box_edge(p: &mut Parser) -> Result<TextBoxEdge, Error> {
 }
 
 /// One of `options`, by its keyword.
+/// SVG's paint: `none` or a colour.
+fn paint(p: &mut Parser) -> Result<ColorValue, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+        return Ok(ColorValue::Rgba(Color::TRANSPARENT));
+    }
+    color_value(p)
+}
+
 /// `content`: `none`, `normal`, or strings, one after the other.
 fn content(p: &mut Parser) -> Result<Option<Arc<str>>, Error> {
     if p.try_parse(|p| p.expect_ident_matching("none")).is_ok()

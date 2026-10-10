@@ -194,6 +194,10 @@ pub struct Computed {
     pub animations: Animations,
     /// What a mark shows: a menu item's check, its arrow.
     pub content: Option<Arc<str>>,
+    /// A path's paint, as SVG's: a graph's series.
+    pub fill: Color,
+    pub stroke: Color,
+    pub stroke_width: f32,
     /// The family picked from `font_family`, with the weight and style.
     pub font: Font,
     /// `line-height`, in logical px: whole device pixels.
@@ -258,6 +262,9 @@ impl Computed {
             transitions: Transitions::initial(),
             animations: Animations::initial(),
             content: None,
+            fill: Color::BLACK,
+            stroke: Color::TRANSPARENT,
+            stroke_width: 1.0,
             font: Font::DEFAULT,
             line_height_px: 0.0,
             ascent: 0.0,
@@ -333,6 +340,8 @@ pub(crate) struct Cascade<'p> {
     shadows: Shadows,
     outline_style: LineStyle,
     outline_color: ColorValue,
+    fill: ColorValue,
+    stroke: ColorValue,
 }
 
 impl<'p> Cascade<'p> {
@@ -351,6 +360,8 @@ impl<'p> Cascade<'p> {
             shadows: Shadows::default(),
             outline_style: LineStyle::None,
             outline_color: ColorValue::Current,
+            fill: ColorValue::Rgba(parent.fill),
+            stroke: ColorValue::Rgba(parent.stroke),
         }
     }
 
@@ -417,6 +428,9 @@ impl<'p> Cascade<'p> {
             Decl::AnimationDirection(v) => out.animations.direction = v.clone(),
             Decl::AnimationFillMode(v) => out.animations.fill = v.clone(),
             Decl::Content(v) => out.content = v.clone(),
+            Decl::Fill(v) => self.fill = *v,
+            Decl::Stroke(v) => self.stroke = *v,
+            Decl::StrokeWidth(v) => out.stroke_width = *v,
             Decl::Wide(prop, wide) => {
                 let inherit = match wide {
                     Wide::Inherit => true,
@@ -448,6 +462,8 @@ impl<'p> Cascade<'p> {
             Prop::OutlineColor => {
                 self.outline_color = ColorValue::Rgba(self.parent.outline_color);
             }
+            Prop::Fill => self.fill = ColorValue::Rgba(self.parent.fill),
+            Prop::Stroke => self.stroke = ColorValue::Rgba(self.parent.stroke),
             Prop::BorderStyle(s) => {
                 self.border_style[s as usize] = if self.parent.border_width.get(s) > 0.0 {
                     LineStyle::Solid
@@ -488,6 +504,8 @@ impl<'p> Cascade<'p> {
             Prop::BorderStyle(s) => self.border_style[s as usize] = LineStyle::None,
             Prop::BorderColor(s) => self.border_color[s as usize] = ColorValue::Current,
             Prop::BoxShadow => self.shadows = Shadows::default(),
+            Prop::Fill => self.fill = ColorValue::Rgba(Color::BLACK),
+            Prop::Stroke => self.stroke = ColorValue::Rgba(Color::TRANSPARENT),
             _ => {}
         }
     }
@@ -503,6 +521,8 @@ impl<'p> Cascade<'p> {
             shadows,
             outline_style,
             outline_color,
+            fill,
+            stroke,
             ..
         } = self;
         let color = out.color;
@@ -511,6 +531,8 @@ impl<'p> Cascade<'p> {
             ColorValue::Current => color,
         };
         out.background = resolve(background);
+        out.fill = resolve(fill);
+        out.stroke = resolve(stroke);
         out.outline_width = match outline_style {
             LineStyle::None => 0.0,
             LineStyle::Solid => snap_border(out.outline_width, scale),
@@ -592,7 +614,7 @@ fn weight(value: WeightValue, parent: u16) -> u16 {
     }
 }
 
-const INHERITED: [Prop; 10] = [
+const INHERITED: [Prop; 13] = [
     Prop::Color,
     Prop::FontFamily,
     Prop::FontSize,
@@ -603,6 +625,9 @@ const INHERITED: [Prop; 10] = [
     Prop::TextAlign,
     Prop::TextTransform,
     Prop::TextBoxEdge,
+    Prop::Fill,
+    Prop::Stroke,
+    Prop::StrokeWidth,
 ];
 
 /// One property's computed value, from `from` to `to`.
@@ -669,5 +694,8 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::AnimationDirection => to.animations.direction = from.animations.direction.clone(),
         Prop::AnimationFillMode => to.animations.fill = from.animations.fill.clone(),
         Prop::Content => to.content = from.content.clone(),
+        Prop::Fill => to.fill = from.fill,
+        Prop::Stroke => to.stroke = from.stroke,
+        Prop::StrokeWidth => to.stroke_width = from.stroke_width,
     }
 }

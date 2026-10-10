@@ -108,6 +108,11 @@
  *                          menu item's check, its arrow). Read where the
  *                          widget is built: it follows the element's
  *                          classes, not its states
+ *   fill*, stroke*         none | <color>: a path's paint, as SVG's (a
+ *                          graph's series); fill's initial value is black,
+ *                          stroke's none
+ *   stroke-width*          <length>: a path's line, snapped to whole
+ *                          device pixels
  *   transition             [<property> | all | none] || <time> || <easing>
  *                          || <time>, comma-separated (the first time the
  *                          duration, the second the delay);
@@ -167,7 +172,7 @@
   --on-accent: #ffffff;
   --border: #c9c9d0;
   --danger: #c62f2f;
-  --selection: rgba(52, 102, 214, 0.25);
+  --accent-soft: rgba(52, 102, 214, 0.25);
 }
 :root.dark {
   --bg: #1e1e22;
@@ -177,7 +182,7 @@
   --on-accent: #12141a;
   --border: #3d3d45;
   --danger: #f06262;
-  --selection: rgba(122, 162, 247, 0.3);
+  --accent-soft: rgba(122, 162, 247, 0.3);
 }
 
 * {
@@ -431,7 +436,7 @@ field > placeholder {
   color: var(--muted);
 }
 field > selection {
-  background: var(--selection);
+  background: var(--accent-soft);
 }
 
 /*
@@ -678,4 +683,44 @@ calendar day.today {
 calendar day.selected {
   background: var(--accent);
   color: var(--on-accent);
+}
+
+/*
+ * Graphs
+ * ======
+ *
+ * Series of values (`tk::graph`), oldest first, as lines with the area
+ * under them: the newest at the right edge, the graph's capacity across
+ * its content box (a young series grows from the right), the top the
+ * largest value unless the app gives one. Lines across at the quarters,
+ * a grid; a text over it (the scale's top, a value), placed as in a row.
+ * Paths are painted as SVG's: stroke, stroke-width, fill. A sparkline is
+ * a graph too: one series, styled as the app likes.
+ *
+ * graph
+ * ├─ series[.<app's>]   one per series: its stroke the line, its fill
+ * │                     the area under it
+ * ├─ grid               its stroke: the lines across
+ * ╰─ label              a text over it
+ */
+graph {
+  width: 160px;
+  height: 60px;
+  padding: 2px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+graph > series {
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  fill: var(--accent-soft);
+}
+graph > grid {
+  stroke: var(--border);
+  stroke-width: 1px;
+}
+graph > label {
+  font-size: 11px;
+  color: var(--muted);
 }

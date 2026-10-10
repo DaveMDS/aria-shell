@@ -18,8 +18,8 @@ use iced::{Element, Length, Size};
 use crate::ui::theme::{self, Node, Theme};
 
 const CHECK_ON: &str = "✓";
-const RADIO_ON: &str = "●";
-const RADIO_OFF: &str = "○";
+pub(crate) const RADIO_ON: &str = "●";
+pub(crate) const RADIO_OFF: &str = "○";
 const ARROW_CLOSED: &str = "▸";
 const ARROW_OPEN: &str = "▾";
 

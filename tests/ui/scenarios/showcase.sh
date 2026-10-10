@@ -16,8 +16,9 @@ assert_eq "$(count_widgets 'osd.volume')" 1 "the OSD"
 assert_eq "$(count_widgets 'notification.normal')" 1 "a notification"
 assert_eq "$(count_widgets 'notification.critical')" 1 "a critical one"
 assert_eq "$(count_widgets 'gadget#showcase > button')" 3 "the bar's buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 12 "the other buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 14 "the other buttons"
 assert_eq "$(count_widgets 'popup#showcase > buttons > button.danger')" 2 "a danger one, and disabled"
+assert_eq "$(count_widgets 'popup#showcase > buttons > button.radio')" 2 "two radios"
 assert_eq "$(count_widgets 'popup#showcase > buttons > tabs > button.tab')" 3 "tabs, one open"
 assert_no_surface launcher
 assert_no_surface exiter
@@ -36,6 +37,14 @@ click_widget 'exiter > button.suspend'
 click_widget 'launcher item'
 assert_surface showcase
 assert_eq "$(count_widgets 'exiter > button')" 6 "still the grid"
+
+# The sample radios and tabs follow a click.
+click_widget 'popup#showcase button.radio:nth-child(2)'
+assert_eq "$(count_widgets 'popup#showcase button.radio.active:nth-child(2)')" 1 "the second radio chosen"
+assert_eq "$(count_widgets 'popup#showcase button.radio.active')" 1 "only it"
+click_widget 'popup#showcase tabs > button.tab:nth-child(3)'
+assert_eq "$(count_widgets 'popup#showcase tabs > button.tab.active:nth-child(3)')" 1 "the third tab open"
+assert_eq "$(count_widgets 'popup#showcase tabs > button.tab.active')" 1 "only it"
 
 # Escape (it has the keyboard since the click).
 key Escape; settle 0.5

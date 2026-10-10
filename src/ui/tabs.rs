@@ -29,8 +29,10 @@ pub fn view<'a, M: Clone + 'a>(
     tabs: impl IntoIterator<Item = Tab<'a, M>>,
     width: Length,
 ) -> Element<'a, M> {
-    let buttons = tabs.into_iter().map(|t| {
-        let mut n = node.child("button").class("tab");
+    let tabs: Vec<Tab<'a, M>> = tabs.into_iter().collect();
+    let count = tabs.len();
+    let buttons = tabs.into_iter().enumerate().map(|(i, t)| {
+        let mut n = node.child("button").class("tab").nth(i, count);
         if let Some(name) = t.name {
             n = n.class(name);
         }

@@ -25,6 +25,7 @@ use crate::services::audio::{
     Channel, Command, ICON_HIGH, ICON_INPUT, ICON_INPUT_MUTED, ICON_LOW, ICON_MEDIUM, ICON_MUTED,
     Kind, PlaybackStatus, Player,
 };
+use crate::ui::menu::{RADIO_OFF, RADIO_ON};
 use crate::ui::theme::{self, Node};
 
 /// Icon size when the theme doesn't set `height` on an `icon`.
@@ -250,6 +251,19 @@ fn anchor(kind: Kind) -> usize {
     }
 }
 
+/// An output or an input, which can be made the default; not a stream.
+fn is_device(c: &Channel) -> bool {
+    matches!(c.kind, Kind::Output | Kind::Input)
+}
+
+/// A device's radio, `channel > button.radio[.active] > check, label`.
+fn radio_node(channel: &Node, c: &Channel) -> Node {
+    channel
+        .child("button")
+        .class("radio")
+        .class_if("active", c.default)
+}
+
 fn kind_class(kind: Kind) -> &'static str {
     match kind {
         Kind::Output => "output",
@@ -380,21 +394,31 @@ impl AudioGadget {
         let mute_button = theme
             .button(&mute, self.channel_icon(ctx, &mute.child("icon"), c))
             .on_press(Message::Mute(c.kind, c.index, !c.muted));
-        let name = node.child("name");
-        let label: Element<'a, Message> = match c.kind {
-            Kind::Output | Kind::Input if !c.default => theme
-                .button(&name, theme.text(&name.child("text"), &c.label))
+        // A device's name is a radio: ● the default, ○ a click makes it
+        // so (on the default too, a click that changes nothing).
+        let label: Element<'a, Message> = if is_device(c) {
+            let radio = radio_node(&node, c);
+            let glyph = if c.default { RADIO_ON } else { RADIO_OFF };
+            let content = row![
+                theme.text(&radio.child("check"), glyph),
+                theme.text(&radio.child("label"), &c.label),
+            ]
+            .spacing(theme.resolve(&radio).gap)
+            .align_y(Alignment::Center);
+            theme
+                .button(&radio, content)
                 .on_press(Message::SetDefault(c.kind, c.index))
-                .into(),
-            _ => theme
+                .into()
+        } else {
+            let name = node.child("name");
+            theme
                 .container(&name, theme.text(&name.child("text"), &c.label))
-                .into(),
+                .into()
         };
-        let value = node.child("value");
         let head = row![
             label,
             Space::new().width(Length::Fill),
-            theme.text(&value, percent(c.volume)),
+            theme.text(&node.child("value"), percent(c.volume)),
         ]
         .align_y(Alignment::Center)
         .width(Length::Fill);
@@ -435,9 +459,17 @@ impl AudioGadget {
         let mute = node.child("button").class("mute");
         let ms = theme.resolve(&mute);
         let button = self.icon_size(ctx, &mute.child("icon")) + ms.inset().y();
-        let name = node.child("name");
+        // The name: the radio's label on a device, else plain.
+        let (name, text) = if is_device(c) {
+            let radio = radio_node(&node, c);
+            let label = radio.child("label");
+            (radio, label)
+        } else {
+            let name = node.child("name");
+            let text = name.child("text");
+            (name, text)
+        };
         let ns = theme.resolve(&name);
-        let text = name.child("text");
         let head = (theme
             .measure(&text, &c.label)
             .height

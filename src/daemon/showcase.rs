@@ -8,9 +8,10 @@
 //! side by side on one transparent layer surface over the focused
 //! output, between its bars: what shows through is the desktop, as on
 //! the real ones. Inert: what the parts would do is dropped, their
-//! hover still shows. Escape, a click beside the parts or the command
-//! again close it; a theme change redraws it like any surface. Its own
-//! layout (the room around the parts and between them) isn't themed.
+//! hover still shows; only the sample radios and tabs follow a click.
+//! Escape, a click beside the parts or the command again close it; a
+//! theme change redraws it like any surface. Its own layout (the room
+//! around the parts and between them) isn't themed.
 //!
 //! ```text
 //! (the surface)                             its own roots, side by side
@@ -23,6 +24,7 @@
 //! │  ╰─ button > icon | text
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
 //!    ├─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
+//!    ├─ button.radio[.active] > check, label
 //!    ╰─ tabs > button.tab[.active] > text
 //! ```
 
@@ -42,6 +44,7 @@ use crate::daemon::view::dialog_surface;
 use crate::gadgets::{AnyGadget, Context};
 use crate::locale::Locale;
 use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
+use crate::ui::menu::{RADIO_OFF, RADIO_ON};
 use crate::ui::tabs::{self, Tab};
 use crate::ui::theme::{self, Node};
 use crate::ui::{popup, toast};
@@ -75,8 +78,9 @@ const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
 ];
 const BUTTONS_ROW: usize = 3;
 
-/// The sample tabs, the first one open.
-const TABS: &[&str] = &["button.tab.active", "button.tab", "button.tab"];
+/// How many sample radios and tabs: a click chooses one.
+const RADIOS: usize = 2;
+const TABS: usize = 3;
 
 /// The icon the sample buttons draw.
 const BUTTON_ICON: &str = "dialog-information-symbolic";
@@ -103,6 +107,9 @@ pub(crate) struct Showcase {
     osd: osd::Content,
     /// A press landed beside the parts: the release closes.
     pressed_outside: bool,
+    /// The chosen sample radio, the open sample tab.
+    radio: usize,
+    tab: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +121,9 @@ pub(crate) enum Message {
     Released,
     /// Escape, on window `Id`.
     Escape(Id),
+    /// A sample radio chosen, a sample tab opened.
+    Radio(usize),
+    Tab(usize),
 }
 
 impl Showcase {
@@ -255,6 +265,8 @@ impl AriaShell {
                 outputs: None,
             },
             pressed_outside: false,
+            radio: 0,
+            tab: 0,
         });
         self.resolve_icons();
         let settings = NewLayerShellSettings {
@@ -295,6 +307,14 @@ impl AriaShell {
         };
         match message {
             Message::Nothing => Task::none(),
+            Message::Radio(i) => {
+                showcase.radio = i;
+                Task::none()
+            }
+            Message::Tab(i) => {
+                showcase.tab = i;
+                Task::none()
+            }
             Message::PressedOutside => {
                 showcase.pressed_outside = true;
                 Task::none()
@@ -365,7 +385,11 @@ impl AriaShell {
             column(popups).spacing(GAP),
             launcher,
             column![exiter, osd].extend(toasts).spacing(GAP),
-            column![inert(self.bar_buttons_view()), inert(self.buttons_view())].spacing(GAP),
+            column![
+                inert(self.bar_buttons_view()),
+                inert(self.buttons_view(showcase))
+            ]
+            .spacing(GAP),
         ]
         .spacing(GAP);
         let content = container(parts)
@@ -409,7 +433,7 @@ impl AriaShell {
 
     /// The other kinds of buttons, in a popup's box, each labelled by
     /// the selector that styles it.
-    fn buttons_view(&self) -> Element<'_, Shell> {
+    fn buttons_view<'a>(&'a self, showcase: &Showcase) -> Element<'a, Shell> {
         let theme = &self.theme;
         let popup = Node::root("popup").id("showcase");
         let list = popup.child("buttons");
@@ -445,11 +469,41 @@ impl AriaShell {
                     .into(),
             );
         }
-        let tabs = TABS.iter().enumerate().map(|(i, &label)| Tab {
-            name: None,
-            label,
-            active: i == 0,
-            on_press: nothing(()),
+        let radios = (0..RADIOS).map(|i| {
+            let on = i == showcase.radio;
+            let node = list
+                .child("button")
+                .class("radio")
+                .class_if("active", on)
+                .nth(i, RADIOS);
+            let (glyph, label) = match on {
+                true => (RADIO_ON, "button.radio.active"),
+                false => (RADIO_OFF, "button.radio"),
+            };
+            let content = row![
+                theme.text(&node.child("check"), glyph),
+                theme.text(&node.child("label"), label),
+            ]
+            .spacing(theme.resolve(&node).gap)
+            .align_y(Alignment::Center);
+            theme
+                .button(&node, content)
+                .on_press(Shell::Showcase(Message::Radio(i)))
+                .into()
+        });
+        rows.push(row(radios).spacing(BUTTONS_GAP).into());
+        let tabs = (0..TABS).map(|i| {
+            let active = i == showcase.tab;
+            Tab {
+                name: None,
+                label: if active {
+                    "button.tab.active"
+                } else {
+                    "button.tab"
+                },
+                active,
+                on_press: Shell::Showcase(Message::Tab(i)),
+            }
         });
         let tabs = tabs::view(theme, &list.child("tabs"), tabs, Length::Shrink);
         let content = theme.container(

@@ -114,9 +114,10 @@
  * an icon's height; the bar's buttons are under Gadgets. A disabled
  * button's icon is muted too.
  *
- * button[.flat|.primary|.danger|.active|.peek]
+ * button[.flat|.primary|.danger|.active|.peek|.radio]
  * ├─ icon      drawn at `height` (symbolic: `color`)
- * ╰─ text
+ * ├─ text
+ * ╰─ check, label   (.radio)
  *
  * button            bordered: a dialog's, a notification's, a popup's actions
  * button.flat       no border, a background on hover: rows, icons, the exit menu's grid
@@ -125,6 +126,8 @@
  * button.active     a toggle that is on: do-not-disturb, mute, the power profile
  * button.peek       the eye by a password field: just its colour, .active while
  *                   the password shows
+ * button.radio      one of a group, .active the chosen one: `check` (● / ○,
+ *                   accent on the chosen one) and its `label`
  */
 button {
   padding: 4px 8px;
@@ -182,6 +185,25 @@ button.peek:hover,
 button.peek.active {
   background: transparent;
   color: var(--aria-fg);
+}
+button.radio {
+  padding: 0 4px;
+  gap: 6px;
+  border: none;
+}
+button.radio.active {
+  background: transparent;
+  color: var(--aria-fg);
+}
+button.radio:hover,
+button.radio.active:hover {
+  background: var(--aria-border);
+}
+button.radio check {
+  color: var(--aria-muted);
+}
+button.radio.active check {
+  color: var(--aria-accent);
 }
 
 /*
@@ -1358,8 +1380,9 @@ gadget.system-monitor section.processes > actions.none > text {
  * (.none: no output); left: the popup, wheel: volume, middle: mute,
  * right: `mixer_command`; `gap` before the percent (show_percent).
  * button.input: the default input, the same way (show_microphone). In
- * the popup a channel's name is a button on a device that isn't the
- * default; a player's .disabled controls are what it can't do.
+ * the popup a device's radio marks the default one, a click on another
+ * makes it the default; a player's :disabled controls are what it
+ * can't do.
  *
  * gadget.audio
  * ├─ button.output[.muted][.none]
@@ -1373,8 +1396,10 @@ gadget.system-monitor section.processes > actions.none > text {
  *    ├─ channel.output|.input|.stream[.muted][.default][name="..."]
  *    │  ├─ button.mute[.active]   toggles mute
  *    │  │  ╰─ icon            the device's / app's icon
- *    │  ├─ name
- *    │  │  ╰─ text
+ *    │  ├─ button.radio[.active]   a device's name (see `button.radio`): .active the
+ *    │  │  ├─ check               default, a click on another makes it the default
+ *    │  │  ╰─ label
+ *    │  ├─ name > text         a stream's name
  *    │  ├─ value              the percent
  *    │  ╰─ slider             (see `slider`)
  *    ├─ player.playing|.paused|.stopped[name="..."]
@@ -1407,14 +1432,7 @@ gadget.audio channel button.mute {
 gadget.audio channel button.mute icon {
   height: 20px;
 }
-gadget.audio channel name {
-  padding: 0 2px;
-  border-radius: 2px;
-}
-gadget.audio channel name:hover {
-  background: var(--aria-border);
-}
-gadget.audio channel.default name text {
+gadget.audio channel.default label {
   font-weight: bold;
 }
 gadget.audio channel value {

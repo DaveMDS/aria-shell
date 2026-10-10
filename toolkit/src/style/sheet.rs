@@ -10,10 +10,11 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use super::computed::Computed;
+use super::keyframes::{Frame, Keyframes};
 use super::node::{Ancestors, Names, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step};
 use super::parse::{self, Loc};
 use super::selector::{Ctx, Nth, Selector};
-use super::value::{self, Assets, Decl};
+use super::value::{self, Assets, Decl, Moving};
 
 /// The toolkit's base stylesheet: every element, class and property,
 /// documented, with neutral defaults. Always first.
@@ -132,6 +133,8 @@ pub struct Sheet {
     pub(crate) scheme_class: super::node::Name,
     /// What a root inherits from.
     pub(crate) initial: Arc<Computed>,
+    /// `@keyframes`, by name: the last one of a name wins.
+    pub(crate) keyframes: FxHashMap<Arc<str>, Arc<Keyframes>>,
     pub(crate) tree: RefCell<Tree>,
 }
 
@@ -192,6 +195,7 @@ impl Sheet {
         }
 
         let mut rules = Vec::new();
+        let mut keyframes = FxHashMap::default();
         let mut assets = Assets {
             dir: None,
             loaded: FxHashMap::default(),
@@ -199,6 +203,55 @@ impl Sheet {
         for (index, (source, dir, file)) in files.into_iter().enumerate() {
             let origin = u8::from(index > 0);
             assets.dir = dir.map(Path::to_path_buf);
+            for raw in file.keyframes {
+                let mut frames = Vec::new();
+                for (offsets, raw_decls) in raw.frames {
+                    let mut decls = Vec::new();
+                    for d in raw_decls {
+                        let parsed = parse::substitute(&d.value, &vars)
+                            .and_then(|value| value::parse(&d.name, &value, &mut assets));
+                        match parsed {
+                            Ok(longhands) => {
+                                if longhands.iter().any(|l| Moving::of(l) == 0) {
+                                    warnings.push(warning(
+                                        source,
+                                        d.location,
+                                        format!(
+                                            "`{}` doesn't move in `@keyframes`: colours, opacity, shadows, transforms only, skipped",
+                                            d.name
+                                        ),
+                                    ));
+                                }
+                                decls.extend(longhands.into_iter().filter(|l| Moving::of(l) != 0));
+                            }
+                            Err(message) => warnings.push(warning(
+                                source,
+                                d.location,
+                                format!("`{}`: {message}, skipped", d.name),
+                            )),
+                        }
+                    }
+                    let sets = decls.iter().fold(0, |set, d| set | Moving::of(d));
+                    let decls: Arc<[Decl]> = decls.into();
+                    for offset in offsets {
+                        frames.push(Frame {
+                            offset,
+                            decls: decls.clone(),
+                            sets,
+                        });
+                    }
+                }
+                frames.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+                let name: Arc<str> = raw.name.into();
+                keyframes.insert(
+                    name.clone(),
+                    Arc::new(Keyframes {
+                        sets: frames.iter().fold(0, |set, f| set | f.sets),
+                        name,
+                        frames,
+                    }),
+                );
+            }
             for raw in file.rules {
                 let mut decls = Vec::new();
                 for d in raw.decls {
@@ -268,6 +321,7 @@ impl Sheet {
                 Scheme::Dark => dark,
             },
             initial: Arc::new(Computed::initial()),
+            keyframes,
             tree: RefCell::new(Tree {
                 names,
                 nodes: Nodes::default(),

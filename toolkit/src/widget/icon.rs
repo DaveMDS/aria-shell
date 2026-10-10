@@ -11,10 +11,12 @@ use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::mouse;
 use iced::advanced::renderer;
 use iced::advanced::svg::{self, Renderer as _};
-use iced::advanced::widget::{Tree, Widget};
+use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
-use iced::{Length, Radians, Rectangle, Size};
+use iced::{Event, Length, Radians, Rectangle, Size};
 
+use crate::anim::Animated;
 use crate::layout::snap;
 use crate::paint::fade;
 use crate::style::{Computed, Node, Size as Len, States};
@@ -99,6 +101,32 @@ impl Icon<'_> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Animated>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Animated::new(self.node))
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.state.downcast_mut::<Animated>().diff(self.node);
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        tree.state.downcast_mut::<Animated>().update(event, shell);
+    }
+
     fn size(&self) -> Size<Length> {
         let natural = self.natural();
         let length = |len: Len, px: f32| match len {
@@ -136,7 +164,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
 
     fn draw(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
@@ -154,14 +182,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         let Some(file) = file else {
             return;
         };
-        let s = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let moving = tree
+            .state
+            .downcast_ref::<Animated>()
+            .style(&resolved, theme);
+        let s = moving.as_ref().unwrap_or(&resolved);
         let opacity = theme.opacity * s.opacity;
+        let rotation = Radians(s.rotate.to_radians());
         match file {
             IconFile::Svg { handle, symbolic } => renderer.draw_svg(
                 svg::Svg {
                     handle,
                     color: symbolic.then(|| fade(s.color, opacity)),
-                    rotation: Radians(0.0),
+                    rotation,
                     opacity: if symbolic { 1.0 } else { opacity },
                 },
                 bounds,
@@ -170,6 +204,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
             IconFile::Image(handle) => {
                 let mut image = image::Image::new(handle);
                 image.opacity = opacity;
+                image.rotation = rotation;
                 image.border_radius = Radius {
                     top_left: s.border_radius[0],
                     top_right: s.border_radius[1],

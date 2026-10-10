@@ -7,11 +7,13 @@
 //! hover shows on the frame it happens. Only the states some rule can
 //! see are tracked (`Node::sensitivity`), so a pointer moving over an
 //! unthemed box asks no frame. A disabled box is never `:hover` or
-//! `:active`, unlike CSS: there's nothing to press.
+//! `:active`, unlike CSS: there's nothing to press. Its transitions and
+//! keyframe animations are `anim.rs`'s; when its animations end it can
+//! say so (`on_animation_end`): an app closes a surface after its exit
+//! animation that way.
 
 use std::cell::Cell;
 use std::sync::Arc;
-use std::time::Instant;
 
 use iced::advanced::Renderer as _;
 use iced::advanced::layout::{self, Layout, Limits};
@@ -22,6 +24,7 @@ use iced::advanced::{Clipboard, Shell, mouse};
 use iced::keyboard::{self, key};
 use iced::{Event, Length, Rectangle, Size, Transformation, touch};
 
+use crate::anim::Animated;
 use crate::layout::{flex, length, snap};
 use crate::paint::{draw_box, draw_outline, fade};
 use crate::style::{Ancestors, Computed, Direction, Node, States};
@@ -34,6 +37,7 @@ pub struct Flex<'a, Message> {
     direction: Direction,
     children: Vec<Element<'a, Message>>,
     on_press: Option<Message>,
+    on_animation_end: Option<Message>,
 }
 
 /// A box laying `children` out in a row.
@@ -73,6 +77,7 @@ impl<'a, Message> Flex<'a, Message> {
             direction,
             children: children.into_iter().collect(),
             on_press: None,
+            on_animation_end: None,
         }
     }
 
@@ -80,6 +85,13 @@ impl<'a, Message> Flex<'a, Message> {
     /// `:disabled`.
     pub fn on_press(mut self, message: Message) -> Self {
         self.on_press = Some(message);
+        self
+    }
+
+    /// What it sends when its keyframe animations end (none of them
+    /// infinite): an exit animation over, its surface can go.
+    pub fn on_animation_end(mut self, message: Message) -> Self {
+        self.on_animation_end = Some(message);
         self
     }
 
@@ -119,10 +131,11 @@ impl<Message: Clone> Flex<'_, Message> {
         // What its children get: its states, where a descendant's style
         // can see them; its opacity.
         let seen = state.states & self.node.sensitivity().descendants;
+        let since = state.animated.since;
         let derived;
-        let theme = if !seen.is_empty() || theme.changed < state.since || opacity != theme.opacity {
+        let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity {
             derived = theme
-                .under(self.node.depth(), seen, state.since)
+                .under(self.node.depth(), seen, since)
                 .with_opacity(opacity);
             &derived
         } else {
@@ -176,6 +189,11 @@ impl<Message: Clone> Flex<'_, Message> {
                 States::NONE
             };
         let state = tree.state.downcast_mut::<State>();
+        if state.animated.update(event, shell)
+            && let Some(message) = &self.on_animation_end
+        {
+            shell.publish(message.clone());
+        }
         let before = state.states;
         let bounds = border_box(layout.bounds(), &self.style, self.node.scale());
         let over = cursor.is_over(bounds);
@@ -217,7 +235,7 @@ impl<Message: Clone> Flex<'_, Message> {
 
         let changed = before != state.states;
         if changed {
-            state.since = Some(Instant::now());
+            state.animated.changed();
         }
         if changed && tracked.intersects(before ^ state.states) {
             shell.request_redraw();
@@ -232,11 +250,11 @@ impl<Message: Clone> Flex<'_, Message> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct State {
     states: States,
-    /// When its states last changed.
-    since: Option<Instant>,
+    /// Its transitions and animations, and when it last changed.
+    animated: Animated,
     /// The `transform` it was last drawn with (an ancestor's state may
     /// set it, which only draw sees): the pointer is taken back through
     /// it, so that hit testing follows what's drawn.
@@ -259,14 +277,16 @@ impl Focusable for State {
     }
 
     fn focus(&mut self) {
-        self.states = self.states.with(States::FOCUS, true);
-        self.since = Some(Instant::now());
+        if !self.is_focused() {
+            self.states = self.states.with(States::FOCUS, true);
+            self.animated.changed();
+        }
     }
 
     fn unfocus(&mut self) {
         if self.is_focused() {
             self.states = self.states.with(States::FOCUS, false);
-            self.since = Some(Instant::now());
+            self.animated.changed();
         }
     }
 }
@@ -297,7 +317,11 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State {
+            states: States::NONE,
+            animated: Animated::new(self.node),
+            drawn: Cell::new(None),
+        })
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -305,6 +329,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     }
 
     fn diff(&self, tree: &mut Tree) {
+        tree.state.downcast_mut::<State>().animated.diff(self.node);
         tree.diff_children(&self.children);
     }
 
@@ -333,16 +358,18 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State>();
-        let s = self.node.resolve(state.states, &theme.ancestors);
-        let bounds = border_box(layout.bounds(), &s, self.node.scale());
+        let resolved = self.node.resolve(state.states, &theme.ancestors);
+        let moving = state.animated.style(&resolved, theme);
+        let s = moving.as_ref().unwrap_or(&resolved);
+        let bounds = border_box(layout.bounds(), s, self.node.scale());
         let transformation = s.transformation(bounds);
         state.drawn.set(transformation);
         let cursor = state.local(cursor);
         match transformation {
             Some(transformation) => renderer.with_transformation(transformation, |renderer| {
-                self.paint(tree, &s, bounds, renderer, theme, layout, cursor, viewport);
+                self.paint(tree, s, bounds, renderer, theme, layout, cursor, viewport);
             }),
-            None => self.paint(tree, &s, bounds, renderer, theme, layout, cursor, viewport),
+            None => self.paint(tree, s, bounds, renderer, theme, layout, cursor, viewport),
         }
     }
 

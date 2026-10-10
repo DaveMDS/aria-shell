@@ -8,11 +8,12 @@ use iced::{Color, Font};
 
 use super::fonts;
 use super::images::{Nine, Picture};
+use super::keyframes::Keyframes;
 use super::value::{
-    Align, BackgroundSize, ColorValue, Decl, Direction, FULL_SLICE, FamilyName, FontStyle, Justify,
-    LineHeight, LineStyle, MinSize, ObjectFit, Origin, Prop, Repeat, Shadows, Side, Size,
-    TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WeightValue,
-    WhiteSpace, Wide,
+    Align, AnimationDirection, BackgroundSize, ColorValue, Decl, Direction, Easing, FULL_SLICE,
+    FamilyName, FillMode, FontStyle, Justify, LineHeight, LineStyle, MinSize, Moving, ObjectFit,
+    Origin, Prop, Repeat, Shadows, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow,
+    TextTransform, Transform, WeightValue, WhiteSpace, Wide,
 };
 
 /// Four lengths, one per side.
@@ -49,6 +50,68 @@ impl Sides {
             Side::Bottom => self.bottom = value,
             Side::Left => self.left = value,
         }
+    }
+}
+
+/// `transition`'s lists, as CSS keeps them: the i-th transition takes
+/// the i-th of each, a shorter list repeating.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transitions {
+    /// Sets of `Moving` bits.
+    pub property: Arc<[u16]>,
+    pub duration: Arc<[f32]>,
+    pub easing: Arc<[Easing]>,
+    pub delay: Arc<[f32]>,
+}
+
+impl Transitions {
+    fn initial() -> Self {
+        Self {
+            property: Arc::from([Moving::ALL.iter().fold(0, |set, m| set | m.bit())]),
+            duration: Arc::from([0.0]),
+            easing: Arc::from([Easing::EASE]),
+            delay: Arc::from([0.0]),
+        }
+    }
+
+    /// Whether any of them takes time.
+    pub fn any(&self) -> bool {
+        !self.property.is_empty() && self.duration.iter().any(|d| *d > 0.0)
+    }
+}
+
+/// `animation`'s lists, as CSS keeps them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Animations {
+    pub names: Arc<[Option<Arc<str>>]>,
+    /// The names' `@keyframes`, found in the sheet.
+    pub keyframes: Arc<[Option<Arc<Keyframes>>]>,
+    pub duration: Arc<[f32]>,
+    pub easing: Arc<[Easing]>,
+    pub delay: Arc<[f32]>,
+    /// `f32::INFINITY` for `infinite`.
+    pub count: Arc<[f32]>,
+    pub direction: Arc<[AnimationDirection]>,
+    pub fill: Arc<[FillMode]>,
+}
+
+impl Animations {
+    fn initial() -> Self {
+        Self {
+            names: Arc::from([None]),
+            keyframes: Arc::from([None]),
+            duration: Arc::from([0.0]),
+            easing: Arc::from([Easing::EASE]),
+            delay: Arc::from([0.0]),
+            count: Arc::from([1.0]),
+            direction: Arc::from([AnimationDirection::Normal]),
+            fill: Arc::from([FillMode::None]),
+        }
+    }
+
+    /// Whether one of them has its `@keyframes`.
+    pub fn any(&self) -> bool {
+        self.keyframes.iter().any(Option::is_some)
     }
 }
 
@@ -125,6 +188,10 @@ pub struct Computed {
     /// The source cut at the slices: drawn in place of the border.
     pub border_image: Option<Arc<Nine>>,
     pub object_fit: ObjectFit,
+    /// Degrees: an icon's or an image's turn.
+    pub rotate: f32,
+    pub transitions: Transitions,
+    pub animations: Animations,
     /// The family picked from `font_family`, with the weight and style.
     pub font: Font,
     /// `line-height`, in logical px: whole device pixels.
@@ -185,6 +252,9 @@ impl Computed {
             border_image_slice: FULL_SLICE,
             border_image: None,
             object_fit: ObjectFit::Fill,
+            rotate: 0.0,
+            transitions: Transitions::initial(),
+            animations: Animations::initial(),
             font: Font::DEFAULT,
             line_height_px: 0.0,
             ascent: 0.0,
@@ -331,6 +401,18 @@ impl<'p> Cascade<'p> {
             Decl::BorderImageSource(v) => out.border_image_source = v.clone(),
             Decl::BorderImageSlice(slices, fill) => out.border_image_slice = (*slices, *fill),
             Decl::ObjectFit(v) => out.object_fit = *v,
+            Decl::Rotate(v) => out.rotate = *v,
+            Decl::TransitionProperty(v) => out.transitions.property = v.clone(),
+            Decl::TransitionDuration(v) => out.transitions.duration = v.clone(),
+            Decl::TransitionTimingFunction(v) => out.transitions.easing = v.clone(),
+            Decl::TransitionDelay(v) => out.transitions.delay = v.clone(),
+            Decl::AnimationName(v) => out.animations.names = v.clone(),
+            Decl::AnimationDuration(v) => out.animations.duration = v.clone(),
+            Decl::AnimationTimingFunction(v) => out.animations.easing = v.clone(),
+            Decl::AnimationDelay(v) => out.animations.delay = v.clone(),
+            Decl::AnimationIterationCount(v) => out.animations.count = v.clone(),
+            Decl::AnimationDirection(v) => out.animations.direction = v.clone(),
+            Decl::AnimationFillMode(v) => out.animations.fill = v.clone(),
             Decl::Wide(prop, wide) => {
                 let inherit = match wide {
                     Wide::Inherit => true,
@@ -570,5 +652,17 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::BorderImageSource => to.border_image_source = from.border_image_source.clone(),
         Prop::BorderImageSlice => to.border_image_slice = from.border_image_slice,
         Prop::ObjectFit => to.object_fit = from.object_fit,
+        Prop::Rotate => to.rotate = from.rotate,
+        Prop::TransitionProperty => to.transitions.property = from.transitions.property.clone(),
+        Prop::TransitionDuration => to.transitions.duration = from.transitions.duration.clone(),
+        Prop::TransitionTimingFunction => to.transitions.easing = from.transitions.easing.clone(),
+        Prop::TransitionDelay => to.transitions.delay = from.transitions.delay.clone(),
+        Prop::AnimationName => to.animations.names = from.animations.names.clone(),
+        Prop::AnimationDuration => to.animations.duration = from.animations.duration.clone(),
+        Prop::AnimationTimingFunction => to.animations.easing = from.animations.easing.clone(),
+        Prop::AnimationDelay => to.animations.delay = from.animations.delay.clone(),
+        Prop::AnimationIterationCount => to.animations.count = from.animations.count.clone(),
+        Prop::AnimationDirection => to.animations.direction = from.animations.direction.clone(),
+        Prop::AnimationFillMode => to.animations.fill = from.animations.fill.clone(),
     }
 }

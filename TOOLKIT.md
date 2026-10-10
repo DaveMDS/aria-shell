@@ -497,12 +497,17 @@ child), so that a list whose items move keeps each item's tree state
 
 - **Transitions** (`transition: <property> <duration> <easing>
   <delay>`): colours (interpolated premultiplied, as CSS does: the
-  prototype's plain interpolation from `transparent` went through grey),
-  opacity, transform, shadow. Layout properties don't animate.
+  prototype's plain interpolation from `transparent` went through grey;
+  `color`, `background-color`, `border-color`, `outline-color`),
+  opacity, transform, `rotate`, shadow. Layout properties don't
+  animate.
 - **Keyframes** (`@keyframes`, `animation: name duration easing count
-  direction fill-mode`): opacity, transform, an svg's or image's
-  rotation. Started when the widget first appears (its tree state is
-  created) or when its class changes to one naming an animation.
+  direction fill-mode`): what transitions move, and an svg's or an
+  image's turn (CSS's `rotate`, which only they take). Started when the
+  widget first appears (its tree state is created) or when its class
+  changes to one naming an animation. A property a step leaves out comes
+  from the steps around it that set it, or from the element's own value
+  at the ends, as CSS's implicit keyframes.
 - **Easing**: CSS's keywords and `cubic-bezier()`, `steps()`; our own
   solver (iced's `Animation` uses lilt, whose custom easing is a plain
   `fn`: no parameters).
@@ -624,14 +629,14 @@ the headless harness and the query with them.
    changes.
 2. ✅ Boxes, text and icons: the box model, the flex subset, the scale,
    painting (background, border, radius, shadow), wrapping, ellipsis
-   and trim; `Measure`. 🔲 The headless harness, the first golden
-   images, and `benches/` from here on.
+   and trim; `Measure`; the headless harness (`testing`). 🔲 The first
+   golden images, and `benches/` from here on.
 3. ✅ States and events: hover, press, focus, disabled, the ancestors'
    states through `Theme`; buttons, `focus_scope`. 🔲 The query.
 4. ✅ The rest of painting and text: borders whose sides differ,
    outline, opacity, transform, background images and 9-patches;
    `text-align`, italic, `text-transform`; images.
-5. Animation: transitions, keyframes, exit animations.
+5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle, slider, input, scroll, menu,
    calendar, tabs, meter, gauge, graphs, tooltip, surface; select last.
 

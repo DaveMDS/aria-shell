@@ -4248,6 +4248,7 @@ dependencies = [
  "cssparser",
  "env_logger",
  "iced",
+ "iced_runtime",
  "image",
  "log",
  "notify",

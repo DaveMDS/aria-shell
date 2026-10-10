@@ -15,6 +15,13 @@ cssparser = "0.38"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 rustc-hash = "2"
 log = "0.4"
+# The headless harness's `UserInterface` (iced doesn't re-export it):
+# already in iced's tree, compiled anyway.
+iced_runtime = "0.14"
+
+[features]
+# The headless harness, for an app's tests too.
+testing = []
 
 [dev-dependencies]
 iced = { version = "0.14", features = ["tokio"] }

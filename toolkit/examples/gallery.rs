@@ -40,6 +40,10 @@ struct Gallery {
     photo: image::Handle,
     /// The last button pressed, and how many times in a row.
     pressed: Option<(&'static str, u32)>,
+    /// The box shakes until its animation ends.
+    shaking: bool,
+    /// The toast, shown: `true` while it leaves.
+    toast: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +54,12 @@ enum Message {
     Window(window::Id, window::Event),
     Scale(f32),
     Pressed(&'static str),
+    Shake,
+    Shaken,
+    Toast,
+    Dismiss,
+    /// The toast's animation ended: in, or out.
+    Toasted,
 }
 
 /// A symbolic icon: one colour, the element's.
@@ -103,6 +113,8 @@ impl Gallery {
             picture: IconFile::Image(picture()),
             photo: photo(),
             pressed: None,
+            shaking: false,
+            toast: None,
         }
     }
 
@@ -124,6 +136,15 @@ impl Gallery {
                 self.scale = scale;
             }
             Message::Window(..) => {}
+            Message::Shake => self.shaking = true,
+            Message::Shaken => self.shaking = false,
+            Message::Toast => self.toast = Some(false),
+            Message::Dismiss => self.toast = self.toast.map(|_| true),
+            Message::Toasted => {
+                if self.toast == Some(true) {
+                    self.toast = None;
+                }
+            }
             Message::Pressed(name) => {
                 self.pressed = match self.pressed {
                     Some((last, n)) if last == name => Some((name, n + 1)),
@@ -147,6 +168,7 @@ impl Gallery {
             root,
             [
                 self.buttons(root),
+                self.animation(root),
                 self.boxes(root),
                 self.painting(root),
                 self.images(root),
@@ -238,6 +260,63 @@ impl Gallery {
             [tk::text(section.child("heading"), title).into(), content],
         )
         .into()
+    }
+
+    fn animation<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+        let section = root.child("section");
+        let row = section.child("row");
+        let labelled = |node: Node<'a>, text: &'static str| -> Element<'a, Message> {
+            tk::text(node.child("label"), text).into()
+        };
+        let pulse = row.child("pulse");
+        let shaken = row
+            .child("box")
+            .class("shake")
+            .class_if("shaking", self.shaking);
+        let shake = row.child("button");
+        let toggle = row.child("button");
+        let mut items: Vec<Element<'a, Message>> = vec![
+            tk::icon(row.child("spinner"), self.star.clone()).into(),
+            tk::row(pulse, [labelled(pulse, "Pulse")]).into(),
+            tk::row(shaken, [labelled(shaken, "Shaken on demand")])
+                .on_animation_end(Message::Shaken)
+                .into(),
+            tk::button(shake, [labelled(shake, "Shake")])
+                .on_press(Message::Shake)
+                .into(),
+            tk::button(
+                toggle,
+                [labelled(
+                    toggle,
+                    if self.toast.is_some() {
+                        "Dismiss"
+                    } else {
+                        "Toast"
+                    },
+                )],
+            )
+            .on_press(if self.toast.is_some() {
+                Message::Dismiss
+            } else {
+                Message::Toast
+            })
+            .into(),
+        ];
+        if let Some(leaving) = self.toast {
+            let toast = row.child("toast").class_if("leaving", leaving);
+            items.push(
+                tk::row(
+                    toast,
+                    [
+                        tk::icon(toast.child("icon"), self.star.clone()).into(),
+                        labelled(toast, "A toast: in, and out when dismissed"),
+                    ],
+                )
+                .on_animation_end(Message::Toasted)
+                .into(),
+            );
+        }
+        self.section(section, "Animation", tk::row(row, items).into())
     }
 
     fn boxes<'a>(&self, root: Node<'a>) -> Element<'a, Message> {

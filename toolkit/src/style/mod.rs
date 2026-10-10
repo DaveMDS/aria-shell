@@ -11,6 +11,7 @@ mod cascade;
 mod computed;
 mod fonts;
 mod images;
+mod keyframes;
 mod node;
 mod parse;
 mod selector;
@@ -19,12 +20,15 @@ mod sheet;
 mod tests;
 mod value;
 
-pub use computed::{Computed, InsetShadow, Shadow, Sides};
+pub use computed::{Animations, Computed, InsetShadow, Shadow, Sides, Transitions};
 pub use images::{Drawn, Nine, Picture};
+pub use keyframes::Keyframes;
 pub use node::{Ancestors, Node, Sensitivity, States};
 pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
+pub(crate) use value::Moving;
 pub use value::{
-    Align, BackgroundSize, Corner, Direction, EdgeOver, EdgeUnder, FamilyName, FontStyle, Justify,
-    LineHeight, MinSize, ObjectFit, Origin, Repeat, Side, Size, TextAlign, TextBoxEdge,
-    TextBoxTrim, TextOverflow, TextTransform, Transform, WhiteSpace,
+    Align, AnimationDirection, BackgroundSize, Corner, Direction, Easing, EdgeOver, EdgeUnder,
+    FamilyName, FillMode, FontStyle, Justify, LineHeight, MinSize, ObjectFit, Origin, Repeat, Side,
+    Size, StepPosition, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform,
+    Transform, WhiteSpace,
 };

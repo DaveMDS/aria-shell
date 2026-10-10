@@ -11,10 +11,12 @@ use iced::advanced::mouse;
 use iced::advanced::renderer;
 use iced::advanced::text::{self, Paragraph as _, Renderer as _, paragraph::Plain};
 use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::{Clipboard, Shell};
 use iced::alignment::Vertical;
 use iced::widget::text::{LineHeight, Shaping, Wrapping};
-use iced::{Length, Pixels, Point, Rectangle, Size};
+use iced::{Event, Length, Pixels, Point, Rectangle, Size};
 
+use crate::anim::Animated;
 use crate::layout::{snap, snap_up};
 use crate::paint::fade;
 use crate::style::{
@@ -75,6 +77,8 @@ struct State {
     /// ask several), so behind a `RefCell` (draw has the tree
     /// read-only).
     cut: RefCell<Option<(f32, Plain<Paragraph>)>>,
+    /// Its colour's and opacity's transitions and animations.
+    animated: Animated,
 }
 
 /// What a paragraph is shaped from: `width` to wrap at, aligned within
@@ -169,7 +173,29 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
             trim: (0.0, 0.0),
             baseline: 0.0,
             cut: RefCell::new(None),
+            animated: Animated::new(self.node),
         })
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.state.downcast_mut::<State>().animated.diff(self.node);
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        tree.state
+            .downcast_mut::<State>()
+            .animated
+            .update(event, shell);
     }
 
     fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -238,7 +264,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         }
         let state = tree.state.downcast_ref::<State>();
         // Its colour may follow an ancestor's state: `button:hover label`.
-        let s = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let moving = state.animated.style(&resolved, theme);
+        let s = moving.as_ref().unwrap_or(&resolved);
         let color = fade(s.color, theme.opacity * s.opacity);
         let bounds = layout.bounds();
         let scale = self.node.scale();

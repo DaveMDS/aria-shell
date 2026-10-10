@@ -6,6 +6,8 @@ mod focus;
 mod icon;
 mod image;
 mod surface;
+#[cfg(test)]
+mod tests;
 mod text;
 
 pub use flex::{Flex, button, column, row};

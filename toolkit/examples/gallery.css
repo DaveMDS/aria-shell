@@ -6,6 +6,7 @@
  * ╰─ section                 one kind of widget
  *    ├─ heading
  *    ├─ buttons > row > button[.flat|.primary|.danger|.grow], card, grow; status
+ *    ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
  *    ├─ row                  boxes, side by side
  *    │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
  *    ├─ painting > row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
@@ -58,6 +59,13 @@ card {
 card > icon {
   height: 16px;
 }
+card {
+  transition: background-color 200ms, box-shadow 200ms;
+}
+card label,
+card icon {
+  transition: color 200ms;
+}
 card:hover {
   background: var(--bg);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
@@ -74,6 +82,79 @@ grow {
 }
 grow:hover {
   padding: 14px 24px;
+}
+
+/* Animation */
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes pulse {
+  from {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes shake {
+  20%, 60% {
+    transform: translateX(-6px);
+  }
+  40%, 80% {
+    transform: translateX(6px);
+  }
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+spinner {
+  height: 24px;
+  color: var(--accent);
+  animation: spin 1.2s linear infinite;
+}
+pulse {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+box.shake {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+}
+box.shaking {
+  border-color: var(--danger);
+  animation: shake 400ms ease-in-out;
+}
+toast {
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slide-in 250ms ease-out;
+}
+toast > icon {
+  height: 16px;
+}
+toast.leaving {
+  animation: fade-out 200ms ease-in forwards;
 }
 
 /* Boxes */

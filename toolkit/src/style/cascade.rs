@@ -55,7 +55,16 @@ impl Sheet {
                 }
             }
         }
-        Arc::new(cascade.finish(node.scale))
+        let mut style = cascade.finish(node.scale);
+        if style.animations.names.iter().any(Option::is_some) {
+            style.animations.keyframes = style
+                .animations
+                .names
+                .iter()
+                .map(|name| name.as_ref().and_then(|n| self.keyframes.get(n).cloned()))
+                .collect();
+        }
+        Arc::new(style)
     }
 
     /// The rules that may match an element of type `kind`, in cascade

@@ -301,6 +301,117 @@ pub enum ObjectFit {
     ScaleDown,
 }
 
+/// A timing function.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Easing {
+    Linear,
+    CubicBezier(f32, f32, f32, f32),
+    Steps(u32, StepPosition),
+}
+
+impl Easing {
+    pub const EASE: Self = Self::CubicBezier(0.25, 0.1, 0.25, 1.0);
+}
+
+/// Where `steps()` jump.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepPosition {
+    JumpStart,
+    JumpEnd,
+    JumpNone,
+    JumpBoth,
+}
+
+/// `animation-direction`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationDirection {
+    Normal,
+    Reverse,
+    Alternate,
+    AlternateReverse,
+}
+
+/// `animation-fill-mode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FillMode {
+    None,
+    Forwards,
+    Backwards,
+    Both,
+}
+
+/// One property that moves: paint only, layout never animates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Moving {
+    Color,
+    Background,
+    BorderColor,
+    OutlineColor,
+    Opacity,
+    Shadow,
+    Transform,
+    Rotate,
+}
+
+impl Moving {
+    pub const ALL: [Moving; 8] = [
+        Moving::Color,
+        Moving::Background,
+        Moving::BorderColor,
+        Moving::OutlineColor,
+        Moving::Opacity,
+        Moving::Shadow,
+        Moving::Transform,
+        Moving::Rotate,
+    ];
+
+    /// Its bit in a set of them.
+    pub fn bit(self) -> u16 {
+        1 << self as u16
+    }
+
+    /// The set a property's name stands for in `transition`, `None` for
+    /// one that doesn't move.
+    fn named(name: &str) -> Option<u16> {
+        Some(match name {
+            "all" => Self::ALL.iter().fold(0, |set, m| set | m.bit()),
+            "color" => Moving::Color.bit(),
+            "background" | "background-color" => Moving::Background.bit(),
+            "border"
+            | "border-color"
+            | "border-top"
+            | "border-right"
+            | "border-bottom"
+            | "border-left"
+            | "border-top-color"
+            | "border-right-color"
+            | "border-bottom-color"
+            | "border-left-color" => Moving::BorderColor.bit(),
+            "outline" | "outline-color" => Moving::OutlineColor.bit(),
+            "opacity" => Moving::Opacity.bit(),
+            "box-shadow" => Moving::Shadow.bit(),
+            "transform" | "translate" | "scale" => Moving::Transform.bit(),
+            "rotate" => Moving::Rotate.bit(),
+            _ => return None,
+        })
+    }
+
+    /// Which of them a declaration sets.
+    pub fn of(decl: &Decl) -> u16 {
+        match decl {
+            Decl::Color(_) => Moving::Color.bit(),
+            Decl::Background(_) => Moving::Background.bit(),
+            Decl::BorderColor(..) => Moving::BorderColor.bit(),
+            Decl::OutlineColor(_) => Moving::OutlineColor.bit(),
+            Decl::Opacity(_) => Moving::Opacity.bit(),
+            Decl::BoxShadow(_) => Moving::Shadow.bit(),
+            Decl::Transform(_) => Moving::Transform.bit(),
+            Decl::Rotate(_) => Moving::Rotate.bit(),
+            _ => 0,
+        }
+    }
+}
+
 /// What `url()`s are loaded from: the sheet's directory, and what's
 /// been loaded already (each file once a load).
 pub(crate) struct Assets {
@@ -357,6 +468,18 @@ pub(crate) enum Prop {
     BorderImageSource,
     BorderImageSlice,
     ObjectFit,
+    Rotate,
+    TransitionProperty,
+    TransitionDuration,
+    TransitionTimingFunction,
+    TransitionDelay,
+    AnimationName,
+    AnimationDuration,
+    AnimationTimingFunction,
+    AnimationDelay,
+    AnimationIterationCount,
+    AnimationDirection,
+    AnimationFillMode,
 }
 
 impl Prop {
@@ -435,6 +558,22 @@ pub(crate) enum Decl {
     /// Top, right, bottom, left, in image pixels; `fill` keeps the middle.
     BorderImageSlice([f32; 4], bool),
     ObjectFit(ObjectFit),
+    /// Degrees.
+    Rotate(f32),
+    /// Sets of `Moving`, one per transition.
+    TransitionProperty(Arc<[u16]>),
+    TransitionDuration(Arc<[f32]>),
+    TransitionTimingFunction(Arc<[Easing]>),
+    TransitionDelay(Arc<[f32]>),
+    /// `None` for `none`.
+    AnimationName(Arc<[Option<Arc<str>>]>),
+    AnimationDuration(Arc<[f32]>),
+    AnimationTimingFunction(Arc<[Easing]>),
+    AnimationDelay(Arc<[f32]>),
+    /// `f32::INFINITY` for `infinite`.
+    AnimationIterationCount(Arc<[f32]>),
+    AnimationDirection(Arc<[AnimationDirection]>),
+    AnimationFillMode(Arc<[FillMode]>),
     Wide(Prop, Wide),
 }
 
@@ -496,6 +635,33 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "border-image-source" => vec![Prop::BorderImageSource],
         "border-image-slice" => vec![Prop::BorderImageSlice],
         "object-fit" => vec![Prop::ObjectFit],
+        "rotate" => vec![Prop::Rotate],
+        "transition" => vec![
+            Prop::TransitionProperty,
+            Prop::TransitionDuration,
+            Prop::TransitionTimingFunction,
+            Prop::TransitionDelay,
+        ],
+        "transition-property" => vec![Prop::TransitionProperty],
+        "transition-duration" => vec![Prop::TransitionDuration],
+        "transition-timing-function" => vec![Prop::TransitionTimingFunction],
+        "transition-delay" => vec![Prop::TransitionDelay],
+        "animation" => vec![
+            Prop::AnimationName,
+            Prop::AnimationDuration,
+            Prop::AnimationTimingFunction,
+            Prop::AnimationDelay,
+            Prop::AnimationIterationCount,
+            Prop::AnimationDirection,
+            Prop::AnimationFillMode,
+        ],
+        "animation-name" => vec![Prop::AnimationName],
+        "animation-duration" => vec![Prop::AnimationDuration],
+        "animation-timing-function" => vec![Prop::AnimationTimingFunction],
+        "animation-delay" => vec![Prop::AnimationDelay],
+        "animation-iteration-count" => vec![Prop::AnimationIterationCount],
+        "animation-direction" => vec![Prop::AnimationDirection],
+        "animation-fill-mode" => vec![Prop::AnimationFillMode],
         "color" => vec![Prop::Color],
         "box-shadow" => vec![Prop::BoxShadow],
         "opacity" => vec![Prop::Opacity],
@@ -762,6 +928,48 @@ fn value_of(
             let (slices, fill) = border_image_slice(p)?;
             vec![Decl::BorderImageSlice(slices, fill)]
         }
+        "rotate" => vec![Decl::Rotate(
+            if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+                0.0
+            } else {
+                angle(p)?
+            },
+        )],
+        "transition" => transition(p)?,
+        "transition-property" => vec![Decl::TransitionProperty(
+            if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+                Arc::from([])
+            } else {
+                p.parse_comma_separated(transition_property)?.into()
+            },
+        )],
+        "transition-duration" => vec![Decl::TransitionDuration(
+            p.parse_comma_separated(|p| duration(p))?.into(),
+        )],
+        "transition-timing-function" => vec![Decl::TransitionTimingFunction(
+            p.parse_comma_separated(easing)?.into(),
+        )],
+        "transition-delay" => vec![Decl::TransitionDelay(p.parse_comma_separated(time)?.into())],
+        "animation" => animation(p)?,
+        "animation-name" => vec![Decl::AnimationName(
+            p.parse_comma_separated(animation_name)?.into(),
+        )],
+        "animation-duration" => vec![Decl::AnimationDuration(
+            p.parse_comma_separated(|p| duration(p))?.into(),
+        )],
+        "animation-timing-function" => vec![Decl::AnimationTimingFunction(
+            p.parse_comma_separated(easing)?.into(),
+        )],
+        "animation-delay" => vec![Decl::AnimationDelay(p.parse_comma_separated(time)?.into())],
+        "animation-iteration-count" => vec![Decl::AnimationIterationCount(
+            p.parse_comma_separated(iteration_count)?.into(),
+        )],
+        "animation-direction" => vec![Decl::AnimationDirection(
+            p.parse_comma_separated(animation_direction)?.into(),
+        )],
+        "animation-fill-mode" => vec![Decl::AnimationFillMode(
+            p.parse_comma_separated(fill_mode)?.into(),
+        )],
         "object-fit" => vec![Decl::ObjectFit(keyword(
             p,
             "an object fit",
@@ -892,6 +1100,284 @@ fn value_of(
         "text-box-edge" => vec![Decl::TextBoxEdge(text_box_edge(p)?)],
         _ => vec![each(p, props[0])?],
     })
+}
+
+/// A time: `s` or `ms`, in seconds.
+fn time(p: &mut Parser) -> Result<f32, Error> {
+    match p.next()?.clone() {
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("s") => Ok(value),
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("ms") => {
+            Ok(value / 1000.0)
+        }
+        Token::Number { value: 0.0, .. } => Ok(0.0),
+        t => fail(format!(
+            "expected a time (`s`, `ms`), found `{}`",
+            t.to_css_string()
+        )),
+    }
+}
+
+fn duration(p: &mut Parser) -> Result<f32, Error> {
+    let value = time(p)?;
+    if value < 0.0 {
+        return fail("a negative duration isn't allowed");
+    }
+    Ok(value)
+}
+
+/// An angle, in degrees: `deg`, `turn`, `rad`, `grad`.
+fn angle(p: &mut Parser) -> Result<f32, Error> {
+    match p.next()?.clone() {
+        Token::Dimension { value, unit, .. } => match &*unit.to_ascii_lowercase() {
+            "deg" => Ok(value),
+            "turn" => Ok(value * 360.0),
+            "rad" => Ok(value.to_degrees()),
+            "grad" => Ok(value * 0.9),
+            other => fail(format!("`{other}` isn't an angle's unit")),
+        },
+        Token::Number { value: 0.0, .. } => Ok(0.0),
+        t => fail(format!("expected an angle, found `{}`", t.to_css_string())),
+    }
+}
+
+/// A timing function: `linear`, `ease`, `ease-in`, `ease-out`,
+/// `ease-in-out`, `step-start`, `step-end`, `cubic-bezier()`, `steps()`.
+fn easing(p: &mut Parser) -> Result<Easing, Error> {
+    match p.next()?.clone() {
+        Token::Ident(name) => Ok(match &*name.to_ascii_lowercase() {
+            "linear" => Easing::Linear,
+            "ease" => Easing::EASE,
+            "ease-in" => Easing::CubicBezier(0.42, 0.0, 1.0, 1.0),
+            "ease-out" => Easing::CubicBezier(0.0, 0.0, 0.58, 1.0),
+            "ease-in-out" => Easing::CubicBezier(0.42, 0.0, 0.58, 1.0),
+            "step-start" => Easing::Steps(1, StepPosition::JumpStart),
+            "step-end" => Easing::Steps(1, StepPosition::JumpEnd),
+            other => return fail(format!("`{other}` isn't a timing function")),
+        }),
+        Token::Function(name) if name.eq_ignore_ascii_case("cubic-bezier") => {
+            p.parse_nested_block(|p| {
+                let x1 = p.expect_number()?;
+                p.expect_comma()?;
+                let y1 = p.expect_number()?;
+                p.expect_comma()?;
+                let x2 = p.expect_number()?;
+                p.expect_comma()?;
+                let y2 = p.expect_number()?;
+                if !(0.0..=1.0).contains(&x1) || !(0.0..=1.0).contains(&x2) {
+                    return fail("a cubic-bezier()'s x values are from 0 to 1");
+                }
+                Ok(Easing::CubicBezier(x1, y1, x2, y2))
+            })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("steps") => p.parse_nested_block(|p| {
+            let n = p.expect_integer()?;
+            let position = if p.try_parse(|p| p.expect_comma()).is_ok() {
+                keyword(
+                    p,
+                    "a step position",
+                    &[
+                        ("jump-start", StepPosition::JumpStart),
+                        ("start", StepPosition::JumpStart),
+                        ("jump-end", StepPosition::JumpEnd),
+                        ("end", StepPosition::JumpEnd),
+                        ("jump-none", StepPosition::JumpNone),
+                        ("jump-both", StepPosition::JumpBoth),
+                    ],
+                )?
+            } else {
+                StepPosition::JumpEnd
+            };
+            let least = if position == StepPosition::JumpNone {
+                2
+            } else {
+                1
+            };
+            if n < least {
+                return fail(format!("steps() takes {least} steps at least here"));
+            }
+            Ok(Easing::Steps(n as u32, position))
+        }),
+        t => fail(format!(
+            "expected a timing function, found `{}`",
+            t.to_css_string()
+        )),
+    }
+}
+
+/// A property a transition watches: one that moves, or `all`.
+fn transition_property(p: &mut Parser) -> Result<u16, Error> {
+    let name = p.expect_ident_cloned()?.to_ascii_lowercase();
+    if name == "none" {
+        return fail("`none` is the whole list's, alone");
+    }
+    match Moving::named(&name) {
+        Some(set) => Ok(set),
+        None if longhands(&name).is_some() => fail(format!(
+            "`{name}` doesn't move here: colours, opacity, shadows, transforms only"
+        )),
+        None => fail(format!("unknown property `{name}`")),
+    }
+}
+
+/// `transition`: `[<property> | all | none] || <duration> || <easing> ||
+/// <delay>`, a comma-separated list.
+fn transition(p: &mut Parser) -> Result<Vec<Decl>, Error> {
+    let items = p.parse_comma_separated(|p| {
+        let (mut property, mut times, mut easing_) = (None, Vec::new(), None);
+        loop {
+            if times.len() < 2
+                && let Ok(t) = p.try_parse(time)
+            {
+                times.push(t);
+            } else if easing_.is_none()
+                && let Ok(e) = p.try_parse(easing)
+            {
+                easing_ = Some(e);
+            } else if property.is_none()
+                && let Ok(set) = p.try_parse(|p| {
+                    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+                        return Ok(0);
+                    }
+                    transition_property(p)
+                })
+            {
+                property = Some(set);
+            } else if p.is_exhausted() {
+                break;
+            } else {
+                transition_property(p)?;
+            }
+        }
+        let duration = times.first().copied().unwrap_or(0.0);
+        if duration < 0.0 {
+            return fail("a negative duration isn't allowed");
+        }
+        Ok((
+            property.unwrap_or(Moving::named("all").expect("all")),
+            duration,
+            easing_.unwrap_or(Easing::EASE),
+            times.get(1).copied().unwrap_or(0.0),
+        ))
+    })?;
+    let property: Vec<u16> = items.iter().map(|i| i.0).collect();
+    Ok(vec![
+        Decl::TransitionProperty(property.into()),
+        Decl::TransitionDuration(items.iter().map(|i| i.1).collect()),
+        Decl::TransitionTimingFunction(items.iter().map(|i| i.2).collect()),
+        Decl::TransitionDelay(items.iter().map(|i| i.3).collect()),
+    ])
+}
+
+fn animation_name(p: &mut Parser) -> Result<Option<Arc<str>>, Error> {
+    match p.next()?.clone() {
+        Token::Ident(name) if name.eq_ignore_ascii_case("none") => Ok(None),
+        Token::Ident(name) | Token::QuotedString(name) => Ok(Some(Arc::from(&*name))),
+        t => fail(format!(
+            "expected an animation's name, found `{}`",
+            t.to_css_string()
+        )),
+    }
+}
+
+fn iteration_count(p: &mut Parser) -> Result<f32, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("infinite")).is_ok() {
+        return Ok(f32::INFINITY);
+    }
+    let count = p.expect_number()?;
+    if count < 0.0 {
+        return fail("a negative count isn't allowed");
+    }
+    Ok(count)
+}
+
+fn animation_direction(p: &mut Parser) -> Result<AnimationDirection, Error> {
+    keyword(
+        p,
+        "a direction",
+        &[
+            ("normal", AnimationDirection::Normal),
+            ("reverse", AnimationDirection::Reverse),
+            ("alternate", AnimationDirection::Alternate),
+            ("alternate-reverse", AnimationDirection::AlternateReverse),
+        ],
+    )
+}
+
+fn fill_mode(p: &mut Parser) -> Result<FillMode, Error> {
+    keyword(
+        p,
+        "a fill mode",
+        &[
+            ("none", FillMode::None),
+            ("forwards", FillMode::Forwards),
+            ("backwards", FillMode::Backwards),
+            ("both", FillMode::Both),
+        ],
+    )
+}
+
+/// `animation`: `<duration> || <easing> || <delay> || <count> ||
+/// <direction> || <fill-mode> || <name>`, a comma-separated list: the
+/// first time the duration, the second the delay.
+fn animation(p: &mut Parser) -> Result<Vec<Decl>, Error> {
+    let items = p.parse_comma_separated(|p| {
+        let mut times = Vec::new();
+        let (mut easing_, mut count, mut direction, mut fill, mut name) =
+            (None, None, None, None, None);
+        loop {
+            if times.len() < 2
+                && let Ok(t) = p.try_parse(time)
+            {
+                times.push(t);
+            } else if easing_.is_none()
+                && let Ok(e) = p.try_parse(easing)
+            {
+                easing_ = Some(e);
+            } else if count.is_none()
+                && let Ok(c) = p.try_parse(iteration_count)
+            {
+                count = Some(c);
+            } else if direction.is_none()
+                && let Ok(d) = p.try_parse(animation_direction)
+            {
+                direction = Some(d);
+            } else if fill.is_none()
+                && let Ok(f) = p.try_parse(fill_mode)
+            {
+                fill = Some(f);
+            } else if name.is_none()
+                && let Ok(n) = p.try_parse(animation_name)
+            {
+                name = Some(n);
+            } else if p.is_exhausted() {
+                break;
+            } else {
+                animation_name(p)?;
+            }
+        }
+        let duration = times.first().copied().unwrap_or(0.0);
+        if duration < 0.0 {
+            return fail("a negative duration isn't allowed");
+        }
+        Ok((
+            name.flatten(),
+            duration,
+            easing_.unwrap_or(Easing::EASE),
+            times.get(1).copied().unwrap_or(0.0),
+            count.unwrap_or(1.0),
+            direction.unwrap_or(AnimationDirection::Normal),
+            fill.unwrap_or(FillMode::None),
+        ))
+    })?;
+    Ok(vec![
+        Decl::AnimationName(items.iter().map(|i| i.0.clone()).collect()),
+        Decl::AnimationDuration(items.iter().map(|i| i.1).collect()),
+        Decl::AnimationTimingFunction(items.iter().map(|i| i.2).collect()),
+        Decl::AnimationDelay(items.iter().map(|i| i.3).collect()),
+        Decl::AnimationIterationCount(items.iter().map(|i| i.4).collect()),
+        Decl::AnimationDirection(items.iter().map(|i| i.5).collect()),
+        Decl::AnimationFillMode(items.iter().map(|i| i.6).collect()),
+    ])
 }
 
 /// CSS's initial `border-image-slice`, 100%: the whole image in the

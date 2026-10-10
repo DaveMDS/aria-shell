@@ -23,6 +23,8 @@
  *   - cascade: this file's rules first and under every other: an app's
  *     or a theme's rule wins over them whatever their specificity (CSS's
  *     user-agent origin); then specificity, then source order
+ *   - `@keyframes name { from { } 50% { } to { } }`: an animation's steps,
+ *     with what moves only (below); the last one of a name wins
  *   - not supported: other @-rules, !important, the `+` and `~`
  *     combinators, pseudo-elements, % and em
  *   - a syntax error (a bracket never closed, a comment never ended, a
@@ -33,6 +35,10 @@
  *   <length>   px, or a unitless 0
  *   <color>    #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba(), hsl(),
  *              hsla(), a CSS colour name, transparent, currentcolor
+ *   <time>     s or ms
+ *   <angle>    deg, turn, rad, grad
+ *   <easing>   linear, ease, ease-in, ease-out, ease-in-out, step-start,
+ *              step-end, cubic-bezier(), steps()
  *
  * Properties (* inherited):
  *   width, height          <length> | auto | fill; the border box (CSS's
@@ -96,6 +102,26 @@
  *                          or lengths; the border box's centre if not set
  *   object-fit             fill | contain | cover | none | scale-down: how
  *                          an image fills its box, centred
+ *   rotate                 none | <angle>: an icon's or an image's turn
+ *                          (a box doesn't turn: iced can't rotate it)
+ *   transition             [<property> | all | none] || <time> || <easing>
+ *                          || <time>, comma-separated (the first time the
+ *                          duration, the second the delay);
+ *                          transition-property, -duration,
+ *                          -timing-function, -delay. What moves: colours
+ *                          (color, background-color, border-color,
+ *                          outline-color), opacity, box-shadow, transform,
+ *                          rotate; layout never does. It starts when its
+ *                          cause did (a state, an ancestor's, a class);
+ *                          reversed half-way, it takes half the time, as
+ *                          CSS does
+ *   animation              <name> || <time> || <easing> || <time> ||
+ *                          <count> | infinite || <direction> ||
+ *                          <fill-mode>, comma-separated; animation-name,
+ *                          -duration, -timing-function, -delay,
+ *                          -iteration-count, -direction, -fill-mode. It
+ *                          starts when the element gets it (a class, its
+ *                          first frame); a widget can say when it ends
  *   font-family*           font names and serif, sans-serif, monospace,
  *                          comma-separated
  *   font-size*             <length>
@@ -174,6 +200,7 @@
  * button.danger     an action not to take lightly
  */
 button {
+  transition: background-color 120ms, border-color 120ms, color 120ms;
   padding: 5px 10px;
   gap: 6px;
   align-items: center;

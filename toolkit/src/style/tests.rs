@@ -587,3 +587,62 @@ fn object_fit() {
     assert_eq!(style(&sheet, "t > b").object_fit, ObjectFit::ScaleDown);
     assert_eq!(style(&sheet, "t > c").object_fit, ObjectFit::Fill);
 }
+
+#[test]
+fn transitions_and_animations_parse_as_lists() {
+    let (sheet, warnings) = load(
+        "a { transition: background-color 200ms ease-in, opacity 1s linear 0.5s; } \
+         b { transition: all 0.3s; transition-duration: 1s, 2s; } \
+         c { animation: spin 1s linear infinite, pulse 2s alternate both 100ms; } \
+         d { transition: width 1s; } e { animation: 1s spin; rotate: 0.5turn; }",
+    );
+    let a = style(&sheet, "t > a");
+    assert_eq!(
+        &a.transitions.property[..],
+        [Moving::Background.bit(), Moving::Opacity.bit()]
+    );
+    assert_eq!(&a.transitions.duration[..], [0.2, 1.0]);
+    assert_eq!(&a.transitions.delay[..], [0.0, 0.5]);
+    assert_eq!(a.transitions.easing[1], Easing::Linear);
+    // A longhand after its shorthand.
+    let b = style(&sheet, "t > b");
+    assert_eq!(&b.transitions.duration[..], [1.0, 2.0]);
+    let c = style(&sheet, "t > c");
+    let names: Vec<Option<&str>> = c.animations.names.iter().map(|n| n.as_deref()).collect();
+    assert_eq!(names, [Some("spin"), Some("pulse")]);
+    assert_eq!(&c.animations.count[..], [f32::INFINITY, 1.0]);
+    assert_eq!(c.animations.direction[1], AnimationDirection::Alternate);
+    assert_eq!(c.animations.fill[1], FillMode::Both);
+    assert_eq!(&c.animations.delay[..], [0.0, 0.1]);
+    // No `@keyframes spin` in this sheet: nothing to run.
+    assert!(!c.animations.any());
+    assert_eq!(style(&sheet, "t > e").rotate, 180.0);
+    assert!(
+        warnings[0].message.contains("`width` doesn't move here"),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn keyframes_keep_what_moves() {
+    let (sheet, warnings) = load(
+        ":root { --to: blue; } \
+         @keyframes glow { from { opacity: 0.5; padding: 3px; } 50%, to { color: var(--to); } } \
+         @keyframes glow { to { opacity: 0; } } \
+         a { animation: glow 1s; } @keyframes nope { 150% { opacity: 1; } }",
+    );
+    let a = style(&sheet, "t > a");
+    assert!(a.animations.any());
+    // The later `@keyframes glow` wins, whole.
+    let glow = a.animations.keyframes[0].clone().expect("found");
+    assert_eq!(glow.frames.len(), 1);
+    let messages: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+    assert!(
+        messages[0].contains("`padding` doesn't move in `@keyframes`"),
+        "{messages:?}"
+    );
+    assert!(
+        messages[1].contains("a step is `from`, `to` or a percentage"),
+        "{messages:?}"
+    );
+}

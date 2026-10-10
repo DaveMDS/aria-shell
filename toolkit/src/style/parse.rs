@@ -46,11 +46,24 @@ pub(crate) struct RawRule {
     pub decls: Vec<RawDecl>,
 }
 
+/// `@keyframes name { from { } 50% { } to { } }`: the steps' offsets (0 to
+/// 1) and their declarations.
+pub(crate) struct RawKeyframes {
+    pub name: String,
+    pub frames: Vec<(Vec<f32>, Vec<RawDecl>)>,
+}
+
+pub(crate) enum Item {
+    Rule(RawRule),
+    Keyframes(RawKeyframes),
+}
+
 #[derive(Default)]
 pub(crate) struct File {
     /// The variables of `:root`, `:root.light` and `:root.dark`.
     pub vars: [Vec<(String, String)>; 3],
     pub rules: Vec<RawRule>,
+    pub keyframes: Vec<RawKeyframes>,
 }
 
 /// A file's rules and variables, the warnings into `warnings`; a syntax
@@ -73,7 +86,11 @@ pub(crate) fn parse(
     let mut file = File::default();
     for item in items {
         let mut rule = match item {
-            Ok(rule) => rule,
+            Ok(Item::Rule(rule)) => rule,
+            Ok(Item::Keyframes(keyframes)) => {
+                file.keyframes.push(keyframes);
+                continue;
+            }
             Err((error, slice, location)) => match error.kind {
                 ParseErrorKind::Custom(message) => {
                     warnings.push((
@@ -134,7 +151,7 @@ struct Top<'c, 'n> {
 
 impl<'i> QualifiedRuleParser<'i> for Top<'_, '_> {
     type Prelude = Vec<Selector>;
-    type QualifiedRule = RawRule;
+    type QualifiedRule = Item;
     type Error = String;
 
     fn parse_prelude(&mut self, input: &mut Parser<'i>) -> Result<Vec<Selector>, Error> {
@@ -146,35 +163,131 @@ impl<'i> QualifiedRuleParser<'i> for Top<'_, '_> {
         selectors: Vec<Selector>,
         _start: &ParserState,
         input: &mut Parser<'i>,
-    ) -> Result<RawRule, Error> {
-        let mut decls = Vec::new();
-        for item in RuleBodyParser::new(input, &mut Body) {
-            match item {
-                Ok(decl) => decls.push(decl),
-                Err((error, slice, location)) => {
-                    let why = if slice.contains('{') {
-                        "nested rules aren't supported".to_string()
-                    } else {
-                        describe(error)
-                    };
-                    self.warnings.push((
-                        location.into(),
-                        format!("`{}`: {why}, skipped", slice.trim()),
-                    ));
-                }
-            }
-        }
-        Ok(RawRule { selectors, decls })
+    ) -> Result<Item, Error> {
+        let decls = declarations(input, &mut self.warnings);
+        Ok(Item::Rule(RawRule { selectors, decls }))
     }
 }
 
+/// A block's declarations, what can't be read a warning.
+fn declarations(input: &mut Parser, warnings: &mut Vec<(Loc, String)>) -> Vec<RawDecl> {
+    let mut decls = Vec::new();
+    for item in RuleBodyParser::new(input, &mut Body) {
+        match item {
+            Ok(decl) => decls.push(decl),
+            Err((error, slice, location)) => {
+                let why = if slice.contains('{') {
+                    "nested rules aren't supported".to_string()
+                } else {
+                    describe(error)
+                };
+                warnings.push((
+                    location.into(),
+                    format!("`{}`: {why}, skipped", slice.trim()),
+                ));
+            }
+        }
+    }
+    decls
+}
+
 impl<'i> AtRuleParser<'i> for Top<'_, '_> {
-    type Prelude = ();
-    type AtRule = RawRule;
+    /// A `@keyframes`' name.
+    type Prelude = String;
+    type AtRule = Item;
     type Error = String;
 
-    fn parse_prelude(&mut self, name: CowRcStr<'i>, _: &mut Parser<'i>) -> Result<(), Error> {
-        Err(ParseError::custom(format!("`@{name}` isn't supported")))
+    fn parse_prelude(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i>,
+    ) -> Result<String, Error> {
+        if !name.eq_ignore_ascii_case("keyframes") {
+            return Err(ParseError::custom(format!("`@{name}` isn't supported")));
+        }
+        match input.next() {
+            Ok(Token::Ident(name) | Token::QuotedString(name)) => Ok(name.to_string()),
+            _ => Err(ParseError::custom("`@keyframes` takes a name".to_string())),
+        }
+    }
+
+    fn parse_block(
+        &mut self,
+        name: String,
+        _start: &ParserState,
+        input: &mut Parser<'i>,
+    ) -> Result<Item, Error> {
+        let mut steps = Steps {
+            warnings: &mut self.warnings,
+        };
+        let mut frames = Vec::new();
+        let mut failures = Vec::new();
+        for item in RuleBodyParser::new(input, &mut steps) {
+            match item {
+                Ok(frame) => frames.push(frame),
+                Err((error, slice, location)) => failures.push((
+                    Loc::from(location),
+                    format!("`{}`: {}, skipped", head(slice), describe(error)),
+                )),
+            }
+        }
+        self.warnings.extend(failures);
+        Ok(Item::Keyframes(RawKeyframes { name, frames }))
+    }
+}
+
+/// A `@keyframes`' body: its steps.
+struct Steps<'w> {
+    warnings: &'w mut Vec<(Loc, String)>,
+}
+
+impl<'i> QualifiedRuleParser<'i> for Steps<'_> {
+    type Prelude = Vec<f32>;
+    type QualifiedRule = (Vec<f32>, Vec<RawDecl>);
+    type Error = String;
+
+    /// `from`, `to`, percentages: offsets from 0 to 1.
+    fn parse_prelude(&mut self, input: &mut Parser<'i>) -> Result<Vec<f32>, Error> {
+        input.parse_comma_separated(|p| match p.next()?.clone() {
+            Token::Ident(word) if word.eq_ignore_ascii_case("from") => Ok(0.0),
+            Token::Ident(word) if word.eq_ignore_ascii_case("to") => Ok(1.0),
+            Token::Percentage { unit_value, .. } if (0.0..=1.0).contains(&unit_value) => {
+                Ok(unit_value)
+            }
+            _ => Err(ParseError::custom(
+                "a step is `from`, `to` or a percentage".to_string(),
+            )),
+        })
+    }
+
+    fn parse_block(
+        &mut self,
+        offsets: Vec<f32>,
+        _start: &ParserState,
+        input: &mut Parser<'i>,
+    ) -> Result<(Vec<f32>, Vec<RawDecl>), Error> {
+        Ok((offsets, declarations(input, self.warnings)))
+    }
+}
+
+impl<'i> DeclarationParser<'i> for Steps<'_> {
+    type Declaration = (Vec<f32>, Vec<RawDecl>);
+    type Error = String;
+}
+
+impl<'i> AtRuleParser<'i> for Steps<'_> {
+    type Prelude = ();
+    type AtRule = (Vec<f32>, Vec<RawDecl>);
+    type Error = String;
+}
+
+impl<'i> RuleBodyItemParser<'i, (Vec<f32>, Vec<RawDecl>), String> for Steps<'_> {
+    fn parse_declarations(&self) -> bool {
+        false
+    }
+
+    fn parse_qualified(&self) -> bool {
+        true
     }
 }
 

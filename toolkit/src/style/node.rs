@@ -458,6 +458,12 @@ impl<'a> Node<'a> {
         self.sheet
     }
 
+    /// Who it is, for a widget to tell when its node changed: its
+    /// sheet, its path.
+    pub(crate) fn key(self) -> (usize, u32) {
+        (std::ptr::from_ref(self.sheet) as usize, self.id.0)
+    }
+
     /// The path in selector syntax: `menu > item.active > label`.
     pub fn path(self) -> String {
         self.sheet.path(self.id)

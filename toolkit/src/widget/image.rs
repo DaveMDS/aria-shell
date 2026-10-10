@@ -9,10 +9,12 @@ use iced::advanced::image::{self, Renderer as _};
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::mouse;
 use iced::advanced::renderer;
-use iced::advanced::widget::{Tree, Widget};
+use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
-use iced::{Length, Point, Rectangle, Size};
+use iced::{Event, Length, Point, Radians, Rectangle, Size};
 
+use crate::anim::Animated;
 use crate::layout::snap;
 use crate::style::{Computed, Node, ObjectFit, Size as Len, States};
 use crate::{Element, Renderer, Theme};
@@ -40,6 +42,32 @@ impl Image<'_> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Animated>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Animated::new(self.node))
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.state.downcast_mut::<Animated>().diff(self.node);
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        tree.state.downcast_mut::<Animated>().update(event, shell);
+    }
+
     fn size(&self) -> Size<Length> {
         let length = |len: Len| match len {
             Len::Auto => Length::Shrink,
@@ -80,7 +108,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
 
     fn draw(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
@@ -93,7 +121,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
         if own.width <= 0.0 || own.height <= 0.0 {
             return;
         }
-        let s = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let moving = tree
+            .state
+            .downcast_ref::<Animated>()
+            .style(&resolved, theme);
+        let s = moving.as_ref().unwrap_or(&resolved);
         let fit = |f: fn(f32, f32) -> f32| f(bounds.width / own.width, bounds.height / own.height);
         let size = match s.object_fit {
             ObjectFit::Fill => bounds.size(),
@@ -111,6 +144,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
         );
         let mut image = image::Image::new(self.handle.clone());
         image.opacity = theme.opacity * s.opacity;
+        image.rotation = Radians(s.rotate.to_radians());
         image.border_radius = Radius {
             top_left: s.border_radius[0],
             top_right: s.border_radius[1],

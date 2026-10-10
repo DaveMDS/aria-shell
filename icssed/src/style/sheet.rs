@@ -156,7 +156,7 @@ impl Sheet {
         };
 
         let base = Source {
-            name: "tk:base.css",
+            name: "icssed:base.css",
             text: BASE,
             dir: None,
         };

@@ -199,7 +199,7 @@
  * Buttons
  * =======
  *
- * A box to press (`tk::button`): a row. Its element is the app's to
+ * A box to press (`icssed::button`): a row. Its element is the app's to
  * name; `button` is the toolkit's own, with these variants as classes.
  * Tab moves the focus among the buttons of a focus scope.
  *
@@ -261,7 +261,7 @@ button.danger {
  * Toggles
  * =======
  *
- * A switch (`tk::toggle`): a button holding its knob, `.on` when it is.
+ * A switch (`icssed::toggle`): a button holding its knob, `.on` when it is.
  * The knob slides with a transform: its travel is the toggle's width
  * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
  *
@@ -301,7 +301,7 @@ toggle.on > knob {
  * Sliders
  * =======
  *
- * A value in a range (`tk::slider`): dragged, clicked, scrolled, or with
+ * A value in a range (`icssed::slider`): dragged, clicked, scrolled, or with
  * the keys while focused (the arrows, Page Up and Down, Home, End);
  * `:active` while dragged. Its track is a meter across its content box,
  * filled up to the value; the knob is centred on the value, from the
@@ -352,7 +352,7 @@ slider:disabled > track > fill {
  * Meters
  * ======
  *
- * A bar filled to a fraction (`tk::meter`): a battery's charge, a disk's
+ * A bar filled to a fraction (`icssed::meter`): a battery's charge, a disk's
  * use; with a label over it, a gauge. The fill is the fraction of the
  * meter's content box wide, as tall as it; the label is placed as in a
  * row. Its states are the app's to give, as classes (`.warning`,
@@ -383,7 +383,7 @@ meter > label {
  * Inputs
  * ======
  *
- * A line of text to edit (`tk::input`): iced's text input in a box, with
+ * A line of text to edit (`icssed::input`): iced's text input in a box, with
  * the app's children before and after it (an icon, a button to peek at
  * a password). The box is `:focus` while its field has the focus (CSS's
  * `:focus-within`); a press on it puts the focus in the field. The
@@ -443,7 +443,7 @@ field > selection {
  * Scrolls
  * =======
  *
- * Content taller or wider than its room, scrolled (`tk::scroll`): iced's
+ * Content taller or wider than its room, scrolled (`icssed::scroll`): iced's
  * scrollable. It's no box: its sizes are its own (a list grows with its
  * items up to its `max-height`, then scrolls), its look its
  * scrollbars'. A scrollbar floats over the content, at its end: a box
@@ -485,7 +485,7 @@ scrollbar:active > thumb {
  * Menus
  * =====
  *
- * A column of items to press (`tk::menu`), each with a mark, an icon,
+ * A column of items to press (`icssed::menu`), each with a mark, an icon,
  * a shortcut; separators; submenus unfolded in place, under their item.
  * Up and Down move the focus among the items once one has it. The marks
  * are text: their `content`, picked by the item's classes, the toolkit's
@@ -567,7 +567,7 @@ menu submenu {
  * Tabs
  * ====
  *
- * A row of buttons, one per page (`tk::tabs`), the page shown `.active`:
+ * A row of buttons, one per page (`icssed::tabs`), the page shown `.active`:
  * the row draws the line under them, a tab its own mark. Left and Right
  * move the focus among the tabs once one has it.
  *
@@ -604,7 +604,7 @@ tabs > tab > label {
  * Calendars
  * =========
  *
- * A month (`tk::calendar`): its days in six weeks under the names of the
+ * A month (`icssed::calendar`): its days in six weeks under the names of the
  * days of the week, its title between the buttons to the months before
  * and after. The title and the names are the app's (no locale here),
  * the first day of the week too. The days around the month fill the
@@ -689,7 +689,7 @@ calendar day.selected {
  * Graphs
  * ======
  *
- * Series of values (`tk::graph`), oldest first, as lines with the area
+ * Series of values (`icssed::graph`), oldest first, as lines with the area
  * under them: the newest at the right edge, the graph's capacity across
  * its content box (a young series grows from the right), the top the
  * largest value unless the app gives one. Lines across at the quarters,
@@ -729,10 +729,10 @@ graph > label {
  * Tooltips
  * ========
  *
- * A tip shown by what the pointer rests on (`tk::tooltip`), after a
+ * A tip shown by what the pointer rests on (`icssed::tooltip`), after a
  * delay: under it, or over it where there's no room under, centred on
  * it; hidden when the pointer leaves or presses. In a window it's drawn
- * over everything; an app with surfaces of its own shows `tk::tip` in
+ * over everything; an app with surfaces of its own shows `icssed::tip` in
  * one instead. Its margins are its distance from what it's about; it's
  * made anew each time it shows, so its animation runs each time.
  *
@@ -760,7 +760,7 @@ tooltip {
  * Selects
  * =======
  *
- * One of a list of options (`tk::select`), shown in a box with an arrow:
+ * One of a list of options (`icssed::select`), shown in a box with an arrow:
  * pressed, its options open under it (over it where there's no room) as
  * a menu, the one chosen checked; `:active` while they're open. Up and
  * Down on the closed select, focused, choose the option before or

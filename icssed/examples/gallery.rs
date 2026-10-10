@@ -1,7 +1,7 @@
 //! The toolkit's gallery: every widget in every state, in a plain iced
 //! window, styled by the theme given on the command line:
 //!
-//!     cargo run -p tk --example gallery [-- theme.css]
+//!     cargo run -p icssed --example gallery [-- theme.css]
 //!
 //! The theme is reloaded when its file changes; `d` toggles light and
 //! dark. What a sheet skips is logged (`RUST_LOG=warn` and up).
@@ -13,7 +13,7 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, keyboard, window};
-use tk::{Element, IconFile, MenuItem, Month, Node, Scheme, Sheet, Source, Tab, Theme};
+use icssed::{Element, IconFile, MenuItem, Month, Node, Scheme, Sheet, Source, Tab, Theme};
 
 /// The gallery's own elements.
 const GALLERY: &str = include_str!("gallery.css");
@@ -21,7 +21,7 @@ const GALLERY: &str = include_str!("gallery.css");
 fn main() -> iced::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     iced::application(Gallery::new, Gallery::update, Gallery::view)
-        .title("tk gallery")
+        .title("icssed gallery")
         .theme(Gallery::theme)
         .subscription(Gallery::subscription)
         .run()
@@ -242,11 +242,11 @@ impl Gallery {
         let root = self.sheet.root("gallery", self.scale);
         let scroll = root.child("scroll");
         let page = scroll.child("page");
-        tk::focus_scope(tk::column(
+        icssed::focus_scope(icssed::column(
             root,
-            [tk::scroll(
+            [icssed::scroll(
                 scroll,
-                tk::column(
+                icssed::column(
                     page,
                     [
                         self.buttons(page),
@@ -279,11 +279,11 @@ impl Gallery {
                 .child("button")
                 .class_if(class, !class.is_empty())
                 .disabled_if(disabled);
-            tk::button(
+            icssed::button(
                 node,
                 [
-                    tk::icon(node.child("icon"), self.star.clone()).into(),
-                    tk::text(node.child("label"), label).into(),
+                    icssed::icon(node.child("icon"), self.star.clone()).into(),
+                    icssed::text(node.child("label"), label).into(),
                 ],
             )
             .on_press(Message::Pressed(label))
@@ -296,10 +296,10 @@ impl Gallery {
         };
         let card = row.child("card");
         let grow = row.child("grow");
-        let content = tk::column(
+        let content = icssed::column(
             section.child("buttons"),
             [
-                tk::row(
+                icssed::row(
                     row,
                     [
                         button("", "Default", false),
@@ -311,15 +311,15 @@ impl Gallery {
                     ],
                 )
                 .into(),
-                tk::text(section.child("buttons").child("status"), pressed).into(),
-                tk::row(
+                icssed::text(section.child("buttons").child("status"), pressed).into(),
+                icssed::row(
                     row,
                     [
-                        tk::row(
+                        icssed::row(
                             card,
                             [
-                                tk::icon(card.child("icon"), self.star.clone()).into(),
-                                tk::text(
+                                icssed::icon(card.child("icon"), self.star.clone()).into(),
+                                icssed::text(
                                     card.child("label"),
                                     "Hover the card: its icon and label follow",
                                 )
@@ -327,9 +327,9 @@ impl Gallery {
                             ],
                         )
                         .into(),
-                        tk::row(
+                        icssed::row(
                             grow,
-                            [tk::text(grow.child("label"), "Grows on hover").into()],
+                            [icssed::text(grow.child("label"), "Grows on hover").into()],
                         )
                         .into(),
                     ],
@@ -346,9 +346,12 @@ impl Gallery {
         title: &'static str,
         content: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        tk::column(
+        icssed::column(
             section,
-            [tk::text(section.child("heading"), title).into(), content],
+            [
+                icssed::text(section.child("heading"), title).into(),
+                content,
+            ],
         )
         .into()
     }
@@ -363,28 +366,30 @@ impl Gallery {
             .child("button")
             .class("peek")
             .class_if("active", self.peek);
-        let label =
-            |text: String| -> Element<'a, Message> { tk::text(line.child("label"), text).into() };
-        let content = tk::column(
+        let label = |text: String| -> Element<'a, Message> {
+            icssed::text(line.child("label"), text).into()
+        };
+        let content = icssed::column(
             controls,
             [
-                tk::row(
+                icssed::row(
                     line,
                     [
-                        tk::toggle(line.child("toggle"), self.wifi, Message::Wifi).into(),
+                        icssed::toggle(line.child("toggle"), self.wifi, Message::Wifi).into(),
                         label("Wi-Fi".into()),
-                        tk::toggle(line.child("toggle"), self.airplane, Message::Airplane).into(),
+                        icssed::toggle(line.child("toggle"), self.airplane, Message::Airplane)
+                            .into(),
                         label("Airplane mode".into()),
-                        tk::toggle(line.child("toggle").disabled_if(true), true, Message::Wifi)
+                        icssed::toggle(line.child("toggle").disabled_if(true), true, Message::Wifi)
                             .into(),
                         label("Disabled".into()),
                     ],
                 )
                 .into(),
-                tk::row(
+                icssed::row(
                     line,
                     [
-                        tk::slider(
+                        icssed::slider(
                             line.child("slider"),
                             0.0..=100.0,
                             self.volume,
@@ -393,7 +398,7 @@ impl Gallery {
                         .step(1.0)
                         .into(),
                         label(format!("Volume {:.0}%", self.volume)),
-                        tk::slider(
+                        icssed::slider(
                             line.child("slider").disabled_if(true),
                             0.0..=1.0,
                             0.3,
@@ -404,34 +409,34 @@ impl Gallery {
                     ],
                 )
                 .into(),
-                tk::row(
+                icssed::row(
                     line,
                     [
-                        tk::input(search, "Search", &self.search)
+                        icssed::input(search, "Search", &self.search)
                             .on_input(Message::Search)
-                            .leading(tk::icon(search.child("icon"), self.star.clone()))
+                            .leading(icssed::icon(search.child("icon"), self.star.clone()))
                             .into(),
-                        tk::input(password, "Password", &self.password)
+                        icssed::input(password, "Password", &self.password)
                             .on_input(Message::Password)
                             .secure(!self.peek)
                             .trailing(
-                                tk::button(
+                                icssed::button(
                                     peek,
-                                    [tk::icon(peek.child("icon"), self.eye.clone()).into()],
+                                    [icssed::icon(peek.child("icon"), self.eye.clone()).into()],
                                 )
                                 .on_press(Message::Peek),
                             )
                             .into(),
-                        tk::input(line.child("input").disabled_if(true), "Disabled", "")
+                        icssed::input(line.child("input").disabled_if(true), "Disabled", "")
                             .on_input(Message::Search)
                             .into(),
                     ],
                 )
                 .into(),
-                tk::row(
+                icssed::row(
                     line,
                     [
-                        tk::select(
+                        icssed::select(
                             line.child("select"),
                             [
                                 "Follow the system",
@@ -444,7 +449,7 @@ impl Gallery {
                         )
                         .placeholder("Pick a scheme")
                         .into(),
-                        tk::select(
+                        icssed::select(
                             line.child("select").disabled_if(true),
                             ["Disabled"],
                             Some(0),
@@ -454,12 +459,12 @@ impl Gallery {
                     ],
                 )
                 .into(),
-                tk::row(
+                icssed::row(
                     line,
                     [
-                        tk::meter(line.child("meter"), self.volume / 100.0).into(),
-                        tk::meter(line.child("meter").class("warning"), 0.85).into(),
-                        tk::meter(line.child("meter").class("gauge"), 0.42)
+                        icssed::meter(line.child("meter"), self.volume / 100.0).into(),
+                        icssed::meter(line.child("meter").class("warning"), 0.85).into(),
+                        icssed::meter(line.child("meter").class("gauge"), 0.42)
                             .label("CPU 42%")
                             .into(),
                     ],
@@ -474,7 +479,7 @@ impl Gallery {
         let section = root.child("section");
         let row = section.child("row");
         let labelled = |node: Node<'a>, text: &'static str| -> Element<'a, Message> {
-            tk::text(node.child("label"), text).into()
+            icssed::text(node.child("label"), text).into()
         };
         let pulse = row.child("pulse");
         let shaken = row
@@ -484,18 +489,18 @@ impl Gallery {
         let shake = row.child("button");
         let toggle = row.child("button");
         let mut items: Vec<Element<'a, Message>> = vec![
-            tk::icon(row.child("spinner"), self.star.clone()).into(),
-            tk::row(pulse, [labelled(pulse, "Pulse")]).into(),
-            tk::row(shaken, [labelled(shaken, "Shaken on demand")])
+            icssed::icon(row.child("spinner"), self.star.clone()).into(),
+            icssed::row(pulse, [labelled(pulse, "Pulse")]).into(),
+            icssed::row(shaken, [labelled(shaken, "Shaken on demand")])
                 .on_animation_end(Message::Shaken)
                 .into(),
-            tk::tooltip(
-                tk::button(shake, [labelled(shake, "Shake")]).on_press(Message::Shake),
+            icssed::tooltip(
+                icssed::button(shake, [labelled(shake, "Shake")]).on_press(Message::Shake),
                 row.child("tooltip"),
                 "Shakes the box beside it, once",
             )
             .into(),
-            tk::button(
+            icssed::button(
                 toggle,
                 [labelled(
                     toggle,
@@ -516,10 +521,10 @@ impl Gallery {
         if let Some(leaving) = self.toast {
             let toast = row.child("toast").class_if("leaving", leaving);
             items.push(
-                tk::row(
+                icssed::row(
                     toast,
                     [
-                        tk::icon(toast.child("icon"), self.star.clone()).into(),
+                        icssed::icon(toast.child("icon"), self.star.clone()).into(),
                         labelled(toast, "A toast: in, and out when dismissed"),
                     ],
                 )
@@ -527,7 +532,7 @@ impl Gallery {
                 .into(),
             );
         }
-        self.section(section, "Animation", tk::row(row, items).into())
+        self.section(section, "Animation", icssed::row(row, items).into())
     }
 
     fn boxes<'a>(&self, root: Node<'a>) -> Element<'a, Message> {
@@ -535,9 +540,9 @@ impl Gallery {
         let row = section.child("row");
         let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
             let node = row.child("box").class(class);
-            tk::row(node, [tk::text(node.child("label"), label).into()]).into()
+            icssed::row(node, [icssed::text(node.child("label"), label).into()]).into()
         };
-        let content = tk::row(
+        let content = icssed::row(
             row,
             [
                 boxed("plain", "Plain"),
@@ -556,17 +561,17 @@ impl Gallery {
         let row = section.child("row");
         let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
             let node = row.child("box").class(class);
-            tk::row(node, [tk::text(node.child("label"), label).into()]).into()
+            icssed::row(node, [icssed::text(node.child("label"), label).into()]).into()
         };
         let faded = row.child("box").class("faded");
         let aligned = section.child("aligned");
         let line = |class: &str, text: &'static str| -> Element<'a, Message> {
-            tk::text(aligned.child("label").class(class), text).into()
+            icssed::text(aligned.child("label").class(class), text).into()
         };
-        let content = tk::column(
+        let content = icssed::column(
             section.child("painting"),
             [
-                tk::row(
+                icssed::row(
                     row,
                     [
                         boxed("tab", "Tab"),
@@ -575,18 +580,18 @@ impl Gallery {
                         boxed("outlined", "Outline"),
                         boxed("scaled", "Scaled 80%"),
                         boxed("moved", "Moved"),
-                        tk::row(
+                        icssed::row(
                             faded,
                             [
-                                tk::icon(faded.child("icon"), self.star.clone()).into(),
-                                tk::text(faded.child("label"), "Opacity 50%").into(),
+                                icssed::icon(faded.child("icon"), self.star.clone()).into(),
+                                icssed::text(faded.child("label"), "Opacity 50%").into(),
                             ],
                         )
                         .into(),
                     ],
                 )
                 .into(),
-                tk::column(
+                icssed::column(
                     aligned,
                     [
                         line("left", "Aligned left"),
@@ -606,12 +611,12 @@ impl Gallery {
         let row = section.child("row");
         let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
             let node = row.child("box").class(class);
-            tk::row(node, [tk::text(node.child("label"), label).into()]).into()
+            icssed::row(node, [icssed::text(node.child("label"), label).into()]).into()
         };
         let fitted = |class: &str| -> Element<'a, Message> {
-            tk::image(row.child("picture").class(class), self.photo.clone()).into()
+            icssed::image(row.child("picture").class(class), self.photo.clone()).into()
         };
-        let content = tk::row(
+        let content = icssed::row(
             row,
             [
                 boxed("textured", "Tiled"),
@@ -629,24 +634,24 @@ impl Gallery {
         let section = root.child("section");
         let texts = section.child("texts");
         let label = |class: &str, text: &'static str| -> Element<'a, Message> {
-            tk::text(texts.child("label").class(class), text).into()
+            icssed::text(texts.child("label").class(class), text).into()
         };
         let boxed = |class: &str| -> Element<'a, Message> {
             let node = texts.child("box").class(class);
-            tk::row(node, [tk::text(node.child("label"), LONG).into()]).into()
+            icssed::row(node, [icssed::text(node.child("label"), LONG).into()]).into()
         };
         let pair = |untrimmed: bool, text: &'static str| -> Element<'a, Message> {
             let node = texts.child("pair").class_if("untrimmed", untrimmed);
-            tk::row(
+            icssed::row(
                 node,
                 [
-                    tk::icon(node.child("icon"), self.star.clone()).into(),
-                    tk::text(node.child("label"), text).into(),
+                    icssed::icon(node.child("icon"), self.star.clone()).into(),
+                    icssed::text(node.child("label"), text).into(),
                 ],
             )
             .into()
         };
-        let content = tk::column(
+        let content = icssed::column(
             texts,
             [
                 label("small", "Small, 12px"),
@@ -669,16 +674,20 @@ impl Gallery {
         let flex = section.child("flex");
         let lane = |class: &str, cells: &[&'static str]| -> Element<'a, Message> {
             let node = flex.child("lane").class(class);
-            tk::row(
+            icssed::row(
                 node,
                 cells.iter().map(|&cell| {
                     let cell_node = node.child("cell").class(cell);
-                    tk::row(cell_node, [tk::text(cell_node.child("label"), cell).into()]).into()
+                    icssed::row(
+                        cell_node,
+                        [icssed::text(cell_node.child("label"), cell).into()],
+                    )
+                    .into()
                 }),
             )
             .into()
         };
-        let content = tk::column(
+        let content = icssed::column(
             flex,
             [
                 lane("plain", &["fill", "fixed", "fill"]),
@@ -698,7 +707,7 @@ impl Gallery {
             None => "Nothing picked yet: click, or Tab to an item then Up, Down, Enter".into(),
         };
         let item = |label: &'static str| MenuItem::new(label).on_press(Message::Picked(label));
-        let menu = tk::menu(
+        let menu = icssed::menu(
             menus.child("menu"),
             [
                 item("Open").icon(self.star.clone()).shortcut("Ctrl+O"),
@@ -724,9 +733,9 @@ impl Gallery {
                 ),
             ],
         );
-        let content = tk::column(
+        let content = icssed::column(
             menus,
-            [menu, tk::text(menus.child("status"), picked).into()],
+            [menu, icssed::text(menus.child("status"), picked).into()],
         );
         self.section(section, "Menu", content.into())
     }
@@ -742,16 +751,16 @@ impl Gallery {
         ];
         let section = root.child("section");
         let pages = section.child("pages");
-        let content = tk::column(
+        let content = icssed::column(
             pages,
             [
-                tk::tabs(
+                icssed::tabs(
                     pages.child("tabs"),
                     PAGES.iter().enumerate().map(|(i, (title, _))| {
                         Tab::new(*title, Message::Tab(i)).active(i == self.tab)
                     }),
                 ),
-                tk::text(pages.child("page"), PAGES[self.tab].1).into(),
+                icssed::text(pages.child("page"), PAGES[self.tab].1).into(),
             ],
         );
         self.section(section, "Tabs", content.into())
@@ -779,7 +788,7 @@ impl Gallery {
             self.month.year
         );
         let (year, month, day) = self.today;
-        let mut calendar = tk::calendar(
+        let mut calendar = icssed::calendar(
             section.child("calendar"),
             self.month,
             title,
@@ -811,20 +820,20 @@ impl Gallery {
         });
         let section = root.child("section");
         let graphs = section.child("graphs");
-        let content = tk::row(
+        let content = icssed::row(
             graphs,
             [
-                tk::graph(graphs.child("graph"), 60)
+                icssed::graph(graphs.child("graph"), 60)
                     .series(load)
                     .max(100.0)
                     .label("100%")
                     .into(),
-                tk::graph(graphs.child("graph").class("traffic"), 60)
+                icssed::graph(graphs.child("graph").class("traffic"), 60)
                     .series_class("down", down)
                     .series_class("up", up)
                     .label("1 MB/s")
                     .into(),
-                tk::graph(graphs.child("sparkline"), 30)
+                icssed::graph(graphs.child("sparkline"), 30)
                     .series((0..30).map(|i| 5.0 + 4.0 * (i as f32 / 3.0).sin()))
                     .label("CPU 42%")
                     .into(),
@@ -840,15 +849,15 @@ impl Gallery {
         let rows = list.child("rows");
         let strip = row.child("scroll").class("strip");
         let cells = strip.child("cells");
-        let content = tk::row(
+        let content = icssed::row(
             row,
             [
-                tk::scroll(
+                icssed::scroll(
                     list,
-                    tk::column(
+                    icssed::column(
                         rows,
                         (1..=30).map(|i| {
-                            tk::text(
+                            icssed::text(
                                 rows.child("label"),
                                 format!("Row {i} of a list that scrolls"),
                             )
@@ -857,15 +866,15 @@ impl Gallery {
                     ),
                 )
                 .into(),
-                tk::scroll(
+                icssed::scroll(
                     strip,
-                    tk::row(
+                    icssed::row(
                         cells,
                         (1..=20).map(|i| {
                             let cell = cells.child("cell");
-                            tk::row(
+                            icssed::row(
                                 cell,
-                                [tk::text(cell.child("label"), format!("Cell {i}")).into()],
+                                [icssed::text(cell.child("label"), format!("Cell {i}")).into()],
                             )
                             .into()
                         }),
@@ -881,18 +890,18 @@ impl Gallery {
     fn icons<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
         let section = root.child("section");
         let icons = section.child("icons");
-        let content = tk::row(
+        let content = icssed::row(
             icons,
             [
-                tk::icon(icons.child("icon").class("small"), self.star.clone()).into(),
-                tk::icon(icons.child("icon"), self.star.clone()).into(),
-                tk::icon(
+                icssed::icon(icons.child("icon").class("small"), self.star.clone()).into(),
+                icssed::icon(icons.child("icon"), self.star.clone()).into(),
+                icssed::icon(
                     icons.child("icon").class("large").class("accent"),
                     self.star.clone(),
                 )
                 .into(),
-                tk::tooltip(
-                    tk::icon(icons.child("avatar"), self.picture.clone()),
+                icssed::tooltip(
+                    icssed::icon(icons.child("avatar"), self.picture.clone()),
                     icons.child("tooltip"),
                     "A picture, rounded by the theme: rest the pointer on anything with a tip",
                 )

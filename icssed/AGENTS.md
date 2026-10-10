@@ -1,9 +1,8 @@
 # AGENTS.md: the toolkit
 
-`toolkit/` is a crate of CSS-styled widgets on iced 0.14, knowing nothing
-of Aria: `tk` for now (a provisional name, still to decide; `tk::` below
-stands for it). How it's built, and why, is ARCHITECTURE.md beside this
-file; every element, class and property, with its neutral default, is
+`icssed/` is a crate of CSS-styled widgets on iced 0.14, knowing nothing
+of Aria. How it's built, and why, is ARCHITECTURE.md beside this file;
+every element, class and property, with its neutral default, is
 `assets/base.css`. Read this first, then those where you need them.
 
 Everything here was learned building it: the rules it keeps, the
@@ -48,11 +47,11 @@ What the toolkit holds to; a change that breaks one is the wrong change.
 ## Commands
 
 ```bash
-cargo run -p tk --example gallery [-- theme.css]   # every widget; `d` toggles light/dark; the theme reloads on save
-cargo test -p tk                                   # style, layout, widgets, golden images
-TK_GOLDEN=bless cargo test -p tk golden            # accept a visual change meant to show (look at it first)
-cargo bench -p tk --features testing               # what it costs: before and after a change
-cargo clippy -p tk --all-targets --features testing
+cargo run -p icssed --example gallery [-- theme.css]   # every widget; `d` toggles light/dark; the theme reloads on save
+cargo test -p icssed                                   # style, layout, widgets, golden images
+ICSSED_GOLDEN=bless cargo test -p icssed golden            # accept a visual change meant to show (look at it first)
+cargo bench -p icssed --features testing               # what it costs: before and after a change
+cargo clippy -p icssed --all-targets --features testing
 cargo fmt                                          # before every commit
 ```
 
@@ -67,26 +66,26 @@ everything.
 ```rust
 // Once, and again when the theme file changes or the scheme flips.
 // The toolkit's base.css always comes first, under every other rule.
-let (sheet, warnings) = tk::Sheet::load(
+let (sheet, warnings) = icssed::Sheet::load(
     &[
-        tk::Source { name: "app.css", text: APP_CSS, dir: Some(app_dir) },
-        tk::Source { name: &theme_name, text: &theme_text, dir: theme_dir },
+        icssed::Source { name: "app.css", text: APP_CSS, dir: Some(app_dir) },
+        icssed::Source { name: &theme_name, text: &theme_text, dir: theme_dir },
     ],
-    tk::Scheme::Dark,
+    icssed::Scheme::Dark,
 )?; // Err only on a syntax error: keep the last good sheet. Log the warnings.
 
 // In view: a surface's root carries its scale (device pixels per
 // logical one: the output's scale times the UI's).
-fn view<'a>(&'a self, sheet: &'a tk::Sheet) -> tk::Element<'a, Message> {
+fn view<'a>(&'a self, sheet: &'a icssed::Sheet) -> icssed::Element<'a, Message> {
     let root = sheet.root("popup", self.scale);
     let list = root.child("list");
-    tk::focus_scope(tk::column(
+    icssed::focus_scope(icssed::column(
         list,
         self.items.iter().enumerate().map(|(i, item)| {
             let row = list.child("entry").class_if("active", item.active);
-            tk::button(row, [
-                tk::icon(row.child("icon"), item.icon.clone()).into(),
-                tk::text(row.child("label"), &item.label).into(),
+            icssed::button(row, [
+                icssed::icon(row.child("icon"), item.icon.clone()).into(),
+                icssed::text(row.child("label"), &item.label).into(),
             ])
             .on_press(Message::Pick(i))
             .into()
@@ -96,18 +95,18 @@ fn view<'a>(&'a self, sheet: &'a tk::Sheet) -> tk::Element<'a, Message> {
 }
 
 // The window's iced theme: what it's cleared with, from the root's style.
-fn theme(&self) -> tk::Theme {
+fn theme(&self) -> icssed::Theme {
     let root = self.sheet.root("popup", self.scale).base();
-    tk::Theme::window(root.background, root.color)
+    icssed::Theme::window(root.background, root.color)
 }
 ```
 
-- `tk::Element<'a, M>` is `iced::Element<'a, M, tk::Theme, tk::Renderer>`.
+- `icssed::Element<'a, M>` is `iced::Element<'a, M, icssed::Theme, icssed::Renderer>`.
   The toolkit's `Theme` isn't a palette. It's the draw-time context a
   parent hands its children: the opacity so far, the states of the
   ancestors, when they last changed. iced's own widgets work inside only
-  if `tk::Theme` has their `Catalog`: `text_input` and `scrollable` do
-  (as `tk::input` and `tk::scroll`). That's on purpose: an unthemed widget
+  if `icssed::Theme` has their `Catalog`: `text_input` and `scrollable` do
+  (as `icssed::input` and `icssed::scroll`). That's on purpose: an unthemed widget
   can't slip in.
 - Node steps: `child(kind)`, `child_at(kind, i, n)` (for `:nth-child()`
   and friends), `class(c)`, `class_if(c, on)`, `id(i)`, `attr(n, v)`,
@@ -147,7 +146,7 @@ base's look. A box's kind is the app's to choose.
 | `tooltip(content, node, text).delay(d).on_tip(f)`, `tip(node, text)` | an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own |
 | `select(node, options, selected, f).placeholder(t).on_open(open, f)` | its options as a menu in an overlay; `on_open` as for tips |
 
-`tk::Measure::new().size(key, element, max)` lays an element out with no
+`icssed::Measure::new().size(key, element, max)` lays an element out with no
 surface (headless tiny-skia, the real widgets): what a layer surface
 must open at. Build the element at the scale it will be shown at. Keep
 one `Measure` and one `key` per surface, so text is shaped once (15 µs a
@@ -162,11 +161,11 @@ surface closes.
 - A tip or a select's options can't be overlays in a bar: a 30 px layer
   surface would cut them. Give the widget `on_tip` / `on_open`; it sends
   the rectangle to show them by, in the surface's coordinates with the
-  scrolls taken into account. Open a popup there with `tk::tip` or a
-  `tk::menu`, and tell the select whether its options are open.
+  scrolls taken into account. Open a popup there with `icssed::tip` or a
+  `icssed::menu`, and tell the select whether its options are open.
 - A tooltip asks its delayed frame with `RedrawRequest::At`. Check that
   `iced_exwlshell` honours it when Aria moves onto the toolkit.
-- Aria's `debug widgets` is the query: run `tk::query::Report` as an
+- Aria's `debug widgets` is the query: run `icssed::query::Report` as an
   iced operation, then `sheet.select("menu item:nth-child(2)", &found)`.
 
 ## Styling: what to know
@@ -217,14 +216,14 @@ surface closes.
 
 ## What things cost
 
-Measured with `cargo bench -p tk --features testing` (`benches/costs.rs`:
+Measured with `cargo bench -p icssed --features testing` (`benches/costs.rs`:
 fixed trees on the headless renderer; this laptop, release, 2026-10).
 Update these numbers when a change moves them:
 
 | tree | view | rebuild (view, diff, layout) | update (pointer) | frame (update, draw) |
 |---|---|---|---|---|
 | a bar, 12 gadgets | 1.6 µs | 4.3 µs | 1.0 µs | 3.5 µs |
-| a menu (`tk::menu`), 20 items | 4.6 µs | 15 µs | 2.0 µs | 7.1 µs |
+| a menu (`icssed::menu`), 20 items | 4.6 µs | 15 µs | 2.0 µs | 7.1 µs |
 | a list, 500 rows | 55 µs | 200 µs | 32 µs | 92 µs |
 
 Loading a theme (the base and the gallery's) takes 0.5 ms.
@@ -258,7 +257,7 @@ src/style/     the sheet: value.rs (properties: parsing, longhands), computed.rs
                the cascade's values), node.rs (Node, States, Ancestors), selector.rs,
                parse.rs, sheet.rs (load, root, stats), cascade.rs (styles, sensitivity,
                the query's matching), fonts.rs, images.rs, keyframes.rs, tests.rs
-src/theme.rs   tk::Theme, and the Catalogs of the stock widgets embedded
+src/theme.rs   icssed::Theme, and the Catalogs of the stock widgets embedded
 src/layout.rs  snap, Sizing (a box's model on its limits), content_box, flex()
 src/paint.rs   boxes: quads, paths for sides that differ, shadows, outline, images
 src/anim.rs    easing, transitions, keyframes: Animated, kept in a widget's tree state

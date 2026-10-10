@@ -92,7 +92,7 @@ impl Base for Theme {
     }
 
     fn name(&self) -> &str {
-        "tk"
+        "icssed"
     }
 }
 
@@ -115,7 +115,7 @@ impl<'a> FieldClass<'a> {
     }
 }
 
-/// iced's text input, as `tk::input` embeds it: no box of its own (the
+/// iced's text input, as `icssed::input` embeds it: no box of its own (the
 /// input's is), its colours its nodes', under the states of its
 /// ancestors. Without a class (an iced text input used directly), black
 /// on nothing.
@@ -190,7 +190,7 @@ fn border(s: &Computed, opacity: f32) -> Border {
     }
 }
 
-/// iced's scrollable, as `tk::scroll` embeds it: no box of its own, its
+/// iced's scrollable, as `icssed::scroll` embeds it: no box of its own, its
 /// scrollbars and thumbs their nodes', `:hover` and `:active` as iced
 /// reports them; the scroll `:hover` under the pointer. Without a class
 /// (an iced scrollable used directly), bars that aren't drawn.

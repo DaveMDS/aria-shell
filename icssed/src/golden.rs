@@ -4,7 +4,7 @@
 //!
 //! A reference missing is written. A scene that differs fails, and
 //! leaves what it drew in `target/golden/`; after a change meant to
-//! show, `TK_GOLDEN=bless cargo test -p tk golden` writes them all again.
+//! show, `ICSSED_GOLDEN=bless cargo test -p icssed golden` writes them all again.
 
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -76,7 +76,7 @@ fn scene(
 
 fn compare(name: &str, drawn: &Pixels) {
     let reference = here().join("tests/golden").join(format!("{name}.png"));
-    let bless = std::env::var("TK_GOLDEN").is_ok_and(|v| v == "bless");
+    let bless = std::env::var("ICSSED_GOLDEN").is_ok_and(|v| v == "bless");
     if bless || !reference.exists() {
         drawn.save_png(&reference).expect("the reference written");
         return;
@@ -100,7 +100,7 @@ fn compare(name: &str, drawn: &Pixels) {
         drawn.save_png(&actual).expect("what was drawn written");
         panic!(
             "{name}: {} differ from {}; what was drawn is in {}; \
-             TK_GOLDEN=bless makes it the reference",
+             ICSSED_GOLDEN=bless makes it the reference",
             if differing == usize::MAX {
                 "the sizes".to_string()
             } else {
@@ -347,7 +347,7 @@ fn golden_flex() {
 #[test]
 fn golden_images() {
     // The theme's images, made the same each time.
-    let dir = std::env::temp_dir().join(format!("tk-golden-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("icssed-golden-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a temporary directory");
     let dots = ::image::RgbaImage::from_fn(8, 8, |x, y| {
         if (2..6).contains(&x) && (2..6).contains(&y) {

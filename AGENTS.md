@@ -30,15 +30,15 @@ support. There's no mock mode, but there is a headless one: `tests/ui/`
 runs the shell inside a nested `sway` with no display output (see
 "Verifying").
 
-`toolkit/` is the UI toolkit being written for the shell, a crate of
-its own (`tk` for now) that knows nothing of it: toolkit/AGENTS.md says
+`icssed/` is the UI toolkit being written for the shell, a crate of
+its own that knows nothing of it: icssed/AGENTS.md says
 how to use it and work on it (its rules, calls, costs and traps),
-toolkit/ARCHITECTURE.md how it's built and why. Its gallery shows
+icssed/ARCHITECTURE.md how it's built and why. Its gallery shows
 every widget, styled by a theme reloaded when its file changes:
 ```bash
-cargo run -p tk --example gallery [-- theme.css]   # `d`: light/dark
-cargo test -p tk                                   # golden images too: TK_GOLDEN=bless accepts a change meant to show
-cargo bench -p tk --features testing               # what it costs, before and after a change
+cargo run -p icssed --example gallery [-- theme.css]   # `d`: light/dark
+cargo test -p icssed                                   # golden images too: ICSSED_GOLDEN=bless accepts a change meant to show
+cargo bench -p icssed --features testing               # what it costs, before and after a change
 ```
 
 With arguments the binary is a client of the running shell:

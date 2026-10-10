@@ -3,15 +3,15 @@
 //! rebuild, an update, a frame. Numbers to compare before and after a
 //! change, kept in AGENTS.md ("What things cost"):
 //!
-//!     cargo bench -p tk --features testing
+//!     cargo bench -p icssed --features testing
 
 use std::hint::black_box;
 use std::path::Path;
 use std::time::Instant;
 
 use iced::{Point, Size};
-use tk::testing::Harness;
-use tk::{Element, IconFile, Measure, Node, Scheme, Sheet, Source};
+use icssed::testing::Harness;
+use icssed::{Element, IconFile, Measure, Node, Scheme, Sheet, Source};
 
 /// The mean of `iterations` runs of `f`, after a tenth of them to warm.
 fn time(name: &str, iterations: u32, mut f: impl FnMut()) {
@@ -50,15 +50,15 @@ fn star() -> IconFile {
 
 /// A bar: twelve gadgets, an icon and a label each.
 fn bar<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
-    tk::row(
+    icssed::row(
         root,
         (0..12).map(|i| {
             let gadget = root.child("gadget");
-            tk::button(
+            icssed::button(
                 gadget,
                 [
-                    tk::icon(gadget.child("icon"), icon.clone()).into(),
-                    tk::text(gadget.child("label"), format!("Gadget {i}")).into(),
+                    icssed::icon(gadget.child("icon"), icon.clone()).into(),
+                    icssed::text(gadget.child("label"), format!("Gadget {i}")).into(),
                 ],
             )
             .on_press(())
@@ -70,10 +70,10 @@ fn bar<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
 
 /// A menu: twenty items, an icon, a label and a shortcut each.
 fn menu<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
-    tk::menu(
+    icssed::menu(
         root,
         (0..20).map(|i| {
-            tk::MenuItem::new(format!("Menu item number {i}"))
+            icssed::MenuItem::new(format!("Menu item number {i}"))
                 .icon(icon.clone())
                 .shortcut("Ctrl+K")
                 .on_press(())
@@ -83,13 +83,13 @@ fn menu<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
 
 /// A list: five hundred rows of a label.
 fn list(root: Node<'_>) -> Element<'_, ()> {
-    tk::column(
+    icssed::column(
         root,
         (0..500).map(|i| {
             let row = root.child("row");
-            tk::row(
+            icssed::row(
                 row,
-                [tk::text(row.child("label"), format!("Row {i}")).into()],
+                [icssed::text(row.child("label"), format!("Row {i}")).into()],
             )
             .into()
         }),

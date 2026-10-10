@@ -1,7 +1,5 @@
 [package]
-# A provisional name, as `tk::` in ARCHITECTURE.md: the crate's name is
-# still to decide.
-name = "tk"
+name = "icssed"
 version = "0.0.1"
 edition = "2024"
 description = "CSS-styled widgets on iced"

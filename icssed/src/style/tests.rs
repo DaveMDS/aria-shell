@@ -437,7 +437,7 @@ fn styles_are_resolved_once() {
 /// A directory with `name`, a `width` x `height` png of colour
 /// `rgba`, for `url()`s to find.
 fn images(test: &str, name: &str, width: u32, height: u32, rgba: [u8; 4]) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("tk-{}-{test}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("icssed-{}-{test}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a temporary directory");
     ::image::RgbaImage::from_pixel(width, height, ::image::Rgba(rgba))
         .save(dir.join(name))

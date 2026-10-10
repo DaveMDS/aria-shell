@@ -12,8 +12,6 @@ release build), which drew a themed menu headlessly and in a real wgpu
 window inside a nested headless Sway at scale 1.5, and then on the
 crate itself (AGENTS.md, "What things cost").
 
-`tk::` in the examples stands for the crate until it has a name.
-
 ## Decisions at a glance
 
 - **Real iced widgets, written on the advanced API** (`iced::advanced::
@@ -84,7 +82,7 @@ rules), per rebuild: prototype view 5.6µs, diff+layout 4.6µs, update
 
 ## Crate
 
-A workspace member (`toolkit/`), its own `Cargo.toml`, depending on:
+A workspace member (`icssed/`), its own `Cargo.toml`, depending on:
 
 - `iced` 0.14 with its defaults (`wgpu`, `tiny-skia`, `crisp`: quads
   snapped to the pixel grid) and `advanced`, `svg`,
@@ -142,12 +140,12 @@ A widget's place is a `Node<'a>`: `Copy`, a reference to the sheet and
 an interned id. The view builds them top-down, without allocating:
 
 ```rust
-fn view<'a>(&'a self, menu: tk::Node<'a>) -> tk::Element<'a, Message> {
-    tk::column(menu, self.items.iter().enumerate().map(|(i, it)| {
+fn view<'a>(&'a self, menu: icssed::Node<'a>) -> icssed::Element<'a, Message> {
+    icssed::column(menu, self.items.iter().enumerate().map(|(i, it)| {
         let item = menu.child("item").class_if("active", it.active);
-        tk::button(item, [
-            tk::icon(item.child("icon"), it.icon.clone()).into(),
-            tk::text(item.child("label"), &it.label).into(),
+        icssed::button(item, [
+            icssed::icon(item.child("icon"), it.icon.clone()).into(),
+            icssed::text(item.child("label"), &it.label).into(),
         ])
         .on_press(Message::Pick(i))
         .into()
@@ -225,8 +223,8 @@ gets no `Theme` (see Scale).
 
 It implements `iced::theme::Base` (all `iced_exwlshell` asks) and the
 `Catalog` traits of the stock widgets the toolkit embeds: `text_input`
-(`tk::input`'s field: its colours from `field`, `field > placeholder`,
-`field > selection`) and `scrollable` (`tk::scroll`: `scrollbar`,
+(`icssed::input`'s field: its colours from `field`, `field > placeholder`,
+`field > selection`) and `scrollable` (`icssed::scroll`: `scrollbar`,
 `scrollbar > thumb`, `:hover`/`:active` as iced reports them). Every
 other stock widget needs a `Catalog` impl before it can be used: that's
 deliberate, an unthemed widget can't slip in.
@@ -362,7 +360,7 @@ ours, and fast.
 
 A layer surface needs its size before the first frame. The toolkit lays
 the element out headlessly, with the real widgets and the real layout:
-`tk::Measure` holds a tiny-skia renderer (`renderer::Headless::new(..,
+`icssed::Measure` holds a tiny-skia renderer (`renderer::Headless::new(..,
 Some("tiny-skia"))`: CPU, no window) and a widget tree kept per surface,
 so text is shaped once. Text is measured by the same cosmic-text
 paragraphs either renderer uses. The root `surface` widget adds the room
@@ -490,7 +488,7 @@ root node's, and what was measured is what the window lays out.
   there's no room, in an iced overlay: what a window wants. A bar's
   tips can't be overlays (a 30px layer surface would cut them): with
   `on_tip` the tooltip publishes the rectangle to show it by, then that
-  it's gone, and the app opens a popup surface with `tk::tip` in it.
+  it's gone, and the app opens a popup surface with `icssed::tip` in it.
   The rectangle is where it's shown: the overlay pass tells the widget
   how far the scrolls around it moved it. The same for a select's
   options (`on_open`). Every container hands its children's overlays

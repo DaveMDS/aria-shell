@@ -9,7 +9,7 @@
 //! In a window the options are an overlay; an app with surfaces of its
 //! own (a layer surface would cut them) is told the rectangle to show
 //! them by instead (`on_open`), says when they're open, and shows a
-//! `tk::menu` of them there.
+//! `icssed::menu` of them there.
 
 use std::borrow::Cow;
 

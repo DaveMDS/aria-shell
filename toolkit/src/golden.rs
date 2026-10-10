@@ -706,3 +706,36 @@ fn golden_graphs() {
         |_, _| {},
     );
 }
+
+#[test]
+fn golden_tooltip() {
+    scene(
+        "tooltip",
+        "scene { padding: 8px 60px; align-items: start; } tooltip { animation: none; } \
+         button { transition: none; }",
+        None,
+        Size::new(220.0, 70.0),
+        |root| {
+            let button = root.child("button");
+            crate::column(
+                root,
+                [crate::tooltip(
+                    crate::button(
+                        button,
+                        [crate::text(button.child("label"), "Rest here").into()],
+                    )
+                    .on_press(()),
+                    root.child("tooltip"),
+                    "A tip, under what it's about",
+                )
+                .into()],
+            )
+            .into()
+        },
+        |ui, sheet| {
+            let button = ui.find(sheet, "button")[0];
+            ui.move_to(button.center());
+            ui.frame(std::time::Instant::now() + std::time::Duration::from_secs(1));
+        },
+    );
+}

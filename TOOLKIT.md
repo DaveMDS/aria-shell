@@ -494,11 +494,14 @@ child), so that a list whose items move keeps each item's tree state
   operation of ours), once one of theirs has it.
 - **Accessibility**: none in iced 0.14 (no AccessKit). A limit.
 - **Tooltips, menus, selects**: the toolkit draws them; where they
-  appear is the app's. A tooltip widget publishes "show this tip at
-  this rectangle" after the hover delay and "hide" on leaving: a bar
-  opens a popup surface for it (a tooltip inside a 30px layer surface
-  would be cut), the gallery shows it in an iced overlay
-  (`tooltip_layer`). The same for a select's list.
+  appear may be the app's. A tooltip shows its tip after the pointer
+  rests (600ms unless said), under what it's about or over it where
+  there's no room, in an iced overlay: what a window wants. A bar's
+  tips can't be overlays (a 30px layer surface would cut them): with
+  `on_tip` the tooltip publishes the rectangle to show it by, then that
+  it's gone, and the app opens a popup surface with `tk::tip` in it.
+  The rectangle is where it's shown: the overlay pass tells the widget
+  how far the scrolls around it moved it. The same for a select's list.
 
 ## Animation
 
@@ -567,7 +570,8 @@ UI.md §7:
 | `tabs` | a row of buttons, one per page, the page shown `.active`; each tab the app's message; Left and Right among them |
 | `meter` | its `fill` at a fraction of its content box; with a `label` over it, a gauge |
 | `graph` | series as lines with the area under them, painted as SVG's (`stroke`, `stroke-width`, `fill`), the newest at the right edge; a grid; a label over it; its paths kept in iced's geometry cache until the values, the size or the paint change. A sparkline is a graph |
-| `tooltip`, `select` | above (select later) |
+| `tooltip` | a tip after a rest, in an overlay or the app's surface (`on_tip`, `tk::tip`); made anew each time, so its entry animation runs |
+| `select` | above (later) |
 | `surface` | a surface's root: the shadow's room around its box, clicks on the room ignored |
 | `focus_scope` | above |
 
@@ -664,7 +668,7 @@ the headless harness and the query with them.
 5. ✅ Animation: transitions, keyframes, exit animations.
 6. The widgets of UI.md §7: toggle ✅, slider ✅, meter and gauge ✅,
    surface ✅ (with step 2), input ✅, scroll ✅, menu ✅, tabs ✅,
-   calendar ✅, graphs ✅, tooltip; select last.
+   calendar ✅, graphs ✅, tooltip ✅; select last.
    A widget placing its children its own way (a meter's fill, a
    slider's knob) shares the box's states, painting and animation
    (`widget/boxed.rs`) and its box model (`layout::Sizing`).

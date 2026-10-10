@@ -19,6 +19,7 @@ mod tabs;
 mod tests;
 mod text;
 mod toggle;
+mod tooltip;
 
 pub use calendar::{Calendar, Month, calendar};
 pub use flex::{Flex, button, column, row};
@@ -35,3 +36,4 @@ pub use surface::{Surface, surface};
 pub use tabs::{Tab, tabs};
 pub use text::{Text, text};
 pub use toggle::toggle;
+pub use tooltip::{Tooltip, tip, tooltip};

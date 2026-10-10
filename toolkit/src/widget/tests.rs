@@ -915,3 +915,64 @@ fn a_graph_draws_its_series_from_the_right() {
     ui.frame(now);
     assert_eq!(ui.pixels(Color::WHITE).at(97, 5), [255, 255, 255, 255]);
 }
+
+/// A 40x20 button with a tip, its own way or the app's.
+fn tipped(root: Node<'_>, the_apps: bool) -> Element<'_, Message> {
+    let button = crate::button(root.child("button"), []).on_press(Message::Pressed("tipped"));
+    let tip = crate::tooltip(button, root.child("tooltip"), "A tip");
+    let tip = if the_apps {
+        tip.on_tip(|shown| match shown {
+            Some(_) => Message::Pressed("shown"),
+            None => Message::Pressed("hidden"),
+        })
+    } else {
+        tip
+    };
+    crate::column(root, [tip.into()]).into()
+}
+
+/// The button 80px in, a tip wider than it.
+const TIPPED: &str = "root { padding: 0 80px; align-items: start; } \
+                      button { width: 40px; height: 20px; } \
+                      tooltip { animation: none; margin: 6px 0; }";
+
+#[test]
+fn a_tip_shows_after_a_rest_and_goes_with_the_pointer() {
+    let sheet = sheet(TIPPED);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(tipped(root, false), Size::new(200.0, 100.0), 1.0);
+    let start = Instant::now();
+    ui.move_to(Point::new(100.0, 10.0));
+    ui.frame(start + Duration::from_millis(100));
+    assert!(ui.find(&sheet, "tooltip").is_empty());
+    ui.frame(start + Duration::from_millis(700));
+    let tip = ui.find(&sheet, "tooltip");
+    assert_eq!(tip.len(), 1);
+    // Under the button, its margin away, centred on it.
+    assert_eq!(tip[0].y, 20.0 + 6.0);
+    assert!((tip[0].center_x() - 100.0).abs() <= 1.0, "{tip:?}");
+    ui.move_to(Point::new(190.0, 80.0));
+    ui.frame(start + Duration::from_millis(800));
+    assert!(ui.find(&sheet, "tooltip").is_empty());
+    // Pressed, it doesn't show until the pointer leaves.
+    ui.move_to(Point::new(100.0, 10.0));
+    ui.press();
+    ui.release();
+    ui.frame(Instant::now() + Duration::from_secs(1));
+    assert!(ui.find(&sheet, "tooltip").is_empty());
+}
+
+#[test]
+fn an_app_can_show_a_tip_itself() {
+    let sheet = sheet(TIPPED);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(tipped(root, true), Size::new(200.0, 100.0), 1.0);
+    ui.move_to(Point::new(100.0, 10.0));
+    ui.frame(Instant::now() + Duration::from_millis(700));
+    assert!(ui.find(&sheet, "tooltip").is_empty());
+    ui.move_to(Point::new(190.0, 80.0));
+    assert_eq!(
+        ui.messages,
+        [Message::Pressed("shown"), Message::Pressed("hidden")]
+    );
+}

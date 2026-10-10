@@ -724,3 +724,34 @@ graph > label {
   font-size: 11px;
   color: var(--muted);
 }
+
+/*
+ * Tooltips
+ * ========
+ *
+ * A tip shown by what the pointer rests on (`tk::tooltip`), after a
+ * delay: under it, or over it where there's no room under, centred on
+ * it; hidden when the pointer leaves or presses. In a window it's drawn
+ * over everything; an app with surfaces of its own shows `tk::tip` in
+ * one instead. Its margins are its distance from what it's about; it's
+ * made anew each time it shows, so its animation runs each time.
+ *
+ * tooltip
+ * ╰─ label
+ */
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+tooltip {
+  max-width: 320px;
+  margin: 6px 0;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  animation: tooltip-in 120ms ease-out;
+}

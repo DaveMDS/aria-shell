@@ -458,9 +458,12 @@ impl Gallery {
             tk::row(shaken, [labelled(shaken, "Shaken on demand")])
                 .on_animation_end(Message::Shaken)
                 .into(),
-            tk::button(shake, [labelled(shake, "Shake")])
-                .on_press(Message::Shake)
-                .into(),
+            tk::tooltip(
+                tk::button(shake, [labelled(shake, "Shake")]).on_press(Message::Shake),
+                row.child("tooltip"),
+                "Shakes the box beside it, once",
+            )
+            .into(),
             tk::button(
                 toggle,
                 [labelled(
@@ -857,7 +860,12 @@ impl Gallery {
                     self.star.clone(),
                 )
                 .into(),
-                tk::icon(icons.child("avatar"), self.picture.clone()).into(),
+                tk::tooltip(
+                    tk::icon(icons.child("avatar"), self.picture.clone()),
+                    icons.child("tooltip"),
+                    "A picture, rounded by the theme: rest the pointer on anything with a tip",
+                )
+                .into(),
             ],
         );
         self.section(section, "Icons", content.into())

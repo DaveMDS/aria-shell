@@ -32,7 +32,8 @@ runs the shell inside a nested `sway` with no display output (see
 
 `toolkit/` is the UI toolkit being written for the shell, a crate of
 its own (`tk` for now) that knows nothing of it: UI.md says what it's
-for, TOOLKIT.md how it's built and how far it got. Its gallery shows
+for, TOOLKIT.md how it's built and how far it got, toolkit/AGENTS.md how
+to use it and work on it well (its patterns, costs and traps). Its gallery shows
 every widget, styled by a theme reloaded when its file changes:
 ```bash
 cargo run -p tk --example gallery [-- theme.css]   # `d`: light/dark

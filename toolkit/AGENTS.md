@@ -1,0 +1,406 @@
+# AGENTS.md: the toolkit
+
+`toolkit/` is a crate of CSS-styled widgets on iced 0.14, knowing nothing
+of Aria: `tk` for now (a provisional name, still to decide; `tk::` below
+stands for it). What it's for is UI.md; how it's built, and why, is
+TOOLKIT.md; every element, class and property, with its neutral default,
+is `assets/base.css`. Read this first, then those where you need them.
+
+Everything here was learned building it: the patterns that work, what
+things cost, and the traps already fallen into once.
+
+## Commands
+
+```bash
+cargo run -p tk --example gallery [-- theme.css]   # every widget; `d` toggles light/dark; the theme reloads on save
+cargo test -p tk                                   # style, layout, widgets, golden images
+TK_GOLDEN=bless cargo test -p tk golden            # accept a visual change meant to show (look at it first)
+cargo bench -p tk --features testing               # what it costs: before and after a change
+cargo clippy -p tk --all-targets --features testing
+cargo fmt                                          # before every commit
+```
+
+## The model in one page
+
+A view builds **nodes** top-down from a surface's root, and hands each
+widget its node. The node is an interned path in the sheet: its style is
+computed once per distinct (node, own states, ancestors' states) and
+shared. No colour, size or font is ever written in Rust: the sheet says
+everything.
+
+```rust
+// Once, and again when the theme file changes or the scheme flips.
+// The toolkit's base.css always comes first, under every other rule.
+let (sheet, warnings) = tk::Sheet::load(
+    &[
+        tk::Source { name: "app.css", text: APP_CSS, dir: Some(app_dir) },
+        tk::Source { name: &theme_name, text: &theme_text, dir: theme_dir },
+    ],
+    tk::Scheme::Dark,
+)?; // Err only on a syntax error: keep the last good sheet. Log the warnings.
+
+// In view: a surface's root carries its scale (device pixels per
+// logical one: the output's scale times the UI's).
+fn view<'a>(&'a self, sheet: &'a tk::Sheet) -> tk::Element<'a, Message> {
+    let root = sheet.root("popup", self.scale);
+    let list = root.child("list");
+    tk::focus_scope(tk::column(
+        list,
+        self.items.iter().enumerate().map(|(i, item)| {
+            let row = list.child("entry").class_if("active", item.active);
+            tk::button(row, [
+                tk::icon(row.child("icon"), item.icon.clone()).into(),
+                tk::text(row.child("label"), &item.label).into(),
+            ])
+            .on_press(Message::Pick(i))
+            .into()
+        }),
+    ))
+    .into()
+}
+
+// The window's iced theme: what it's cleared with, from the root's style.
+fn theme(&self) -> tk::Theme {
+    let root = self.sheet.root("popup", self.scale).base();
+    tk::Theme::window(root.background, root.color)
+}
+```
+
+- `tk::Element<'a, M>` is `iced::Element<'a, M, tk::Theme, tk::Renderer>`.
+  The toolkit's `Theme` isn't a palette. It's the draw-time context a
+  parent hands its children: the opacity so far, the states of the
+  ancestors, when they last changed. iced's own widgets work inside only
+  if `tk::Theme` has their `Catalog`: `text_input` and `scrollable` do
+  (as `tk::input` and `tk::scroll`). That's on purpose: an unthemed widget
+  can't slip in.
+- Node steps: `child(kind)`, `child_at(kind, i, n)` (for `:nth-child()`
+  and friends), `class(c)`, `class_if(c, on)`, `id(i)`, `attr(n, v)`,
+  `disabled_if(off)`. Each step is a hash lookup (~30 ns), never an
+  allocation after the first time.
+- A new scale is a new root, so a new view. A new sheet (theme, scheme)
+  means the views must be rebuilt.
+- Widgets are **controlled**: the app holds every value (a toggle's
+  state, a slider's value, an unfolded submenu, the tab shown), and each
+  widget sends the app's messages. The only state a widget keeps itself
+  is what the pointer and the keyboard do: hover, press, focus,
+  transitions, an open tooltip or select.
+
+### The widgets
+
+The toolkit's widgets are styled by the element kinds of `base.css`:
+make their nodes with those kinds (`row.child("slider")`) to get the
+base's look. A box's kind is the app's to choose.
+
+| Call | Notes |
+|---|---|
+| `row(node, children)`, `column(..)`, `button(..)` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations |
+| `text(node, content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
+| `icon(node, source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |
+| `image(node, handle)` | `object-fit`, `border-radius` |
+| `surface(node, content)` | a surface's root: adds the room its shadow needs, so a popup's size includes it |
+| `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
+| `toggle(node, on, Message::Wifi)` | a button and its `knob`, `.on` |
+| `slider(node, 0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
+| `meter(node, fraction).label(text)` | with a label, a gauge |
+| `input(node, placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
+| `scroll(node, content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
+| `menu(node, [MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it |
+| `tabs(node, [Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
+| `calendar(node, Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
+| `graph(node, capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |
+| `tooltip(content, node, text).delay(d).on_tip(f)`, `tip(node, text)` | an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own |
+| `select(node, options, selected, f).placeholder(t).on_open(open, f)` | its options as a menu in an overlay; `on_open` as for tips |
+
+`tk::Measure::new().size(key, element, max)` lays an element out with no
+surface (headless tiny-skia, the real widgets): what a layer surface
+must open at. Build the element at the scale it will be shown at. Keep
+one `Measure` and one `key` per surface, so text is shaped once (15 µs a
+menu, against 135 µs with a fresh tree), and `forget(key)` when the
+surface closes.
+
+### Apps with layer surfaces (Aria)
+
+- One root node per surface, made with that surface's scale. Measure a
+  popup's content with the same root, so what's measured is what's
+  shown.
+- A tip or a select's options can't be overlays in a bar: a 30 px layer
+  surface would cut them. Give the widget `on_tip` / `on_open`; it sends
+  the rectangle to show them by, in the surface's coordinates with the
+  scrolls taken into account. Open a popup there with `tk::tip` or a
+  `tk::menu`, and tell the select whether its options are open.
+- A tooltip asks its delayed frame with `RedrawRequest::At`. Check that
+  `iced_exwlshell` honours it when Aria moves onto the toolkit.
+- Aria's `debug widgets` is the query: run `tk::query::Report` as an
+  iced operation, then `sheet.select("menu item:nth-child(2)", &found)`.
+
+## Styling: what to know
+
+- **The CSS is a subset, documented in `base.css`'s header**, and it
+  means CSS: same names, units and behaviour, or it says where it
+  differs. Variables live in `:root`, `:root.light`, `:root.dark` only.
+  A syntax error rejects a file; anything else is a warning with its
+  `file:line:col`, and is skipped.
+- **The toolkit's base is the user-agent origin**: any app or theme rule
+  beats it, whatever the specificity.
+- **Element types are global, as in CSS.** An app's own `track`, `fill`,
+  `knob`, `label`, `icon`, `menu`, `item`, `field`, `series`, `day`, ...
+  gets the base's rules for the toolkit's parts. Scope your rules
+  (`lanes > track`), or choose names the base doesn't use. The
+  gallery's `track` once took a slider's fill height away, and test
+  fixtures named `menu`/`item` got the menu's padding.
+- **States**: `:hover`, `:active` and `:focus` are tracked only on
+  nodes some rule can see them on, so a moving pointer over unthemed UI
+  asks no frame. `:disabled` is part of the path (`disabled_if`), and
+  only the marked element is disabled, not the nodes under it. Paint
+  may follow any state, own or an ancestor's. Layout (sizes, padding,
+  font) follows only the element's own states: under an ancestor's
+  state it isn't applied. The sheet doesn't warn about it yet, though
+  TOOLKIT.md says it should. What a state changes, the descendants
+  inherit (`button:hover { color }` reaches its label).
+- **Classes are the view's, states the widget's.** State a widget owns
+  at runtime shows as a pseudo-class: an open select is `:active`.
+  `content` (the marks: a menu item's check, an arrow) is read where
+  the widget is built, so it follows classes, not states.
+- **Paths are painted as SVG's**: `fill`, `stroke`, `stroke-width`,
+  inherited, with fill initially black, as SVG has it.
+- **The scale**: borders snap to whole device pixels as CSS does (at
+  least one), and layout puts boxes, line boxes and baselines on the
+  device grid, at any scale, fractional too.
+- **Text is centred on its letters** (`text-box: trim-both cap
+  alphabetic` on every element): a label's box runs from its capitals'
+  top to its baseline.
+- `transform` takes translate and a uniform `scale` (iced has nothing
+  else); `rotate` turns only icons and images. `opacity` isn't a group:
+  overlapping children show through each other.
+- `min-height` beats `height`, as in CSS: a test's 30 px input stays at
+  the base's 32 px `min-height`.
+- Animations: `transition` (colours, opacity, shadow, transform,
+  rotate) and `@keyframes` with `animation`. Exit animations: the app
+  adds a class (`.leaving`) and closes the surface on
+  `on_animation_end`.
+
+## What things cost
+
+Measured on this laptop in release (`benches/costs.rs`; see TOOLKIT.md's
+table for all of it):
+
+| tree | rebuild (view, diff, layout) | update (pointer) | frame |
+|---|---|---|---|
+| a bar, 12 gadgets | 4.3 µs | 1.0 µs | 3.5 µs |
+| a menu, 20 items | 15 µs | 2.0 µs | 7.1 µs |
+| a list, 500 rows | 200 µs | 32 µs | 92 µs |
+
+Loading a theme (the base and the gallery's) takes 0.5 ms.
+
+- **An idle UI costs nothing.** A frame comes only when a tracked state
+  changes, or while an animation runs. A `:hover` rule on a big list
+  makes every row tracked: put it there only if it's wanted.
+- **Positional pseudo-classes split rows, a little.** In a sheet
+  without them `child_at` is `child`: a list's 500 rows share one node
+  and one style. With them, a row's node carries which of the sheet's
+  positions it matches (in every list, whatever kind the rule names), so
+  the rows split into a few nodes (first, last, odd, even), each
+  resolved once. The base doesn't use them, so a sheet that doesn't
+  need them pays nothing.
+- iced lays out a surface's whole tree on every rebuild, changed or
+  not, and asks every widget for overlays on every event and every
+  frame: ~6 ns a widget, a third of the list's update. Smaller trees
+  per surface are cheaper; nothing else is wasted.
+- Text is shaped once and kept in the tree; a line that doesn't wrap is
+  shaped once, at any width. Keep the tree shape stable between views
+  (the same widget at the same place), or iced builds a new state and
+  shapes again.
+- Measure before and after any change on a hot path, with the bench.
+
+## Working on the toolkit
+
+### Map
+
+```
+src/style/     the sheet: value.rs (properties: parsing, longhands), computed.rs (Computed,
+               the cascade's values), node.rs (Node, States, Ancestors), selector.rs,
+               parse.rs, sheet.rs (load, root, stats), cascade.rs (styles, sensitivity,
+               the query's matching), fonts.rs, images.rs, keyframes.rs, tests.rs
+src/theme.rs   tk::Theme, and the Catalogs of the stock widgets embedded
+src/layout.rs  snap, Sizing (a box's model on its limits), content_box, flex()
+src/paint.rs   boxes: quads, paths for sides that differ, shadows, outline, images
+src/anim.rs    easing, transitions, keyframes: Animated, kept in a widget's tree state
+src/measure.rs Measure       src/query.rs  Report, Found, Reported
+src/testing.rs the Harness (feature `testing`)   src/golden.rs the golden scenes
+src/widget/    boxed.rs (the shared box), flex.rs, text.rs, icon.rs, image.rs,
+               surface.rs, focus.rs, meter.rs, slider.rs, toggle.rs, input.rs,
+               scroll.rs, menu.rs, tabs.rs, calendar.rs, graph.rs, tooltip.rs,
+               select.rs, tests.rs
+assets/base.css               the reference and the neutral defaults
+examples/gallery.{rs,css}     every widget in every state
+tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
+```
+
+### Invariants
+
+- **No allocation while drawing.** Styles are `Arc`s resolved by key;
+  nodes and anything per view are made in `view` or in `layout` (which
+  is `&mut self`), never in `draw`. A cache is compared without a copy,
+  and copied only when it changes (`graph.rs`). The ellipsis cut is the
+  one exception: once per new width or text.
+- **Everything on the device grid**: use `snap`/`snap_up` with the
+  node's `scale()` for every size and position a widget computes.
+- **Time is `Instant::now()` in `update`**, or the `now` of
+  `RedrawRequested`: never the last frame's time.
+- **A box widget is built on `widget/boxed.rs`**: `Boxed` (node, style
+  at rest) and `BoxState` (states, `Animated`, the transform drawn).
+  `boxed.draw(...)` paints the box, hands the children their theme
+  (states, opacity, when it changed) and draws the outline.
+  `boxed.settle(...)` follows hover and asks frames and relayouts. A
+  widget placing its children its own way uses `layout::Sizing` and
+  `content_box` for its own box (`meter.rs`, `slider.rs`).
+- **Every widget reports itself through `operate`**:
+  `operation.custom(None, bounds, &mut Reported::new(node))`, so the
+  query finds it, plus `operation.focusable(...)` when it takes keys.
+  Paint parts that aren't widgets report their own nodes too (a graph's
+  series).
+- **Every container forwards `overlay`** (`overlay::from_children`).
+  Without it, an iced overlay inside it never shows.
+- **A wrapped stock widget** (`Field` in `input.rs`, `Scroll`) calls the
+  trait's methods explicitly: `Widget::<M, Theme, Renderer>::layout(&mut
+  self.inner, ..)`. `TextInput` has inherent `layout`/`draw` methods with
+  other signatures.
+
+### Facts about iced 0.14 that shaped the code
+
+- `focus_next`/`focus_previous` stop at the ends: the focus leaves.
+  That's right for Tab; an arrows scope (a menu's, tabs') moves it round
+  with an operation of ours (`Round` in `focus.rs`). The focus scope
+  drops the focus *before* a press reaches the content, so a pressed
+  text field takes it back.
+- `Scrollable::operate` doesn't move its content's layout; it calls
+  `operation.scrollable(.., translation, ..)` and lets each operation
+  apply it. The query does (`Report`). A widget learns where it's shown
+  from `overlay(.., translation)`, which iced calls on every event.
+- A disabled `text_input` still takes the focus on a click or a focus
+  operation. The toolkit keeps both away from it.
+- An overlay can tell whether its content sent a message by giving it
+  a `Shell` of its own and `merge`-ing it afterwards (the select closes
+  on a pick that way).
+- tiny-skia (the headless renderer, the golden images) places a
+  stretched image on a grid as coarse as its stretch and doesn't round
+  an image's corners: right on wgpu only.
+- Stock widgets' colours come from a style asked at draw, so they don't
+  transition; a scrollbar's sizes are set at the view, so they follow no
+  state.
+
+### Adding a widget
+
+1. Its file in `src/widget/`, built on `Boxed` if it's a box. Export it
+   from `widget/mod.rs`.
+2. Its section in `base.css`: an element tree in the comment (every
+   element, class and attribute, what each part is) and neutral defaults
+   from the palette's variables. No positional pseudo-classes (every
+   app's lists would split by them) and no `url()` (the base has no
+   directory at runtime).
+3. A section in the gallery (`examples/gallery.rs` and `gallery.css`,
+   whose header has the gallery's element tree). Use names the base
+   doesn't use, or scope them.
+4. Tests: behaviour with the `Harness` in `widget/tests.rs`, a golden
+   scene in `golden.rs` at both scales, a bench row if it's on a hot
+   path.
+5. Look at it in the gallery on wgpu at scale 1.5, light and dark (see
+   "Verifying"), then update TOOLKIT.md (the widget table, the order of
+   work, the limits).
+
+### Adding a property
+
+`value.rs`: a `Prop`, a `Decl`, its longhands, its parsing in
+`value_of`, and `inherited()` if it inherits. `computed.rs`: the field,
+its initial value, `apply`, `copy` and `INHERITED`; a value that
+resolves late (a colour with `currentcolor`) goes through the cascade's
+own fields, with `inherit`, `reset` and `finish`. Then its line in
+`base.css`'s reference and a test in `style/tests.rs`. If a state may
+change it, decide whether it's layout (`Computed::same_layout`) or paint
+(`anim.rs`'s `Paint`, if it should transition).
+
+## Verifying
+
+### The harness (tests, and an app's tests with `--features testing`)
+
+```rust
+let root = sheet.root("root", 1.5);                   // the harness's scale
+let mut ui = Harness::new(view(root), Size::new(300.0, 200.0), 1.5);
+ui.move_to(point); ui.press(); ui.release(); ui.click(point);
+ui.click_on(&sheet, "menu > item:nth-child(2)");     // by selector
+ui.key(Named::Tab); ui.type_text("hi"); ui.send(&[event]);
+let found = ui.find(&sheet, "slider > knob");         // border boxes, as shown
+ui.frame(now);                                        // RedrawRequested(now), then draw
+let pixel = ui.pixels(Color::WHITE).at_point(x, y, 1.5);
+ui.rebuild(view(root));                               // a new view, the tree kept
+assert_eq!(ui.messages, [..]);
+```
+
+Frames come at the times you give, so a transition is sampled where it
+should be, and a tooltip's delay is a `frame(start + 700ms)`. The
+messages don't come back into the view: rebuild with the new values
+yourself.
+
+### Golden images
+
+- Each scene is drawn at scale 1 and 1.5 with the fonts of
+  `tests/fonts/`, and compared within 2 levels per channel. On a
+  failure, what was drawn is in `target/golden/`: look at it.
+- Keep scenes deterministic. Turn transitions and animations off in the
+  scene's CSS. Use marks the test fonts have (ASCII `content`, not
+  ✓ ● ▸), or a system font's fallback sneaks in. Give the content room:
+  at 1.5 the rounding can make it a pixel taller than the scene, and
+  the layout then shrinks it as CSS does, empty boxes first (a menu's
+  separators once vanished that way).
+- Root a scene in its root node (`column(root, ..)`), or the page's
+  padding and background are lost.
+- Bless only after looking at the images.
+
+### The gallery on wgpu, in a headless nested Sway
+
+`tests/ui/lib.sh` gives the input vocabulary (`pointer`, `click`, `key`,
+`type_text`, `inject "scroll 3"`, `settle`); `aria-inject` comes from
+`cargo build -p aria-inject`. A run, from the repository's root (build
+the gallery first):
+
+```sh
+out=/tmp/gallery-run; mkdir -p "$out"
+cat > "$out/inner.sh" <<'EOF'
+#!/bin/sh
+. "$ARIA_UI_ROOT/tests/ui/lib.sh"
+inject_start
+inject "layout 1500 1350"        # the output's resolution: pointer positions are then a screenshot's pixels
+"$ARIA_UI_ROOT/target/debug/examples/gallery" > "$GAL_OUT/gallery.log" 2>&1 &
+pid=$!
+sleep 2.5
+pointer 1490 1340; settle        # out of the way
+grim "$GAL_OUT/light.png"        # the whole output, in device pixels
+key d; settle; grim "$GAL_OUT/dark.png"
+pointer 450 300; inject click; settle
+grim -g "0,100 400x150" "$GAL_OUT/clicked.png"   # -g takes logical pixels: device ones / 1.5
+kill $pid; inject_stop; swaymsg exit
+EOF
+chmod +x "$out/inner.sh"
+cat > "$out/sway.conf" <<CONF
+output HEADLESS-1 resolution 1500x1350 position 0,0 scale 1.5
+default_border none
+exec "$out/inner.sh"
+CONF
+WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=gles2 \
+  GAL_OUT="$out" ARIA_UI_ROOT="$PWD" \
+  timeout 90 dbus-run-session -- sway -c "$out/sway.conf" > "$out/sway.log" 2>&1
+```
+
+Use `WLR_RENDERER=pixman` without a `/dev/dri/renderD*`. Find positions
+in a first whole screenshot; the gallery's page scrolls with
+`inject "scroll 30"` over it. Never `hyprctl`.
+
+## Conventions
+
+Code, comments, docs and commits in English. Comments are terse and say
+why. Every item has a doc comment saying what it is in a phrase. Commit
+subjects look like `Toolkit: the menu`: informal, no Conventional
+Commits, no attribution lines. Run `cargo fmt` before committing; never
+push. Keep TOOLKIT.md (design, order of work, limits, costs), `base.css`
+(the reference) and the gallery's tree comment current with every
+change.

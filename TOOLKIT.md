@@ -215,8 +215,8 @@ border colour, shadow, opacity, transform, outline) under any state,
 own or ancestors'. Layout properties (sizes, padding, margin, border
 widths, gap, font) under the node's own states: a change relayouts
 (`shell.invalidate_layout()`). Under an ancestor's state they're not
-applied, and the sheet says so at load: the descendant has no way to
-ask its own relayout at draw time. What a state changes, its
+applied, and the sheet is to say so at load (not done yet): the
+descendant has no way to ask its own relayout at draw time. What a state changes, its
 descendants inherit (a button's `color` under `:hover` is its label's):
 a box hands its states down to its children whenever some rule sees
 them; an inherited layout property (`font-size`) reaches only their

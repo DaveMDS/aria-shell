@@ -1,7 +1,7 @@
 //! A select is one of a list of options:
 //! `icssed::select(options, selected, Message::Choose)`, the
 //! choice an index the app holds. Pressed, it opens its options under it
-//! as a menu (over it where there's no room), the one chosen checked.
+//! as a menu (over it where there's no room), the one chosen `.selected`.
 //!
 //!     icssed::select(["Light", "Dark"], self.scheme, Message::Scheme)
 //!         .placeholder("Pick a scheme")

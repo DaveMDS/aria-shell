@@ -279,7 +279,8 @@ button.danger:disabled {
  * and its label. Tab moves the focus to it, Enter and Space flip it.
  *
  * toggle[.check|.radio|.switch][.checked]
- * ├─ check > mark      (.check) the box, and its mark: its content
+ * ├─ check > mark      (.check) the box, and its mark: an icon, the
+ * │                    toolkit's tick (`opacity` shows it)
  * ├─ radio > dot       (.radio) the circle, and its dot
  * ├─ switch > knob     (.switch) the track, and its knob
  * ├─ icon              if it has one
@@ -357,7 +358,9 @@ toggle.switch:focus > switch {
   outline-offset: 1px;
 }
 
-toggle.check > check {
+/* A check box and a radio, a toggle's or a menu item's. */
+toggle.check > check,
+menu item.check > check {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -367,22 +370,31 @@ toggle.check > check {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-toggle.check:hover > check {
+toggle.check:hover > check,
+menu item.check:hover > check {
   border-color: var(--accent);
 }
-toggle.check.checked > check {
+toggle.check.checked > check,
+menu item.check.checked > check {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
 }
-toggle.check > check > mark {
-  font-size: 12px;
+/* The mark is an icon, the toolkit's tick: hidden until checked. */
+toggle.check > check > mark,
+menu item.check > check > mark {
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
 }
-toggle.check.checked > check > mark {
-  content: "✓";
+toggle.check.checked > check > mark,
+menu item.check.checked > check > mark {
+  opacity: 1;
 }
 
-toggle.radio > radio {
+toggle.radio > radio,
+menu item.radio > radio {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -392,19 +404,23 @@ toggle.radio > radio {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-toggle.radio:hover > radio {
+toggle.radio:hover > radio,
+menu item.radio:hover > radio {
   border-color: var(--accent);
 }
-toggle.radio.checked > radio {
+toggle.radio.checked > radio,
+menu item.radio.checked > radio {
   border-color: var(--accent);
 }
-toggle.radio > radio > dot {
+toggle.radio > radio > dot,
+menu item.radio > radio > dot {
   width: 10px;
   height: 10px;
   border-radius: 5px;
   transition: background-color 120ms;
 }
-toggle.radio.checked > radio > dot {
+toggle.radio.checked > radio > dot,
+menu item.radio.checked > radio > dot {
   background: var(--accent);
 }
 
@@ -618,17 +634,19 @@ scrollbar:active > thumb {
  * Menus
  * =====
  *
- * A column of items to press (`icssed::menu`), each with a mark, an icon,
- * a shortcut; separators; submenus unfolded in place, under their item.
- * Up and Down move the focus among the items once one has it. The marks
- * are text: their `content`, picked by the item's classes, the toolkit's
- * a check, a radio's dot and an arrow.
+ * A column of items to press (`icssed::menu`), each with a check box or
+ * a radio, an icon, a shortcut; separators; submenus unfolded in place,
+ * under their item. Up and Down move the focus among the items once one
+ * has it. The check box and the radio are a toggle's, drawn by the same
+ * rules; a submenu's arrow is text, its `content`.
  *
  * menu
  * ├─ item[.check|.radio][.checked][.submenu][.expanded][.<app's>]
  * │  │                  a button; :disabled without a message
- * │  ├─ check           a check's or a radio's mark: on every item of a
- * │  │                  level where one has one, so labels line up
+ * │  ├─ check > mark    (.check) a check box, a toggle's (see Toggles)
+ * │  ├─ radio > dot     (.radio) a radio, a toggle's
+ * │  ├─ check           empty on the other items of a level where one
+ * │  │                  has either, so labels line up
  * │  ├─ icon            the same: empty on an item without one
  * │  ├─ label
  * │  ├─ shortcut
@@ -655,9 +673,14 @@ menu item:focus {
 menu item:disabled {
   color: var(--muted);
 }
-menu item > check {
-  width: 12px;
-  text-align: center;
+menu item > check,
+menu item > radio {
+  width: 16px;
+  height: 16px;
+}
+menu item:disabled > check,
+menu item:disabled > radio {
+  opacity: 0.5;
 }
 menu item > icon {
   width: 16px;
@@ -671,15 +694,6 @@ menu item > label {
 menu item > shortcut {
   color: var(--muted);
   white-space: nowrap;
-}
-menu item.check.checked > check {
-  content: "✓";
-}
-menu item.radio > check {
-  content: "○";
-}
-menu item.radio.checked > check {
-  content: "●";
 }
 menu item.submenu > arrow {
   content: "▸";
@@ -895,7 +909,8 @@ tooltip {
  *
  * One of a list of options (`icssed::select`), shown in a box with an arrow:
  * pressed, its options open under it (over it where there's no room) as
- * a menu, the one chosen checked; `:active` while they're open. Up and
+ * a menu of their labels alone, the one chosen `.selected` (the base
+ * leaves it as the others); `:active` while they're open. Up and
  * Down on the closed select, focused, choose the option before or
  * after. In a window the options are drawn over everything; an app with
  * surfaces of its own shows them in one. Their margins are their
@@ -905,7 +920,8 @@ tooltip {
  * ├─ label[.placeholder]   the choice, or what's shown while there's none
  * ├─ arrow                 its mark: its content
  * ╰─ menu                  the options (see Menus), as wide as the
- *                          select at least
+ *    │                     select at least
+ *    ╰─ item[.selected] > label   an option, .selected the one chosen
  */
 select {
   min-width: 120px;

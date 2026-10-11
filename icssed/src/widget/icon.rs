@@ -19,7 +19,6 @@ use iced::{Event, Length, Radians, Rectangle, Size};
 use super::place::{Place, placed};
 use crate::anim::Animated;
 use crate::layout::snap;
-use crate::paint::fade;
 use crate::query::Reported;
 use crate::style::{Computed, Node, Size as Len, States, name};
 use crate::{Element, Renderer, Theme};
@@ -212,12 +211,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         let opacity = theme.opacity * s.opacity;
         let rotation = Radians(s.rotate.to_radians());
         match file {
+            // iced recolours a symbolic svg's RGB alone, its alpha left
+            // out: the colour's alpha goes to the svg's opacity.
             IconFile::Svg { handle, symbolic } => renderer.draw_svg(
                 svg::Svg {
                     handle,
-                    color: symbolic.then(|| fade(s.color, opacity)),
+                    color: symbolic.then_some(s.color),
                     rotation,
-                    opacity: if symbolic { 1.0 } else { opacity },
+                    opacity: if symbolic {
+                        opacity * s.color.a
+                    } else {
+                        opacity
+                    },
                 },
                 bounds,
                 bounds,

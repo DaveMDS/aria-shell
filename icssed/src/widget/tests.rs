@@ -279,6 +279,44 @@ fn an_infinite_animation_never_stops_asking() {
 }
 
 #[test]
+fn a_symbolic_icon_fades_with_its_colour_and_opacity() {
+    // iced recolours a symbolic svg's RGB alone: the alpha must still
+    // reach it.
+    let sheet = sheet(
+        "row { gap: 0; } icon { width: 16px; height: 16px; color: black; } \
+         icon.faded { opacity: 0.5; } icon.thin { color: rgba(0, 0, 0, 0.5); } \
+         icon.hidden { opacity: 0; }",
+    );
+    let root = sheet.root("root", 1.0);
+    let square = || {
+        crate::IconFile::Svg {
+        handle: iced::advanced::svg::Handle::from_memory(
+            b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2'><rect width='2' height='2'/></svg>".as_slice(),
+        ),
+        symbolic: true,
+    }
+    };
+    let mut ui = Harness::<Message>::new(
+        crate::row(["", "faded", "thin", "hidden"].map(|class| {
+            crate::icon(square())
+                .class_if(class, !class.is_empty())
+                .into()
+        }))
+        .at(root),
+        Size::new(64.0, 16.0),
+        1.0,
+    );
+    ui.frame(Instant::now());
+    let pixels = ui.pixels(Color::WHITE);
+    assert_eq!(pixels.at(8, 8), [0, 0, 0, 255]);
+    for x in [24, 40] {
+        let [r, ..] = pixels.at(x, 8);
+        assert!((126..=129).contains(&r), "half way to white: {r}");
+    }
+    assert_eq!(pixels.at(56, 8), [255, 255, 255, 255]);
+}
+
+#[test]
 fn an_idle_ui_asks_for_nothing() {
     let sheet = sheet(CSS);
     let root = sheet.root("root", 1.0);
@@ -1077,6 +1115,16 @@ fn a_select_opens_its_options_and_picks_one() {
     ui.click(Point::new(290.0, 190.0));
     assert!(ui.find(&sheet, "select > menu").is_empty());
     assert_eq!(ui.messages.len(), 1);
+    // Chosen, it's the options' one `.selected`: labels alone, no mark.
+    ui.rebuild(chooser(root, Some(1), false));
+    ui.click_on(&sheet, "select");
+    assert_eq!(ui.find(&sheet, "select > menu > item.selected").len(), 1);
+    assert_eq!(
+        ui.find(&sheet, "select > menu > item.selected:nth-child(2)")
+            .len(),
+        1
+    );
+    assert!(ui.find(&sheet, "select > menu > item > check").is_empty());
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! A select: one of a list of options, shown in a box with an arrow.
 //! Pressed (or Enter, Space while it has the focus), its options open
-//! under it (over it, where there's no room under) as a menu, the one
-//! chosen checked; picking one sends the app's message and closes them,
+//! under it (over it, where there's no room under) as a menu of their
+//! labels alone, the one chosen `.selected`; picking one sends the app's message and closes them,
 //! as Escape and a press elsewhere do. Up and Down on the closed select,
 //! focused, choose the option before or after. `:active` while its
 //! options are open: a class is the view's, this state the widget's.
@@ -58,9 +58,11 @@ pub fn select<'a, Message: Clone + 'a, S: Into<Cow<'a, str>>>(
     let selected = selected.filter(|&i| i < count);
     let shown = selected.map(|i| options[i].clone()).unwrap_or_default();
     let items = options.into_iter().enumerate().map(|(i, option)| {
-        MenuItem::new(option)
-            .check(Some(i) == selected)
-            .on_press(on_select(i))
+        let item = MenuItem::new(option).on_press(on_select(i));
+        match Some(i) == selected {
+            true => item.class("selected"),
+            false => item,
+        }
     });
     Select {
         boxed: Boxed::of(name!("select")),

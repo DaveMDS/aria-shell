@@ -1,14 +1,14 @@
-//! A menu: a column of items to press, each with a check's or a radio's
-//! mark, an icon, a shortcut; separators; submenus unfolded in place,
+//! A menu: a column of items to press, each with a check box or a radio
+//! (a toggle's), an icon, a shortcut; separators; submenus unfolded in place,
 //! under their item. Up and Down move the focus among the items once one
 //! has it, Enter and Space press it.
 //!
 //! It's the app's, as a toggle or a slider is: each item carries the
 //! message its press sends, and whether a submenu is unfolded is the
 //! app's to say (`MenuItem::submenu`), so it knows when one unfolds (a tray's
-//! menu fetches its items then). The marks are the theme's: a `check`'s
-//! and an `arrow`'s text is their `content`, as the item's classes pick
-//! it (`item.radio.checked > check { content: "●" }`).
+//! menu fetches its items then). A check box and a radio are the
+//! toggle's parts, `check > mark` and `radio > dot`, drawn as a toggle's
+//! are; a submenu's `arrow` is a mark, its text the theme's `content`.
 
 use std::borrow::Cow;
 
@@ -17,6 +17,7 @@ use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
 use super::place::placed;
 use super::text::{mark, text};
+use super::toggle::{check_part, radio_part};
 use crate::Element;
 use crate::style::name;
 
@@ -159,7 +160,11 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
         let expanded = matches!(entry.submenu, Some((true, _)));
         let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(5);
         if marks {
-            parts.push(mark().kind_of(name!("check")).into());
+            parts.push(match entry.mark {
+                Mark::Check(_) => check_part(),
+                Mark::Radio(_) => radio_part(),
+                Mark::None => row([]).kind_of(name!("check")).into(),
+            });
         }
         if icons {
             parts.push(match entry.icon {

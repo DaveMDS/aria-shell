@@ -7,8 +7,8 @@
 //! [`Message`] and `.map()`s [`Menu::view`].
 //!
 //! Element tree: the toolkit's (`menu > item[.check|.radio][.checked]
-//! [.submenu][.expanded] > (check | label | arrow)`, `menu > separator`,
-//! `menu > submenu > item …`).
+//! [.submenu][.expanded] > (check > mark | radio > dot | label | arrow)`,
+//! `menu > separator`, `menu > submenu > item …`).
 
 use std::collections::BTreeSet;
 

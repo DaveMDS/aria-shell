@@ -419,10 +419,9 @@ fn golden_controls_focused_and_dragged() {
 fn golden_toggles() {
     scene(
         "toggles",
-        "toggle, toggle > check, toggle > radio, toggle > radio > dot, toggle > switch, \
-         toggle > switch > knob { transition: none; } \
-         column { gap: 8px; } line { gap: 10px; align-items: center; } \
-         toggle.check.checked > check > mark { content: \"x\"; }",
+        "toggle, toggle > check, toggle > check > mark, toggle > radio, toggle > radio > dot, \
+         toggle > switch, toggle > switch > knob { transition: none; } \
+         column { gap: 8px; } line { gap: 10px; align-items: center; }",
         None,
         Size::new(320.0, 140.0),
         |root| {
@@ -541,10 +540,8 @@ fn golden_menu() {
         // Marks the test fonts have.
         "menu { max-width: 220px; border: 1px solid #999; border-radius: 6px; \
                 box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25); background: white; } \
-         menu item { transition: none; } \
-         menu item.check.checked > check { content: \"x\"; } \
-         menu item.radio > check { content: \"o\"; } \
-         menu item.radio.checked > check { content: \"*\"; } \
+         menu item, menu item > check, menu item > check > mark, menu item > radio, \
+         menu item > radio > dot { transition: none; } \
          menu item.submenu > arrow { content: \">\"; } \
          menu item.expanded > arrow { content: \"v\"; }",
         None,
@@ -705,8 +702,7 @@ fn golden_select() {
     scene(
         "select",
         "scene { align-items: start; } select { transition: none; width: 150px; } \
-         menu item { transition: none; } \
-         select > arrow { content: \"v\"; } menu item.check.checked > check { content: \"x\"; }",
+         menu item { transition: none; } select > arrow { content: \"v\"; }",
         None,
         Size::new(220.0, 160.0),
         |root| {

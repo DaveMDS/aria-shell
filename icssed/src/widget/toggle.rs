@@ -5,7 +5,9 @@
 //! with the toolkit's part before its icon and its label. Its classes
 //! reach them all, whenever they're given. The switch's knob slides as
 //! the theme says: the base moves it with a transform, by the switch's
-//! width less its padding and the knob's.
+//! width less its padding and the knob's. A check box's mark is the
+//! toolkit's own drawing, a symbolic svg: it takes its `color` and its
+//! size from the sheet, as any icon, and shows as its `opacity` says.
 //!
 //! A radio is a toggle that chooses: one among a few is on, a press on
 //! any asks for it (`toggle(p == chosen, move |_| Choose(p))`), on the
@@ -13,11 +15,14 @@
 //! does the same, the radio's group as buttons side by side.
 
 use std::borrow::Cow;
+use std::sync::LazyLock;
+
+use iced::advanced::svg;
 
 use super::flex::{Flex, row};
-use super::icon::{IconSource, icon};
+use super::icon::{IconFile, IconSource, icon};
 use super::place::{Place, placed};
-use super::text::{mark, text};
+use super::text::text;
 use crate::Element;
 use crate::style::{Direction, name};
 
@@ -101,19 +106,11 @@ impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message>
             Look::Button => None,
             Look::Check => {
                 place.class("check");
-                Some(
-                    row([mark().kind_of(name!("mark")).into()])
-                        .kind_of(name!("check"))
-                        .into(),
-                )
+                Some(check_part())
             }
             Look::Radio => {
                 place.class("radio");
-                Some(
-                    row([row([]).kind_of(name!("dot")).into()])
-                        .kind_of(name!("radio"))
-                        .into(),
-                )
+                Some(radio_part())
             }
             Look::Switch => {
                 place.class("switch");
@@ -134,4 +131,31 @@ impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message>
         .on_press(toggle.press)
         .into()
     }
+}
+
+/// A check box's mark: a tick, stroked in a 16 px square.
+static TICK: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(
+        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>"##
+            .as_slice(),
+    )
+});
+
+/// A check box's part, a toggle's or a menu item's: `check > mark`, the
+/// mark an icon.
+pub(super) fn check_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
+    let tick = IconFile::Svg {
+        handle: TICK.clone(),
+        symbolic: true,
+    };
+    row([icon(tick).kind_of(name!("mark")).into()])
+        .kind_of(name!("check"))
+        .into()
+}
+
+/// A radio's part, a toggle's or a menu item's: `radio > dot`.
+pub(super) fn radio_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
+    row([row([]).kind_of(name!("dot")).into()])
+        .kind_of(name!("radio"))
+        .into()
 }

@@ -944,17 +944,20 @@ Two things flow between the daemon and the gadgets besides messages:
   over `BoxStream`s. `zvariant` converts an `OwnedValue` to a tuple /
   `Vec` / `String` with `try_from`; a `Structure` inside an `av` comes
   back as a tuple the same way.
-- `iced_exwlshell` (0.20.1, and 0.21.0-rc1) keeps the program's state
-  by value (`Instance { program, state }`) inside `UserInterfaces`,
-  inside its `Context`, which `handle_event(mut self)` moves on every
-  event; the windows' widget trees borrow the state, transmuted to
-  `'static`. A widget dereferencing what it borrowed outside the frame
-  it was built in reads where the state was: the toolkit's nodes
-  borrow the sheet, and `debug widgets` (an operation, run from the
-  channel of tasks) crashed in `Flex::operate` (SIGSEGV, `Node::scale`).
-  Stock widgets mostly kept owned data, which hid it. Hence `Pinned`
-  in `main.rs`: the daemon's state is a `Box`, at an address that
-  stays while the runtime moves the box.
+- `iced_exwlshell` 0.20.1 keeps the program's state by value
+  (`Instance { program, state }`) inside `UserInterfaces`, inside its
+  `Context`, which its event loop moves on every event
+  (`mem::replace`, `handle_event(mut self)`); the windows' widget trees
+  borrow the state, transmuted to `'static`. A widget dereferencing
+  what it borrowed outside the frame it was built in reads where the
+  state was: the toolkit's nodes borrow the sheet, and `debug widgets`
+  (an operation, run from the channel of tasks) crashed in
+  `Flex::operate` (SIGSEGV, `Node::scale`). Stock widgets mostly kept
+  owned data, which hid it. Hence `Pinned` in `main.rs`: the daemon's
+  state is a `Box`, at an address that stays while the runtime moves
+  the box. 0.21.0-rc1 no longer moves it (the context stays in its
+  event loop's handler, `handle_event(&mut self)`): with the move to
+  0.21 the box can go.
 - A surface's scale: `iced::window::scale_factor(id)` is answered with
   the surface's Wayland scale, fractional (`WindowAction::
   GetScaleFactor`: `wp_fractional_scale_v1.preferred_scale`, 1 until

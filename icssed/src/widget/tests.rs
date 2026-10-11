@@ -301,9 +301,9 @@ fn widgets_are_found_by_selector() {
     let list = sheet.root("list", 1.0);
     let view = || -> Element<'_, Message> {
         crate::column(["a", "b", "c"].map(|name| {
-            let entry = list.child("entry").class_if("active", name == "b");
-            crate::button([crate::text(name).into()])
-                .at(entry)
+            crate::button![crate::text(name)]
+                .kind("entry")
+                .class_if("active", name == "b")
                 .on_press(Message::Pressed(name))
                 .into()
         }))
@@ -637,17 +637,13 @@ const SCROLL: &str = "scroll { width: 100px; max-height: 100px; } \
 /// `n` cells of 20px, one under the other (or side by side), in a
 /// scroll at most 100px tall (or 100px wide).
 fn cells(root: Node<'_>, n: usize, sideways: bool) -> Element<'_, Message> {
-    let scroll = root.child("scroll");
-    let line = scroll.child("line");
     let content = (0..n).map(|_| crate::row([]).kind("cell").into());
     let scroll = if sideways {
-        crate::scroll(crate::row(content).at(line))
-            .at(scroll)
-            .horizontal()
+        crate::scroll(crate::row(content).kind("line")).horizontal()
     } else {
-        crate::scroll(crate::column(content).at(line)).at(scroll)
+        crate::scroll(crate::column(content).kind("line"))
     };
-    crate::column([scroll.into()]).at(root).into()
+    crate::column![scroll].at(root).into()
 }
 
 #[test]
@@ -841,12 +837,7 @@ fn a_childs_inherited_colour_follows_its_parents_state() {
          button:hover { color: rgb(255 0 0); } label { width: 40px; }",
     );
     let root = sheet.root("root", 1.0);
-    let view = crate::row([crate::button([crate::text("████")
-        .at(root.child("button").child("label"))
-        .into()])
-    .on_press(Message::Ended)
-    .into()])
-    .at(root);
+    let view = crate::row![crate::button![crate::text("████")].on_press(Message::Ended)].at(root);
     let mut ui = Harness::new(view, Size::new(40.0, 20.0), 1.0);
     let now = Instant::now();
     let label = ui.find(&sheet, "label")[0];
@@ -863,7 +854,7 @@ fn a_childs_inherited_colour_follows_its_parents_state() {
 
 /// October 2026, its weeks from `first`, today the 10th.
 fn october(root: Node<'_>, first: u32) -> Element<'_, Message> {
-    crate::calendar(
+    let calendar = crate::calendar(
         crate::Month::new(2026, 10),
         "October 2026",
         ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
@@ -873,9 +864,8 @@ fn october(root: Node<'_>, first: u32) -> Element<'_, Message> {
     .selected(2026, 9, 30)
     .on_previous(Message::Pressed("previous"))
     .on_next(Message::Pressed("next"))
-    .on_select(|day| Message::Value(day as f32))
-    .at(root.child("calendar"))
-    .into()
+    .on_select(|day| Message::Value(day as f32));
+    crate::column![calendar].at(root).into()
 }
 
 #[test]

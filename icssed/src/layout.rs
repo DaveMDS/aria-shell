@@ -627,9 +627,8 @@ mod tests {
         };
         assert!(rects(&lay(text("whole"), MAX))[0].width > 40.0);
         assert_eq!(rects(&lay(text("cut"), MAX))[0].width, 40.0);
-        let button = row.child("button");
         let node = lay(
-            crate::row([crate::button([crate::text(WIDE).into()]).at(button).into()])
+            crate::row![crate::button![crate::text(WIDE)]]
                 .at(row)
                 .into(),
             MAX,

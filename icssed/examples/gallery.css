@@ -11,9 +11,10 @@
  *       ├─ row > spinner, pulse, box.shake[.shaking], button, toast[.leaving]
  *       ├─ row                  boxes, side by side
  *       │  ╰─ box.plain|.bordered|.rounded|.shadow|.inset|.sides > label
- *       ├─ painting > row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
+ *       ├─ painting
+ *       │  ├─ row > box.tab|.four|.ring|.outlined|.scaled|.moved|.faded
+ *       │  ╰─ aligned > label.left|.center|.right|.italic
  *       ├─ row > box.textured|.framed|.scenery, picture.fill|.contain|.cover
- *       │             aligned > label.left|.center|.right|.italic
  *       ├─ texts                texts, one under the other
  *       │  ├─ label.small|.large|.bold|.muted|.caps
  *       │  ├─ box.wrap > label, box.cut > label
@@ -191,7 +192,9 @@ toast.leaving {
 }
 
 /* Boxes */
-section > row {
+section > row,
+buttons > row,
+painting > row {
   gap: 12px;
 }
 box {

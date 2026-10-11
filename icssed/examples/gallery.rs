@@ -13,7 +13,7 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, keyboard, window};
-use icssed::{Element, IconFile, MenuItem, Month, Node, Scheme, Sheet, Source, Tab, Theme};
+use icssed::{Element, IconFile, MenuItem, Month, Scheme, Sheet, Source, Tab, Theme};
 
 /// The gallery's own elements.
 const GALLERY: &str = include_str!("gallery.css");
@@ -238,61 +238,63 @@ impl Gallery {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
-        let root = self.sheet.root("gallery", self.scale);
-        let scroll = root.child("scroll");
-        let page = scroll.child("page");
+    fn view<'a>(&'a self) -> Element<'a, Message> {
+        let page = icssed::column([
+            self.buttons(),
+            self.controls(),
+            self.animation(),
+            self.boxes(),
+            self.painting(),
+            self.images(),
+            self.texts(),
+            self.flex(),
+            self.menus(),
+            self.tabs(),
+            self.calendar(),
+            self.graphs(),
+            self.scrolls(),
+            self.icons(),
+        ])
+        .kind("page");
         icssed::focus_scope(
-            icssed::column([icssed::scroll(
-                icssed::column([
-                    self.buttons(page),
-                    self.controls(page),
-                    self.animation(page),
-                    self.boxes(page),
-                    self.painting(page),
-                    self.images(page),
-                    self.texts(page),
-                    self.flex(page),
-                    self.menus(page),
-                    self.tabs(page),
-                    self.calendar(page),
-                    self.graphs(page),
-                    self.scrolls(page),
-                    self.icons(page),
-                ])
-                .at(page),
-            )
-            .at(scroll)
-            .into()])
-            .at(root),
+            icssed::column![icssed::scroll(page)].at(self.sheet.root("gallery", self.scale)),
         )
         .into()
     }
 
-    fn buttons<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("row");
-        let button = |class: &str, label: &'static str, disabled: bool| -> Element<'a, Message> {
-            let node = row
-                .child("button")
-                .class_if(class, !class.is_empty())
-                .disabled_if(disabled);
-            icssed::button([
-                icssed::icon(self.star.clone()).into(),
-                icssed::text(label).into(),
-            ])
-            .at(node)
-            .on_press(Message::Pressed(label))
+    /// A section: its title over `content`.
+    fn section<'a>(
+        &self,
+        title: &'static str,
+        content: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        icssed::column([icssed::text(title).kind("heading").into(), content])
+            .kind("section")
             .into()
+    }
+
+    /// A box with a label in it.
+    fn boxed<'a>(class: &str, label: &'a str) -> Element<'a, Message> {
+        icssed::row![icssed::text(label)]
+            .kind("box")
+            .class(class)
+            .into()
+    }
+
+    fn buttons<'a>(&'a self) -> Element<'a, Message> {
+        let button = |class: &str, label: &'static str, disabled: bool| -> Element<'a, Message> {
+            icssed::button![icssed::icon(self.star.clone()), icssed::text(label)]
+                .class_if(class, !class.is_empty())
+                .disabled_if(disabled)
+                .on_press(Message::Pressed(label))
+                .into()
         };
         let pressed = match self.pressed {
             None => "Nothing pressed yet: click, or Tab then Enter".to_string(),
             Some((name, 1)) => format!("Pressed: {name}"),
             Some((name, n)) => format!("Pressed: {name}, {n} times"),
         };
-        let card = row.child("card");
-        let grow = row.child("grow");
-        let content = icssed::column([
+        let content = icssed::column![
             icssed::row([
                 button("", "Default", false),
                 button("flat", "Flat", false),
@@ -300,104 +302,60 @@ impl Gallery {
                 button("danger", "Danger", false),
                 button("grow", "Grows", false),
                 button("", "Disabled", true),
-            ])
-            .at(row)
-            .into(),
-            icssed::text(pressed)
-                .at(section.child("buttons").child("status"))
-                .into(),
-            icssed::row([
-                icssed::row([
-                    icssed::icon(self.star.clone()).into(),
-                    icssed::text("Hover the card: its icon and label follow").into(),
-                ])
-                .at(card)
-                .into(),
-                icssed::row([icssed::text("Grows on hover").into()])
-                    .at(grow)
-                    .into(),
-            ])
-            .at(row)
-            .into(),
-        ])
+            ]),
+            icssed::text(pressed).kind("status"),
+            icssed::row![
+                icssed::row![
+                    icssed::icon(self.star.clone()),
+                    icssed::text("Hover the card: its icon and label follow"),
+                ]
+                .kind("card"),
+                icssed::row![icssed::text("Grows on hover")].kind("grow"),
+            ],
+        ]
         .kind("buttons");
-        self.section(section, "Buttons and states", content.into())
+        self.section("Buttons and states", content.into())
     }
 
-    fn section<'a>(
-        &self,
-        section: Node<'a>,
-        title: &'static str,
-        content: Element<'a, Message>,
-    ) -> Element<'a, Message> {
-        icssed::column([icssed::text(title).kind("heading").into(), content])
-            .at(section)
-            .into()
-    }
-
-    fn controls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let controls = section.child("controls");
-        let line = controls.child("line");
-        let search = line.child("input");
-        let password = line.child("input");
-        let peek = password
-            .child("button")
-            .class("peek")
-            .class_if("active", self.peek);
-        let label = |text: String| -> Element<'a, Message> { icssed::text(text).into() };
-        let content = icssed::column([
-            icssed::row([
-                icssed::toggle(self.wifi, Message::Wifi).switch().into(),
-                label("Wi-Fi".into()),
-                icssed::toggle(self.airplane, Message::Airplane)
-                    .switch()
-                    .into(),
-                label("Airplane mode".into()),
+    fn controls<'a>(&'a self) -> Element<'a, Message> {
+        let content = icssed::column![
+            icssed::row![
+                icssed::toggle(self.wifi, Message::Wifi).switch(),
+                icssed::text("Wi-Fi"),
+                icssed::toggle(self.airplane, Message::Airplane).switch(),
+                icssed::text("Airplane mode"),
                 icssed::toggle(true, Message::Wifi)
                     .disabled_if(true)
-                    .switch()
-                    .into(),
-                label("Disabled".into()),
-            ])
-            .at(line)
-            .into(),
-            icssed::row([
-                icssed::slider(0.0..=100.0, self.volume, Message::Volume)
-                    .step(1.0)
-                    .into(),
-                label(format!("Volume {:.0}%", self.volume)),
-                icssed::slider(0.0..=1.0, 0.3, Message::Volume)
-                    .disabled_if(true)
-                    .into(),
-                label("Disabled".into()),
-            ])
-            .at(line)
-            .into(),
-            icssed::row([
+                    .switch(),
+                icssed::text("Disabled"),
+            ]
+            .kind("line"),
+            icssed::row![
+                icssed::slider(0.0..=100.0, self.volume, Message::Volume).step(1.0),
+                icssed::text(format!("Volume {:.0}%", self.volume)),
+                icssed::slider(0.0..=1.0, 0.3, Message::Volume).disabled_if(true),
+                icssed::text("Disabled"),
+            ]
+            .kind("line"),
+            icssed::row![
                 icssed::input("Search", &self.search)
-                    .at(search)
                     .on_input(Message::Search)
-                    .leading(icssed::icon(self.star.clone()))
-                    .into(),
+                    .leading(icssed::icon(self.star.clone())),
                 icssed::input("Password", &self.password)
-                    .at(password)
                     .on_input(Message::Password)
                     .secure(!self.peek)
                     .trailing(
-                        icssed::button([icssed::icon(self.eye.clone()).into()])
-                            .at(peek)
+                        icssed::button![icssed::icon(self.eye.clone())]
+                            .class("peek")
+                            .class_if("active", self.peek)
                             .on_press(Message::Peek),
-                    )
-                    .into(),
+                    ),
                 icssed::input("Disabled", "")
                     .disabled_if(true)
-                    .on_input(Message::Search)
-                    .into(),
-            ])
-            .at(line)
-            .into(),
-            icssed::row([
+                    .on_input(Message::Search),
+            ]
+            .kind("line"),
+            icssed::row![
                 icssed::select(
                     [
                         "Follow the system",
@@ -408,62 +366,41 @@ impl Gallery {
                     self.choice,
                     Message::Choose,
                 )
-                .placeholder("Pick a scheme")
-                .into(),
-                icssed::select(["Disabled"], Some(0), Message::Choose)
-                    .disabled_if(true)
-                    .into(),
-            ])
-            .at(line)
-            .into(),
-            icssed::row([
-                icssed::meter(self.volume / 100.0).into(),
-                icssed::meter(0.85).class("warning").into(),
-                icssed::meter(0.42).class("gauge").label("CPU 42%").into(),
-            ])
-            .at(line)
-            .into(),
-        ])
-        .at(controls);
-        self.section(section, "Controls", content.into())
+                .placeholder("Pick a scheme"),
+                icssed::select(["Disabled"], Some(0), Message::Choose).disabled_if(true),
+            ]
+            .kind("line"),
+            icssed::row![
+                icssed::meter(self.volume / 100.0),
+                icssed::meter(0.85).class("warning"),
+                icssed::meter(0.42).class("gauge").label("CPU 42%"),
+            ]
+            .kind("line"),
+        ]
+        .kind("controls");
+        self.section("Controls", content.into())
     }
 
-    fn animation<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("row");
-        let labelled = |_node: Node<'a>, text: &'static str| -> Element<'a, Message> {
-            icssed::text(text).into()
-        };
-        let pulse = row.child("pulse");
-        let shaken = row
-            .child("box")
-            .class("shake")
-            .class_if("shaking", self.shaking);
-        let shake = row.child("button");
-        let toggle = row.child("button");
+    fn animation<'a>(&'a self) -> Element<'a, Message> {
         let mut items: Vec<Element<'a, Message>> = vec![
             icssed::icon(self.star.clone()).kind("spinner").into(),
-            icssed::row([labelled(pulse, "Pulse")]).at(pulse).into(),
-            icssed::row([labelled(shaken, "Shaken on demand")])
-                .at(shaken)
+            icssed::row![icssed::text("Pulse")].kind("pulse").into(),
+            icssed::row![icssed::text("Shaken on demand")]
+                .kind("box")
+                .class("shake")
+                .class_if("shaking", self.shaking)
                 .on_animation_end(Message::Shaken)
                 .into(),
             icssed::tooltip(
-                icssed::button([labelled(shake, "Shake")])
-                    .at(shake)
-                    .on_press(Message::Shake),
+                icssed::button![icssed::text("Shake")].on_press(Message::Shake),
                 "Shakes the box beside it, once",
             )
             .into(),
-            icssed::button([labelled(
-                toggle,
-                if self.toast.is_some() {
-                    "Dismiss"
-                } else {
-                    "Toast"
-                },
-            )])
-            .at(toggle)
+            icssed::button![icssed::text(if self.toast.is_some() {
+                "Dismiss"
+            } else {
+                "Toast"
+            })]
             .on_press(if self.toast.is_some() {
                 Message::Dismiss
             } else {
@@ -472,88 +409,62 @@ impl Gallery {
             .into(),
         ];
         if let Some(leaving) = self.toast {
-            let toast = row.child("toast").class_if("leaving", leaving);
             items.push(
-                icssed::row([
-                    icssed::icon(self.star.clone()).into(),
-                    labelled(toast, "A toast: in, and out when dismissed"),
-                ])
-                .at(toast)
+                icssed::row![
+                    icssed::icon(self.star.clone()),
+                    icssed::text("A toast: in, and out when dismissed"),
+                ]
+                .kind("toast")
+                .class_if("leaving", leaving)
                 .on_animation_end(Message::Toasted)
                 .into(),
             );
         }
-        self.section(section, "Animation", icssed::row(items).at(row).into())
+        self.section("Animation", icssed::row(items).into())
     }
 
-    fn boxes<'a>(&self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("row");
-        let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
-            let node = row.child("box").class(class);
-            icssed::row([icssed::text(label).into()]).at(node).into()
-        };
+    fn boxes<'a>(&'a self) -> Element<'a, Message> {
         let content = icssed::row([
-            boxed("plain", "Plain"),
-            boxed("bordered", "Border"),
-            boxed("rounded", "Radius"),
-            boxed("shadow", "Shadow"),
-            boxed("inset", "Inset"),
-            boxed("sides", "Sides"),
-        ])
-        .at(row);
-        self.section(section, "Boxes", content.into())
+            Self::boxed("plain", "Plain"),
+            Self::boxed("bordered", "Border"),
+            Self::boxed("rounded", "Radius"),
+            Self::boxed("shadow", "Shadow"),
+            Self::boxed("inset", "Inset"),
+            Self::boxed("sides", "Sides"),
+        ]);
+        self.section("Boxes", content.into())
     }
 
-    fn painting<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("row");
-        let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
-            let node = row.child("box").class(class);
-            icssed::row([icssed::text(label).into()]).at(node).into()
-        };
-        let faded = row.child("box").class("faded");
-        let aligned = section.child("aligned");
+    fn painting<'a>(&'a self) -> Element<'a, Message> {
         let line = |class: &str, text: &'static str| -> Element<'a, Message> {
             icssed::text(text).class(class).into()
         };
-        let content = icssed::column([
+        let content = icssed::column![
             icssed::row([
-                boxed("tab", "Tab"),
-                boxed("four", "Four sides"),
-                boxed("ring", "Ring"),
-                boxed("outlined", "Outline"),
-                boxed("scaled", "Scaled 80%"),
-                boxed("moved", "Moved"),
-                icssed::row([
-                    icssed::icon(self.star.clone()).into(),
-                    icssed::text("Opacity 50%").into(),
-                ])
-                .at(faded)
-                .into(),
-            ])
-            .at(row)
-            .into(),
+                Self::boxed("tab", "Tab"),
+                Self::boxed("four", "Four sides"),
+                Self::boxed("ring", "Ring"),
+                Self::boxed("outlined", "Outline"),
+                Self::boxed("scaled", "Scaled 80%"),
+                Self::boxed("moved", "Moved"),
+                icssed::row![icssed::icon(self.star.clone()), icssed::text("Opacity 50%"),]
+                    .kind("box")
+                    .class("faded")
+                    .into(),
+            ]),
             icssed::column([
                 line("left", "Aligned left"),
                 line("center", "Centred"),
                 line("right", "Aligned right"),
                 line("italic", "Italic, as the theme says"),
             ])
-            .at(aligned)
-            .into(),
-        ])
+            .kind("aligned"),
+        ]
         .kind("painting");
-        self.section(section, "Painting and text", content.into())
+        self.section("Painting and text", content.into())
     }
 
-    fn images<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("row");
-        let boxed = |class: &str, label: &'static str| -> Element<'a, Message> {
-            let node = row.child("box").class(class);
-            icssed::row([icssed::text(label).into()]).at(node).into()
-        };
+    fn images<'a>(&'a self) -> Element<'a, Message> {
         let fitted = |class: &str| -> Element<'a, Message> {
             icssed::image(self.photo.clone())
                 .kind("picture")
@@ -561,35 +472,25 @@ impl Gallery {
                 .into()
         };
         let content = icssed::row([
-            boxed("textured", "Tiled"),
-            boxed("framed", "9-patch"),
-            boxed("scenery", "Cover"),
+            Self::boxed("textured", "Tiled"),
+            Self::boxed("framed", "9-patch"),
+            Self::boxed("scenery", "Cover"),
             fitted("fill"),
             fitted("contain"),
             fitted("cover"),
-        ])
-        .at(row);
-        self.section(section, "Images", content.into())
+        ]);
+        self.section("Images", content.into())
     }
 
-    fn texts<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let texts = section.child("texts");
+    fn texts<'a>(&'a self) -> Element<'a, Message> {
         let label = |class: &str, text: &'static str| -> Element<'a, Message> {
             icssed::text(text).class(class).into()
         };
-        let boxed = |class: &str| -> Element<'a, Message> {
-            let node = texts.child("box").class(class);
-            icssed::row([icssed::text(LONG).into()]).at(node).into()
-        };
         let pair = |untrimmed: bool, text: &'static str| -> Element<'a, Message> {
-            let node = texts.child("pair").class_if("untrimmed", untrimmed);
-            icssed::row([
-                icssed::icon(self.star.clone()).into(),
-                icssed::text(text).into(),
-            ])
-            .at(node)
-            .into()
+            icssed::row![icssed::icon(self.star.clone()), icssed::text(text)]
+                .kind("pair")
+                .class_if("untrimmed", untrimmed)
+                .into()
         };
         let content = icssed::column([
             label("small", "Small, 12px"),
@@ -598,27 +499,25 @@ impl Gallery {
             label("bold", "Bold"),
             label("muted", "Muted"),
             label("caps", "Upper case, by the theme"),
-            boxed("wrap"),
-            boxed("cut"),
+            Self::boxed("wrap", LONG),
+            Self::boxed("cut", LONG),
             pair(false, "Trimmed: Centred On Its Letters"),
             pair(true, "Untrimmed: Centred On Its Line Box"),
         ])
-        .at(texts);
-        self.section(section, "Text", content.into())
+        .kind("texts");
+        self.section("Text", content.into())
     }
 
-    fn flex<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let flex = section.child("flex");
+    fn flex<'a>(&'a self) -> Element<'a, Message> {
         let lane = |class: &str, cells: &[&'static str]| -> Element<'a, Message> {
-            let node = flex.child("lane").class(class);
             icssed::row(cells.iter().map(|&cell| {
-                let cell_node = node.child("cell").class(cell);
-                icssed::row([icssed::text(cell).into()])
-                    .at(cell_node)
+                icssed::row![icssed::text(cell)]
+                    .kind("cell")
+                    .class(cell)
                     .into()
             }))
-            .at(node)
+            .kind("lane")
+            .class(class)
             .into()
         };
         let content = icssed::column([
@@ -627,13 +526,11 @@ impl Gallery {
             lane("end", &["fixed", "fixed"]),
             lane("align-center", &["tall", "mid", "short"]),
         ])
-        .at(flex);
-        self.section(section, "Flex", content.into())
+        .kind("flex");
+        self.section("Flex", content.into())
     }
 
-    fn menus<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let menus = section.child("menus");
+    fn menus<'a>(&'a self) -> Element<'a, Message> {
         let picked = match self.picked {
             Some(label) => format!("Picked: {label}"),
             None => "Nothing picked yet: click, or Tab to an item then Up, Down, Enter".into(),
@@ -662,12 +559,11 @@ impl Gallery {
                 ],
             ),
         ]);
-        let content =
-            icssed::column([menu.into(), icssed::text(picked).kind("status").into()]).at(menus);
-        self.section(section, "Menu", content.into())
+        let content = icssed::column![menu, icssed::text(picked).kind("status")].kind("menus");
+        self.section("Menu", content.into())
     }
 
-    fn tabs<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+    fn tabs<'a>(&'a self) -> Element<'a, Message> {
         const PAGES: [(&str, &str); 3] = [
             (
                 "Overview",
@@ -676,21 +572,17 @@ impl Gallery {
             ("Details", "The second page, its tab marked by the theme."),
             ("Settings", "The third page."),
         ];
-        let section = root.child("section");
-        let pages = section.child("pages");
-        let content =
-            icssed::column([
-                icssed::tabs(PAGES.iter().enumerate().map(|(i, (title, _))| {
-                    Tab::new(*title, Message::Tab(i)).active(i == self.tab)
-                }))
-                .into(),
-                icssed::text(PAGES[self.tab].1).kind("page").into(),
-            ])
-            .at(pages);
-        self.section(section, "Tabs", content.into())
+        let content = icssed::column![
+            icssed::tabs(PAGES.iter().enumerate().map(|(i, (title, _))| {
+                Tab::new(*title, Message::Tab(i)).active(i == self.tab)
+            })),
+            icssed::text(PAGES[self.tab].1).kind("page"),
+        ]
+        .kind("pages");
+        self.section("Tabs", content.into())
     }
 
-    fn calendar<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+    fn calendar<'a>(&'a self) -> Element<'a, Message> {
         const MONTHS: [&str; 12] = [
             "January",
             "February",
@@ -705,7 +597,6 @@ impl Gallery {
             "November",
             "December",
         ];
-        let section = root.child("section");
         let title = format!(
             "{} {}",
             MONTHS[self.month.month as usize - 1],
@@ -724,10 +615,10 @@ impl Gallery {
         if let Some((year, month, day)) = self.day {
             calendar = calendar.selected(year, month, day);
         }
-        self.section(section, "Calendar", calendar.into())
+        self.section("Calendar", calendar.into())
     }
 
-    fn graphs<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+    fn graphs<'a>(&'a self) -> Element<'a, Message> {
         // Two made-up series: a load, and traffic in and out.
         let load = (0..60).map(|i| {
             let t = i as f32 / 6.0;
@@ -741,82 +632,55 @@ impl Gallery {
             let t = i as f32 / 4.0;
             (120.0 + 90.0 * (t * 1.3).cos()).max(0.0)
         });
-        let section = root.child("section");
-        let graphs = section.child("graphs");
-        let content = icssed::row([
-            icssed::graph(60)
-                .series(load)
-                .max(100.0)
-                .label("100%")
-                .into(),
+        let content = icssed::row![
+            icssed::graph(60).series(load).max(100.0).label("100%"),
             icssed::graph(60)
                 .class("traffic")
                 .series_class("down", down)
                 .series_class("up", up)
-                .label("1 MB/s")
-                .into(),
+                .label("1 MB/s"),
             icssed::graph(30)
                 .kind("sparkline")
                 .series((0..30).map(|i| 5.0 + 4.0 * (i as f32 / 3.0).sin()))
-                .label("CPU 42%")
-                .into(),
-        ])
-        .at(graphs);
-        self.section(section, "Graphs", content.into())
+                .label("CPU 42%"),
+        ]
+        .kind("graphs");
+        self.section("Graphs", content.into())
     }
 
-    fn scrolls<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let row = section.child("scrolls");
-        let list = row.child("scroll").class("list");
-        let rows = list.child("rows");
-        let strip = row.child("scroll").class("strip");
-        let cells = strip.child("cells");
-        let content = icssed::row([
-            icssed::scroll(
-                icssed::column(
-                    (1..=30)
-                        .map(|i| icssed::text(format!("Row {i} of a list that scrolls")).into()),
-                )
-                .at(rows),
-            )
-            .at(list)
-            .into(),
-            icssed::scroll(
-                icssed::row((1..=20).map(|i| {
-                    let cell = cells.child("cell");
-                    icssed::row([icssed::text(format!("Cell {i}")).into()])
-                        .at(cell)
-                        .into()
-                }))
-                .at(cells),
-            )
-            .at(strip)
-            .horizontal()
-            .into(),
-        ])
-        .at(row);
-        self.section(section, "Scroll", content.into())
+    fn scrolls<'a>(&'a self) -> Element<'a, Message> {
+        let rows = icssed::column(
+            (1..=30).map(|i| icssed::text(format!("Row {i} of a list that scrolls")).into()),
+        )
+        .kind("rows");
+        let cells = icssed::row((1..=20).map(|i| {
+            icssed::row![icssed::text(format!("Cell {i}"))]
+                .kind("cell")
+                .into()
+        }))
+        .kind("cells");
+        let content = icssed::row![
+            icssed::scroll(rows).class("list"),
+            icssed::scroll(cells).class("strip").horizontal(),
+        ]
+        .kind("scrolls");
+        self.section("Scroll", content.into())
     }
 
-    fn icons<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let section = root.child("section");
-        let icons = section.child("icons");
-        let content = icssed::row([
-            icssed::icon(self.star.clone()).class("small").into(),
-            icssed::icon(self.star.clone()).into(),
+    fn icons<'a>(&'a self) -> Element<'a, Message> {
+        let content = icssed::row![
+            icssed::icon(self.star.clone()).class("small"),
+            icssed::icon(self.star.clone()),
             icssed::icon(self.star.clone())
                 .class("large")
-                .class("accent")
-                .into(),
+                .class("accent"),
             icssed::tooltip(
                 icssed::icon(self.picture.clone()).kind("avatar"),
                 "A picture, rounded by the theme: rest the pointer on anything with a tip",
-            )
-            .into(),
-        ])
-        .at(icons);
-        self.section(section, "Icons", content.into())
+            ),
+        ]
+        .kind("icons");
+        self.section("Icons", content.into())
     }
 
     fn theme(&self) -> Theme {

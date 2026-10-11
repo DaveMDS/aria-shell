@@ -84,8 +84,10 @@ pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Elemen
                         Message::Align,
                     )
                     .into(),
-                    label("The first fills"),
-                    icssed::toggle(controls.child("toggle"), state.fill, Message::Fill).into(),
+                    icssed::toggle(controls.child("toggle"), state.fill, Message::Fill)
+                        .label("The first fills")
+                        .check()
+                        .into(),
                 ],
             )
             .into(),

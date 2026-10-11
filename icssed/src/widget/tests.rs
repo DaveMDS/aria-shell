@@ -386,7 +386,8 @@ fn a_box_is_found_and_focused_by_its_id() {
 }
 
 /// The base's controls, without their transitions.
-const CONTROLS: &str = "toggle, toggle > knob, slider > knob { transition: none; }";
+const CONTROLS: &str = "toggle, toggle > check, toggle > switch, toggle > switch > knob, \
+                        slider > knob { transition: none; }";
 
 #[test]
 fn a_toggle_asks_for_the_other_state() {
@@ -395,16 +396,18 @@ fn a_toggle_asks_for_the_other_state() {
     let view = |on: bool| -> Element<'_, Message> {
         crate::focus_scope(crate::row(
             root,
-            [crate::toggle(root.child("toggle"), on, Message::Toggled).into()],
+            [crate::toggle(root.child("toggle"), on, Message::Toggled)
+                .switch()
+                .into()],
         ))
         .into()
     };
     let mut ui = Harness::new(view(false), Size::new(100.0, 40.0), 1.0);
-    assert!(ui.find(&sheet, "toggle.on").is_empty());
+    assert!(ui.find(&sheet, "toggle.checked").is_empty());
     ui.click_on(&sheet, "toggle");
     assert_eq!(ui.messages, [Message::Toggled(true)]);
     ui.rebuild(view(true));
-    assert_eq!(ui.find(&sheet, "toggle.on > knob").len(), 1);
+    assert_eq!(ui.find(&sheet, "toggle.checked > switch > knob").len(), 1);
     // From the keyboard: Tab to it, then Space.
     ui.key(Named::Tab);
     ui.key(Named::Space);

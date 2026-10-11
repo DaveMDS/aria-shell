@@ -375,12 +375,16 @@ impl Gallery {
                 icssed::row(
                     line,
                     [
-                        icssed::toggle(line.child("toggle"), self.wifi, Message::Wifi).into(),
+                        icssed::toggle(line.child("toggle"), self.wifi, Message::Wifi)
+                            .switch()
+                            .into(),
                         label("Wi-Fi".into()),
                         icssed::toggle(line.child("toggle"), self.airplane, Message::Airplane)
+                            .switch()
                             .into(),
                         label("Airplane mode".into()),
                         icssed::toggle(line.child("toggle").disabled_if(true), true, Message::Wifi)
+                            .switch()
                             .into(),
                         label("Disabled".into()),
                     ],

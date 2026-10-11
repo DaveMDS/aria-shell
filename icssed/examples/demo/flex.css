@@ -1,6 +1,6 @@
 /*
  * demo#flex
- * ├─ controls > label, select, toggle
+ * ├─ controls > label, select, toggle.check > label
  * ├─ lane.justify-*.align-* > cell.short|.fill|.tall|.mid > label
  * ╰─ status                 the lane's classes
  */

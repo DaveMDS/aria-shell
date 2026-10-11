@@ -1,12 +1,13 @@
 /*
  * demo#toggle
- * ╰─ line > toggle, label   one per toggle
+ * ╰─ line                   one per look
+ *    ╰─ toggle[.check|.switch][.checked] > icon, label   the toolkit's
  */
 
 demo#toggle {
-  gap: 10px;
+  gap: 14px;
 }
 demo#toggle > line {
-  gap: 10px;
+  gap: 24px;
   align-items: center;
 }

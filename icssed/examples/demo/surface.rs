@@ -64,10 +64,10 @@ pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element
         [
             icssed::row(
                 controls,
-                [
-                    icssed::toggle(controls.child("toggle"), state.deep, Message::Deep).into(),
-                    icssed::text(controls.child("label"), "A deeper shadow").into(),
-                ],
+                [icssed::toggle(controls.child("toggle"), state.deep, Message::Deep)
+                    .label("A deeper shadow")
+                    .check()
+                    .into()],
             )
             .into(),
             icssed::row(

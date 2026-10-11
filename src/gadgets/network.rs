@@ -727,7 +727,11 @@ fn wifi_header<'a>(ctx: Context<'a>, list: Node<'a>) -> Element<'a, Message> {
                 .into(),
         );
     }
-    parts.push(icssed::toggle(header.child("toggle"), on, Message::SetWireless).into());
+    parts.push(
+        icssed::toggle(header.child("toggle"), on, Message::SetWireless)
+            .switch()
+            .into(),
+    );
     icssed::row(header, parts).into()
 }
 
@@ -759,6 +763,7 @@ fn vpn_row<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Profile) -> Element<'a, 
         icssed::toggle(line.child("toggle"), on || connecting, move |v| {
             Message::Vpn(uuid.clone(), v)
         })
+        .switch()
         .into(),
     );
     let mut parts: Vec<Element<'a, Message>> = vec![icssed::row(line, head).into()];

@@ -10,7 +10,7 @@
  * │     ├─ group > label           a group's name
  * │     ╰─ entry[.active] > label  a demo, the one shown active
  * ╰─ main
- *    ├─ header > title, label, toggle   the demo's title; light or dark
+ *    ├─ header > title, label, toggle.switch   the demo's title; light or dark
  *    ├─ stage > demo#<name>        the demo, live
  *    ├─ tabs                       Info, Source, Style
  *    ├─ scroll.info > doc          the description:

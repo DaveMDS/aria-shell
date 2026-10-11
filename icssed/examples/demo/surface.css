@@ -1,6 +1,6 @@
 /*
  * demo#surface
- * ├─ controls > toggle, label
+ * ├─ controls > toggle.check > label
  * ├─ edge                   where the surface would end
  * │  ╰─ popup[.deep]        the surface's root box
  * │     ╰─ entry > icon, label

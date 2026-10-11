@@ -135,7 +135,7 @@ base's look. A box's kind is the app's to choose.
 | `image(node, handle)` | `object-fit`, `border-radius` |
 | `surface(node, content)` | a surface's root: adds the room its shadow needs, so a popup's size includes it; `Surface::room(node)` is that room, for placing the surface |
 | `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
-| `toggle(node, on, Message::Wifi)` | a button and its `knob`, `.on` |
+| `toggle(node, on, Message::Wifi).icon(s).label(t)`, `.check()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a switch (`switch > knob`); it makes all its nodes, as a menu item |
 | `slider(node, 0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
 | `meter(node, fraction).label(text)` | with a label, a gauge |
 | `input(node, placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |

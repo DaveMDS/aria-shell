@@ -282,7 +282,9 @@ impl PowerGadget {
             [
                 ctx.icon(node.child("icon"), name.as_str()),
                 icssed::text(node.child("title"), ctx.locale.tr("power.keep_awake")).into(),
-                icssed::toggle(node.child("toggle"), inhibited, Message::SetIdle).into(),
+                icssed::toggle(node.child("toggle"), inhibited, Message::SetIdle)
+                    .switch()
+                    .into(),
             ],
         )
         .into()

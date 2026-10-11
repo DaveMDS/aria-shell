@@ -995,7 +995,7 @@ gadget.places info > meter.critical > fill {
  *    ├─ idle[.inhibited][.playing]       "Keep awake"
  *    │  ├─ icon
  *    │  ├─ title
- *    │  ╰─ toggle                        the toolkit's
+ *    │  ╰─ toggle.switch                 the toolkit's
  *    ├─ message > label
  *    ╰─ button.settings > label          runs `settings_command`
  */
@@ -1578,7 +1578,7 @@ gadget.audio player > controls > button > icon {
  *       ├─ header.wifi[.off] | header.wired | header.vpn
  *       │  ├─ title                              "Wi‑Fi networks", "Ethernet network", ...
  *       │  ├─ button.scan > icon                 (wifi) asks for a scan
- *       │  ╰─ toggle                             (wifi) on/off, the toolkit's
+ *       │  ╰─ toggle.switch                      (wifi) on/off, the toolkit's
  *       ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
  *       │  ├─ button.flat                        the row
  *       │  │  ├─ icon                            the strength
@@ -1605,7 +1605,7 @@ gadget.audio player > controls > button > icon {
  *       │  │  ├─ icon
  *       │  │  ├─ name
  *       │  │  ├─ status
- *       │  │  ╰─ toggle
+ *       │  │  ╰─ toggle.switch
  *       │  ╰─ message > label                    "Needs a password: open the settings"
  *       ├─ empty > label                         "Wi‑Fi is off", "No networks found", ...
  *       ╰─ button.settings > label               runs `settings_command`

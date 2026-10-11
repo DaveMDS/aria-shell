@@ -1,18 +1,28 @@
-//! A toggle is a switch: `icssed::toggle(node, on, Message::Wifi)`. It
-//! sends the new value, and the app holds it: the toggle shows what it's
-//! given, as every widget of the toolkit does.
+//! A toggle is a value on or off: `icssed::toggle(node, on, f)`. A button
+//! sends a message; a toggle holds a value, which the app keeps, and asks
+//! for the other one: a press sends `f(!on)`. It shows what it's given,
+//! as every widget of the toolkit does.
 //!
-//!     icssed::toggle(row.child("toggle"), self.wifi, Message::Wifi)
+//!     icssed::toggle(node, self.muted, Message::Mute).icon(speaker).label("Mute")
+//!     icssed::toggle(node, self.hidden, Message::Hidden).label("Show hidden").check()
+//!     icssed::toggle(node, self.wifi, Message::Wifi).switch()
 //!
-//! - It's a button holding its `knob`, `.on` when it is: the knob slides
+//! It looks one of three ways, picked by the call:
+//!
+//! - As a button that stays pressed.
+//! - `.check()`: a check box, its `check > mark` first; the mark is the
+//!   sheet's `content`.
+//! - `.switch()`: a switch, its `switch > knob` first; the knob slides
 //!   with a transform, a transition in the base.
-//! - The knob's travel is the toggle's width less its padding and the
-//!   knob's own width: a theme that resizes one resizes the travel too.
-//! - Tab gives it the focus, Space and Enter flip it.
-//! - `disabled_if(true)` on its node: it sends nothing.
 //!
-//! Its label is the app's, beside it in a row: a toggle has no text of
-//! its own.
+//! `.icon(..)` and `.label(..)` follow, both optional. In all three looks
+//! it's `.checked` while it's on: one class for the sheet, whatever the
+//! look. It makes all its nodes itself, as a menu's items do, so
+//! `toggle.checked > label` reaches its label.
+//!
+//! A press anywhere on it flips it, its label too; Tab gives it the
+//! focus, Space and Enter flip it; `disabled_if(true)` on its node, and
+//! it sends nothing.
 
 use icssed::{Element, Node};
 
@@ -21,53 +31,84 @@ use crate::Assets;
 pub const TITLE: &str = "Toggle";
 
 pub struct State {
+    muted: bool,
+    hidden: bool,
     wifi: bool,
-    airplane: bool,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
+            muted: true,
+            hidden: false,
             wifi: true,
-            airplane: false,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Mute(bool),
+    Hidden(bool),
     Wifi(bool),
-    Airplane(bool),
 }
 
 pub fn update(state: &mut State, message: Message) {
     match message {
+        Message::Mute(on) => state.muted = on,
+        Message::Hidden(on) => state.hidden = on,
         Message::Wifi(on) => state.wifi = on,
-        Message::Airplane(on) => state.airplane = on,
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let line = |toggle: Element<'a, Message>, text: &'static str| -> Element<'a, Message> {
-        let line = node.child("line");
-        icssed::row(line, [toggle, icssed::text(line.child("label"), text).into()]).into()
-    };
-    let toggle = node.child("line").child("toggle");
+pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
+    let line = node.child("line");
+    let toggle = line.child("toggle");
+    let disabled = toggle.disabled_if(true);
     icssed::column(
         node,
         [
-            line(
-                icssed::toggle(toggle, state.wifi, Message::Wifi).into(),
-                if state.wifi { "Wi-Fi: on" } else { "Wi-Fi: off" },
-            ),
-            line(
-                icssed::toggle(toggle, state.airplane, Message::Airplane).into(),
-                "Airplane mode",
-            ),
-            line(
-                icssed::toggle(toggle.disabled_if(true), true, Message::Wifi).into(),
-                "Disabled",
-            ),
+            icssed::row(
+                line,
+                [
+                    icssed::toggle(toggle, state.muted, Message::Mute)
+                        .icon(assets.star.clone())
+                        .label(if state.muted { "Muted" } else { "Mute" })
+                        .into(),
+                    icssed::toggle(disabled, true, Message::Mute)
+                        .label("Disabled")
+                        .into(),
+                ],
+            )
+            .into(),
+            icssed::row(
+                line,
+                [
+                    icssed::toggle(toggle, state.hidden, Message::Hidden)
+                        .label("Show hidden files")
+                        .check()
+                        .into(),
+                    icssed::toggle(disabled, true, Message::Hidden)
+                        .label("Disabled")
+                        .check()
+                        .into(),
+                ],
+            )
+            .into(),
+            icssed::row(
+                line,
+                [
+                    icssed::toggle(toggle, state.wifi, Message::Wifi)
+                        .label("Wi-Fi")
+                        .switch()
+                        .into(),
+                    icssed::toggle(disabled, true, Message::Wifi)
+                        .label("Disabled")
+                        .switch()
+                        .into(),
+                ],
+            )
+            .into(),
         ],
     )
     .into()

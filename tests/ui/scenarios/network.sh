@@ -43,7 +43,7 @@ assert_eq "$(count_widgets "$list ap:nth-child(3)[ssid=\"Darma6\"].secured")" 1 
 assert_eq "$(count_widgets "$list ap:nth-child(4)[ssid=\"Corp\"].enterprise")" 1 "Corp (60%, 802.1x) third"
 assert_eq "$(count_widgets "$list ap:nth-child(5)[ssid=\"Guest\"]")" 1 "Guest (20%, open) last"
 assert_eq "$(count_widgets "$list ap.secured > button > title > icon.badge")" 3 "a lock on the secured ones"
-assert_eq "$(count_widgets "$list header.wifi toggle.on")" 1 "the Wi‑Fi toggle on"
+assert_eq "$(count_widgets "$list header.wifi toggle.checked")" 1 "the Wi‑Fi toggle on"
 assert_eq "$(count_widgets "$list header.wired")" 1 "a wired section"
 assert_eq "$(count_widgets "$list device.wired.unplugged")" 1 "eth0 unplugged"
 assert_eq "$(count_widgets "$list header.vpn")" 0 "no VPN section without profiles"

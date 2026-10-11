@@ -271,14 +271,112 @@ button.danger:disabled {
  * Toggles
  * =======
  *
- * A switch (`icssed::toggle`): a button holding its knob, `.on` when it is.
- * The knob slides with a transform: its travel is the toggle's width
- * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
+ * A value on or off (`icssed::toggle`): a button whose press asks for the
+ * other value, `.checked` while it's on. It looks one of three ways,
+ * picked by the call: a button that stays pressed, a check box
+ * (`.check`), a switch (`.switch`), the last two with the toolkit's part
+ * before its icon and its label. Tab moves the focus to it, Enter and
+ * Space flip it.
  *
- * toggle[.on]
- * ╰─ knob
+ * toggle[.check|.switch][.checked]
+ * ├─ check > mark      (.check) the box, and its mark: its content
+ * ├─ switch > knob     (.switch) the track, and its knob
+ * ├─ icon              if it has one
+ * ╰─ label             if it has one
+ *
+ * The knob slides with a transform: its travel is the switch's width
+ * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
  */
 toggle {
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+  padding: 5px 10px;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+toggle:hover {
+  border-color: var(--accent);
+}
+toggle:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+toggle:disabled {
+  color: var(--muted);
+}
+toggle > label {
+  white-space: nowrap;
+}
+toggle.checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+toggle.checked:hover {
+  border-color: var(--fg);
+}
+toggle.checked:disabled {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+/* A check box and a switch: no button around them. */
+toggle.check,
+toggle.switch,
+toggle.check.checked,
+toggle.switch.checked {
+  padding: 0;
+  gap: 8px;
+  justify-content: start;
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+toggle.check:disabled,
+toggle.switch:disabled {
+  opacity: 0.5;
+}
+/* The focus is shown on the toolkit's part, around its own shape. */
+toggle.check:focus,
+toggle.switch:focus {
+  outline: none;
+}
+toggle.check:focus > check,
+toggle.switch:focus > switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+toggle.check > check {
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--muted);
+  border-radius: 3px;
+  background: var(--bg);
+  transition: background-color 120ms, border-color 120ms;
+}
+toggle.check:hover > check {
+  border-color: var(--accent);
+}
+toggle.check.checked > check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+toggle.check > check > mark {
+  font-size: 12px;
+}
+toggle.check.checked > check > mark {
+  content: "✓";
+}
+
+toggle.switch > switch {
   width: 36px;
   height: 20px;
   padding: 2px;
@@ -286,24 +384,17 @@ toggle {
   background: var(--border);
   transition: background-color 120ms;
 }
-toggle.on {
+toggle.switch.checked > switch {
   background: var(--accent);
 }
-toggle:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-toggle:disabled {
-  opacity: 0.5;
-}
-toggle > knob {
+toggle.switch > switch > knob {
   width: 16px;
   height: 16px;
   border-radius: 8px;
   background: var(--bg);
   transition: transform 120ms;
 }
-toggle.on > knob {
+toggle.switch.checked > switch > knob {
   transform: translateX(16px);
 }
 

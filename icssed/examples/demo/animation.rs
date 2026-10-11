@@ -129,7 +129,9 @@ pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element
             icssed::row(
                 line,
                 [
-                    icssed::toggle(line.child("toggle"), state.lit, Message::Lit).into(),
+                    icssed::toggle(line.child("toggle"), state.lit, Message::Lit)
+                        .switch()
+                        .into(),
                     icssed::row(lamp, [labelled(lamp, "A transition: colour, shadow, scale")])
                         .into(),
                 ],

@@ -555,7 +555,8 @@ with its line, and neutral defaults there; AGENTS.md has their calls.
 They come in a few kinds:
 
 - **Boxes** (`row`, `column`, `button`, and what's made of them: a
-  toggle is a button holding its knob; tabs are buttons in a row; a
+  toggle is a button holding its icon and its label, and a check box's
+  mark or a switch's knob before them; tabs are buttons in a row; a
   menu is a column of buttons; a calendar is boxes and texts). Their
   states, painting and animation are `widget/boxed.rs`'s.
 - **Boxes placing their children their own way**: a meter's fill at

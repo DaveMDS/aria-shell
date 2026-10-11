@@ -308,7 +308,9 @@ impl App {
                     [
                         icssed::text(header.child("title"), demo.title).into(),
                         icssed::text(header.child("label"), "Dark").into(),
-                        icssed::toggle(dark, self.scheme == Scheme::Dark, Message::Dark).into(),
+                        icssed::toggle(dark, self.scheme == Scheme::Dark, Message::Dark)
+                            .switch()
+                            .into(),
                     ],
                 )
                 .into(),

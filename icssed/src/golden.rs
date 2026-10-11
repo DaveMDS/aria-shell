@@ -392,9 +392,15 @@ fn controls(root: Node<'_>) -> Element<'_, ()> {
             crate::row(
                 line,
                 [
-                    crate::toggle(line.child("toggle"), false, |_| ()).into(),
-                    crate::toggle(line.child("toggle"), true, |_| ()).into(),
-                    crate::toggle(line.child("toggle").disabled_if(true), true, |_| ()).into(),
+                    crate::toggle(line.child("toggle"), false, |_| ())
+                        .switch()
+                        .into(),
+                    crate::toggle(line.child("toggle"), true, |_| ())
+                        .switch()
+                        .into(),
+                    crate::toggle(line.child("toggle").disabled_if(true), true, |_| ())
+                        .switch()
+                        .into(),
                 ],
             )
             .into(),
@@ -427,7 +433,8 @@ fn controls(root: Node<'_>) -> Element<'_, ()> {
     .into()
 }
 
-const CONTROLS: &str = "toggle, toggle > knob, slider > knob { transition: none; } \
+const CONTROLS: &str = "toggle, toggle > switch, toggle > switch > knob, slider > knob { \
+                        transition: none; } \
                         line { gap: 10px; align-items: center; } \
                         meter.gauge { width: 100px; height: 16px; }";
 
@@ -459,6 +466,50 @@ fn golden_controls_focused_and_dragged() {
             ui.press();
             ui.key(Named::Tab);
             ui.key(Named::Tab);
+        },
+    );
+}
+
+/// The three looks of a toggle, off, on and disabled; the focus on the
+/// check box.
+#[test]
+fn golden_toggles() {
+    scene(
+        "toggles",
+        "toggle, toggle > check, toggle > switch, toggle > switch > knob { transition: none; } \
+         column { gap: 8px; } line { gap: 10px; align-items: center; } \
+         toggle.check.checked > check > mark { content: \"x\"; }",
+        None,
+        Size::new(320.0, 110.0),
+        |root| {
+            let line = root.child("line");
+            let toggle = line.child("toggle");
+            let looks = |look: fn(crate::Toggle<'_, ()>) -> crate::Toggle<'_, ()>| {
+                crate::row(
+                    line,
+                    [
+                        (toggle, false, "Off"),
+                        (toggle, true, "On"),
+                        (toggle.disabled_if(true), true, "Off limits"),
+                    ]
+                    .map(|(node, on, text)| {
+                        look(crate::toggle(node, on, |_| ()).label(text)).into()
+                    }),
+                )
+                .into()
+            };
+            crate::focus_scope(crate::column(
+                root,
+                [looks(|t| t), looks(|t| t.check()), looks(|t| t.switch())],
+            ))
+            .into()
+        },
+        |ui, _| {
+            // The focus on the first check box: past the three buttons
+            // (the disabled one takes none).
+            for _ in 0..3 {
+                ui.key(Named::Tab);
+            }
         },
     );
 }

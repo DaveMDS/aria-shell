@@ -442,10 +442,10 @@ input > button > icon {
 input > button:hover {
   background: var(--border);
 }
-field > placeholder {
+input > field > placeholder {
   color: var(--muted);
 }
-field > selection {
+input > field > selection {
   background: var(--accent-soft);
 }
 

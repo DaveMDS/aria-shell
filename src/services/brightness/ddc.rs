@@ -11,6 +11,12 @@ use super::{Display, Kind, Level};
 
 const PROGRAM: &str = "ddcutil";
 
+/// One `ddcutil` at a time: the monitors' reads would otherwise start
+/// together, contending for the i2c buses, and two processes forked in
+/// the same instant hang the shell under lldb (22.1: the vforks'
+/// breakpoints restored twice, `ld.so`'s one never stepped over).
+static RUNNING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Whether `ddcutil` is there to ask.
 pub fn available() -> bool {
     crate::process::first_on_path(&[PROGRAM]).is_some()
@@ -57,6 +63,7 @@ pub fn bus(id: &str) -> Option<&str> {
 }
 
 async fn run(args: &[&str]) -> Result<String, String> {
+    let _running = RUNNING.lock().await;
     let output = tokio::process::Command::new(PROGRAM)
         .args(args)
         .stdin(Stdio::null())

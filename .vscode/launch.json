@@ -2,6 +2,48 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Run aria-shell (debug)",
+            "command": "cargo run",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Run aria-shell (release)",
+            "command": "cargo run --release",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "icssed gallery",
+            "command": "cargo run -p icssed --example gallery",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Tests",
+            "command": "cargo test --workspace",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "icssed bench",
+            "command": "cargo bench -p icssed --features testing",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "UI scenarios",
+            "command": "tests/ui/run.sh ${input:scenario}",
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "Debug aria-shell",
@@ -9,6 +51,14 @@
             "program": "${workspaceFolder}/target/debug/aria-shell",
             "args": [],
             "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "scenario",
+            "type": "promptString",
+            "description": "Scenario in tests/ui/scenarios (empty: all of them)",
+            "default": ""
         }
     ]
 }

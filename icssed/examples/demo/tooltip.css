@@ -1,0 +1,17 @@
+/*
+ * demo#tooltip
+ * ╰─ line
+ *    ├─ button > label      what the tips are about
+ *    ├─ avatar              an icon: a picture, rounded
+ *    ╰─ tooltip > label     the tips, the toolkit's
+ */
+
+demo#tooltip > line {
+  gap: 12px;
+  align-items: center;
+}
+demo#tooltip avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+}

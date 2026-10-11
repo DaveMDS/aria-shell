@@ -1,0 +1,62 @@
+/*
+ * demo#images
+ * ├─ line > fitted > picture.fill|.contain|.cover, label
+ * ╰─ line > box.tiled|.framed|.scenery > label   backgrounds, a 9-patch
+ *
+ * url()s are found from this file's directory.
+ */
+
+demo#images {
+  gap: 16px;
+}
+demo#images > line {
+  gap: 16px;
+  align-items: center;
+}
+demo#images fitted {
+  gap: 8px;
+  align-items: center;
+}
+demo#images fitted > label {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+demo#images picture {
+  width: 96px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+demo#images picture.contain {
+  object-fit: contain;
+}
+demo#images picture.cover {
+  object-fit: cover;
+}
+
+demo#images box.tiled,
+demo#images box.scenery {
+  width: 140px;
+  height: 64px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 10px;
+}
+demo#images box.tiled {
+  background: url(../assets/dots.png) var(--border);
+}
+demo#images box.framed {
+  padding: 2px 8px;
+  border: 10px solid;
+  border-image: url(../assets/frame.png) 10 fill;
+  color: #1f1f23;
+}
+demo#images box.scenery {
+  background-image: url(../assets/photo.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: #1f1f23;
+  font-weight: bold;
+}

@@ -1,0 +1,10 @@
+/*
+ * demo#tabs
+ * ├─ tabs > tab[.active] > label   the toolkit's
+ * ╰─ page                   the page shown: the app's
+ */
+
+demo#tabs {
+  width: 420px;
+  gap: 14px;
+}

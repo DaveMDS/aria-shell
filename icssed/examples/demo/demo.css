@@ -1,0 +1,136 @@
+/*
+ * The demo's frame, loaded after the toolkit's base, before the demos'
+ * stylesheets and the theme given on the command line. Each demo's
+ * stylesheet styles its own `demo#<name>` alone.
+ *
+ * app                              the window
+ * ├─ sidebar
+ * │  ├─ input                      the search
+ * │  ╰─ scroll > entries
+ * │     ├─ group > label           a group's name
+ * │     ╰─ entry[.active] > label  a demo, the one shown active
+ * ╰─ main
+ *    ├─ header > title, label, toggle   the demo's title; light or dark
+ *    ├─ stage > demo#<name>        the demo, live
+ *    ├─ tabs                       Info, Source, Style
+ *    ├─ scroll.info > doc          the description:
+ *    │  ├─ para                   a paragraph
+ *    │  ├─ list > bullet > mark, text   bullets in a row
+ *    │  ╰─ code > text            code lines
+ *    ╰─ scroll.listing > code > text   the source, or the stylesheet
+ */
+
+app {
+  width: fill;
+  height: fill;
+  background: var(--bg);
+}
+
+/* The sidebar */
+sidebar {
+  width: 220px;
+  height: fill;
+  gap: 8px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+}
+sidebar > input {
+  width: fill;
+}
+sidebar > scroll {
+  height: fill;
+}
+sidebar entries {
+  width: fill;
+  gap: 2px;
+}
+entries > group {
+  padding: 16px 8px 6px;
+}
+entries > group > label {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+entries > entry {
+  width: fill;
+  padding: 7px 10px;
+  border-radius: 4px;
+  transition: background-color 120ms;
+}
+entries > entry:hover {
+  background: var(--border);
+}
+entries > entry.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The demo shown */
+main {
+  width: fill;
+  height: fill;
+  gap: 12px;
+  padding: 16px 20px;
+}
+main > header {
+  width: fill;
+  gap: 8px;
+  align-items: center;
+}
+main > header > title {
+  width: fill;
+  font-size: 20px;
+  font-weight: bold;
+}
+main > header > label {
+  color: var(--muted);
+}
+main > stage {
+  width: fill;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+main > scroll {
+  width: fill;
+  height: fill;
+}
+
+/* Info */
+scroll.info > doc {
+  max-width: 680px;
+  gap: 16px;
+  padding: 4px 12px 12px 0;
+}
+scroll.info > doc > list {
+  gap: 8px;
+}
+scroll.info > doc > list > bullet {
+  gap: 8px;
+  padding: 0 0 0 8px;
+}
+scroll.info > doc > list > bullet > mark {
+  content: "•";
+  color: var(--muted);
+}
+scroll.info > doc > code {
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--border);
+}
+scroll.info > doc > code > text,
+scroll.listing > code > text {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+/* Source and Style */
+scroll.listing > code {
+  padding: 4px 16px 16px 4px;
+}
+scroll.listing > code > text {
+  font-size: 13px;
+  line-height: 1.4;
+}

@@ -1,0 +1,60 @@
+/*
+ * demo#flex
+ * ├─ controls > label, select, toggle
+ * ├─ lane.justify-*.align-* > cell.short|.fill|.tall|.mid > label
+ * ╰─ status                 the lane's classes
+ */
+
+demo#flex {
+  width: fill;
+  gap: 12px;
+}
+demo#flex > controls {
+  gap: 8px;
+  align-items: center;
+}
+demo#flex > controls > select {
+  width: 120px;
+}
+demo#flex > controls > label {
+  font-family: monospace;
+  color: var(--muted);
+}
+demo#flex > status {
+  font-family: monospace;
+  color: var(--muted);
+}
+
+demo#flex > lane {
+  width: fill;
+  height: 96px;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--muted);
+}
+demo#flex > lane.justify-start { justify-content: start; }
+demo#flex > lane.justify-center { justify-content: center; }
+demo#flex > lane.justify-end { justify-content: end; }
+demo#flex > lane.align-stretch { align-items: stretch; }
+demo#flex > lane.align-start { align-items: start; }
+demo#flex > lane.align-center { align-items: center; }
+demo#flex > lane.align-end { align-items: end; }
+
+demo#flex cell {
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+demo#flex cell.short {
+  width: 80px;
+}
+demo#flex cell.fill {
+  width: fill;
+}
+demo#flex cell.tall {
+  min-height: 60px;
+}
+demo#flex cell.mid {
+  min-height: 36px;
+}

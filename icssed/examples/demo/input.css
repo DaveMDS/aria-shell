@@ -1,0 +1,20 @@
+/*
+ * demo#input
+ * ├─ line > input           search, password, disabled
+ * │  ╰─ button.peek[.active] > icon   the password's: shows it
+ * ╰─ status                 what Enter sent
+ */
+
+demo#input {
+  gap: 12px;
+}
+demo#input > line {
+  gap: 10px;
+  align-items: center;
+}
+demo#input button.peek.active > icon {
+  color: var(--accent);
+}
+demo#input > status {
+  color: var(--muted);
+}

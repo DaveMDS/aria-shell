@@ -1,0 +1,83 @@
+/*
+ * demo#boxes
+ * ╰─ line > box.<what it shows> > label
+ */
+
+demo#boxes {
+  gap: 18px;
+}
+demo#boxes > line {
+  gap: 14px;
+  align-items: center;
+}
+demo#boxes box {
+  padding: 12px 16px;
+}
+
+demo#boxes box.plain {
+  background: var(--border);
+}
+demo#boxes box.bordered {
+  border: 1px solid var(--muted);
+}
+demo#boxes box.rounded {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 8px;
+}
+demo#boxes box.shadow {
+  background: var(--bg);
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+demo#boxes box.inset {
+  background: var(--border);
+  box-shadow: inset 0 -3px var(--accent);
+}
+demo#boxes box.sides {
+  border-left: 4px solid var(--accent);
+  border-bottom: 1px solid var(--muted);
+}
+
+demo#boxes box.tab {
+  border: 1px solid var(--border);
+  border-bottom: 3px solid var(--accent);
+  border-radius: 8px 8px 0 0;
+}
+demo#boxes box.four {
+  border-style: solid;
+  border-width: 4px 2px 6px 3px;
+  border-color: var(--danger) var(--accent) var(--warning) var(--muted);
+  border-radius: 12px;
+}
+demo#boxes box.ring {
+  border: 2px solid var(--accent);
+  border-left-width: 8px;
+  border-radius: 10px;
+}
+demo#boxes box.outlined {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Painted only: the layout doesn't move. */
+demo#boxes box.scaled {
+  background: var(--border);
+  transform: scale(0.8);
+}
+demo#boxes box.moved {
+  border: 1px solid var(--muted);
+  transform: translate(4px, 6px);
+}
+demo#boxes box.faded {
+  gap: 6px;
+  align-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  opacity: 0.5;
+}
+demo#boxes box.faded > icon {
+  height: 16px;
+}

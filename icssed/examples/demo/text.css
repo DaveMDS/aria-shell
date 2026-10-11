@@ -1,0 +1,69 @@
+/*
+ * demo#text
+ * ├─ line > label.small|.large|.bold|.italic|.muted|.caps
+ * ├─ line > box.wrap|.cut|.center > label
+ * ╰─ pair[.untrimmed] > icon, label
+ */
+
+demo#text {
+  gap: 14px;
+  align-items: start;
+}
+demo#text > line {
+  gap: 16px;
+  align-items: center;
+}
+demo#text label.small {
+  font-size: 12px;
+}
+demo#text label.large {
+  font-size: 20px;
+}
+demo#text label.bold {
+  font-weight: bold;
+}
+demo#text label.italic {
+  font-style: italic;
+}
+demo#text label.muted {
+  color: var(--muted);
+}
+demo#text label.caps {
+  text-transform: uppercase;
+}
+
+demo#text box {
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+demo#text box.wrap {
+  width: 280px;
+}
+demo#text box.cut {
+  width: 200px;
+}
+demo#text box.cut > label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+demo#text box.center {
+  width: 140px;
+}
+demo#text box.center > label {
+  width: fill;
+  text-align: center;
+}
+
+demo#text pair {
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  align-items: center;
+  background: var(--border);
+}
+demo#text pair > icon {
+  height: 16px;
+}
+demo#text pair.untrimmed > label {
+  text-box: normal;
+}

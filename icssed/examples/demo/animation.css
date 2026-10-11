@@ -1,0 +1,101 @@
+/*
+ * demo#animation
+ * ├─ line > spinner, pulse > label, box.shake[.shaking] > label, button
+ * ├─ line > toggle, lamp[.lit] > label
+ * ╰─ line > button, toast[.leaving] > icon, label
+ */
+
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes pulse {
+  from {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes shake {
+  20%, 60% {
+    transform: translateX(-6px);
+  }
+  40%, 80% {
+    transform: translateX(6px);
+  }
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+demo#animation {
+  gap: 16px;
+}
+demo#animation > line {
+  gap: 14px;
+  align-items: center;
+}
+
+demo#animation spinner {
+  height: 24px;
+  color: var(--accent);
+  animation: spin 1.2s linear infinite;
+}
+demo#animation pulse {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+demo#animation box.shake {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+}
+demo#animation box.shaking {
+  border-color: var(--danger);
+  animation: shake 400ms ease-in-out;
+}
+
+demo#animation lamp {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: background-color 300ms, color 300ms, box-shadow 300ms, transform 300ms;
+}
+demo#animation lamp.lit {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 4px 14px var(--accent-soft);
+  transform: scale(1.05);
+}
+
+demo#animation toast {
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slide-in 250ms ease-out;
+}
+demo#animation toast > icon {
+  height: 16px;
+}
+demo#animation toast.leaving {
+  animation: fade-out 200ms ease-in forwards;
+}

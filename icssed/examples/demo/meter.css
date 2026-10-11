@@ -1,0 +1,21 @@
+/*
+ * demo#meter
+ * ╰─ line > meter[.warning|.gauge], slider, label
+ */
+
+demo#meter {
+  gap: 14px;
+}
+demo#meter > line {
+  gap: 12px;
+  align-items: center;
+}
+demo#meter meter {
+  width: 160px;
+}
+demo#meter meter.warning > fill {
+  background: var(--warning);
+}
+demo#meter meter.gauge {
+  height: 18px;
+}

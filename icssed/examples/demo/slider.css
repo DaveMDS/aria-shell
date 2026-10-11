@@ -1,0 +1,16 @@
+/*
+ * demo#slider
+ * ├─ line > slider, label   one per slider
+ * ╰─ status                 where the last drag ended
+ */
+
+demo#slider {
+  gap: 12px;
+}
+demo#slider > line {
+  gap: 12px;
+  align-items: center;
+}
+demo#slider > status {
+  color: var(--muted);
+}

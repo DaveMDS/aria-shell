@@ -1,0 +1,19 @@
+/*
+ * demo#select
+ * ├─ line > select          a choice, a disabled one
+ * ╰─ status                 the choice
+ */
+
+demo#select {
+  gap: 12px;
+}
+demo#select > line {
+  gap: 10px;
+  align-items: center;
+}
+demo#select > line > select {
+  width: 200px;
+}
+demo#select > status {
+  color: var(--muted);
+}

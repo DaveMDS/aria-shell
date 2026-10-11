@@ -1,0 +1,13 @@
+/*
+ * demo#calendar
+ * ├─ calendar               the toolkit's
+ * ╰─ status                 the day picked
+ */
+
+demo#calendar {
+  gap: 12px;
+  align-items: start;
+}
+demo#calendar > status {
+  color: var(--muted);
+}

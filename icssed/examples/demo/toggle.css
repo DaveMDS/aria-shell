@@ -1,0 +1,12 @@
+/*
+ * demo#toggle
+ * ╰─ line > toggle, label   one per toggle
+ */
+
+demo#toggle {
+  gap: 10px;
+}
+demo#toggle > line {
+  gap: 10px;
+  align-items: center;
+}

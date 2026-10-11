@@ -1,0 +1,33 @@
+/*
+ * demo#palette
+ * ╰─ line > cell > swatch.<variable>, label
+ */
+
+demo#palette > line {
+  gap: 14px;
+}
+demo#palette cell {
+  gap: 8px;
+  align-items: center;
+}
+demo#palette swatch {
+  width: 64px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+demo#palette cell > label {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+demo#palette swatch.bg { background: var(--bg); }
+demo#palette swatch.fg { background: var(--fg); }
+demo#palette swatch.muted { background: var(--muted); }
+demo#palette swatch.border { background: var(--border); }
+demo#palette swatch.accent { background: var(--accent); }
+demo#palette swatch.on-accent { background: var(--on-accent); }
+demo#palette swatch.accent-soft { background: var(--accent-soft); }
+demo#palette swatch.danger { background: var(--danger); }
+demo#palette swatch.warning { background: var(--warning); }

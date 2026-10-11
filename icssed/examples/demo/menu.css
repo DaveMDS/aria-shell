@@ -1,0 +1,23 @@
+/*
+ * demo#menu
+ * ├─ menu > item[.danger]   the toolkit's menu, its items
+ * ╰─ status                 the last item picked
+ */
+
+demo#menu {
+  gap: 12px;
+  align-items: start;
+}
+demo#menu > menu {
+  max-width: 280px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+demo#menu item.danger {
+  color: var(--danger);
+}
+demo#menu > status {
+  color: var(--muted);
+}

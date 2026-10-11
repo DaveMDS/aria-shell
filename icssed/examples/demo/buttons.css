@@ -1,0 +1,48 @@
+/*
+ * demo#buttons
+ * ├─ row > button[.flat|.primary|.danger|.grow] > icon, label
+ * ├─ status                 the last button pressed
+ * ╰─ card > icon, label     a box that follows the pointer
+ */
+
+demo#buttons {
+  gap: 12px;
+  align-items: start;
+}
+demo#buttons > row {
+  gap: 8px;
+  align-items: center;
+}
+demo#buttons > status {
+  color: var(--muted);
+}
+
+/* A state may change the box's own size: padding grows, the row
+   makes room. Layout never transitions. */
+demo#buttons button.grow:hover {
+  padding: 8px 16px;
+}
+
+demo#buttons > card {
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--border);
+  transition: background-color 200ms, box-shadow 200ms;
+}
+demo#buttons > card > icon {
+  height: 16px;
+}
+demo#buttons > card > label,
+demo#buttons > card > icon {
+  transition: color 200ms;
+}
+demo#buttons > card:hover {
+  background: var(--bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+demo#buttons > card:hover > label,
+demo#buttons > card:hover > icon {
+  color: var(--accent);
+}

@@ -18,6 +18,13 @@
         {
             "type": "node-terminal",
             "request": "launch",
+            "name": "icssed demo",
+            "command": "cargo run -p icssed --example demo",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
             "name": "icssed gallery",
             "command": "cargo run -p icssed --example gallery",
             "cwd": "${workspaceFolder}"

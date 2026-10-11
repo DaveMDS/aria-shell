@@ -1,0 +1,43 @@
+/*
+ * demo#surface
+ * ├─ controls > toggle, label
+ * ├─ edge                   where the surface would end
+ * │  ╰─ popup[.deep]        the surface's root box
+ * │     ╰─ entry > icon, label
+ * ╰─ status                 the room its shadow takes
+ */
+
+demo#surface {
+  gap: 14px;
+  align-items: start;
+}
+demo#surface > controls {
+  gap: 10px;
+  align-items: center;
+}
+demo#surface > edge {
+  border: 1px solid var(--muted);
+}
+demo#surface popup {
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+demo#surface popup.deep {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+demo#surface entry {
+  gap: 8px;
+  padding: 6px 10px;
+  align-items: center;
+}
+demo#surface entry > icon {
+  height: 16px;
+}
+demo#surface > status {
+  font-family: monospace;
+  color: var(--muted);
+}

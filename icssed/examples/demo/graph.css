@@ -1,0 +1,41 @@
+/*
+ * demo#graph
+ * ├─ line
+ * │  ├─ graph               a load, 0 to 100
+ * │  ├─ graph.traffic > series.down, series.up
+ * │  ╰─ sparkline           a graph, small: its series and its label
+ * ╰─ button                 more values
+ */
+
+demo#graph {
+  gap: 14px;
+  align-items: start;
+}
+demo#graph > line {
+  gap: 12px;
+  align-items: center;
+}
+demo#graph > line > graph {
+  width: 220px;
+  height: 80px;
+}
+demo#graph graph.traffic > series.up {
+  stroke: var(--danger);
+  fill: transparent;
+}
+demo#graph sparkline {
+  width: 80px;
+  height: 22px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  background: var(--border);
+}
+demo#graph sparkline > series {
+  stroke: var(--accent);
+  stroke-width: 1px;
+  fill: var(--accent-soft);
+}
+demo#graph sparkline > label {
+  font-size: 11px;
+}

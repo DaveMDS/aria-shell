@@ -1,0 +1,65 @@
+/*
+ * demo#states
+ * ├─ line > tile.hover|.press|.focus|.grow > icon, label   buttons of the demo's own kind
+ * ╰─ status
+ */
+
+demo#states {
+  gap: 14px;
+  align-items: start;
+}
+demo#states > line {
+  gap: 12px;
+  align-items: center;
+}
+demo#states tile {
+  gap: 8px;
+  padding: 10px 14px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: background-color 150ms, transform 150ms, box-shadow 150ms;
+}
+demo#states tile > icon {
+  height: 16px;
+  color: var(--muted);
+  transition: color 150ms;
+}
+demo#states tile > label {
+  transition: color 150ms;
+}
+
+/* Paint follows a state, the children's colours too. */
+demo#states tile.hover:hover {
+  background: var(--border);
+}
+demo#states tile.hover:hover > icon,
+demo#states tile.hover:hover > label {
+  color: var(--accent);
+}
+
+demo#states tile.press:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+demo#states tile.press:active {
+  transform: scale(0.94);
+  box-shadow: none;
+}
+
+demo#states tile.focus:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Its own size may follow its state: the row makes room. */
+demo#states tile.grow:hover {
+  padding: 16px 22px;
+}
+
+demo#states tile:disabled {
+  color: var(--muted);
+}
+
+demo#states > status {
+  color: var(--muted);
+}

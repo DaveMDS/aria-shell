@@ -92,13 +92,13 @@ pub fn calendar<'a, Message>(
     node: Node<'a>,
     month: Month,
     title: impl Into<Cow<'a, str>>,
-    weekdays: [&'a str; 7],
+    weekdays: [impl Into<Cow<'a, str>>; 7],
 ) -> Calendar<'a, Message> {
     Calendar {
         node,
         month,
         title: title.into(),
-        weekdays: weekdays.map(Cow::Borrowed),
+        weekdays: weekdays.map(Into::into),
         first: 0,
         today: None,
         selected: None,

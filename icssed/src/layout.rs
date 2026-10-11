@@ -345,7 +345,16 @@ pub(crate) fn flex<M>(
         }
         let mut settled = true;
         for &i in &open {
-            let at = Limits::new(pack(sizes[i], 0.0), pack(sizes[i], cross_room));
+            // Across, its content: a child that stretches is laid out
+            // again at the box's cross size once it's known (4.), not at
+            // the room the box was offered.
+            let compress = if row {
+                Size::new(false, true)
+            } else {
+                Size::new(true, false)
+            };
+            let at =
+                Limits::with_compression(pack(sizes[i], 0.0), pack(sizes[i], cross_room), compress);
             let node = children[i]
                 .as_widget_mut()
                 .layout(&mut trees[i], renderer, &at);
@@ -506,6 +515,47 @@ mod tests {
                 rect(200.0, 0.0, 100.0, 20.0)
             ]
         );
+    }
+
+    #[test]
+    fn a_child_filling_across_takes_the_box_s_height_not_the_room() {
+        // CSS's stretch: an auto-sized row is as tall as its tallest
+        // child's content; a child stretched across takes that height,
+        // whatever room the row was offered.
+        let sheet = sheet(
+            "row { width: 300px; } cell.h20 { width: 50px; height: 20px; } \
+             cell.fill { width: 50px; height: fill; }",
+        );
+        let row = sheet.root("row", 1.0);
+        let node = lay(
+            crate::row(row, [cell(row, "h20"), cell(row, "fill")]).into(),
+            MAX,
+        );
+        assert_eq!(node.size(), Size::new(300.0, 20.0));
+        assert_eq!(
+            rects(&node),
+            [rect(0.0, 0.0, 50.0, 20.0), rect(50.0, 0.0, 50.0, 20.0)]
+        );
+    }
+
+    #[test]
+    fn children_filling_across_keep_the_content_s_height_when_shrunk() {
+        // Too wide for the row: the children shrink (CSS's flex-shrink),
+        // laid out again at their shares; across, still their content.
+        let sheet = sheet(
+            "row { width: 50px; } cell.fill { height: fill; } \
+             cell.w40 { width: 40px; height: 12px; }",
+        );
+        let row = sheet.root("row", 1.0);
+        let node = lay(
+            crate::row(
+                row,
+                [holding(row, "fill", "w40"), holding(row, "fill", "w40")],
+            )
+            .into(),
+            MAX,
+        );
+        assert_eq!(node.size(), Size::new(50.0, 12.0));
     }
 
     #[test]
@@ -727,5 +777,15 @@ mod tests {
         // Blur 8 on every side, the offset moving 3 of it down.
         assert_eq!(node.size(), Size::new(116.0, 56.0));
         assert_eq!(rects(&node), [rect(8.0, 5.0, 100.0, 40.0)]);
+        // What an app placing the surface takes off.
+        assert_eq!(
+            crate::Surface::<()>::room(popup),
+            crate::style::Sides {
+                top: 5.0,
+                right: 8.0,
+                bottom: 11.0,
+                left: 8.0
+            }
+        );
     }
 }

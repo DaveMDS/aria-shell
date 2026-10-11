@@ -128,11 +128,12 @@ base's look. A box's kind is the app's to choose.
 
 | Call | Notes |
 |---|---|
-| `row(node, children)`, `column(..)`, `button(..)` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations |
+| `row(node, children)`, `column(..)`, `button(..)` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus) |
 | `text(node, content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
+| `mark(node)` | a text whose words are its node's `content` (a check, an arrow): the theme's, picked by the node's classes |
 | `icon(node, source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |
 | `image(node, handle)` | `object-fit`, `border-radius` |
-| `surface(node, content)` | a surface's root: adds the room its shadow needs, so a popup's size includes it |
+| `surface(node, content)` | a surface's root: adds the room its shadow needs, so a popup's size includes it; `Surface::room(node)` is that room, for placing the surface |
 | `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
 | `toggle(node, on, Message::Wifi)` | a button and its `knob`, `.on` |
 | `slider(node, 0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
@@ -163,10 +164,19 @@ surface closes.
   the rectangle to show them by, in the surface's coordinates with the
   scrolls taken into account. Open a popup there with `icssed::tip` or a
   `icssed::menu`, and tell the select whether its options are open.
-- A tooltip asks its delayed frame with `RedrawRequest::At`. Check that
-  `iced_exwlshell` honours it when Aria moves onto the toolkit.
+- A tooltip asks its delayed frame with `RedrawRequest::At`, which
+  `iced_exwlshell` 0.20.1 honours.
+- The surface's scale, for its root: `iced::window::scale_factor(id)`
+  answers the fractional one under `iced_exwlshell`; no event tells a
+  change, so ask it when the surface appears and when its output
+  changes.
 - Aria's `debug widgets` is the query: run `icssed::query::Report` as an
-  iced operation, then `sheet.select("menu item:nth-child(2)", &found)`.
+  iced operation, then `sheet.matching("menu item:nth-child(2)", &found)`
+  (indices into `found`); `found[i].path(&sheet)` names each one, and its
+  root tells the surfaces apart (an operation runs on every window).
+- A surface is placed by its box, not by its shadow's room:
+  `Surface::room(root)` is what to take off (a popup's anchor, a toast's
+  margins).
 
 ## Styling: what to know
 
@@ -367,6 +377,8 @@ ui.move_to(point); ui.press(); ui.release(); ui.click(point);
 ui.click_on(&sheet, "menu > item:nth-child(2)");     // by selector
 ui.key(Named::Tab); ui.type_text("hi"); ui.send(&[event]);
 let found = ui.find(&sheet, "slider > knob");         // border boxes, as shown
+let all = ui.report();                                // every widget: sheet.matching(..), found.path(&sheet)
+ui.operate(&mut operation);                           // any iced operation, its outcome
 ui.frame(now);                                        // RedrawRequested(now), then draw
 let pixel = ui.pixels(Color::WHITE).at_point(x, y, 1.5);
 ui.rebuild(view(root));                               // a new view, the tree kept

@@ -15,7 +15,7 @@ use iced::advanced::widget::Id;
 use iced::advanced::widget::operation::{Operation, Outcome, Scrollable};
 use iced::{Rectangle, Vector};
 
-use crate::style::Node;
+use crate::style::{Node, NodeId, Sheet};
 
 /// What a widget gives a [`Report`]: who it is.
 pub(crate) struct Reported {
@@ -42,6 +42,15 @@ pub struct Found {
     pub(crate) node: u32,
     pub(crate) depth: u16,
     pub bounds: Rectangle,
+}
+
+impl Found {
+    /// Its node's path in selector syntax (`popup > menu > item.active`),
+    /// `None` when it's another sheet's widget: what an app prints, and
+    /// how it tells the surface of a widget from its root.
+    pub fn path(&self, sheet: &Sheet) -> Option<String> {
+        (self.sheet == std::ptr::from_ref(sheet) as usize).then(|| sheet.path(NodeId(self.node)))
+    }
 }
 
 /// The operation that collects every widget, in pre-order.

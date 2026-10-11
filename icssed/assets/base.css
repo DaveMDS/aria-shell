@@ -211,6 +211,8 @@
  * button.flat       no border, a background on hover
  * button.primary    the action a dialog suggests
  * button.danger     an action not to take lightly
+ *
+ * A :disabled one is muted, a primary or a danger one plain too.
  */
 button {
   transition: background-color 120ms, border-color 120ms, color 120ms;
@@ -255,6 +257,12 @@ button.primary:active {
 }
 button.danger {
   color: var(--danger);
+}
+button.primary:disabled,
+button.danger:disabled {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--muted);
 }
 
 /*

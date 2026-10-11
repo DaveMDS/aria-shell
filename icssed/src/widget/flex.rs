@@ -10,7 +10,7 @@
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::Focusable;
-use iced::advanced::widget::{Operation, Tree, Widget, tree};
+use iced::advanced::widget::{self, Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
 use iced::{Event, Length, Rectangle, Size, Vector, touch};
@@ -28,6 +28,7 @@ pub struct Flex<'a, Message> {
     children: Vec<Element<'a, Message>>,
     on_press: Option<Message>,
     on_animation_end: Option<Message>,
+    id: Option<widget::Id>,
 }
 
 /// A box laying `children` out in a row.
@@ -67,7 +68,16 @@ impl<'a, Message> Flex<'a, Message> {
             children: children.into_iter().collect(),
             on_press: None,
             on_animation_end: None,
+            id: None,
         }
+    }
+
+    /// Its iced id, for operations: where it is (an app opening a
+    /// surface by it), focusing a button. Unique across windows: an
+    /// operation runs on every window.
+    pub fn id(mut self, id: widget::Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     /// What a press sends: the box is a button, unless its node is
@@ -287,10 +297,14 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         operation: &mut dyn Operation,
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
-        operation.container(None, bounds);
+        operation.container(self.id.as_ref(), bounds);
         operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
         if self.pressable() {
-            operation.focusable(None, bounds, tree.state.downcast_mut::<BoxState>());
+            operation.focusable(
+                self.id.as_ref(),
+                bounds,
+                tree.state.downcast_mut::<BoxState>(),
+            );
         }
         operation.traverse(&mut |operation| {
             for ((child, tree), layout) in self

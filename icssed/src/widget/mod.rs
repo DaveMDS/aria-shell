@@ -36,6 +36,6 @@ pub use select::{Select, select};
 pub use slider::{Slider, slider};
 pub use surface::{Surface, surface};
 pub use tabs::{Tab, tabs};
-pub use text::{Text, text};
+pub use text::{Text, mark, text};
 pub use toggle::toggle;
 pub use tooltip::{Tooltip, tip, tooltip};

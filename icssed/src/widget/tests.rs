@@ -327,6 +327,62 @@ fn widgets_are_found_by_selector() {
     assert!(ui.find(&sheet, "nothing").is_empty());
     ui.click_on(&sheet, "entry:nth-child(3)");
     assert_eq!(ui.messages, [Message::Pressed("c")]);
+
+    // What was found, by name.
+    let found = ui.report();
+    let active = sheet.matching("entry.active", &found).expect("a selector");
+    assert_eq!(active.len(), 1);
+    assert_eq!(
+        found[active[0]].path(&sheet).as_deref(),
+        Some("list > entry.active")
+    );
+    let other = self::sheet("");
+    assert_eq!(found[active[0]].path(&other), None, "another sheet's");
+    assert!(other.matching("entry", &found).unwrap().is_empty());
+}
+
+#[test]
+fn a_box_is_found_and_focused_by_its_id() {
+    use iced::advanced::widget::operation::{Operation, Outcome, focusable};
+    use iced::advanced::widget::{self, Id};
+
+    struct Bounds(Id, Option<Rectangle>);
+    impl Operation<Option<Rectangle>> for Bounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
+            if id == Some(&self.0) {
+                self.1 = Some(bounds);
+            }
+        }
+        fn finish(&self) -> Outcome<Option<Rectangle>> {
+            Outcome::Some(self.1)
+        }
+    }
+
+    let sheet = sheet(CSS);
+    let root = sheet.root("root", 1.0);
+    let id = Id::unique();
+    let view = crate::row(
+        root,
+        ["a", "b"].map(|name| {
+            let b = crate::button(root.child("button").class(name), [])
+                .on_press(Message::Pressed(name));
+            if name == "b" { b.id(id.clone()) } else { b }.into()
+        }),
+    );
+    let mut ui = Harness::new(view, Size::new(80.0, 20.0), 1.0);
+    assert_eq!(
+        ui.operate(&mut Bounds(id.clone(), None)),
+        Some(Some(Rectangle::new(
+            Point::new(40.0, 0.0),
+            Size::new(40.0, 20.0)
+        )))
+    );
+    ui.operate::<()>(&mut focusable::focus(id));
+    ui.key(Named::Enter);
+    assert_eq!(ui.messages, [Message::Pressed("b")]);
 }
 
 /// The base's controls, without their transitions.

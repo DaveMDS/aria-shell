@@ -23,6 +23,7 @@ mod value;
 pub use computed::{Animations, Computed, InsetShadow, Shadow, Sides, Transitions};
 pub use images::{Drawn, Nine, Picture};
 pub use keyframes::Keyframes;
+pub(crate) use node::NodeId;
 pub use node::{Ancestors, Node, Sensitivity, States};
 pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
 pub(crate) use value::Moving;

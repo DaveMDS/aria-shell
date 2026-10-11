@@ -10,7 +10,7 @@ use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::{Event, Length, Point, Rectangle, Size, Vector};
 
 use crate::layout::snap_up;
-use crate::style::Node;
+use crate::style::{Node, Sides};
 use crate::{Element, Renderer, Theme};
 
 pub struct Surface<'a, Message> {
@@ -24,15 +24,28 @@ pub fn surface<'a, Message>(
     node: Node<'a>,
     content: impl Into<Element<'a, Message>>,
 ) -> Surface<'a, Message> {
-    let style = node.base();
-    let scale = node.scale();
-    let room = style.shadow.map_or([0.0; 4], |s| {
-        let side = |offset: f32| snap_up((s.blur - offset).max(0.0), scale);
-        [side(s.x), side(s.y), side(-s.x), side(-s.y)]
-    });
+    let room = Surface::<Message>::room(node);
     Surface {
-        room,
+        room: [room.left, room.top, room.right, room.bottom],
         content: content.into(),
+    }
+}
+
+impl<Message> Surface<'_, Message> {
+    /// The room around the box of root `node` for its shadow, at rest:
+    /// what an app placing the surface takes off, so the box, not the
+    /// surface, lands where it should (a popup on its bar).
+    pub fn room(node: Node<'_>) -> Sides {
+        let scale = node.scale();
+        node.base().shadow.map_or(Sides::default(), |s| {
+            let side = |offset: f32| snap_up((s.blur - offset).max(0.0), scale);
+            Sides {
+                top: side(s.y),
+                right: side(-s.x),
+                bottom: side(-s.y),
+                left: side(s.x),
+            }
+        })
     }
 }
 

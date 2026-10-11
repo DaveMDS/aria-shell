@@ -127,6 +127,17 @@ impl Sheet {
     /// The border boxes of the widgets of this sheet `selector` (a list,
     /// states aside) matches among `found`, in tree order.
     pub fn select(&self, selector: &str, found: &[Found]) -> Result<Vec<Rectangle>, String> {
+        Ok(self
+            .matching(selector, found)?
+            .into_iter()
+            .map(|i| found[i].bounds)
+            .collect())
+    }
+
+    /// Which of `found` are this sheet's widgets `selector` matches, as
+    /// indices, in tree order: for an app naming what it found
+    /// ([`Found::path`]) as well as where.
+    pub fn matching(&self, selector: &str, found: &[Found]) -> Result<Vec<usize>, String> {
         let me = std::ptr::from_ref(self) as usize;
         let mut positional = Vec::new();
         let selectors = {
@@ -172,7 +183,7 @@ impl Sheet {
                 .iter()
                 .any(|s| s.matches(&chain, StateCheck::Ignore))
             {
-                out.push(f.bounds);
+                out.push(i);
             }
         }
         Ok(out)

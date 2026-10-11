@@ -14,7 +14,7 @@ use iced::{Color, Event, Point, Rectangle, Size, mouse, window};
 use iced_runtime::user_interface::{self, UserInterface};
 
 use crate::measure::headless;
-use crate::query::Report;
+use crate::query::{Found, Report};
 use crate::{Element, Renderer, Sheet, Theme};
 
 pub struct Harness<'a, Message> {
@@ -137,11 +137,24 @@ impl<'a, Message> Harness<'a, Message> {
     /// The border boxes of the widgets `selector` matches, in tree
     /// order.
     pub fn find(&mut self, sheet: &Sheet, selector: &str) -> Vec<Rectangle> {
-        let mut report = Report::default();
+        sheet.select(selector, &self.report()).expect("a selector")
+    }
+
+    /// Every widget, as the query reports them: for
+    /// [`Sheet::matching`] and [`Found::path`].
+    pub fn report(&mut self) -> Vec<Found> {
+        self.operate(&mut Report::default()).unwrap_or_default()
+    }
+
+    /// An iced operation run on the tree, as a `Task` runs one: its
+    /// outcome, when it has one.
+    pub fn operate<T>(&mut self, operation: &mut dyn Operation<T>) -> Option<T> {
         let ui = self.ui.as_mut().expect("built");
-        ui.operate(&self.renderer, &mut operation::black_box(&mut report));
-        let _ = report.finish();
-        sheet.select(selector, &report.found).expect("a selector")
+        ui.operate(&self.renderer, &mut operation::black_box(operation));
+        match operation.finish() {
+            operation::Outcome::Some(outcome) => Some(outcome),
+            _ => None,
+        }
     }
 
     /// A click in the middle of the first widget `selector` matches.

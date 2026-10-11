@@ -259,8 +259,9 @@ computed values:
   pixels, which picks a png theme's `@2` directory.
 
 A new scale is a new root, so a rebuilt view. The gallery learns it
-from iced (`window::scale_factor`, `window::Event::Rescaled`); Aria's
-surfaces from `iced_exwlshell`, later (see "To decide").
+from iced (`window::scale_factor`, `window::Event::Rescaled`); Aria
+asks `window::scale_factor` of `iced_exwlshell` when a surface appears
+and when its output changes (no event tells it).
 
 ## Layout
 
@@ -298,7 +299,10 @@ content's):
    and the gaps: shared equally by the `fill` children when there's
    some, taken from the others in proportion to their bases when it's
    negative (CSS's `flex-shrink: 1`). Each child is laid out again at
-   its share; one that comes back at another size (larger: its minimum;
+   its share, across at its content (a child that stretches takes the
+   box's cross size in 4., not the room the box was offered: it once
+   made a bar of `fill` gadgets as tall as its output when they
+   shrank); one that comes back at another size (larger: its minimum;
    smaller: its `max-*`) keeps it, and what's left is shared again among
    the others, as CSS's loop does. With nobody at a limit, the usual
    case, that's one round;
@@ -577,8 +581,10 @@ gives operations its translation, and lays its content out unmoved).
 `query.rs` runs a CSS selector over that, `:nth-child()` included even
 where the sheet has none (positions come from the report's tree): the
 harness's `find` and `click_on`, and Aria's `debug widgets 'launcher
-item:nth-child(2)'` on top of it. Every widget is found, text and paths
-included; iced's own scrollbars aren't.
+item:nth-child(2)'` on top of it. `Sheet::matching` says which widgets
+match, `Found::path` names one: an operation runs on every window, and
+a widget's root is how an app tells their surfaces apart. Every widget
+is found, text and paths included; iced's own scrollbars aren't.
 
 ## Testing
 
@@ -653,11 +659,6 @@ for overlays at every event and every frame.
 
 - The crate's name, and its licence (GPL-3 like Aria, or a laxer one
   for a toolkit others may use).
-- Where the freedesktop icon index lives: Aria (proposed), the toolkit,
-  or a small crate of its own.
-- How Aria learns a surface's scale for its root node when it's
-  fractional (with Aria's move, later): sctk's `OutputInfo` has the
-  integer `scale_factor`; the fractional one (`wp-fractional-scale`)
-  only reaches `iced_exwlshell`'s viewport, and no event tells the app
-  (0.20 and 0.21: no `Rescaled`). Whether `iced_exwlshell` honours a
-  `RedrawRequest::At` (a tooltip's delay) is to check then too.
+- Where the freedesktop icon index lives: Aria for now (its
+  `services/icons`, given to `icssed::icon` as `&dyn Icons`), the
+  toolkit, or a small crate of its own.

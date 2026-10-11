@@ -129,21 +129,18 @@ impl Gadget for NotificationsGadget {
         let scroll = ctx.node.child("scroll");
         let list = scroll.child("list");
         let header = list.child("header");
-        let dnd = header
-            .child("button")
-            .class("dnd")
-            .class_if("active", ctx.notifications.dnd());
+        let dnd = icssed::toggle(
+            header.child("toggle").class("dnd"),
+            ctx.notifications.dnd(),
+            |_| Message::ToggleDnd,
+        )
+        .label(ctx.locale.tr("notifications.dnd"));
         let clear = header.child("button").class("clear");
         let header = icssed::row(
             header,
             [
                 icssed::text(header.child("title"), ctx.locale.tr("notifications.title")).into(),
-                icssed::button(
-                    dnd,
-                    [icssed::text(dnd.child("label"), ctx.locale.tr("notifications.dnd")).into()],
-                )
-                .on_press(Message::ToggleDnd)
-                .into(),
+                dnd.into(),
                 icssed::button(
                     clear,
                     [

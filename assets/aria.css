@@ -75,9 +75,9 @@
  * ├─ label
  * ╰─ check     (.radio) its mark: ● / ○
  *
- * button.active    a toggle that is on: do-not-disturb, mute, the power profile
+ * button.active    the one chosen among a few: the power profile
  * button.plain     just its colour: muted, the text's when hovered or .active;
- *                  a password's peek (.active: shown), a row's chevron (.active: open)
+ *                  a row's chevron (.active: open)
  * button.radio     one of a group, .active the chosen one: its `check`
  *                  (● / ○, accent on the chosen one), then its `label`
  */
@@ -128,6 +128,31 @@ button.radio > check {
 button.radio.active > check {
   color: var(--accent);
   content: "●";
+}
+
+/*
+ * Toggles
+ * =======
+ *
+ * The toolkit's (`toggle`, `.check`, `.switch`, `.checked` while it's
+ * on: do-not-disturb, mute), and the shell's variant, set as a class by
+ * the code:
+ *
+ * toggle.plain     just its colour: muted, the text's when hovered or
+ *                  .checked; a password's peek (.checked: shown)
+ */
+toggle > icon {
+  height: 16px;
+}
+toggle.plain {
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+toggle.plain:hover,
+toggle.plain.checked {
+  color: var(--fg);
 }
 
 /* Surfaces */
@@ -401,7 +426,7 @@ wallpaper {
  *    ├─ date
  *    ╰─ auth[.error][.busy]     the password block
  *       ├─ input                the toolkit's, the password (:focus)
- *       │  ╰─ button.peek.plain[.active] > icon   the eye (.active: the password shows);
+ *       │  ╰─ toggle.peek.plain[.checked] > icon   the eye (.checked: the password shows);
  *       │                                 a `label`, show / hide, without one in the icon theme
  *       ├─ message              what PAM said, "Unlocking…"
  *       ╰─ button.primary > label   Unlock (:disabled while checking)
@@ -448,10 +473,10 @@ locker auth > input {
 locker auth.error > input {
   border-color: var(--danger);
 }
-locker auth > input > button.peek {
+locker auth > input > toggle.peek {
   padding: 4px;
 }
-locker auth > input > button.peek > icon {
+locker auth > input > toggle.peek > icon {
   height: 18px;
 }
 locker auth > message {
@@ -602,8 +627,8 @@ notification actions {
  * showcase                    the surface, the parts centred in it
  * ╰─ parts                    a row
  *    ╰─ column                parts, one under the other
- * popup#showcase > buttons    every kind of button, labelled by its selector
- * ├─ row > button ...
+ * popup#showcase > buttons    every kind of button and toggle, labelled by its selector
+ * ├─ row > button ..., toggle ...
  * ╰─ tabs
  */
 showcase {
@@ -1143,7 +1168,7 @@ gadget.brightness screen slider {
  *    ╰─ list                    `width` sizes it
  *       ├─ header
  *       │  ├─ title
- *       │  ├─ button.dnd[.active]  toggles do-not-disturb
+ *       │  ├─ toggle.dnd[.checked] do-not-disturb, on or off
  *       │  ╰─ button.clear         empties the history
  *       ├─ empty > label        "No notifications"
  *       ╰─ notification[.unseen]   one per notification kept
@@ -1440,7 +1465,7 @@ gadget.system-monitor monitor > actions.none > label {
  *    ╰─ list
  *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
  *       ├─ channel.output|.input|.stream[.muted][.default][name="..."]
- *       │  ├─ button.mute[.active] > icon   toggles mute: the device's / app's icon
+ *       │  ├─ toggle.mute[.checked] > icon  mute, on or off: the device's / app's icon
  *       │  ╰─ info                         a column
  *       │     ├─ head                      a row
  *       │     │  ├─ button.radio[.active]  a device's name (see `button.radio`): .active
@@ -1477,10 +1502,10 @@ gadget.audio channel {
   gap: 8px;
   align-items: center;
 }
-gadget.audio channel > button.mute {
+gadget.audio channel > toggle.mute {
   padding: 4px;
 }
-gadget.audio channel > button.mute > icon {
+gadget.audio channel > toggle.mute > icon {
   height: 20px;
 }
 gadget.audio channel > info {
@@ -1593,7 +1618,7 @@ gadget.audio player > controls > button > icon {
  *       │  ├─ auth[.busy]                        the password
  *       │  │  ├─ input                           the toolkit's (:focus)
  *       │  │  │  ├─ field
- *       │  │  │  ╰─ button.peek.plain[.active] > icon   the eye (.active: shown)
+ *       │  │  │  ╰─ toggle.peek.plain[.checked] > icon   the eye (.checked: shown)
  *       │  │  ╰─ button.connect > label          :disabled: nothing typed yet
  *       │  ╰─ message > label                    "Wrong password", the enterprise hint
  *       ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]

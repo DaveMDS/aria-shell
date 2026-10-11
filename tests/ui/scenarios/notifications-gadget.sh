@@ -61,8 +61,8 @@ assert_eq "$(count_widgets 'popup notification[id="'"$id2"'"]')" 1 "the other st
 
 # Do not disturb from the popup: a new notification is listed, not
 # shown; a critical one shows anyway.
-click_widget 'popup gadget.notifications header button.dnd'
-assert_eq "$(count_widgets 'popup gadget.notifications header button.dnd.active')" 1
+click_widget 'popup gadget.notifications header toggle.dnd'
+assert_eq "$(count_widgets 'popup gadget.notifications header toggle.dnd.checked')" 1
 assert_eq "$(count_widgets 'gadget.notifications > button.dnd')" 2 "quiet on both bars"
 nsend -t 0 "Quiet" "not on screen" > /dev/null
 settle

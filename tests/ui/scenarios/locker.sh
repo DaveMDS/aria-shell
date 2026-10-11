@@ -58,12 +58,12 @@ shot locked-password
 # The eye shows the password in clear and hides it again (the field's
 # text isn't readable from outside; the button's state is).
 type_text "not-the-password"
-assert_eq "$(count_widgets 'locker button.peek.active')" 0 "hidden at first"
-click_widget 'locker[output="HEADLESS-1"] button.peek'
-assert_eq "$(count_widgets 'locker button.peek.active')" 2 "shown after a click, on both"
+assert_eq "$(count_widgets 'locker toggle.peek.checked')" 0 "hidden at first"
+click_widget 'locker[output="HEADLESS-1"] toggle.peek'
+assert_eq "$(count_widgets 'locker toggle.peek.checked')" 2 "shown after a click, on both"
 shot locked-peek
-click_widget 'locker[output="HEADLESS-1"] button.peek'
-assert_eq "$(count_widgets 'locker button.peek.active')" 0 "hidden again"
+click_widget 'locker[output="HEADLESS-1"] toggle.peek'
+assert_eq "$(count_widgets 'locker toggle.peek.checked')" 0 "hidden again"
 
 # The field has the keyboard: a wrong password, checked by PAM, is
 # refused; the field is emptied, the lock stays.

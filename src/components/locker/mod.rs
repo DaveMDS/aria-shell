@@ -296,24 +296,22 @@ impl Locker {
             let input = auth.child("input");
             // The eye: the password in clear while it's on.
             let peek = input
-                .child("button")
+                .child("toggle")
                 .class("peek")
                 .class("plain")
-                .class_if("active", self.peek)
                 .disabled_if(busy);
             let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };
+            let eye = icssed::toggle(peek, self.peek, |_| Message::TogglePeek);
             // Words, when the icon theme has no eye.
-            let mark: Element<'a, Message> = if shared.icons.get_name(name, None).is_some() {
-                icssed::icon(peek.child("icon"), (icons, name)).into()
+            let eye = if shared.icons.get_name(name, None).is_some() {
+                eye.icon((icons, name))
             } else {
-                let key = if self.peek {
+                eye.label(shared.locale.tr(if self.peek {
                     "locker.hide_password"
                 } else {
                     "locker.show_password"
-                };
-                icssed::text(peek.child("label"), shared.locale.tr(key)).into()
+                }))
             };
-            let eye = icssed::button(peek, [mark]).on_press(Message::TogglePeek);
             let mut field = icssed::input(
                 input,
                 shared.locale.tr("locker.enter_password"),

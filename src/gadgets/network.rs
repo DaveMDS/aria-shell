@@ -628,19 +628,12 @@ impl NetworkGadget {
         let locale = ctx.locale;
         let auth = node.child("auth").class_if("busy", busy);
         let input = auth.child("input").disabled_if(busy);
-        let peek = input
-            .child("button")
-            .class("peek")
-            .class("plain")
-            .class_if("active", self.peek);
-        let eye = icssed::button(
-            peek,
-            [ctx.icon(
-                peek.child("icon"),
-                if self.peek { ICON_CONCEAL } else { ICON_PEEK },
-            )],
+        let eye = icssed::toggle(
+            input.child("toggle").class("peek").class("plain"),
+            self.peek,
+            |_| Message::Peek,
         )
-        .on_press(Message::Peek);
+        .icon(ctx.named(if self.peek { ICON_CONCEAL } else { ICON_PEEK }));
         let field = icssed::input(input, locale.tr("network.password"), &self.password)
             .id(self.input.clone())
             .secure(!self.peek)

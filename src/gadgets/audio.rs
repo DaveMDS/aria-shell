@@ -15,7 +15,7 @@
 use iced::mouse::ScrollDelta;
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::{Element, IconSource, Node};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
@@ -269,12 +269,11 @@ impl AudioGadget {
             .class_if("muted", c.muted)
             .class_if("default", c.default)
             .attr("name", &c.name);
-        let mute = node
-            .child("button")
-            .class("mute")
-            .class_if("active", c.muted);
-        let mute_button = icssed::button(mute, [channel_icon(ctx, mute.child("icon"), c)])
-            .on_press(Message::Mute(c.kind, c.index, !c.muted));
+        let (kind, index) = (c.kind, c.index);
+        let mute_button = icssed::toggle(node.child("toggle").class("mute"), c.muted, move |m| {
+            Message::Mute(kind, index, m)
+        })
+        .icon(channel_icon(ctx, c));
         let info = node.child("info");
         let head = info.child("head");
         // A device's name is a radio: ● the default, ○ a click makes it
@@ -329,12 +328,12 @@ impl AudioGadget {
 /// (the server's `device.icon_name`s are rarely in a theme), a stream's
 /// application (its desktop entry, else the icon name it gave, else a
 /// generic player).
-fn channel_icon<'a>(ctx: Context<'a>, node: Node<'a>, c: &'a Channel) -> Element<'a, Message> {
+fn channel_icon<'a>(ctx: Context<'a>, c: &'a Channel) -> IconSource<'a> {
     match c.kind {
-        Kind::Output | Kind::Input => ctx.icon(node, c.icon_name()),
+        Kind::Output | Kind::Input => ctx.named(c.icon_name()),
         Kind::Stream => match c.app.as_deref().and_then(|app| ctx.icons.get(app)) {
-            Some(icon) => icssed::icon(node, icon.clone()).into(),
-            None => ctx.icon(node, c.icon.as_deref().unwrap_or(ICON_STREAM)),
+            Some(icon) => icon.clone().into(),
+            None => ctx.named(c.icon.as_deref().unwrap_or(ICON_STREAM)),
         },
     }
 }

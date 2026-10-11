@@ -83,6 +83,9 @@ const PLAINS: [(bool, bool); 3] = [(false, true), (true, true), (true, false)];
 
 /// How many sample radios and tabs: a click chooses one.
 const RADIOS: usize = 2;
+/// The sample toggles: the toolkit's three looks, and the shell's plain
+/// one.
+const TOGGLES: [&str; 4] = ["", "check", "switch", "plain"];
 const TABS: usize = 3;
 
 /// The icon the sample buttons draw.
@@ -100,9 +103,10 @@ pub(crate) struct Showcase {
     /// A press landed beside the parts: the release closes.
     pressed_outside: bool,
     /// The sample plain buttons that are on, the chosen sample radio,
-    /// the open sample tab.
+    /// the sample toggles that are on, the open sample tab.
     plains: [bool; PLAINS.len()],
     radio: usize,
+    toggles: [bool; TOGGLES.len()],
     tab: usize,
 }
 
@@ -116,9 +120,10 @@ pub(crate) enum Message {
     /// Escape, on window `Id`.
     Escape(Id),
     /// A sample plain button turned on or off, a sample radio chosen,
-    /// a sample tab opened.
+    /// a sample toggle flipped, a sample tab opened.
     Plain(usize),
     Radio(usize),
+    Toggle(usize),
     Tab(usize),
 }
 
@@ -249,6 +254,7 @@ impl AriaShell {
             pressed_outside: false,
             plains: [false, true, false],
             radio: 0,
+            toggles: [true, true, false, false],
             tab: 0,
         });
         self.resolve_icons();
@@ -296,6 +302,10 @@ impl AriaShell {
             }
             Message::Radio(i) => {
                 showcase.radio = i;
+                Task::none()
+            }
+            Message::Toggle(i) => {
+                showcase.toggles[i] = !showcase.toggles[i];
                 Task::none()
             }
             Message::Tab(i) => {
@@ -398,8 +408,9 @@ impl AriaShell {
     fn buttons_view<'a>(&'a self, showcase: &Showcase, scale: f32) -> Element<'a, Shell> {
         let popup = self.theme.root("popup", scale).id("showcase");
         let list = popup.child("buttons");
-        // The rows of buttons, the plain ones', the radios', the tabs.
-        let count = BUTTONS.len().div_ceil(BUTTONS_ROW) + 3;
+        // The rows of buttons, the plain ones', the radios', the
+        // toggles', the tabs.
+        let count = BUTTONS.len().div_ceil(BUTTONS_ROW) + 4;
         let mut children: Vec<Element<'a, Shell>> = Vec::new();
         for (k, chunk) in BUTTONS.chunks(BUTTONS_ROW).enumerate() {
             // The plain ones after the flat ones.
@@ -453,6 +464,8 @@ impl AriaShell {
             .into()
         });
         children.push(icssed::row(row, radios).into());
+        let row = list.child_at("row", children.len(), count);
+        children.push(icssed::row(row, self.toggles_view(showcase, row)).into());
         let tabs = (0..TABS).map(|i| {
             let active = i == showcase.tab;
             let label = match active {
@@ -464,6 +477,38 @@ impl AriaShell {
         let node = list.child_at("tabs", children.len(), count);
         children.push(icssed::tabs(node, tabs));
         popup::view(popup, icssed::column(list, children).into())
+    }
+
+    /// The sample toggles, in their row `row`, each labelled by its
+    /// selector.
+    fn toggles_view<'a>(&'a self, showcase: &Showcase, row: Node<'a>) -> Vec<Element<'a, Shell>> {
+        let icons: &'a dyn icssed::Icons = &self.icons;
+        TOGGLES
+            .iter()
+            .enumerate()
+            .map(|(i, &look)| {
+                let on = showcase.toggles[i];
+                let node = row
+                    .child_at("toggle", i, TOGGLES.len())
+                    .class_if("plain", look == "plain");
+                let mut label = match look {
+                    "" => "toggle".to_owned(),
+                    look => format!("toggle.{look}"),
+                };
+                if on {
+                    label.push_str(".checked");
+                }
+                let toggle = icssed::toggle(node, on, move |_| Shell::Showcase(Message::Toggle(i)));
+                match look {
+                    "check" => toggle.check(),
+                    "switch" => toggle.switch(),
+                    "plain" => toggle.icon((icons, BUTTON_ICON)),
+                    _ => toggle,
+                }
+                .label(label)
+                .into()
+            })
+            .collect()
     }
 
     /// The sample plain buttons, in their row `row`.

@@ -65,8 +65,14 @@ impl<'a> Context<'a> {
     /// The icon theme's icon `name` as `node`: its room kept while it
     /// isn't resolved.
     pub fn icon<M: 'a>(&self, node: Node<'a>, name: impl Into<Cow<'a, str>>) -> Element<'a, M> {
+        icssed::icon(node, self.named(name)).into()
+    }
+
+    /// The icon `name`, looked up in the icon theme when it's drawn: for
+    /// a widget that makes its icon itself (a toggle).
+    pub fn named(&self, name: impl Into<Cow<'a, str>>) -> icssed::IconSource<'a> {
         let icons: &'a dyn icssed::Icons = self.shared.icons;
-        icssed::icon(node, (icons, name)).into()
+        (icons, name).into()
     }
 }
 

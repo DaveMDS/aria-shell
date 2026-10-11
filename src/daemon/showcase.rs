@@ -11,7 +11,7 @@
 //! hover still shows; only the sample plain buttons, radios and tabs
 //! follow a click. Escape, a click beside the parts or the command
 //! again close it; a theme change redraws it like any surface. Its own
-//! layout, the room around the parts and between them, is base.css's
+//! layout, the room around the parts and between them, is aria.css's
 //! (`showcase`).
 //!
 //! ```text

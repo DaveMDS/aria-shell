@@ -274,7 +274,7 @@ stage has its own timeout from the last input, on AC and on battery.
 
 ### 🎨 Theming
 The look comes from a CSS stylesheet, drawn by the shell's own toolkit
-(`icssed/`): `assets/base.css` documents the shell's element trees,
+(`icssed/`): `assets/aria.css` documents the shell's element trees,
 `icssed/assets/base.css` the toolkit's widgets and the supported
 properties; a user theme (`[general] style`) is loaded on top, with
 light and dark colour schemes. Themes are found in

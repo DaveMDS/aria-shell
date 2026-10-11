@@ -3,12 +3,12 @@
  * A flat monospace bar; the clock, the first gadget on the left and the
  * last on the right in reversed colours.
  *
- * See assets/base.css for the element trees, icssed/assets/base.css for
+ * See assets/aria.css for the element trees, icssed/assets/base.css for
  * the properties.
  */
 
 /* The bar alone in monospace: `panel:root`, as a plain `panel` loses to
-   base.css's `:root` font. */
+   aria.css's `:root` font. */
 panel:root {
   font-family: "JetBrains Mono NL", "Roboto Mono", monospace;
 }

@@ -1,5 +1,5 @@
 //! Styling: the toolkit's base stylesheet, then Aria's
-//! (`assets/base.css`: its own elements, the palette), then the user
+//! (`assets/aria.css`: its own elements, the palette), then the user
 //! theme `[general] style` names, compiled into one `icssed::Sheet` for
 //! one [`Scheme`]. The views build their nodes from a surface's root
 //! ([`Theme::root`]); the toolkit's widgets resolve their styles.
@@ -21,7 +21,7 @@ use crate::config::{self, Config};
 pub use icssed::Scheme;
 
 /// Aria's own stylesheet, over the toolkit's base, under the user's.
-const BASE: &str = include_str!("../../assets/base.css");
+const BASE: &str = include_str!("../../assets/aria.css");
 
 /// What a gadget asks the daemon to change about the theme.
 #[derive(Debug, Clone)]
@@ -106,7 +106,7 @@ impl Theme {
     /// The base stylesheets alone.
     fn base(scheme: Scheme) -> Self {
         Self {
-            sheet: compile(&[base_source()], scheme).expect("base.css is valid"),
+            sheet: compile(&[base_source()], scheme).expect("aria.css is valid"),
             files: Vec::new(),
             name: None,
         }
@@ -145,7 +145,7 @@ impl Default for Theme {
 
 fn base_source() -> Source<'static> {
     Source {
-        name: "base.css",
+        name: "aria.css",
         text: BASE,
         dir: None,
     }
@@ -171,7 +171,7 @@ pub fn parse_scheme(value: &str) -> Option<Scheme> {
 }
 
 /// The fonts built into the binary (`assets/fonts/`, with their
-/// licenses): `base.css` names them, so the text looks the same on
+/// licenses): `aria.css` names them, so the text looks the same on
 /// every system, whatever is installed.
 const FONTS: [&[u8]; 3] = [
     include_bytes!("../../assets/fonts/NotoSansDisplay-Regular.ttf"),
@@ -253,10 +253,10 @@ mod tests {
     #[test]
     fn base_stylesheet_loads_clean_in_both_schemes() {
         for scheme in [Scheme::Light, Scheme::Dark] {
-            let (_, warnings) = Sheet::load(&[base_source()], scheme).expect("base.css parses");
+            let (_, warnings) = Sheet::load(&[base_source()], scheme).expect("aria.css parses");
             assert!(
                 warnings.is_empty(),
-                "base.css ({}): {}",
+                "aria.css ({}): {}",
                 scheme.name(),
                 warnings
                     .iter()

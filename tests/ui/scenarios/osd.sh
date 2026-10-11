@@ -25,7 +25,7 @@ wait_osd() {
 assert_eq "$(count_osd)" 0 "no OSD at rest"
 aria osd show --icon audio-volume-high-symbolic --value 40 Test
 wait_osd 2 "one OSD per output"
-# 320x56 (base.css), centred, 100 px above the bottom edge.
+# 320x56 (aria.css), centred, 100 px above the bottom edge.
 assert_contains "$(surfaces)" "osd HEADLESS-1 800,924 320x56"
 assert_contains "$(surfaces)" "osd HEADLESS-2 2720,924 320x56"
 assert_eq "$(widget 'osd[output="HEADLESS-1"]')" "800 924 320 56" "the box fills it"

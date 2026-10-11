@@ -57,7 +57,7 @@ kept compatible on purpose; nothing of its structure (`Singleton`,
   `[patch.crates-io]` in `Cargo.toml`; `Bgra8Unorm` is picked, the same
   shadow fades by one step a pixel. Drop it when a release has the
   filter and `iced_exwlshell` moves to it: Cargo then warns the patch is
-  unused. `base.css` still gives the surfaces' roots no shadow and no
+  unused. `aria.css` still gives the surfaces' roots no shadow and no
   rounded corners: neutral, a theme's to choose.
 
 ## Structure
@@ -451,7 +451,7 @@ process    (process.rs)     split_words (shell-like quoting, no shell), command(
                             `systemctl --user restart aria-shell` (the unit kills its whole cgroup) spares
                             them. Moved after the spawn: a fork made before the move stays with us
 
-Theme      (theme.rs)       daemon-owned styling: the toolkit's base, base.css and the user's theme, compiled
+Theme      (theme.rs)       daemon-owned styling: the toolkit's base, aria.css and the user's theme, compiled
                             into one `icssed::Sheet` for one Scheme
   load / try_load(&Config, style, scheme)   what can't be used logged with its file:line:col, a syntax
                             error rejecting the user's file (a reload keeps the last good one)
@@ -638,7 +638,7 @@ Two things flow between the daemon and the gadgets besides messages:
   :root.<scheme>`: a user theme's plain variable still beats the base's
   scheme one); a theme that only sets `:root` looks the same in both.
   The sheet gives every root the scheme as a class, so `panel.dark { }`
-  rules work without touching the nodes gadgets build. `base.css`
+  rules work without touching the nodes gadgets build. `aria.css`
   carries both palettes (Catppuccin-like Latte / Mocha), as the
   toolkit's variables (`--bg`, `--accent`, ...) plus the shell's own
   (`--warning`), so a palette restyles the toolkit's widgets too.
@@ -663,7 +663,7 @@ Two things flow between the daemon and the gadgets besides messages:
   scale. It replaced stock iced widgets styled by closures (`git log --
   src/ui/theme`), whose limits its ARCHITECTURE.md lists. The daemon
   runs on `icssed::Theme` (`iced_exwlshell`'s daemon has one theme type
-  for every surface). `assets/base.css` (compiled in, over the
+  for every surface). `assets/aria.css` (compiled in, over the
   toolkit's base, under the user's) documents the shell's element trees
   for theme authors, the toolkit's base its widgets' and the
   properties; `[general] style` names a user theme loaded on top
@@ -981,7 +981,7 @@ Two things flow between the daemon and the gadgets besides messages:
   `Lines` (the same click); `-0.0.signum()` is `-1.0`, so a zero delta
   must be filtered before taking its sign.
 - Theme selectors are global: `gadget.tray button` would match a
-  button anywhere under a tray gadget, its popup's too; base.css
+  button anywhere under a tray gadget, its popup's too; aria.css
   styles the bar's buttons with `gadget > button` (the child
   combinator), which a popup's content never is.
 - A layer surface's `margin: Some((top, right, bottom, left))` and
@@ -1450,7 +1450,7 @@ Text is centred on its letters, not on its line box (the toolkit's
 `text-box: trim-both cap alphabetic` on every element): a label's box
 runs from its capitals' top to its baseline, so it sits centred next
 to an icon. Lines of text stacked in a column touch unless a `gap`
-parts them: base.css's gaps between them are the old line boxes'
+parts them: aria.css's gaps between them are the old line boxes'
 leading.
 
 ## Verified where

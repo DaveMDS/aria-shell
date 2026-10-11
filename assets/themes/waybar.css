@@ -3,7 +3,7 @@
  * with coloured gadget cells. The popups and the dialogs keep the
  * colour scheme's palette.
  *
- * See assets/base.css for the element trees, icssed/assets/base.css for
+ * See assets/aria.css for the element trees, icssed/assets/base.css for
  * the properties.
  */
 
@@ -14,7 +14,7 @@
   font-family: Roboto;
 }
 
-/* `panel:root`, as a plain `panel` loses to base.css's `:root` font. */
+/* `panel:root`, as a plain `panel` loses to aria.css's `:root` font. */
 panel:root {
   font-size: 13px;
 }

@@ -244,7 +244,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
                 snap_up(bounds.height - state.trim.0 - state.trim.1, scale),
             )
         };
-        let mut width = known.unwrap_or(natural.width);
+        let mut width = match known {
+            // A width it's given (a share, a stretch) goes no lower than
+            // its content's least, CSS's automatic minimum: the whole line
+            // when it doesn't wrap, its longest word when it does (shaped
+            // at that width, its widest line is that word).
+            Some(given) if !matches!(s.width, Len::Px(_)) && !self.ellipsis() => {
+                given.max(natural.width)
+            }
+            Some(given) => given,
+            None => natural.width,
+        };
         if self.ellipsis() {
             // Cut to fit, down to nothing: CSS's `overflow: hidden`.
             width = width.min(limits.max().width);

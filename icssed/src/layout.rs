@@ -628,6 +628,38 @@ mod tests {
     }
 
     #[test]
+    fn a_text_shrinks_no_lower_than_its_content_unless_it_cuts() {
+        // CSS's automatic minimum of a text: the whole line when it
+        // doesn't wrap, so a button's label stays whole; nothing with an
+        // ellipsis, which cuts it to fit.
+        let sheet = sheet(
+            "row { width: 40px; } label { white-space: nowrap; } \
+             label.cut { text-overflow: ellipsis; }",
+        );
+        let row = sheet.root("row", 1.0);
+        const WIDE: &str = "A label far wider than its row";
+        let text = |class: &str| -> Element<'_, ()> {
+            crate::row(
+                row,
+                [crate::text(row.child("label").class(class), WIDE).into()],
+            )
+            .into()
+        };
+        assert!(rects(&lay(text("whole"), MAX))[0].width > 40.0);
+        assert_eq!(rects(&lay(text("cut"), MAX))[0].width, 40.0);
+        let button = row.child("button");
+        let node = lay(
+            crate::row(
+                row,
+                [crate::button(button, [crate::text(button.child("label"), WIDE).into()]).into()],
+            )
+            .into(),
+            MAX,
+        );
+        assert!(rects(&node)[0].width > 40.0);
+    }
+
+    #[test]
     fn what_cannot_shrink_overflows() {
         let sheet = sheet(
             "row { width: 100px; gap: 4px; } \

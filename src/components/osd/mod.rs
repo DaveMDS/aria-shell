@@ -487,7 +487,7 @@ impl Osd {
     ) -> Element<'a, M> {
         match &self.content {
             Some(content) => view(node(root, content, output), icons, content, output),
-            None => icssed::column(root, []).into(),
+            None => icssed::column![].at(root).into(),
         }
     }
 }
@@ -512,19 +512,19 @@ pub fn view<'a, M: Clone + 'a>(
     let mut parts: Vec<Element<'a, M>> = Vec::new();
     if let Some(name) = &content.icon {
         let icons: &'a dyn icssed::Icons = icons;
-        parts.push(icssed::icon(node.child("icon"), (icons, name.as_str())).into());
+        parts.push(icssed::icon((icons, name.as_str())).into());
     }
     let value = content.value_on(output);
     if let Some(value) = value {
-        parts.push(icssed::meter(node.child("meter"), value as f32 / 100.0).into());
+        parts.push(icssed::meter(value as f32 / 100.0).into());
     }
     if let Some(text) = &content.text {
-        parts.push(icssed::text(node.child("label"), text.as_str()).into());
+        parts.push(icssed::text(text.as_str()).into());
     }
     if let Some(value) = value {
-        parts.push(icssed::text(node.child("value"), format!("{value}%")).into());
+        parts.push(icssed::text(format!("{value}%")).kind("value").into());
     }
-    icssed::surface(node, icssed::row(node, parts)).into()
+    icssed::surface(icssed::row(parts)).at(node).into()
 }
 
 fn anchor(position: Position) -> Anchor {

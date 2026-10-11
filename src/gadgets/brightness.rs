@@ -12,7 +12,7 @@
 use iced::mouse::ScrollDelta;
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::process;
@@ -98,23 +98,20 @@ impl Gadget for BrightnessGadget {
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let screen = self.bar_screen(&ctx);
-        let button = ctx
-            .node
-            .child("button")
-            .class_if("none", ctx.brightness.displays().is_empty());
-        let mut content = vec![ctx.icon(button.child("icon"), ICON)];
+        let mut content: Vec<Element<'a, Message>> = vec![ctx.icon(ICON).into()];
         if self.config.show_percent
             && let Some(percent) = screen.and_then(Display::percent)
         {
-            content.push(icssed::text(button.child("label"), format!("{percent}%")).into());
+            content.push(icssed::text(format!("{percent}%")).into());
         }
-        let button = icssed::button(button, content)
+        let button = icssed::button(content)
+            .class_if("none", ctx.brightness.displays().is_empty())
             .on_press(Message::TogglePopup)
             .id(self.popup.anchor());
         let button = mouse_area(button)
             .on_right_press(Message::RunSettings)
             .on_scroll(Message::Scroll);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -122,27 +119,25 @@ impl Gadget for BrightnessGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let list = ctx.node.child("list");
         let mut rows: Vec<Element<'a, Message>> = ctx
             .brightness
             .displays()
             .iter()
-            .map(|d| screen(ctx, list, d))
+            .map(|d| screen(ctx, d))
             .collect();
         if rows.is_empty() {
             let text = ctx.locale.tr("brightness.empty");
-            rows.push(super::note(list.child("empty"), text));
+            rows.push(super::note(text).kind("empty").into());
         }
         if !self.config.settings_command.is_empty() {
-            let b = list.child("button").class("settings");
-            let label = icssed::text(b.child("label"), ctx.locale.tr("brightness.settings"));
             rows.push(
-                icssed::button(b, [label.into()])
+                icssed::button![icssed::text(ctx.locale.tr("brightness.settings"))]
+                    .class("settings")
                     .on_press(Message::RunSettings)
                     .into(),
             );
         }
-        icssed::column(list, rows).into()
+        icssed::column(rows).kind("list").into()
     }
 }
 
@@ -160,17 +155,7 @@ impl BrightnessGadget {
 
 /// A screen: its icon, its name and connector with the percent, over
 /// the slider (none while its level is unknown).
-fn screen<'a>(ctx: Context<'a>, list: Node<'a>, d: &'a Display) -> Element<'a, Message> {
-    let mut node = list
-        .child("screen")
-        .class(match d.kind {
-            Kind::Backlight => "backlight",
-            Kind::Ddc => "ddc",
-        })
-        .class_if("unknown", d.level.is_none());
-    if let Some(output) = &d.output {
-        node = node.attr("output", output);
-    }
+fn screen<'a>(ctx: Context<'a>, d: &'a Display) -> Element<'a, Message> {
     let icon_name = match d.kind {
         Kind::Backlight => ICON_PANEL,
         Kind::Ddc => ICON_MONITOR,
@@ -180,36 +165,35 @@ fn screen<'a>(ctx: Context<'a>, list: Node<'a>, d: &'a Display) -> Element<'a, M
         Kind::Ddc if d.model.is_empty() => ctx.locale.tr("brightness.monitor"),
         Kind::Ddc => &d.model,
     };
-    let info = node.child("info");
-    let head = info.child("head");
-    let mut parts: Vec<Element<'a, Message>> = vec![icssed::text(head.child("name"), name).into()];
+    let mut parts: Vec<Element<'a, Message>> = vec![icssed::text(name).kind("name").into()];
     if let Some(output) = &d.output {
-        parts.push(icssed::text(head.child("output"), output.as_str()).into());
+        parts.push(icssed::text(output.as_str()).kind("output").into());
     }
     let percent = d
         .percent()
         .map_or_else(|| "–".to_owned(), |p| format!("{p}%"));
-    parts.push(icssed::text(head.child("value"), percent).into());
-    let mut body: Vec<Element<'a, Message>> = vec![icssed::row(head, parts).into()];
+    parts.push(icssed::text(percent).kind("value").into());
+    let mut body: Vec<Element<'a, Message>> = vec![icssed::row(parts).kind("head").into()];
     if let Some(percent) = d.percent() {
         let id = d.id.clone();
         body.push(
-            icssed::slider(
-                info.child("slider"),
-                0.0..=100.0,
-                percent as f32,
-                move |v| Message::Set(id.clone(), v.round() as u32),
-            )
+            icssed::slider(0.0..=100.0, percent as f32, move |v| {
+                Message::Set(id.clone(), v.round() as u32)
+            })
             .step(1.0)
             .into(),
         );
     }
-    icssed::row(
-        node,
-        [
-            ctx.icon(node.child("icon"), icon_name),
-            icssed::column(info, body).into(),
-        ],
-    )
+    let screen = icssed::row![ctx.icon(icon_name), icssed::column(body).kind("info")]
+        .kind("screen")
+        .class(match d.kind {
+            Kind::Backlight => "backlight",
+            Kind::Ddc => "ddc",
+        })
+        .class_if("unknown", d.level.is_none());
+    match &d.output {
+        Some(output) => screen.attr("output", output),
+        None => screen,
+    }
     .into()
 }

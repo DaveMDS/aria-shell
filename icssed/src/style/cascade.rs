@@ -141,9 +141,7 @@ impl Sheet {
         let me = std::ptr::from_ref(self) as usize;
         let mut positional = Vec::new();
         let selectors = {
-            let mut tree = self.tree.borrow_mut();
             let mut ctx = Ctx {
-                names: &mut tree.names,
                 positional: &mut positional,
             };
             let mut p = Parser::new(selector);

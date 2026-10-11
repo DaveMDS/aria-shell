@@ -1,11 +1,11 @@
-//! A toggle is a value on or off: `icssed::toggle(node, on, f)`. A button
+//! A toggle is a value on or off: `icssed::toggle(on, f)`. A button
 //! sends a message; a toggle holds a value, which the app keeps, and asks
 //! for the other one: a press sends `f(!on)`. It shows what it's given,
 //! as every widget of the toolkit does.
 //!
-//!     icssed::toggle(node, self.muted, Message::Mute).icon(speaker).label("Mute")
-//!     icssed::toggle(node, self.hidden, Message::Hidden).label("Show hidden").check()
-//!     icssed::toggle(node, self.wifi, Message::Wifi).switch()
+//!     icssed::toggle(self.muted, Message::Mute).icon(speaker).label("Mute")
+//!     icssed::toggle(self.hidden, Message::Hidden).label("Show hidden").check()
+//!     icssed::toggle(self.wifi, Message::Wifi).switch()
 //!
 //! It looks one of three ways, picked by the call:
 //!
@@ -17,14 +17,14 @@
 //!
 //! `.icon(..)` and `.label(..)` follow, both optional. In all three looks
 //! it's `.checked` while it's on: one class for the sheet, whatever the
-//! look. It makes all its nodes itself, as a menu's items do, so
-//! `toggle.checked > label` reaches its label.
+//! look, which its parts see: `toggle.checked > label` reaches its
+//! label.
 //!
 //! A press anywhere on it flips it, its label too; Tab gives it the
-//! focus, Space and Enter flip it; `disabled_if(true)` on its node, and
-//! it sends nothing.
+//! focus, Space and Enter flip it; `disabled_if(true)`, and it sends
+//! nothing.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, row, toggle};
 
 use crate::Assets;
 
@@ -61,55 +61,33 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let toggle = line.child("toggle");
-    let disabled = toggle.disabled_if(true);
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::toggle(toggle, state.muted, Message::Mute)
-                        .icon(assets.star.clone())
-                        .label(if state.muted { "Muted" } else { "Mute" })
-                        .into(),
-                    icssed::toggle(disabled, true, Message::Mute)
-                        .label("Disabled")
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    icssed::toggle(toggle, state.hidden, Message::Hidden)
-                        .label("Show hidden files")
-                        .check()
-                        .into(),
-                    icssed::toggle(disabled, true, Message::Hidden)
-                        .label("Disabled")
-                        .check()
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    icssed::toggle(toggle, state.wifi, Message::Wifi)
-                        .label("Wi-Fi")
-                        .switch()
-                        .into(),
-                    icssed::toggle(disabled, true, Message::Wifi)
-                        .label("Disabled")
-                        .switch()
-                        .into(),
-                ],
-            )
-            .into(),
-        ],
-    )
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    column![
+        row![
+            toggle(state.muted, Message::Mute)
+                .icon(assets.star.clone())
+                .label(if state.muted { "Muted" } else { "Mute" }),
+            toggle(true, Message::Mute).label("Disabled").disabled_if(true),
+        ]
+        .kind("line"),
+        row![
+            toggle(state.hidden, Message::Hidden)
+                .label("Show hidden files")
+                .check(),
+            toggle(true, Message::Hidden)
+                .label("Disabled")
+                .check()
+                .disabled_if(true),
+        ]
+        .kind("line"),
+        row![
+            toggle(state.wifi, Message::Wifi).label("Wi-Fi").switch(),
+            toggle(true, Message::Wifi)
+                .label("Disabled")
+                .switch()
+                .disabled_if(true),
+        ]
+        .kind("line"),
+    ]
     .into()
 }

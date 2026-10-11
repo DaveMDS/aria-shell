@@ -91,19 +91,14 @@ impl Gadget for NotificationsGadget {
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let unseen = ctx.notifications.unseen();
-        let button = ctx
-            .node
-            .child("button")
-            .class_if("dnd", ctx.notifications.dnd())
-            .class_if("new", unseen > 0);
         let name = if ctx.notifications.dnd() {
             &self.config.dnd_icon
         } else {
             &self.config.icon
         };
-        let mut content = vec![ctx.icon(button.child("icon"), name.as_str())];
+        let mut content: Vec<Element<'a, Message>> = vec![ctx.icon(name.as_str()).into()];
         if unseen > 0 {
-            content.push(icssed::text(button.child("label"), unseen.to_string()).into());
+            content.push(icssed::text(unseen.to_string()).into());
         }
         let unseen_ids = ctx
             .notifications
@@ -112,13 +107,15 @@ impl Gadget for NotificationsGadget {
             .filter(|e| !e.seen)
             .map(|e| e.notification.id)
             .collect();
-        let button = icssed::button(button, content)
+        let button = icssed::button(content)
+            .class_if("dnd", ctx.notifications.dnd())
+            .class_if("new", unseen > 0)
             .on_press(Message::TogglePopup(unseen_ids))
             .id(self.popup.anchor());
         let button = mouse_area(button)
             .on_right_press(Message::ToggleDnd)
             .on_middle_press(Message::DismissAll);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -126,50 +123,33 @@ impl Gadget for NotificationsGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let scroll = ctx.node.child("scroll");
-        let list = scroll.child("list");
-        let header = list.child("header");
-        let dnd = icssed::toggle(
-            header.child("toggle").class("dnd"),
-            ctx.notifications.dnd(),
-            |_| Message::ToggleDnd,
-        )
-        .label(ctx.locale.tr("notifications.dnd"));
-        let clear = header.child("button").class("clear");
-        let header = icssed::row(
-            header,
-            [
-                icssed::text(header.child("title"), ctx.locale.tr("notifications.title")).into(),
-                dnd.into(),
-                icssed::button(
-                    clear,
-                    [
-                        icssed::text(clear.child("label"), ctx.locale.tr("notifications.clear"))
-                            .into(),
-                    ],
-                )
-                .on_press(Message::Clear)
-                .into(),
-            ],
-        );
+        let dnd = icssed::toggle(ctx.notifications.dnd(), |_| Message::ToggleDnd)
+            .class("dnd")
+            .label(ctx.locale.tr("notifications.dnd"));
+        let header = icssed::row![
+            icssed::text(ctx.locale.tr("notifications.title")).kind("title"),
+            dnd,
+            icssed::button![icssed::text(ctx.locale.tr("notifications.clear"))]
+                .class("clear")
+                .on_press(Message::Clear),
+        ]
+        .kind("header");
         let mut rows: Vec<Element<'a, Message>> = vec![header.into()];
         let entries = ctx.notifications.history();
         if entries.is_empty() {
             let text = ctx.locale.tr("notifications.empty");
-            rows.push(super::note(list.child("empty"), text));
+            rows.push(super::note(text).kind("empty").into());
         }
         for entry in entries {
             let n = &entry.notification;
-            let node = toast::node_under(list, n).class_if("unseen", self.unseen.contains(&n.id));
             let extras = toast::Extras {
                 age: Some(toast::age(entry.received, self.now, ctx.locale)),
                 close: true,
+                unseen: self.unseen.contains(&n.id),
             };
-            rows.push(
-                toast::view(node, n, ctx.notifications, ctx.icons, extras).map(Message::Toast),
-            );
+            rows.push(toast::view(n, ctx.notifications, ctx.icons, extras).map(Message::Toast));
         }
-        icssed::scroll(scroll, icssed::column(list, rows)).into()
+        icssed::scroll(icssed::column(rows).kind("list")).into()
     }
 
     fn popup_closed(&mut self) {

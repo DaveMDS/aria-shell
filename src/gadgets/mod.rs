@@ -32,7 +32,7 @@ use std::time::{Duration, Instant};
 use iced::mouse::ScrollDelta;
 use iced::{Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::config::{Config, Section};
 use crate::services::compositor;
@@ -51,21 +51,18 @@ use themes::Themes;
 use tray::TrayGadget;
 use workspaces::Workspaces;
 
-/// What a gadget gets in `view`: the shared state plus its own place in
-/// the element tree, to derive the nodes of its widgets from
-/// (`ctx.node.child("workspace")`). Derefs to [`Shared`], so
-/// `ctx.compositor` and `ctx.theme` read as before.
+/// What a gadget gets in `view`: the shared state. Derefs to
+/// [`Shared`], so `ctx.compositor` and `ctx.theme` read as before.
 #[derive(Clone, Copy)]
 pub struct Context<'a> {
     pub shared: Shared<'a>,
-    pub node: Node<'a>,
 }
 
 impl<'a> Context<'a> {
-    /// The icon theme's icon `name` as `node`: its room kept while it
-    /// isn't resolved.
-    pub fn icon<M: 'a>(&self, node: Node<'a>, name: impl Into<Cow<'a, str>>) -> Element<'a, M> {
-        icssed::icon(node, self.named(name)).into()
+    /// The icon theme's icon `name`: its room kept while it isn't
+    /// resolved.
+    pub fn icon(&self, name: impl Into<Cow<'a, str>>) -> icssed::Icon<'a> {
+        icssed::icon(self.named(name))
     }
 
     /// The icon `name`, looked up in the icon theme when it's drawn: for
@@ -84,11 +81,11 @@ impl<'a> std::ops::Deref for Context<'a> {
     }
 }
 
-/// A popup's line of text in a box of its own, `node` (`empty`,
-/// `message`): the text is `node > label`, the room around it the
-/// box's (a text has no padding).
-pub fn note<'a, M: Clone + 'a>(node: Node<'a>, text: impl Into<Cow<'a, str>>) -> Element<'a, M> {
-    icssed::column(node, [icssed::text(node.child("label"), text).into()]).into()
+/// A popup's line of text in a box of its own, given its type (`empty`,
+/// `message`): the text is its `label`, the room around it the box's (a
+/// text has no padding).
+pub fn note<'a, M: Clone + 'a>(text: impl Into<Cow<'a, str>>) -> icssed::Flex<'a, M> {
+    icssed::column![icssed::text(text)]
 }
 
 /// What `update` asks the daemon to do. Like a `Task`, but it can also
@@ -261,7 +258,7 @@ pub trait Gadget: Sized {
 
     fn update(&mut self, message: Self::Message) -> Action<Self::Message>;
 
-    /// The gadget on the bar: its box, `ctx.node` (`gadget.<kind>`), and
+    /// The gadget on the bar: its box (`gadget.<kind>`, the bar says) and
     /// what's in it.
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Self::Message>;
 
@@ -273,8 +270,8 @@ pub trait Gadget: Sized {
     /// Content of the popup; the panel measures it for the surface's
     /// size, when the popup opens and again after any state change (a
     /// different size resizes the surface).
-    fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Self::Message> {
-        icssed::column(ctx.node, []).into()
+    fn popup_view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Self::Message> {
+        icssed::column![].into()
     }
 
     /// The popup surface is gone, whoever closed it.

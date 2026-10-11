@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use icssed::{Element, MenuItem, Node};
+use icssed::{Element, MenuItem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Toggle {
@@ -111,10 +111,10 @@ impl Menu {
         }
     }
 
-    /// The menu as `node` (a `menu`). Items are taken by value: hosts
+    /// The menu, a `menu`. Items are taken by value: hosts
     /// build them from their state in `view`.
-    pub fn view<'a>(&self, node: Node<'a>, items: Vec<Item>) -> Element<'a, Message> {
-        icssed::menu(node, self.entries(items))
+    pub fn view<'a>(&self, items: Vec<Item>) -> Element<'a, Message> {
+        icssed::menu(self.entries(items)).into()
     }
 
     /// One level's entries, an unfolded submenu's under its item.

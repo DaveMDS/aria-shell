@@ -72,12 +72,13 @@ impl Gadget for Clock {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let button = ctx.node.child("button");
         let time = ctx.locale.date(&self.now, &self.config.format);
-        let button = icssed::button(button, [icssed::text(button.child("label"), time).into()])
-            .on_press(Message::Toggle)
-            .id(self.popup.anchor());
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![
+            icssed::button![icssed::text(time)]
+                .on_press(Message::Toggle)
+                .id(self.popup.anchor())
+        ]
+        .into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -86,11 +87,7 @@ impl Gadget for Clock {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         self.calendar
-            .view(
-                self.now.date_naive(),
-                ctx.locale,
-                ctx.node.child("calendar"),
-            )
+            .view(self.now.date_naive(), ctx.locale)
             .map(Message::Calendar)
     }
 

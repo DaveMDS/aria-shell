@@ -7,6 +7,7 @@
 //! shows, so the theme's entry animation runs each time.
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 use iced::advanced::layout::{self, Layout, Limits};
@@ -17,10 +18,11 @@ use iced::advanced::{Clipboard, Shell, mouse};
 use iced::{Event, Length, Point, Rectangle, Size, Vector, touch, window};
 
 use super::flex::row;
-use super::surface::surface;
+use super::place;
+use super::surface::{Surface, surface};
 use super::text::text;
 use crate::layout::snap;
-use crate::style::Node;
+use crate::style::name;
 use crate::{Element, Renderer, Theme};
 
 /// How long the pointer rests before a tip shows.
@@ -29,42 +31,38 @@ const DELAY: Duration = Duration::from_millis(600);
 pub struct Tooltip<'a, Message> {
     content: Element<'a, Message>,
     tip: Element<'a, Message>,
-    scale: f32,
+    /// The scale of where it is, once reached.
+    scale: Cell<f32>,
     delay: Duration,
     on_tip: Option<Box<dyn Fn(Option<Rectangle>) -> Message + 'a>>,
 }
 
-/// `content`, its tip `text` in `node` (a `tooltip`) shown after the
-/// pointer rests on it.
+/// `content`, its tip `text` shown after the pointer rests on it: a
+/// `tooltip` and its `label`, beside the children of the element the
+/// tooltip is in.
 pub fn tooltip<'a, Message: Clone + 'a>(
     content: impl Into<Element<'a, Message>>,
-    node: Node<'a>,
     text: impl Into<Cow<'a, str>>,
 ) -> Tooltip<'a, Message> {
     Tooltip {
         content: content.into(),
-        tip: tip_box(node, text),
-        scale: node.scale(),
+        tip: tip_box(text),
+        scale: Cell::new(1.0),
         delay: DELAY,
         on_tip: None,
     }
 }
 
-/// The tip's box: `node` and its `label`.
-fn tip_box<'a, Message: Clone + 'a>(
-    node: Node<'a>,
-    label: impl Into<Cow<'a, str>>,
-) -> Element<'a, Message> {
-    row(node, [text(node.child("label"), label).into()]).into()
+/// The tip's box and its `label`.
+fn tip_box<'a, Message: Clone + 'a>(label: impl Into<Cow<'a, str>>) -> Element<'a, Message> {
+    row([text(label).into()]).kind_of(name!("tooltip")).into()
 }
 
 /// A tip as a surface's content, for an app showing it in a surface of
-/// its own: its box with the room its shadow needs.
-pub fn tip<'a, Message: Clone + 'a>(
-    node: Node<'a>,
-    label: impl Into<Cow<'a, str>>,
-) -> Element<'a, Message> {
-    surface(node, tip_box(node, label)).into()
+/// its own: its box and its `label`, with the room its shadow needs; at
+/// a root `tooltip` the app gives (`at`).
+pub fn tip<'a, Message: Clone + 'a>(label: impl Into<Cow<'a, str>>) -> Surface<'a, Message> {
+    surface(tip_box(label))
 }
 
 impl<'a, Message> Tooltip<'a, Message> {
@@ -120,11 +118,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Tooltip<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content), Tree::new(&self.tip)]
+        // Its content is where the tooltip is; the tip floats over it.
+        vec![
+            Tree::new(&self.content),
+            place::aside(|scale| {
+                self.scale.set(scale);
+                Tree::new(&self.tip)
+            }),
+        ]
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.content, &self.tip]);
+        tree.children.truncate(2);
+        match tree.children.as_mut_slice() {
+            [content, tip] => {
+                content.diff(&self.content);
+                place::aside(|scale| {
+                    self.scale.set(scale);
+                    tip.diff(&self.tip);
+                });
+            }
+            _ => tree.children = self.children(),
+        }
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -282,7 +297,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Tooltip<'_, Message> {
                 tip: &mut self.tip,
                 tree: tip_tree,
                 about: layout.bounds() + translation,
-                scale: self.scale,
+                scale: self.scale.get(),
             }))
         });
         match (content, tip) {

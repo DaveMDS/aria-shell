@@ -16,7 +16,10 @@ use iced::advanced::{image, svg};
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, window};
-use icssed::{Element, IconFile, Node, Scheme, Sheet, Source, Tab, Theme};
+use icssed::{
+    Element, IconFile, Scheme, Sheet, Source, Tab, Theme, button, column, icon, mark, row, scroll,
+    slot, text,
+};
 
 /// Every demo, by group, in the sidebar's order: a module of this
 /// directory, with `TITLE`, `State`, `Message`, `update` and `view`, and
@@ -53,15 +56,10 @@ macro_rules! demos {
                 }
             }
 
-            fn view<'a>(
-                &'a self,
-                name: &str,
-                node: Node<'a>,
-                assets: &'a Assets,
-            ) -> Element<'a, DemoMessage> {
+            fn view<'a>(&'a self, name: &str, assets: &'a Assets) -> Element<'a, DemoMessage> {
                 match name {
                     $($(stringify!($name) => {
-                        $name::view(&self.$name, node, assets).map(DemoMessage::$name)
+                        $name::view(&self.$name, assets).map(DemoMessage::$name)
                     })*)*
                     _ => unreachable!("{name} is no demo"),
                 }
@@ -77,7 +75,7 @@ demos! {
     ],
     "Content" => [text, icon, images],
     "Layout" => [boxes, flex, surface],
-    "Styling" => [nodes, palette, states, animation],
+    "Styling" => [elements, palette, states, animation],
 }
 
 /// A demo, as the sidebar and the tabs show it.
@@ -244,16 +242,13 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         let root = self.sheet.root("app", self.scale);
-        icssed::focus_scope(icssed::row(root, [self.sidebar(root), self.main(root)])).into()
+        icssed::focus_scope(row![self.sidebar(), self.main()].at(root)).into()
     }
 
     /// The search, then the demos that match it, by group.
-    fn sidebar<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
-        let sidebar = root.child("sidebar");
-        let scroll = sidebar.child("scroll");
-        let entries = scroll.child("entries");
+    fn sidebar(&self) -> Element<'_, Message> {
         let wanted = self.search.to_lowercase();
-        let mut items: Vec<Element<'a, Message>> = Vec::new();
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
         let mut group = "";
         for (index, demo) in DEMOS.iter().enumerate() {
             if !demo.title.to_lowercase().contains(&wanted) {
@@ -261,89 +256,58 @@ impl App {
             }
             if demo.group != group {
                 group = demo.group;
-                let node = entries.child("group");
-                items.push(
-                    icssed::row(node, [icssed::text(node.child("label"), group).into()]).into(),
-                );
+                items.push(row![text(group)].kind("group").into());
             }
-            let entry = entries
-                .child("entry")
-                .class_if("active", index == self.shown);
             items.push(
-                icssed::button(
-                    entry,
-                    [icssed::text(entry.child("label"), demo.title).into()],
-                )
-                .on_press(Message::Show(index))
-                .into(),
+                button![text(demo.title)]
+                    .kind("entry")
+                    .class_if("active", index == self.shown)
+                    .on_press(Message::Show(index))
+                    .into(),
             );
         }
-        let search = sidebar.child("input");
-        icssed::column(
-            sidebar,
-            [
-                icssed::input(search, "Search", &self.search)
-                    .on_input(Message::Search)
-                    .leading(icssed::icon(search.child("icon"), self.assets.star.clone()))
-                    .into(),
-                icssed::scroll(scroll, icssed::column(entries, items)).into(),
-            ],
-        )
+        column![
+            icssed::input("Search", &self.search)
+                .on_input(Message::Search)
+                .leading(icon(self.assets.star.clone())),
+            scroll(column(items).kind("entries")),
+        ]
+        .kind("sidebar")
         .into()
     }
 
     /// The demo shown: its header, the demo itself, its tabs.
-    fn main<'a>(&'a self, root: Node<'a>) -> Element<'a, Message> {
+    fn main(&self) -> Element<'_, Message> {
         let demo = &DEMOS[self.shown];
-        let main = root.child("main");
-        let header = main.child("header");
-        let dark = header.child("toggle");
-        let stage = main.child("stage");
-        let tabs = main.child("tabs");
-        icssed::column(
-            main,
-            [
-                icssed::row(
-                    header,
-                    [
-                        icssed::text(header.child("title"), demo.title).into(),
-                        icssed::text(header.child("label"), "Dark").into(),
-                        icssed::toggle(dark, self.scheme == Scheme::Dark, Message::Dark)
-                            .switch()
-                            .into(),
-                    ],
-                )
-                .into(),
-                icssed::row(
-                    stage,
-                    [self
-                        .demos
-                        .view(demo.name, stage.child("demo").id(demo.name), &self.assets)
-                        .map(Message::Demo)],
-                )
-                .into(),
-                icssed::tabs(
-                    tabs,
-                    Pane::ALL.map(|pane| {
-                        Tab::new(pane.title(), Message::Pane(pane)).active(pane == self.pane)
-                    }),
-                ),
-                self.pane(main),
-            ],
-        )
+        column![
+            row![
+                text(demo.title).kind("title"),
+                text("Dark"),
+                icssed::toggle(self.scheme == Scheme::Dark, Message::Dark).switch(),
+            ]
+            .kind("header"),
+            row![
+                slot(self.demos.view(demo.name, &self.assets).map(Message::Demo))
+                    .kind("demo")
+                    .named(demo.name)
+            ]
+            .kind("stage"),
+            icssed::tabs(Pane::ALL.map(|pane| {
+                Tab::new(pane.title(), Message::Pane(pane)).active(pane == self.pane)
+            })),
+            self.pane(),
+        ]
+        .kind("main")
         .into()
     }
 
     /// The tab shown: the description, the source or the stylesheet.
-    fn pane<'a>(&'a self, main: Node<'a>) -> Element<'a, Message> {
+    fn pane(&self) -> Element<'_, Message> {
         let demo = &DEMOS[self.shown];
         match self.pane {
-            Pane::Info => {
-                let scroll = main.child("scroll").class("info");
-                icssed::scroll(scroll, doc(scroll.child("doc"), demo.source)).into()
-            }
-            Pane::Source => listing(main, demo.source),
-            Pane::Style => listing(main, &self.styles[self.shown]),
+            Pane::Info => scroll(doc(demo.source)).class("info").into(),
+            Pane::Source => listing(demo.source),
+            Pane::Style => listing(&self.styles[self.shown]),
         }
     }
 
@@ -364,21 +328,17 @@ impl App {
 }
 
 /// A file's text, lines kept, scrolled both ways.
-fn listing<'a>(main: Node<'a>, text: &'a str) -> Element<'a, Message> {
-    let scroll = main.child("scroll").class("listing");
-    let code = scroll.child("code");
-    icssed::scroll(
-        scroll,
-        icssed::column(code, [icssed::text(code.child("text"), text).into()]),
-    )
-    .both()
-    .into()
+fn listing(text: &str) -> Element<'_, Message> {
+    scroll(column![icssed::text(text)].kind("code"))
+        .class("listing")
+        .both()
+        .into()
 }
 
 /// A module's `//!` comment as paragraphs, bullets and code: a blank
 /// line ends a paragraph, `- ` starts a bullet, four spaces a code line.
 /// Backticks are dropped: a text has one font.
-fn doc<'a>(node: Node<'a>, source: &'a str) -> Element<'a, Message> {
+fn doc(source: &str) -> Element<'_, Message> {
     let lines = source
         .lines()
         .map_while(|line| line.strip_prefix("//!"))
@@ -413,40 +373,26 @@ fn doc<'a>(node: Node<'a>, source: &'a str) -> Element<'a, Message> {
         }
     }
     // Bullets in a row are one list.
-    let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let mut list: Vec<Element<'a, Message>> = Vec::new();
-    let list_node = node.child("list");
+    let mut items: Vec<Element<'_, Message>> = Vec::new();
+    let mut list: Vec<Element<'_, Message>> = Vec::new();
     for (kind, text) in blocks {
         if kind != "bullet" && !list.is_empty() {
-            items.push(icssed::column(list_node, std::mem::take(&mut list)).into());
+            items.push(column(std::mem::take(&mut list)).kind("list").into());
         }
         match kind {
-            "bullet" => {
-                let bullet = list_node.child("bullet");
-                list.push(
-                    icssed::row(
-                        bullet,
-                        [
-                            icssed::mark(bullet.child("mark")),
-                            icssed::text(bullet.child("text"), text.replace('`', "")).into(),
-                        ],
-                    )
+            "bullet" => list.push(
+                row![mark(), icssed::text(text.replace('`', "")).kind("text")]
+                    .kind("bullet")
                     .into(),
-                );
-            }
-            "code" => {
-                let code = node.child("code");
-                items.push(
-                    icssed::column(code, [icssed::text(code.child("text"), text).into()]).into(),
-                );
-            }
-            _ => items.push(icssed::text(node.child("para"), text.replace('`', "")).into()),
+            ),
+            "code" => items.push(column![icssed::text(text).kind("text")].kind("code").into()),
+            _ => items.push(icssed::text(text.replace('`', "")).kind("para").into()),
         }
     }
     if !list.is_empty() {
-        items.push(icssed::column(list_node, list).into());
+        items.push(column(list).kind("list").into());
     }
-    icssed::column(node, items).into()
+    column(items).kind("doc").into()
 }
 
 impl Assets {

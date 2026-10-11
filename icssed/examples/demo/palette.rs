@@ -25,7 +25,7 @@
 //! the switch at the top, and they follow. A theme that sets only these
 //! variables restyles every widget.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, row, text};
 
 use crate::Assets;
 
@@ -54,21 +54,15 @@ pub fn update(_state: &mut State, message: Message) {
     match message {}
 }
 
-pub fn view<'a>(_state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    icssed::row(
-        line,
-        VARIABLES.map(|variable| {
-            let cell = line.child("cell");
-            icssed::column(
-                cell,
-                [
-                    icssed::row(cell.child("swatch").class(variable), []).into(),
-                    icssed::text(cell.child("label"), format!("--{variable}")).into(),
-                ],
-            )
-            .into()
-        }),
-    )
+pub fn view<'a>(_state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
+    column![row(VARIABLES.map(|variable| {
+        column![
+            row![].kind("swatch").class(variable),
+            text(format!("--{variable}")),
+        ]
+        .kind("cell")
+        .into()
+    }))
+    .kind("line")]
     .into()
 }

@@ -57,11 +57,14 @@ cargo fmt                                          # before every commit
 
 ## The model in one page
 
-A view builds **nodes** top-down from a surface's root, and hands each
-widget its node. The node is an interned path in the sheet: its style is
-computed once per distinct (node, own states, ancestors' states) and
-shared. No colour, size or font is ever written in Rust: the sheet says
-everything.
+Every widget is an **element**: a type (`label`, `button`, an app's
+`entry`), classes, an id, attributes, as in a document. The view says
+them on the widget; where the element is in the tree (under which
+parent, at which position) the toolkit finds itself, the first time the
+runtime reaches the widget, from the container it's in. That place is a
+**node**, an interned path in the sheet: its style is computed once per
+distinct (node, own states, ancestors' states) and shared. No colour,
+size or font is ever written in Rust: the sheet says everything.
 
 ```rust
 // Once, and again when the theme file changes or the scheme flips.
@@ -74,23 +77,20 @@ let (sheet, warnings) = icssed::Sheet::load(
     icssed::Scheme::Dark,
 )?; // Err only on a syntax error: keep the last good sheet. Log the warnings.
 
-// In view: a surface's root carries its scale (device pixels per
-// logical one: the output's scale times the UI's).
+// In view: the top of a view is given its place, a surface's root,
+// which carries its scale (device pixels per logical one: the output's
+// scale times the UI's). Everything under it finds its own.
 fn view<'a>(&'a self, sheet: &'a icssed::Sheet) -> icssed::Element<'a, Message> {
-    let root = sheet.root("popup", self.scale);
-    let list = root.child("list");
-    icssed::focus_scope(icssed::column(
-        list,
-        self.items.iter().enumerate().map(|(i, item)| {
-            let row = list.child("entry").class_if("active", item.active);
-            icssed::button(row, [
-                icssed::icon(row.child("icon"), item.icon.clone()).into(),
-                icssed::text(row.child("label"), &item.label).into(),
-            ])
+    let rows = self.items.iter().enumerate().map(|(i, item)| {
+        icssed::button![icssed::icon(item.icon.clone()), icssed::text(&item.label)]
+            .kind("entry")
+            .class_if("active", item.active)
             .on_press(Message::Pick(i))
             .into()
-        }),
-    ))
+    });
+    icssed::focus_scope(
+        icssed::column![icssed::column(rows).kind("list")].at(sheet.root("popup", self.scale)),
+    )
     .into()
 }
 
@@ -108,10 +108,25 @@ fn theme(&self) -> icssed::Theme {
   if `icssed::Theme` has their `Catalog`: `text_input` and `scrollable` do
   (as `icssed::input` and `icssed::scroll`). That's on purpose: an unthemed widget
   can't slip in.
-- Node steps: `child(kind)`, `child_at(kind, i, n)` (for `:nth-child()`
-  and friends), `class(c)`, `class_if(c, on)`, `id(i)`, `attr(n, v)`,
-  `disabled_if(off)`. Each step is a hash lookup (~30 ns), never an
-  allocation after the first time.
+- Every widget has a type of its own (`text` a `label`, `icon` an
+  `icon`, `row` a `row`, `button` a `button`): `.kind(k)` gives another.
+  `.class(c)`, `.class_if(c, on)`, `.named(id)` (CSS's `#id`; `.id(..)`
+  is iced's), `.attr(n, v)`, `.disabled_if(off)` say the rest, before or
+  after the children: they see them all the same. Positions
+  (`:nth-child()` and friends) are known with nothing said.
+- `row![a, b]`, `column![..]`, `button![..]` take widgets of any kind;
+  `row(iter)` and friends an iterator of `Element`s.
+- A widget's place comes from a container of the toolkit: put it in
+  one. The top of a view is given its place, `.at(root)`; so is a
+  widget inside one of iced's containers that measure their children as
+  they're built (`stack`, `row!` of iced's). `icssed::slot(view)` says
+  what a view is from where it's put (`.kind("gadget").class("clock")`),
+  so the view needn't know; `surface(content).at(root)` makes `content`
+  a surface's root box.
+- `Node` is still the place, for reading a style where there's no widget
+  (`sheet.root("popup", scale).base().shadow`, `Surface::room(root)`):
+  `child(kind)`, `class(c)`, ... step down from a root. Each step is a
+  hash lookup (~30 ns), never an allocation after the first time.
 - A new scale is a new root, so a new view. A new sheet (theme, scheme)
   means the views must be rebuilt.
 - Widgets are **controlled**: the app holds every value (a toggle's
@@ -122,30 +137,31 @@ fn theme(&self) -> icssed::Theme {
 
 ### The widgets
 
-The toolkit's widgets are styled by the element kinds of `base.css`:
-make their nodes with those kinds (`row.child("slider")`) to get the
-base's look. A box's kind is the app's to choose.
+The toolkit's widgets are styled by the element kinds of `base.css`,
+their own unless `.kind(..)` says otherwise. A box's kind is the app's
+to choose.
 
 | Call | Notes |
 |---|---|
-| `row(node, children)`, `column(..)`, `button(..)` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus) |
-| `text(node, content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
-| `mark(node)` | a text whose words are its node's `content` (a check, an arrow): the theme's, picked by the node's classes |
-| `icon(node, source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |
-| `image(node, handle)` | `object-fit`, `border-radius` |
-| `surface(node, content)` | a surface's root: adds the room its shadow needs, so a popup's size includes it; `Surface::room(node)` is that room, for placing the surface |
+| `row(children)`, `column(..)`, `button(..)`; `row![..]`, `column![..]`, `button![..]` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus) |
+| `text(content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
+| `mark()` | a text whose words are its style's `content` (a check, an arrow): the theme's, picked by its classes |
+| `icon(source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |
+| `image(handle)` | `object-fit`, `border-radius` |
+| `surface(content).at(root)` | a surface's root: `content` is its box, and it adds the room the box's shadow needs, so a popup's size includes it; `Surface::room(root)` is that room, for placing the surface |
+| `slot(view).kind(k).class(c)` | nothing of its own: `view`'s top widget is the slot's element, with its own classes too; a frame says what a page is, a bar what a gadget is |
 | `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
-| `toggle(node, on, Message::Wifi).icon(s).label(t)`, `.check()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a switch (`switch > knob`); it makes all its nodes, as a menu item |
-| `slider(node, 0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
-| `meter(node, fraction).label(text)` | with a label, a gauge |
-| `input(node, placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
-| `scroll(node, content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
-| `menu(node, [MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it |
-| `tabs(node, [Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
-| `calendar(node, Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
-| `graph(node, capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |
-| `tooltip(content, node, text).delay(d).on_tip(f)`, `tip(node, text)` | an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own |
-| `select(node, options, selected, f).placeholder(t).on_open(open, f)` | its options as a menu in an overlay; `on_open` as for tips |
+| `toggle(on, Message::Wifi).icon(s).label(t)`, `.check()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a switch (`switch > knob`) |
+| `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
+| `meter(fraction).label(text)` | with a label, a gauge |
+| `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
+| `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
+| `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it |
+| `tabs([Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
+| `calendar(Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
+| `graph(capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |
+| `tooltip(content, text).delay(d).on_tip(f)`, `tip(text).at(root)` | the tip a `tooltip` beside the children of the element the tooltip is in; an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own |
+| `select(options, selected, f).placeholder(t).on_open(open, f)` | its options as a menu in an overlay; `on_open` as for tips |
 
 `icssed::Measure::new().size(key, element, max)` lays an element out with no
 surface (headless tiny-skia, the real widgets): what a layer surface
@@ -204,8 +220,8 @@ surface closes.
   inherit (`button:hover { color }` reaches its label).
 - **Classes are the view's, states the widget's.** State a widget owns
   at runtime shows as a pseudo-class: an open select is `:active`.
-  `content` (the marks: a menu item's check, an arrow) is read where
-  the widget is built, so it follows classes, not states.
+  `content` (the marks: a menu item's check, an arrow) is read from the
+  style at rest, so it follows classes, not states.
 - **Paths are painted as SVG's**: `fill`, `stroke`, `stroke-width`,
   inherited, with fill initially black, as SVG has it.
 - **The scale**: borders snap to whole device pixels as CSS does (at
@@ -232,9 +248,13 @@ Update these numbers when a change moves them:
 
 | tree | view | rebuild (view, diff, layout) | update (pointer) | frame (update, draw) |
 |---|---|---|---|---|
-| a bar, 12 gadgets | 1.6 µs | 4.3 µs | 1.0 µs | 3.5 µs |
-| a menu (`icssed::menu`), 20 items | 4.6 µs | 15 µs | 2.0 µs | 7.1 µs |
-| a list, 500 rows | 55 µs | 200 µs | 32 µs | 92 µs |
+| a bar, 12 gadgets | 1.0 µs | 4.8 µs | 1.1 µs | 3.8 µs |
+| a menu (`icssed::menu`), 20 items | 3.0 µs | 16.5 µs | 2.2 µs | 7.6 µs |
+| a list, 500 rows | 43 µs | 224 µs | 35 µs | 97 µs |
+
+A view only describes its widgets: their nodes are found in the diff
+that follows, so the view costs less and the rebuild a little more
+(~5%) than when views built their nodes themselves.
 
 Loading a theme (the base and the gallery's) takes 0.5 ms.
 
@@ -242,8 +262,8 @@ Loading a theme (the base and the gallery's) takes 0.5 ms.
   changes, or while an animation runs. A `:hover` rule on a big list
   makes every row tracked: put it there only if it's wanted.
 - **Positional pseudo-classes split rows, a little.** In a sheet
-  without them `child_at` is `child`: a list's 500 rows share one node
-  and one style. With them, a row's node carries which of the sheet's
+  without them a child's position isn't part of its node: a list's 500
+  rows share one node and one style. With them, a row's node carries which of the sheet's
   positions it matches (in every list, whatever kind the rule names), so
   the rows split into a few nodes (first, last, odd, even), each
   resolved once. The base doesn't use them, so a sheet that doesn't
@@ -264,7 +284,7 @@ Loading a theme (the base and the gallery's) takes 0.5 ms.
 
 ```
 src/style/     the sheet: value.rs (properties: parsing, longhands), computed.rs (Computed,
-               the cascade's values), node.rs (Node, States, Ancestors), selector.rs,
+               the cascade's values), node.rs (Name, Node, States, Ancestors), selector.rs,
                parse.rs, sheet.rs (load, root, stats), cascade.rs (styles, sensitivity,
                the query's matching), fonts.rs, images.rs, keyframes.rs, tests.rs
 src/theme.rs   icssed::Theme, and the Catalogs of the stock widgets embedded
@@ -273,8 +293,9 @@ src/paint.rs   boxes: quads, paths for sides that differ, shadows, outline, imag
 src/anim.rs    easing, transitions, keyframes: Animated, kept in a widget's tree state
 src/measure.rs Measure       src/query.rs  Report, Found, Reported
 src/testing.rs the Harness (feature `testing`)   src/golden.rs the golden scenes
-src/widget/    boxed.rs (the shared box), flex.rs, text.rs, icon.rs, image.rs,
-               surface.rs, focus.rs, meter.rs, slider.rs, toggle.rs, input.rs,
+src/widget/    place.rs (where a widget is: Place, what a container hands its children),
+               boxed.rs (the shared box), flex.rs, text.rs, icon.rs, image.rs,
+               surface.rs, slot.rs, focus.rs, meter.rs, slider.rs, toggle.rs, input.rs,
                scroll.rs, menu.rs, tabs.rs, calendar.rs, graph.rs, tooltip.rs,
                select.rs, tests.rs
 assets/base.css               the reference and the neutral defaults
@@ -285,7 +306,8 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
 ### Invariants
 
 - **No allocation while drawing.** Styles are `Arc`s resolved by key;
-  nodes and anything per view are made in `view` or in `layout` (which
+  nodes and anything per view are made in `view`, when the runtime
+  first reaches a widget (its tree made, diffed) or in `layout` (which
   is `&mut self`), never in `draw`. A cache is compared without a copy,
   and copied only when it changes (`graph.rs`). The ellipsis cut is the
   one exception: once per new width or text.
@@ -293,8 +315,20 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
   node's `scale()` for every size and position a widget computes.
 - **Time is `Instant::now()` in `update`**, or the `now` of
   `RedrawRequested`: never the last frame's time.
-- **A box widget is built on `widget/boxed.rs`**: `Boxed` (node, style
-  at rest) and `BoxState` (states, `Animated`, the transform drawn).
+- **A widget's node isn't known where it's built.** It has a `Place`
+  (`widget/place.rs`: its type and classes, then its node and its style
+  at rest), resolved the first time the runtime reaches the widget
+  (`tag`, `state`, `children`, `diff`, `size`), against the parent a
+  container hands it: a container makes and diffs its children's trees
+  with `place::trees` / `place::diff`, never `Tree::new` or
+  `diff_children` (a lone child: `place::under`). So nothing in a
+  constructor may read the style: what depends on it is made at the
+  first touch (`Field`'s `TextInput`, `Scroll`'s `Scrollable`, a text's
+  `text-transform`). A part made of widgets says its kind
+  (`row([]).kind_of(name!("knob"))`: `name!` interns it once).
+- **A box widget is built on `widget/boxed.rs`**: `Boxed` (its place,
+  through it its node and style at rest) and `BoxState` (states,
+  `Animated`, the transform drawn).
   `boxed.draw(...)` paints the box, hands the children their theme
   (states, opacity, when it changed) and draws the outline.
   `boxed.settle(...)` follows hover and asks frames and relayouts. A
@@ -406,7 +440,7 @@ yourself.
   at 1.5 the rounding can make it a pixel taller than the scene, and
   the layout then shrinks it as CSS does, empty boxes first (a menu's
   separators once vanished that way).
-- Root a scene in its root node (`column(root, ..)`), or the page's
+- Root a scene in its root node (`column![..].at(root)`), or the page's
   padding and background are lost.
 - Bless only after looking at the images.
 

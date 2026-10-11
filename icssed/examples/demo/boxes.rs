@@ -2,7 +2,7 @@
 //! `border`, then `margin` around it. `icssed::row` and `icssed::column`
 //! are the boxes an app builds with; their look is all in the sheet.
 //!
-//!     icssed::row(node.child("card"), [..])
+//!     row![..].kind("card")
 //!
 //! - `width` and `height` are lengths, `fill` (the room left) or the
 //!   content's when not set; `min-` and `max-` bound them, and
@@ -21,7 +21,7 @@
 //! A box doesn't turn: iced can't rotate one (`rotate` turns icons and
 //! images).
 
-use icssed::{Element, Node};
+use icssed::{Element, column, icon, row, text};
 
 use crate::Assets;
 
@@ -37,55 +37,33 @@ pub fn update(_state: &mut State, message: Message) {
     match message {}
 }
 
-pub fn view<'a>(_state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let boxed = |class: &str, text: &'static str| -> Element<'a, Message> {
-        let boxed = line.child("box").class(class);
-        icssed::row(boxed, [icssed::text(boxed.child("label"), text).into()]).into()
-    };
-    let faded = line.child("box").class("faded");
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    boxed("plain", "Background"),
-                    boxed("bordered", "Border"),
-                    boxed("rounded", "Radius"),
-                    boxed("shadow", "Shadow"),
-                    boxed("inset", "Inset"),
-                    boxed("sides", "Sides"),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    boxed("tab", "A tab"),
-                    boxed("four", "Four sides"),
-                    boxed("ring", "Ring"),
-                    boxed("outlined", "Outline"),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    boxed("scaled", "Scaled 80%"),
-                    boxed("moved", "Moved"),
-                    icssed::row(
-                        faded,
-                        [
-                            icssed::icon(faded.child("icon"), assets.star.clone()).into(),
-                            icssed::text(faded.child("label"), "Opacity 50%").into(),
-                        ],
-                    )
-                    .into(),
-                ],
-            )
-            .into(),
-        ],
-    )
+pub fn view<'a>(_state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let boxed = |class: &str, content: &'static str| row![text(content)].kind("box").class(class);
+    column![
+        row![
+            boxed("plain", "Background"),
+            boxed("bordered", "Border"),
+            boxed("rounded", "Radius"),
+            boxed("shadow", "Shadow"),
+            boxed("inset", "Inset"),
+            boxed("sides", "Sides"),
+        ]
+        .kind("line"),
+        row![
+            boxed("tab", "A tab"),
+            boxed("four", "Four sides"),
+            boxed("ring", "Ring"),
+            boxed("outlined", "Outline"),
+        ]
+        .kind("line"),
+        row![
+            boxed("scaled", "Scaled 80%"),
+            boxed("moved", "Moved"),
+            row![icon(assets.star.clone()), text("Opacity 50%")]
+                .kind("box")
+                .class("faded"),
+        ]
+        .kind("line"),
+    ]
     .into()
 }

@@ -7,10 +7,11 @@
 
 use std::borrow::Cow;
 
-use super::flex::{button, column, row};
+use super::flex::{Flex, button, column, row};
+use super::place::{Place, placed};
 use super::text::{mark, text};
 use crate::Element;
-use crate::style::Node;
+use crate::style::{Direction, name};
 
 /// A month of a year, in the Gregorian calendar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,7 +73,7 @@ fn days_from_civil(year: i32, month: u32, day: u32) -> i64 {
 }
 
 pub struct Calendar<'a, Message> {
-    node: Node<'a>,
+    place: Place<'a>,
     month: Month,
     title: Cow<'a, str>,
     /// Monday first.
@@ -87,15 +88,14 @@ pub struct Calendar<'a, Message> {
 }
 
 /// `month`, its `title` (its name and year, as the app writes them),
-/// the names of the days of the week from Monday: `node`.
+/// the names of the days of the week from Monday: a `calendar`.
 pub fn calendar<'a, Message>(
-    node: Node<'a>,
     month: Month,
     title: impl Into<Cow<'a, str>>,
     weekdays: [impl Into<Cow<'a, str>>; 7],
 ) -> Calendar<'a, Message> {
     Calendar {
-        node,
+        place: Place::new(name!("calendar")),
         month,
         title: title.into(),
         weekdays: weekdays.map(Into::into),
@@ -109,6 +109,8 @@ pub fn calendar<'a, Message>(
 }
 
 impl<'a, Message> Calendar<'a, Message> {
+    placed!(place);
+
     /// The day the week starts on: 0 for Monday, 6 for Sunday.
     pub fn first_weekday(mut self, first: u32) -> Self {
         self.first = first % 7;
@@ -148,43 +150,33 @@ impl<'a, Message> Calendar<'a, Message> {
 
 impl<'a, Message: Clone + 'a> From<Calendar<'a, Message>> for Element<'a, Message> {
     fn from(calendar: Calendar<'a, Message>) -> Self {
-        let node = calendar.node;
-        let header = node.child("header");
-        let arrow = |class: &str, message: Option<Message>| -> Element<'a, Message> {
-            let node = header
-                .child("button")
+        let arrow = |class: &'a str, message: Option<Message>| -> Element<'a, Message> {
+            let mut pressed = button([mark().kind_of(name!("arrow")).into()])
                 .class(class)
                 .disabled_if(message.is_none());
-            let mut pressed = button(node, [mark(node.child("arrow"))]);
             if let Some(message) = message {
                 pressed = pressed.on_press(message);
             }
             pressed.into()
         };
-        let header = row(
-            header,
-            [
-                arrow("previous", calendar.on_previous),
-                text(header.child("title"), calendar.title).into(),
-                arrow("next", calendar.on_next),
-            ],
-        );
+        let header = row([
+            arrow("previous", calendar.on_previous),
+            text(calendar.title).kind_of(name!("title")).into(),
+            arrow("next", calendar.on_next),
+        ])
+        .kind_of(name!("header"));
 
-        let weekdays = node.child("weekdays");
         let names = (0..7).map(|i| {
             let name = calendar.weekdays[(calendar.first as usize + i) % 7].clone();
-            let cell = weekdays.child_at("weekday", i, 7);
-            row(cell, [text(cell.child("label"), name).into()]).into()
+            row([text(name).into()]).kind_of(name!("weekday")).into()
         });
-        let weekdays = row(weekdays, names);
+        let weekdays = row(names).kind_of(name!("weekdays"));
 
         // Six weeks from the week of the 1st: the month, the days around.
         let month = calendar.month;
         let lead = (month.first_weekday() + 7 - calendar.first) % 7;
         let before = month.previous().days();
-        let days = node.child("days");
         let weeks = (0..6).map(|w| {
-            let week = days.child_at("week", w, 6);
             let cells = (0..7).map(|d| {
                 let at = (w * 7 + d) as u32;
                 let (day, other) = if at < lead {
@@ -194,22 +186,26 @@ impl<'a, Message: Clone + 'a> From<Calendar<'a, Message>> for Element<'a, Messag
                 } else {
                     (at - lead - month.days() + 1, true)
                 };
-                let cell = week
-                    .child_at("day", d, 7)
-                    .class_if("other", other)
-                    .class_if("today", !other && calendar.today == Some(day))
-                    .class_if("selected", !other && calendar.selected == Some(day));
-                let label = text(cell.child("label"), day.to_string()).into();
+                let label = [text(day.to_string()).into()];
                 match &calendar.on_select {
-                    Some(on_select) if !other => button(cell, [label]).on_press(on_select(day)),
-                    _ => row(cell, [label]),
+                    Some(on_select) if !other => button(label).on_press(on_select(day)),
+                    _ => row(label),
                 }
+                .kind_of(name!("day"))
+                .class_if("other", other)
+                .class_if("today", !other && calendar.today == Some(day))
+                .class_if("selected", !other && calendar.selected == Some(day))
                 .into()
             });
-            row(week, cells).into()
+            row(cells).kind_of(name!("week")).into()
         });
-        let days = column(days, weeks);
-        column(node, [header.into(), weekdays.into(), days.into()]).into()
+        let days = column(weeks).kind_of(name!("days"));
+        Flex::placed(
+            calendar.place,
+            Direction::Column,
+            [header.into(), weekdays.into(), days.into()],
+        )
+        .into()
     }
 }
 

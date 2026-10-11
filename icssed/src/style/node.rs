@@ -1,9 +1,10 @@
 //! The element tree: interned names, nodes as `Copy` handles to interned
 //! paths, the states an element can be in.
 
+use std::cell::RefCell;
 use std::fmt;
 use std::ops::{BitAnd, BitOr, BitOrAssign, BitXor};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rustc_hash::FxHashMap;
 
@@ -11,29 +12,64 @@ use super::computed::Computed;
 use super::sheet::Sheet;
 
 /// An interned name: an element type, a class, an id, an attribute's
-/// name or value.
+/// name or value. The same for every sheet: a widget names its type and
+/// its classes before it knows its sheet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Name(u32);
 
+/// Every name interned so far: bounded by the shapes of the UIs, not by
+/// their data, so kept for good.
 #[derive(Default)]
-pub(crate) struct Names {
-    by_text: FxHashMap<Box<str>, Name>,
-    texts: Vec<Box<str>>,
+struct Names {
+    by_text: FxHashMap<&'static str, Name>,
+    texts: Vec<&'static str>,
 }
 
-impl Names {
-    pub fn intern(&mut self, text: &str) -> Name {
-        if let Some(&name) = self.by_text.get(text) {
+static NAMES: Mutex<Option<Names>> = Mutex::new(None);
+
+thread_local! {
+    /// The names this thread has seen: most are looked up here, with no
+    /// lock.
+    static SEEN: RefCell<FxHashMap<&'static str, Name>> = RefCell::default();
+}
+
+/// `$text` interned once where it's written: a widget's own type, a
+/// part's.
+macro_rules! name {
+    ($text:literal) => {{
+        static NAME: std::sync::OnceLock<$crate::style::Name> = std::sync::OnceLock::new();
+        *NAME.get_or_init(|| $crate::style::Name::new($text))
+    }};
+}
+
+pub(crate) use name;
+
+impl Name {
+    pub fn new(text: &str) -> Self {
+        if let Some(name) = SEEN.with_borrow(|seen| seen.get(text).copied()) {
             return name;
         }
-        let name = Name(self.texts.len() as u32);
-        self.texts.push(text.into());
-        self.by_text.insert(text.into(), name);
+        let (text, name) = Self::interned(text);
+        SEEN.with_borrow_mut(|seen| seen.insert(text, name));
         name
     }
 
-    pub fn text(&self, name: Name) -> &str {
-        &self.texts[name.0 as usize]
+    fn interned(text: &str) -> (&'static str, Self) {
+        let mut names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        let names = names.get_or_insert_with(Names::default);
+        if let Some((&text, &name)) = names.by_text.get_key_value(text) {
+            return (text, name);
+        }
+        let name = Name(names.texts.len() as u32);
+        let text: &'static str = Box::leak(text.into());
+        names.texts.push(text);
+        names.by_text.insert(text, name);
+        (text, name)
+    }
+
+    pub fn text(self) -> &'static str {
+        let names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        names.as_ref().expect("interned").texts[self.0 as usize]
     }
 }
 
@@ -332,25 +368,25 @@ impl Nodes {
     }
 
     /// The path in selector syntax, for messages and debugging.
-    pub fn path(&self, id: NodeId, names: &Names) -> String {
+    pub fn path(&self, id: NodeId) -> String {
         let mut out = String::new();
         for step in self.steps(id) {
             match step {
-                Step::Root(kind, _) => out.push_str(names.text(kind)),
+                Step::Root(kind, _) => out.push_str(kind.text()),
                 Step::Kind(kind) => {
                     out.push_str(" > ");
-                    out.push_str(names.text(kind));
+                    out.push_str(kind.text());
                 }
                 Step::Class(c) => {
                     out.push('.');
-                    out.push_str(names.text(c));
+                    out.push_str(c.text());
                 }
                 Step::Id(i) => {
                     out.push('#');
-                    out.push_str(names.text(i));
+                    out.push_str(i.text());
                 }
                 Step::Attr(n, v) => {
-                    out.push_str(&format!("[{}=\"{}\"]", names.text(n), names.text(v)));
+                    out.push_str(&format!("[{}=\"{}\"]", n.text(), v.text()));
                 }
                 Step::Position(_) => {}
                 Step::Disabled => out.push_str(":disabled"),
@@ -375,16 +411,16 @@ impl<'a> Node<'a> {
         Self { sheet, id }
     }
 
-    fn step(self, make: impl FnOnce(&mut Names) -> Step) -> Self {
+    pub(crate) fn step(self, step: Step) -> Self {
         Self {
             sheet: self.sheet,
-            id: self.sheet.extend(Some(self.id), make),
+            id: self.sheet.extend(Some(self.id), step),
         }
     }
 
     /// A child element of type `kind`.
     pub fn child(self, kind: &str) -> Self {
-        self.step(|names| Step::Kind(names.intern(kind)))
+        self.child_named(Name::new(kind), None)
     }
 
     /// The child of type `kind` at `index` of `count`, for
@@ -392,15 +428,20 @@ impl<'a> Node<'a> {
     /// has none of them, the same as [`Node::child`]: rows that look the
     /// same share one node.
     pub fn child_at(self, kind: &str, index: usize, count: usize) -> Self {
-        let child = self.child(kind);
-        match self.sheet.position(index, count) {
+        self.child_named(Name::new(kind), Some((index, count)))
+    }
+
+    /// A child element of type `kind`, at `index` of `count` if given.
+    pub(crate) fn child_named(self, kind: Name, at: Option<(usize, usize)>) -> Self {
+        let child = self.step(Step::Kind(kind));
+        match at.map_or(0, |(index, count)| self.sheet.position(index, count)) {
             0 => child,
-            bits => child.step(|_| Step::Position(bits)),
+            bits => child.step(Step::Position(bits)),
         }
     }
 
     pub fn class(self, class: &str) -> Self {
-        self.step(|names| Step::Class(names.intern(class)))
+        self.step(Step::Class(Name::new(class)))
     }
 
     pub fn class_if(self, class: &str, on: bool) -> Self {
@@ -408,18 +449,18 @@ impl<'a> Node<'a> {
     }
 
     pub fn id(self, id: &str) -> Self {
-        self.step(|names| Step::Id(names.intern(id)))
+        self.step(Step::Id(Name::new(id)))
     }
 
     pub fn attr(self, name: &str, value: &str) -> Self {
-        self.step(|names| Step::Attr(names.intern(name), names.intern(value)))
+        self.step(Step::Attr(Name::new(name), Name::new(value)))
     }
 
     /// `:disabled`: known where the widget is built, so part of the path
     /// (and of its descendants').
     pub fn disabled_if(self, disabled: bool) -> Self {
         if disabled {
-            self.step(|_| Step::Disabled)
+            self.step(Step::Disabled)
         } else {
             self
         }
@@ -449,6 +490,12 @@ impl<'a> Node<'a> {
         self.sheet.node(self.id).scale
     }
 
+    /// Its parent element's node: `None` for a root.
+    pub(crate) fn parent(self) -> Option<Self> {
+        let parent = self.sheet.node(self.id).parent?;
+        Some(Self::new(self.sheet, parent))
+    }
+
     /// The element is `:disabled`.
     pub fn is_disabled(self) -> bool {
         self.sheet.node(self.id).disabled
@@ -456,6 +503,11 @@ impl<'a> Node<'a> {
 
     pub fn sheet(self) -> &'a Sheet {
         self.sheet
+    }
+
+    /// Its sheet and its path, for a child to find its node from.
+    pub(crate) fn parts(self) -> (*const Sheet, NodeId) {
+        (std::ptr::from_ref(self.sheet), self.id)
     }
 
     /// Who it is, for a widget to tell when its node changed: its

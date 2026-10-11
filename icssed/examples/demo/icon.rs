@@ -1,9 +1,8 @@
-//! An icon draws a picture at its node's size: `icssed::icon(node,
-//! source)`. The source is a file, or a name for the app's icons to look
-//! up.
+//! An icon draws a picture at its element's size: `icssed::icon(source)`.
+//! The source is a file, or a name for the app's icons to look up.
 //!
-//!     icssed::icon(node.child("icon"), IconFile::Svg { handle, symbolic: true })
-//!     icssed::icon(node.child("icon"), (icons as &dyn Icons, "network-wireless"))
+//!     icssed::icon(IconFile::Svg { handle, symbolic: true })
+//!     icssed::icon((icons as &dyn Icons, "network-wireless"))
 //!
 //! - `IconFile::Svg { handle, symbolic }`: a symbolic one is recoloured
 //!   by the element's `color`, so it follows the text around it, its
@@ -19,7 +18,7 @@
 //! `rotate` turns it. The icons below are the same star, sized and
 //! coloured by classes, and two looked up by name.
 
-use icssed::{Element, IconFile, Icons, Node};
+use icssed::{Element, IconFile, Icons, column, icon, row, text};
 
 use crate::Assets;
 
@@ -52,41 +51,25 @@ impl Icons for Named {
     }
 }
 
-pub fn view<'a>(_state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let star = |class: &str| -> Element<'a, Message> {
-        icssed::icon(
-            line.child("icon").class_if(class, !class.is_empty()),
-            assets.star.clone(),
-        )
-        .into()
-    };
+pub fn view<'a>(_state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let star = || icon(assets.star.clone());
     let named: &'a dyn Icons = &assets.named;
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    star("small"),
-                    star(""),
-                    star("large"),
-                    star("accent"),
-                    star("turned"),
-                    icssed::icon(line.child("avatar"), assets.picture.clone()).into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    icssed::icon(line.child("icon"), (named, "star")).into(),
-                    icssed::icon(line.child("icon"), (named, "eye")).into(),
-                    icssed::text(line.child("label"), "Looked up by name").into(),
-                ],
-            )
-            .into(),
-        ],
-    )
+    column![
+        row![
+            star().class("small"),
+            star(),
+            star().class("large"),
+            star().class("accent"),
+            star().class("turned"),
+            icon(assets.picture.clone()).kind("avatar"),
+        ]
+        .kind("line"),
+        row![
+            icon((named, "star")),
+            icon((named, "eye")),
+            text("Looked up by name"),
+        ]
+        .kind("line"),
+    ]
     .into()
 }

@@ -36,14 +36,13 @@ enum Message {
 
 /// A row of buttons, each `name` at 40x20, no gap.
 fn buttons<'a>(root: Node<'a>, names: &[&'static str]) -> Element<'a, Message> {
-    crate::row(
-        root,
-        names.iter().map(|&name| {
-            crate::button(root.child("button").class(name), [])
-                .on_press(Message::Pressed(name))
-                .into()
-        }),
-    )
+    crate::row(names.iter().map(|&name| {
+        crate::button([])
+            .class(name)
+            .on_press(Message::Pressed(name))
+            .into()
+    }))
+    .at(root)
     .into()
 }
 
@@ -95,7 +94,9 @@ fn an_ancestors_state_reaches_its_descendants() {
     );
     let card = sheet.root("card", 1.0);
     let view = || -> Element<'_, Message> {
-        crate::row(card, [crate::row(card.child("part"), []).into()]).into()
+        crate::row([crate::row([]).kind("part").into()])
+            .at(card)
+            .into()
     };
     let mut ui = Harness::new(view(), Size::new(60.0, 30.0), 1.0);
     ui.frame(Instant::now());
@@ -169,11 +170,9 @@ fn a_transition_runs_from_its_cause_to_its_end() {
     );
     let root = sheet.root("root", 1.0);
     let view = |on: bool| -> Element<'_, Message> {
-        crate::row(
-            root,
-            [crate::row(root.child("cell").class_if("on", on), []).into()],
-        )
-        .into()
+        crate::row([crate::row([]).kind("cell").class_if("on", on).into()])
+            .at(root)
+            .into()
     };
     let mut ui = Harness::new(view(false), Size::new(20.0, 20.0), 1.0);
     let start = Instant::now();
@@ -201,7 +200,7 @@ fn an_ancestors_hover_starts_its_descendants_transition() {
     );
     let card = sheet.root("card", 1.0);
     let mut ui = Harness::<Message>::new(
-        crate::row(card, [crate::row(card.child("part"), []).into()]),
+        crate::row([crate::row([]).kind("part").into()]).at(card),
         Size::new(60.0, 30.0),
         1.0,
     );
@@ -229,12 +228,11 @@ fn keyframes_animate_and_end() {
     );
     let root = sheet.root("root", 1.0);
     let mut ui = Harness::new(
-        crate::row(
-            root,
-            [crate::row(root.child("cell"), [])
-                .on_animation_end(Message::Ended)
-                .into()],
-        ),
+        crate::row([crate::row([])
+            .kind("cell")
+            .on_animation_end(Message::Ended)
+            .into()])
+        .at(root),
         Size::new(20.0, 20.0),
         1.0,
     );
@@ -269,7 +267,7 @@ fn an_infinite_animation_never_stops_asking() {
         symbolic: true,
     };
     let mut ui = Harness::<Message>::new(
-        crate::row(root, [crate::icon(root.child("icon"), star).into()]),
+        crate::row([crate::icon(star).into()]).at(root),
         Size::new(16.0, 16.0),
         1.0,
     );
@@ -302,15 +300,14 @@ fn widgets_are_found_by_selector() {
     );
     let list = sheet.root("list", 1.0);
     let view = || -> Element<'_, Message> {
-        crate::column(
-            list,
-            ["a", "b", "c"].map(|name| {
-                let entry = list.child("entry").class_if("active", name == "b");
-                crate::button(entry, [crate::text(entry.child("label"), name).into()])
-                    .on_press(Message::Pressed(name))
-                    .into()
-            }),
-        )
+        crate::column(["a", "b", "c"].map(|name| {
+            let entry = list.child("entry").class_if("active", name == "b");
+            crate::button([crate::text(name).into()])
+                .at(entry)
+                .on_press(Message::Pressed(name))
+                .into()
+        }))
+        .at(list)
         .into()
     };
     let mut ui = Harness::new(view(), Size::new(100.0, 60.0), 1.0);
@@ -364,14 +361,13 @@ fn a_box_is_found_and_focused_by_its_id() {
     let sheet = sheet(CSS);
     let root = sheet.root("root", 1.0);
     let id = Id::unique();
-    let view = crate::row(
-        root,
-        ["a", "b"].map(|name| {
-            let b = crate::button(root.child("button").class(name), [])
-                .on_press(Message::Pressed(name));
-            if name == "b" { b.id(id.clone()) } else { b }.into()
-        }),
-    );
+    let view = crate::row(["a", "b"].map(|name| {
+        let b = crate::button([])
+            .class(name)
+            .on_press(Message::Pressed(name));
+        if name == "b" { b.id(id.clone()) } else { b }.into()
+    }))
+    .at(root);
     let mut ui = Harness::new(view, Size::new(80.0, 20.0), 1.0);
     assert_eq!(
         ui.operate(&mut Bounds(id.clone(), None)),
@@ -394,12 +390,9 @@ fn a_toggle_asks_for_the_other_state() {
     let sheet = sheet(CONTROLS);
     let root = sheet.root("root", 1.0);
     let view = |on: bool| -> Element<'_, Message> {
-        crate::focus_scope(crate::row(
-            root,
-            [crate::toggle(root.child("toggle"), on, Message::Toggled)
-                .switch()
-                .into()],
-        ))
+        crate::focus_scope(
+            crate::row([crate::toggle(on, Message::Toggled).switch().into()]).at(root),
+        )
         .into()
     };
     let mut ui = Harness::new(view(false), Size::new(100.0, 40.0), 1.0);
@@ -420,18 +413,14 @@ fn a_toggle_asks_for_the_other_state() {
 /// A slider from 0 to 100 at `value`: 160px wide, its track from 8 to
 /// 152 (the base's padding, half its knob).
 fn slider(root: Node<'_>, value: f32, disabled: bool) -> Element<'_, Message> {
-    crate::focus_scope(crate::row(
-        root,
-        [crate::slider(
-            root.child("slider").disabled_if(disabled),
-            0.0..=100.0,
-            value,
-            Message::Value,
-        )
-        .step(1.0)
-        .on_release(Message::Released)
-        .into()],
-    ))
+    crate::focus_scope(
+        crate::row([crate::slider(0.0..=100.0, value, Message::Value)
+            .disabled_if(disabled)
+            .step(1.0)
+            .on_release(Message::Released)
+            .into()])
+        .at(root),
+    )
     .into()
 }
 
@@ -539,13 +528,9 @@ fn a_meter_fills_its_fraction_under_its_label() {
     let sheet = sheet("meter { width: 100px; height: 20px; padding: 2px; }");
     let root = sheet.root("root", 1.0);
     let view = |fraction: f32| -> Element<'_, Message> {
-        crate::row(
-            root,
-            [crate::meter(root.child("meter"), fraction)
-                .label("25%")
-                .into()],
-        )
-        .into()
+        crate::row([crate::meter(fraction).label("25%").into()])
+            .at(root)
+            .into()
     };
     let mut ui = Harness::new(view(0.25), Size::new(200.0, 40.0), 1.0);
     assert_eq!(
@@ -570,15 +555,14 @@ fn a_meter_fills_its_fraction_under_its_label() {
 
 /// A search input in a focus scope, 200px wide.
 fn search<'a>(root: Node<'a>, value: &str, disabled: bool) -> Element<'a, Message> {
-    crate::focus_scope(crate::row(
-        root,
-        [
-            crate::input(root.child("input").disabled_if(disabled), "Search", value)
-                .on_input(Message::Typed)
-                .on_submit(Message::Submitted)
-                .into(),
-        ],
-    ))
+    crate::focus_scope(
+        crate::row([crate::input("Search", value)
+            .disabled_if(disabled)
+            .on_input(Message::Typed)
+            .on_submit(Message::Submitted)
+            .into()])
+        .at(root),
+    )
     .into()
 }
 
@@ -655,13 +639,15 @@ const SCROLL: &str = "scroll { width: 100px; max-height: 100px; } \
 fn cells(root: Node<'_>, n: usize, sideways: bool) -> Element<'_, Message> {
     let scroll = root.child("scroll");
     let line = scroll.child("line");
-    let content = (0..n).map(|_| crate::row(line.child("cell"), []).into());
+    let content = (0..n).map(|_| crate::row([]).kind("cell").into());
     let scroll = if sideways {
-        crate::scroll(scroll, crate::row(line, content)).horizontal()
+        crate::scroll(crate::row(content).at(line))
+            .at(scroll)
+            .horizontal()
     } else {
-        crate::scroll(scroll, crate::column(line, content))
+        crate::scroll(crate::column(content).at(line)).at(scroll)
     };
-    crate::column(root, [scroll.into()]).into()
+    crate::column([scroll.into()]).at(root).into()
 }
 
 #[test]
@@ -736,27 +722,25 @@ const MENU: &str = "menu item { transition: none; }";
 /// A menu: two items, a disabled one, a check, a submenu unfolded or not.
 fn file_menu(root: Node<'_>, expanded: bool) -> Element<'_, Message> {
     use crate::MenuItem;
-    crate::focus_scope(crate::column(
-        root,
-        [crate::menu(
-            root.child("menu"),
-            [
-                MenuItem::new("Open").on_press(Message::Pressed("open")),
-                MenuItem::new("Save").on_press(Message::Pressed("save")),
-                MenuItem::new("Paste"),
-                MenuItem::separator(),
-                MenuItem::new("Hidden")
-                    .check(true)
-                    .on_press(Message::Pressed("hidden")),
-                MenuItem::new("More")
-                    .on_press(Message::Pressed("more"))
-                    .submenu(
-                        expanded,
-                        [MenuItem::new("Rename").on_press(Message::Pressed("rename"))],
-                    ),
-            ],
-        )],
-    ))
+    crate::focus_scope(
+        crate::column([crate::menu([
+            MenuItem::new("Open").on_press(Message::Pressed("open")),
+            MenuItem::new("Save").on_press(Message::Pressed("save")),
+            MenuItem::new("Paste"),
+            MenuItem::separator(),
+            MenuItem::new("Hidden")
+                .check(true)
+                .on_press(Message::Pressed("hidden")),
+            MenuItem::new("More")
+                .on_press(Message::Pressed("more"))
+                .submenu(
+                    expanded,
+                    [MenuItem::new("Rename").on_press(Message::Pressed("rename"))],
+                ),
+        ])
+        .into()])
+        .at(root),
+    )
     .into()
 }
 
@@ -810,14 +794,14 @@ fn up_and_down_move_the_focus_among_a_menus_items() {
 
 /// Three tabs, the second shown.
 fn pages(root: Node<'_>) -> Element<'_, Message> {
-    crate::focus_scope(crate::column(
-        root,
-        [crate::tabs(
-            root.child("tabs"),
+    crate::focus_scope(
+        crate::column([crate::tabs(
             ["one", "two", "three"]
                 .map(|name| crate::Tab::new(name, Message::Pressed(name)).active(name == "two")),
-        )],
-    ))
+        )
+        .into()])
+        .at(root),
+    )
     .into()
 }
 
@@ -857,15 +841,12 @@ fn a_childs_inherited_colour_follows_its_parents_state() {
          button:hover { color: rgb(255 0 0); } label { width: 40px; }",
     );
     let root = sheet.root("root", 1.0);
-    let view = crate::row(
-        root,
-        [crate::button(
-            root.child("button"),
-            [crate::text(root.child("button").child("label"), "████").into()],
-        )
-        .on_press(Message::Ended)
-        .into()],
-    );
+    let view = crate::row([crate::button([crate::text("████")
+        .at(root.child("button").child("label"))
+        .into()])
+    .on_press(Message::Ended)
+    .into()])
+    .at(root);
     let mut ui = Harness::new(view, Size::new(40.0, 20.0), 1.0);
     let now = Instant::now();
     let label = ui.find(&sheet, "label")[0];
@@ -883,7 +864,6 @@ fn a_childs_inherited_colour_follows_its_parents_state() {
 /// October 2026, its weeks from `first`, today the 10th.
 fn october(root: Node<'_>, first: u32) -> Element<'_, Message> {
     crate::calendar(
-        root.child("calendar"),
         crate::Month::new(2026, 10),
         "October 2026",
         ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
@@ -894,6 +874,7 @@ fn october(root: Node<'_>, first: u32) -> Element<'_, Message> {
     .on_previous(Message::Pressed("previous"))
     .on_next(Message::Pressed("next"))
     .on_select(|day| Message::Value(day as f32))
+    .at(root.child("calendar"))
     .into()
 }
 
@@ -943,15 +924,9 @@ fn a_graph_draws_its_series_from_the_right() {
     let root = sheet.root("root", 1.0);
     // Half its capacity, rising from nothing to its top.
     let view = |values: Vec<f32>| -> Element<'_, Message> {
-        crate::column(
-            root,
-            [crate::graph(root.child("graph"), 11)
-                .series(values)
-                .max(10.0)
-                .label("10")
-                .into()],
-        )
-        .into()
+        crate::column([crate::graph(11).series(values).max(10.0).label("10").into()])
+            .at(root)
+            .into()
     };
     let mut ui = Harness::new(
         view((5..=10).map(|v| v as f32).collect()),
@@ -977,8 +952,8 @@ fn a_graph_draws_its_series_from_the_right() {
 
 /// A 40x20 button with a tip, its own way or the app's.
 fn tipped(root: Node<'_>, the_apps: bool) -> Element<'_, Message> {
-    let button = crate::button(root.child("button"), []).on_press(Message::Pressed("tipped"));
-    let tip = crate::tooltip(button, root.child("tooltip"), "A tip");
+    let button = crate::button([]).on_press(Message::Pressed("tipped"));
+    let tip = crate::tooltip(button, "A tip");
     let tip = if the_apps {
         tip.on_tip(|shown| match shown {
             Some(_) => Message::Pressed("shown"),
@@ -987,7 +962,7 @@ fn tipped(root: Node<'_>, the_apps: bool) -> Element<'_, Message> {
     } else {
         tip
     };
-    crate::column(root, [tip.into()]).into()
+    crate::column([tip.into()]).at(root).into()
 }
 
 /// The button 80px in, a tip wider than it.
@@ -1038,17 +1013,15 @@ fn an_app_can_show_a_tip_itself() {
 
 /// A select of three in a focus scope, `chosen` if any.
 fn chooser(root: Node<'_>, chosen: Option<usize>, disabled: bool) -> Element<'_, Message> {
-    crate::focus_scope(crate::column(
-        root,
-        [crate::select(
-            root.child("select").disabled_if(disabled),
-            ["one", "two", "three"],
-            chosen,
-            |i| Message::Value(i as f32),
-        )
+    crate::focus_scope(
+        crate::column([crate::select(["one", "two", "three"], chosen, |i| {
+            Message::Value(i as f32)
+        })
+        .disabled_if(disabled)
         .placeholder("none yet")
-        .into()],
-    ))
+        .into()])
+        .at(root),
+    )
     .into()
 }
 
@@ -1114,19 +1087,15 @@ fn an_app_can_show_a_selects_options_itself() {
     let sheet = sheet(CHOOSER);
     let root = sheet.root("root", 1.0);
     let view = |opened: bool| -> Element<'_, Message> {
-        crate::column(
-            root,
-            [
-                crate::select(root.child("select"), ["one", "two"], None, |i| {
-                    Message::Value(i as f32)
-                })
+        crate::column([
+            crate::select(["one", "two"], None, |i| Message::Value(i as f32))
                 .on_open(opened, |at| match at {
                     Some(_) => Message::Pressed("open"),
                     None => Message::Pressed("close"),
                 })
                 .into(),
-            ],
-        )
+        ])
+        .at(root)
         .into()
     };
     let mut ui = Harness::new(view(false), Size::new(300.0, 200.0), 1.0);
@@ -1138,4 +1107,41 @@ fn an_app_can_show_a_selects_options_itself() {
         ui.messages,
         [Message::Pressed("open"), Message::Pressed("close")]
     );
+}
+
+#[test]
+fn widgets_without_nodes_find_their_place() {
+    use crate::text;
+    let sheet = sheet(
+        "label { width: 10px; height: 10px; } \
+         button.primary > label { width: 30px; } \
+         root > label:last-child { width: 20px; }",
+    );
+    let root = sheet.root("root", 1.0);
+    // The class comes after the children are built: they see it all the
+    // same, found only when the runtime reaches them.
+    let view = || -> Element<'_, Message> {
+        crate::row![
+            text("a"),
+            crate::button![text("b")]
+                .class("primary")
+                .on_press(Message::Pressed("b")),
+            text("c"),
+        ]
+        .at(root)
+        .into()
+    };
+    let mut ui = Harness::new(view(), Size::new(100.0, 10.0), 1.0);
+    let widths = |ui: &mut Harness<'_, Message>, selector| {
+        ui.find(&sheet, selector)
+            .iter()
+            .map(|r| r.width)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(widths(&mut ui, "root > label"), [10.0, 20.0]);
+    assert_eq!(widths(&mut ui, "root > button.primary > label"), [30.0]);
+    ui.rebuild(view());
+    assert_eq!(widths(&mut ui, "button.primary > label"), [30.0]);
+    ui.click_on(&sheet, "button.primary");
+    assert_eq!(ui.messages, [Message::Pressed("b")]);
 }

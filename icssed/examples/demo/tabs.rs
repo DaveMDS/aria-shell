@@ -1,9 +1,9 @@
 //! Tabs are a row of buttons, one per page:
-//! `icssed::tabs(node, [Tab::new(label, message).active(shown)])`. The
+//! `icssed::tabs([Tab::new(label, message).active(shown)])`. The
 //! page shown is the app's: the tabs mark it `.active` and send a
 //! message when another is pressed.
 //!
-//!     icssed::tabs(node.child("tabs"), PAGES.iter().enumerate().map(|(i, page)| {
+//!     icssed::tabs(PAGES.iter().enumerate().map(|(i, page)| {
 //!         Tab::new(page.title, Message::Tab(i)).active(i == self.tab)
 //!     }))
 //!
@@ -16,7 +16,7 @@
 //! the page shown under them. This demo's own Info, Source and Style are
 //! tabs.
 
-use icssed::{Element, Node, Tab};
+use icssed::{Element, Tab, column, tabs, text};
 
 use crate::Assets;
 
@@ -47,18 +47,15 @@ pub fn update(state: &mut State, message: Message) {
     state.tab = tab;
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    icssed::column(
-        node,
-        [
-            icssed::tabs(
-                node.child("tabs"),
-                PAGES.iter().enumerate().map(|(i, (title, _))| {
-                    Tab::new(*title, Message::Tab(i)).active(i == state.tab)
-                }),
-            ),
-            icssed::text(node.child("page"), PAGES[state.tab].1).into(),
-        ],
-    )
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
+    column![
+        tabs(
+            PAGES
+                .iter()
+                .enumerate()
+                .map(|(i, (title, _))| Tab::new(*title, Message::Tab(i)).active(i == state.tab)),
+        ),
+        text(PAGES[state.tab].1).kind("page"),
+    ]
     .into()
 }

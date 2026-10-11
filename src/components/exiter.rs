@@ -15,7 +15,7 @@ use std::sync::Arc;
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::{Event, Subscription, Task, window};
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::locale::Locale;
@@ -343,7 +343,7 @@ impl Exiter {
         }
     }
 
-    /// The texts of the confirmation, and their node.
+    /// The texts of the confirmation, and the button it asks about.
     fn confirm_texts(&self, locale: &Locale) -> Option<(String, Option<String>, &Button)> {
         let confirm = self.confirm.as_ref()?;
         let button = self.config.buttons.get(confirm.button)?;
@@ -356,48 +356,30 @@ impl Exiter {
 
     /// The keys, the keyboard leaving (as the launcher), and the
     /// countdown's seconds. The daemon checks that `window` is ours.
-    /// Its dialog's box, `root`: the grid of buttons, or a button's
-    /// confirmation in its place.
-    pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
+    /// Its dialog's box: the grid of buttons, or a button's confirmation
+    /// in its place.
+    pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
         let locale = shared.locale;
         if let Some((question, countdown, button)) = self.confirm_texts(locale) {
-            let c = root.child("confirm");
-            let mut items: Vec<Element<'a, Message>> =
-                vec![icssed::text(c.child("label"), question).into()];
+            let mut items: Vec<Element<'a, Message>> = vec![icssed::text(question).into()];
             if let Some(countdown) = countdown {
-                items.push(icssed::text(c.child("countdown"), countdown).into());
+                items.push(icssed::text(countdown).kind("countdown").into());
             }
-            let buttons = c.child("buttons");
-            let cancel = buttons.child("button").class("cancel");
-            let ok = buttons
-                .child("button")
-                .class("ok")
-                .class(&button.name)
-                .class("danger");
             items.push(
-                icssed::row(
-                    buttons,
-                    [
-                        icssed::button(
-                            cancel,
-                            [
-                                icssed::text(cancel.child("label"), locale.tr("exiter.cancel"))
-                                    .into(),
-                            ],
-                        )
-                        .on_press(Message::Cancel)
-                        .into(),
-                        icssed::button(
-                            ok,
-                            [icssed::text(ok.child("label"), button.label.text(locale)).into()],
-                        )
-                        .on_press(Message::Ok)
-                        .into(),
-                    ],
-                )
+                icssed::row![
+                    icssed::button![icssed::text(locale.tr("exiter.cancel"))]
+                        .class("cancel")
+                        .on_press(Message::Cancel),
+                    icssed::button![icssed::text(button.label.text(locale))]
+                        .class("ok")
+                        .class(&button.name)
+                        .class("danger")
+                        .on_press(Message::Ok),
+                ]
+                .kind("buttons")
                 .into(),
             );
-            return icssed::column(root, [icssed::column(c, items).into()]).into();
+            return icssed::column![icssed::column(items).kind("confirm")].into();
         }
         let icons: &'a dyn icssed::Icons = shared.icons;
         let cols = self.config.columns.max(1);
@@ -407,31 +389,22 @@ impl Exiter {
             .chunks(cols)
             .enumerate()
             .map(|(r, chunk)| {
-                let row = root.child("row");
                 let cells = chunk.iter().enumerate().map(|(c, button)| {
                     let i = r * cols + c;
-                    let b = row
-                        .child("button")
+                    let icon = match shared.icons.first_of(&button.icons) {
+                        Some(icon) => icssed::icon(icon.clone()),
+                        None => icssed::icon((icons, "")),
+                    };
+                    icssed::button![icon, icssed::text(button.label.text(locale))]
                         .class(&button.name)
                         .class("flat")
-                        .class_if("selected", i == self.selected);
-                    let icon = match shared.icons.first_of(&button.icons) {
-                        Some(icon) => icssed::icon(b.child("icon"), icon.clone()),
-                        None => icssed::icon(b.child("icon"), (icons, "")),
-                    };
-                    icssed::button(
-                        b,
-                        [
-                            icon.into(),
-                            icssed::text(b.child("label"), button.label.text(locale)).into(),
-                        ],
-                    )
-                    .on_press(Message::Activate(i))
-                    .into()
+                        .class_if("selected", i == self.selected)
+                        .on_press(Message::Activate(i))
+                        .into()
                 });
-                icssed::row(row, cells).into()
+                icssed::row(cells).into()
             });
-        icssed::column(root, rows).into()
+        icssed::column(rows).into()
     }
 
     pub fn subscription(&self) -> Subscription<(Option<window::Id>, Message)> {

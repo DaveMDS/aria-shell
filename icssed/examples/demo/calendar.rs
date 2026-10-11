@@ -1,8 +1,8 @@
-//! A calendar shows a month: `icssed::calendar(node, month, title,
-//! weekdays)`, its days in six weeks under the names of the days, its
-//! title between the buttons to the months before and after.
+//! A calendar shows a month: `icssed::calendar(month, title, weekdays)`,
+//! its days in six weeks under the names of the days, its title between
+//! the buttons to the months before and after.
 //!
-//!     icssed::calendar(node, self.month, title, ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
+//!     icssed::calendar(self.month, title, ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
 //!         .today(year, month, day)
 //!         .selected(year, month, day)
 //!         .on_previous(Message::PreviousMonth)
@@ -19,7 +19,7 @@
 //!   day picked are marked. The month's days are buttons once
 //!   `on_select` says what a press sends: the day of the month shown.
 
-use icssed::{Element, Month, Node};
+use icssed::{Element, Month, calendar, column, text};
 
 use crate::Assets;
 
@@ -73,23 +73,18 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
     let title = format!(
         "{} {}",
         MONTHS[state.month.month as usize - 1],
         state.month.year
     );
     let (year, month, day) = state.today;
-    let mut calendar = icssed::calendar(
-        node.child("calendar"),
-        state.month,
-        title,
-        ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
-    )
-    .today(year, month, day)
-    .on_previous(Message::PreviousMonth)
-    .on_next(Message::NextMonth)
-    .on_select(Message::Day);
+    let mut calendar = calendar(state.month, title, ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
+        .today(year, month, day)
+        .on_previous(Message::PreviousMonth)
+        .on_next(Message::NextMonth)
+        .on_select(Message::Day);
     if let Some((year, month, day)) = state.day {
         calendar = calendar.selected(year, month, day);
     }
@@ -97,14 +92,7 @@ pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Elemen
         Some((year, month, day)) => format!("Picked: {day} {} {year}", MONTHS[month as usize - 1]),
         None => "No day picked yet".into(),
     };
-    icssed::column(
-        node,
-        [
-            calendar.into(),
-            icssed::text(node.child("status"), picked).into(),
-        ],
-    )
-    .into()
+    column![calendar, text(picked).kind("status")].into()
 }
 
 /// Today's date, in UTC: (year, month, day).

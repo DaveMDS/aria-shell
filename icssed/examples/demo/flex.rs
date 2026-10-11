@@ -16,7 +16,7 @@
 //! The controls below change the lane's classes; the sheet has a rule for
 //! each. Change `flex.css` while the demo runs: it's read again on save.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, row, select, text, toggle};
 
 use crate::Assets;
 
@@ -50,62 +50,30 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let controls = node.child("controls");
-    let label = |text: &'static str| -> Element<'a, Message> {
-        icssed::text(controls.child("label"), text).into()
-    };
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
     let justify = format!("justify-{}", JUSTIFY[state.justify]);
     let align = format!("align-{}", ALIGN[state.align]);
-    let lane = node.child("lane").class(&justify).class(&align);
-    let cell = |class: &str, text: &'static str| -> Element<'a, Message> {
-        let cell = lane.child("cell").class(class);
-        icssed::row(cell, [icssed::text(cell.child("label"), text).into()]).into()
-    };
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                controls,
-                [
-                    label("justify-content"),
-                    icssed::select(
-                        controls.child("select"),
-                        JUSTIFY,
-                        Some(state.justify),
-                        Message::Justify,
-                    )
-                    .into(),
-                    label("align-items"),
-                    icssed::select(
-                        controls.child("select"),
-                        ALIGN,
-                        Some(state.align),
-                        Message::Align,
-                    )
-                    .into(),
-                    icssed::toggle(controls.child("toggle"), state.fill, Message::Fill)
-                        .label("The first fills")
-                        .check()
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                lane,
-                [
-                    cell(if state.fill { "fill" } else { "short" }, "One"),
-                    cell("tall", "Two"),
-                    cell("mid", "Three"),
-                ],
-            )
-            .into(),
-            icssed::text(
-                node.child("status"),
-                format!("lane.{justify}.{align}"),
-            )
-            .into(),
-        ],
-    )
+    let cell = |class: &str, content: &'static str| row![text(content)].kind("cell").class(class);
+    column![
+        row![
+            text("justify-content"),
+            select(JUSTIFY, Some(state.justify), Message::Justify),
+            text("align-items"),
+            select(ALIGN, Some(state.align), Message::Align),
+            toggle(state.fill, Message::Fill)
+                .label("The first fills")
+                .check(),
+        ]
+        .kind("controls"),
+        row![
+            cell(if state.fill { "fill" } else { "short" }, "One"),
+            cell("tall", "Two"),
+            cell("mid", "Three"),
+        ]
+        .kind("lane")
+        .class(&justify)
+        .class(&align),
+        text(format!("lane.{justify}.{align}")).kind("status"),
+    ]
     .into()
 }

@@ -37,7 +37,7 @@ use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::OutputId;
-use icssed::{Element, Node, Tab};
+use icssed::{Element, Tab};
 
 use crate::components::exiter::Exiter;
 use crate::components::launcher::Launcher;
@@ -339,49 +339,38 @@ impl AriaShell {
         let output = self.output_name(showcase.output);
         let popup = theme.root("popup", scale).attr("output", output);
         let popups = showcase.gadgets.iter().map(|gadget| {
-            let node = popup.child("gadget").class(gadget.kind());
-            let content = gadget.popup_view(Context { shared, node }).map(nothing);
+            let content = gadget.popup_view(Context { shared }).map(nothing);
+            let content = icssed::column![content].kind("gadget").class(gadget.kind());
             inert(popup::view(popup, content))
         });
-        let launcher = theme.root("launcher", scale);
         let launcher = dialog_surface(
-            launcher,
-            showcase.launcher.view(shared, launcher).map(nothing),
+            theme.root("launcher", scale),
+            showcase.launcher.view(shared).map(nothing),
             nothing(()),
         );
-        let exiter = theme.root("exiter", scale);
         let exiter = dialog_surface(
-            exiter,
-            showcase.exiter.view(shared, exiter).map(nothing),
+            theme.root("exiter", scale),
+            showcase.exiter.view(shared).map(nothing),
             nothing(()),
         );
         let osd_node = osd::node(theme.root("osd", scale), &showcase.osd, output);
         let osd = inert(osd::view(osd_node, &self.icons, &showcase.osd, output));
         let toasts = showcase.notifications.iter().map(|n| {
-            let node = toast::node(theme.root("notification", scale), n, output);
-            inert(toast::surface(node, n, &self.notifications, &self.icons).map(nothing))
+            let root = theme.root("notification", scale).attr("output", output);
+            inert(toast::surface(root, n, &self.notifications, &self.icons).map(nothing))
         });
-        let root = theme.root("showcase", scale);
-        let parts = root.child("parts");
-        let column = |i: usize, children: Vec<Element<'a, Shell>>| -> Element<'a, Shell> {
-            icssed::column(parts.child_at("column", i, 4), children).into()
-        };
-        let parts = icssed::row(
-            parts,
-            [
-                column(0, popups.collect()),
-                column(1, vec![launcher]),
-                column(2, [exiter, osd].into_iter().chain(toasts).collect()),
-                column(
-                    3,
-                    vec![
-                        inert(self.bar_buttons_view(scale)),
-                        inert(self.buttons_view(showcase, scale)),
-                    ],
-                ),
-            ],
-        );
-        mouse_area(icssed::column(root, [parts.into()]))
+        let column = |children: Vec<Element<'a, Shell>>| icssed::column(children).kind("column");
+        let parts = icssed::row![
+            column(popups.collect()),
+            column(vec![launcher]),
+            column([exiter, osd].into_iter().chain(toasts).collect()),
+            column(vec![
+                inert(self.bar_buttons_view(scale)),
+                inert(self.buttons_view(showcase, scale)),
+            ]),
+        ]
+        .kind("parts");
+        mouse_area(icssed::column![parts].at(theme.root("showcase", scale)))
             .on_press(Shell::Showcase(Message::PressedOutside))
             .on_release(Shell::Showcase(Message::Released))
             .into()
@@ -390,82 +379,64 @@ impl AriaShell {
     /// A bar, with the bar's buttons in a gadget of no kind: only the
     /// rules every gadget gets apply.
     fn bar_buttons_view(&self, scale: f32) -> Element<'_, Shell> {
-        let panel = self.theme.root("panel", scale);
-        let slot = panel.child("slot").class("start");
-        let gadget = slot.child_at("gadget", 0, 1).id("showcase");
-        let count = BAR_BUTTONS.len();
-        let buttons = BAR_BUTTONS.iter().enumerate().map(|(i, &(icon, label))| {
-            let node = gadget.child_at("button", i, count);
-            let content = self.button_content(node, icon, label.map(str::to_owned));
-            icssed::button(node, content).on_press(nothing(())).into()
+        let buttons = BAR_BUTTONS.iter().map(|&(icon, label)| {
+            icssed::button(self.button_content(icon, label.map(str::to_owned)))
+                .on_press(nothing(()))
+                .into()
         });
-        let gadget: Element<'_, Shell> = icssed::row(gadget, buttons).into();
-        icssed::row(panel, [icssed::row(slot, [gadget]).into()]).into()
+        let gadget = icssed::row(buttons).kind("gadget").named("showcase");
+        icssed::row![icssed::row![gadget].kind("slot").class("start")]
+            .at(self.theme.root("panel", scale))
+            .into()
     }
 
     /// The other kinds of buttons, in a popup's box, each labelled by
     /// the selector that styles it.
     fn buttons_view<'a>(&'a self, showcase: &Showcase, scale: f32) -> Element<'a, Shell> {
-        let popup = self.theme.root("popup", scale).id("showcase");
-        let list = popup.child("buttons");
         // The rows of buttons, the plain ones', the radios', the
         // toggles', the tabs.
-        let count = BUTTONS.len().div_ceil(BUTTONS_ROW) + 4;
         let mut children: Vec<Element<'a, Shell>> = Vec::new();
         for (k, chunk) in BUTTONS.chunks(BUTTONS_ROW).enumerate() {
             // The plain ones after the flat ones.
             if k == 2 {
-                let row = list.child_at("row", children.len(), count);
-                children.push(icssed::row(row, self.plains_view(showcase, row)).into());
+                children.push(icssed::row(self.plains_view(showcase)).into());
             }
-            let row = list.child_at("row", children.len(), count);
-            let buttons = chunk
-                .iter()
-                .enumerate()
-                .map(|(i, &(class, enabled, icon, text))| {
-                    let mut node = row.child_at("button", i, chunk.len()).disabled_if(!enabled);
-                    let mut label = "button".to_owned();
-                    if let Some(class) = class {
-                        node = node.class(class);
-                        label = format!("{label}.{class}");
-                    }
-                    if !enabled {
-                        label.push_str(":disabled");
-                    }
-                    let content = self.button_content(node, icon, text.then_some(label));
-                    let button = icssed::button(node, content);
-                    match enabled {
-                        true => button.on_press(nothing(())),
-                        false => button,
-                    }
-                    .into()
-                });
-            children.push(icssed::row(row, buttons).into());
+            let buttons = chunk.iter().map(|&(class, enabled, icon, text)| {
+                let mut label = "button".to_owned();
+                if let Some(class) = class {
+                    label = format!("{label}.{class}");
+                }
+                if !enabled {
+                    label.push_str(":disabled");
+                }
+                let button = icssed::button(self.button_content(icon, text.then_some(label)))
+                    .disabled_if(!enabled);
+                let button = match class {
+                    Some(class) => button.class(class),
+                    None => button,
+                };
+                match enabled {
+                    true => button.on_press(nothing(())),
+                    false => button,
+                }
+                .into()
+            });
+            children.push(icssed::row(buttons).into());
         }
-        let row = list.child_at("row", children.len(), count);
         let radios = (0..RADIOS).map(|i| {
             let on = i == showcase.radio;
-            let node = row
-                .child_at("button", i, RADIOS)
-                .class("radio")
-                .class_if("active", on);
             let label = match on {
                 true => "button.radio.active",
                 false => "button.radio",
             };
-            icssed::button(
-                node,
-                [
-                    icssed::mark(node.child("check")),
-                    icssed::text(node.child("label"), label).into(),
-                ],
-            )
-            .on_press(Shell::Showcase(Message::Radio(i)))
-            .into()
+            icssed::button![icssed::mark().kind("check"), icssed::text(label)]
+                .class("radio")
+                .class_if("active", on)
+                .on_press(Shell::Showcase(Message::Radio(i)))
+                .into()
         });
-        children.push(icssed::row(row, radios).into());
-        let row = list.child_at("row", children.len(), count);
-        children.push(icssed::row(row, self.toggles_view(showcase, row)).into());
+        children.push(icssed::row(radios).into());
+        children.push(icssed::row(self.toggles_view(showcase)).into());
         let tabs = (0..TABS).map(|i| {
             let active = i == showcase.tab;
             let label = match active {
@@ -474,23 +445,19 @@ impl AriaShell {
             };
             Tab::new(label, Shell::Showcase(Message::Tab(i))).active(active)
         });
-        let node = list.child_at("tabs", children.len(), count);
-        children.push(icssed::tabs(node, tabs));
-        popup::view(popup, icssed::column(list, children).into())
+        children.push(icssed::tabs(tabs).into());
+        let popup = self.theme.root("popup", scale).id("showcase");
+        popup::view(popup, icssed::column(children).kind("buttons"))
     }
 
-    /// The sample toggles, in their row `row`, each labelled by its
-    /// selector.
-    fn toggles_view<'a>(&'a self, showcase: &Showcase, row: Node<'a>) -> Vec<Element<'a, Shell>> {
+    /// The sample toggles, each labelled by its selector.
+    fn toggles_view<'a>(&'a self, showcase: &Showcase) -> Vec<Element<'a, Shell>> {
         let icons: &'a dyn icssed::Icons = &self.icons;
         TOGGLES
             .iter()
             .enumerate()
             .map(|(i, &look)| {
                 let on = showcase.toggles[i];
-                let node = row
-                    .child_at("toggle", i, TOGGLES.len())
-                    .class_if("plain", look == "plain");
                 let mut label = match look {
                     "" => "toggle".to_owned(),
                     look => format!("toggle.{look}"),
@@ -498,7 +465,8 @@ impl AriaShell {
                 if on {
                     label.push_str(".checked");
                 }
-                let toggle = icssed::toggle(node, on, move |_| Shell::Showcase(Message::Toggle(i)));
+                let toggle = icssed::toggle(on, move |_| Shell::Showcase(Message::Toggle(i)))
+                    .class_if("plain", look == "plain");
                 match look {
                     "check" => toggle.check(),
                     "switch" => toggle.switch(),
@@ -511,44 +479,35 @@ impl AriaShell {
             .collect()
     }
 
-    /// The sample plain buttons, in their row `row`.
-    fn plains_view<'a>(&'a self, showcase: &Showcase, row: Node<'a>) -> Vec<Element<'a, Shell>> {
+    /// The sample plain buttons.
+    fn plains_view<'a>(&'a self, showcase: &Showcase) -> Vec<Element<'a, Shell>> {
         PLAINS
             .iter()
             .enumerate()
             .map(|(i, &(icon, text))| {
                 let on = showcase.plains[i];
-                let node = row
-                    .child_at("button", i, PLAINS.len())
-                    .class("plain")
-                    .class_if("active", on);
                 let label = match on {
                     true => "button.plain.active",
                     false => "button.plain",
                 };
-                let content = self.button_content(node, icon, text.then(|| label.to_owned()));
-                icssed::button(node, content)
+                icssed::button(self.button_content(icon, text.then(|| label.to_owned())))
+                    .class("plain")
+                    .class_if("active", on)
                     .on_press(Shell::Showcase(Message::Plain(i)))
                     .into()
             })
             .collect()
     }
 
-    /// A sample button's content, in its box `node`: the icon, the
-    /// label, or both.
-    fn button_content<'a>(
-        &'a self,
-        node: Node<'a>,
-        icon: bool,
-        label: Option<String>,
-    ) -> Vec<Element<'a, Shell>> {
+    /// A sample button's content: the icon, the label, or both.
+    fn button_content<'a>(&'a self, icon: bool, label: Option<String>) -> Vec<Element<'a, Shell>> {
         let icons: &'a dyn icssed::Icons = &self.icons;
         let mut content = Vec::new();
         if icon {
-            content.push(icssed::icon(node.child("icon"), (icons, BUTTON_ICON)).into());
+            content.push(icssed::icon((icons, BUTTON_ICON)).into());
         }
         if let Some(label) = label {
-            content.push(icssed::text(node.child("label"), label).into());
+            content.push(icssed::text(label).into());
         }
         content
     }

@@ -29,10 +29,12 @@ crate itself (AGENTS.md, "What things cost").
   cached per (node, own states, ancestors' states) and shared as `Arc`s.
   A view pays a hash lookup per node; matching runs once per distinct
   key.
-- **Nodes are explicit in the view** (`menu.child("item")`), as Aria's
-  are: iced's `layout` gets no context from the parent, so the path,
-  with the surface's scale at its root, has to be known where the
-  widget is built.
+- **Nodes are found by the toolkit, the first time the runtime reaches
+  a widget**: a view says each element's type and classes
+  (`button![..].kind("item").class_if("active", on)`); iced's `layout`
+  gets no context from the parent, but a container reaches its children
+  (making and diffing their trees) before any of them is measured, and
+  hands them its node and their positions then.
 - **The scale enters at the root node**, as the device pixel ratio
   enters CSS's computed values: border widths, sizes and positions on
   whole device pixels already in layout, so layout, painting and the
@@ -137,47 +139,72 @@ No `!important`, no `@media`; `@keyframes` yes (see Animation).
 ### Nodes
 
 A widget's place is a `Node<'a>`: `Copy`, a reference to the sheet and
-an interned id. The view builds them top-down, without allocating:
+an interned id. The view doesn't build it: it says what each element is,
+and the toolkit finds where.
 
 ```rust
-fn view<'a>(&'a self, menu: icssed::Node<'a>) -> icssed::Element<'a, Message> {
-    icssed::column(menu, self.items.iter().enumerate().map(|(i, it)| {
-        let item = menu.child("item").class_if("active", it.active);
-        icssed::button(item, [
-            icssed::icon(item.child("icon"), it.icon.clone()).into(),
-            icssed::text(item.child("label"), &it.label).into(),
-        ])
-        .on_press(Message::Pick(i))
-        .into()
-    }))
-    .into()
+fn view<'a>(&'a self) -> icssed::Element<'a, Message> {
+    let items = self.items.iter().enumerate().map(|(i, it)| {
+        icssed::button![icssed::icon(it.icon.clone()), icssed::text(&it.label)]
+            .kind("item")
+            .class_if("active", it.active)
+            .on_press(Message::Pick(i))
+            .into()
+    });
+    icssed::column(items).kind("menu").into()
 }
 ```
 
 A surface's tree starts from its root element, `sheet.root(kind,
-scale)`: the scale is carried by every node under it (see Scale). Each
-call interns one step (`(previous id, Kind | Class | Id | Attr |
-Position | Disabled)` → id), so a node is a chain of steps with a
-canonical id. Names, ids and attribute values are interned strings,
-looked up without allocating. A position step (`child_at(kind, i, n)`)
-is only kept when the sheet has positional pseudo-classes, and then
-only as the set of them the row matches: otherwise the 500 rows of a
-list share one node, and one style (measured: 1500 node lookups of a
-500-row list resolve 8 styles, 60µs cold, 48µs warm).
+scale)`, given to the top of the view (`.at(root)`): the scale is
+carried by every node under it (see Scale). Each step interns one
+`(previous id, Kind | Class | Id | Attr | Position | Disabled)` → id,
+so a node is a chain of steps with a canonical id. Names (types,
+classes, ids, attribute values) are interned once for every sheet,
+`Name`s, so a widget names its type and classes before it knows its
+sheet; a thread's lookups skip the lock. A position step is only kept
+when the sheet has positional pseudo-classes, and then only as the set
+of them the child matches: otherwise the 500 rows of a list share one
+node, and one style (measured: 1500 node lookups of a 500-row list
+resolve 8 styles, 60µs cold, 48µs warm).
 
-Why explicit: iced's `layout(&mut self, tree, renderer, limits)` gets
-nothing from the parent but limits, and `draw` only a `&Theme`; a style
-needs its ancestors and its scale at layout already (padding, font
-size, border widths). Passing context through the children's `Tree`
-states would break at the first stock container in between. The
-explicit node is the price, and Aria already paid it.
+**How a widget finds its place** (`widget/place.rs`). A widget holds a
+`Place`: its type and the steps after it until it's reached, its node
+and its style at rest after (cached in cells: the first touch may be a
+`&self` method). iced builds a tree's state top-down before any layout
+(`Tree::new`, `Tree::diff`), and a container makes and diffs its
+children's (`place::trees`, `place::diff`): there it sets, in a
+thread-local, its sheet, its node and the child's position, and the
+child resolves itself the first time it's touched (`tag`, `state`,
+`children`, `diff`, `size`). Its own children follow under it. A
+surface hands its content its own root node (`At::Is`), a slot the
+node it found for itself (a frame saying what a page is), a tooltip
+its tip a place beside its own siblings (`At::Aside`). A wrapper of
+iced's that keeps out of the thread-local (`mouse_area`, `Map`) is
+transparent: its child takes its place.
+
+The node keeps a reference to the sheet that the thread-local holds as
+a pointer: the one `unsafe`, sound because a child is owned by the
+container that reached it, which borrows the sheet for as long as it
+lives. A widget reached outside a container of the toolkit (the top of
+a view without `.at(root)`, a child of iced's `stack`, which measures
+its children as they're built) has no place: it panics, naming its
+type.
+
+Why found and not passed: a view written with nodes threaded through
+every call (`row.child("button")`, then `button.child("label")` for each
+part) was long, and a widget adding a class to itself after its
+children were built (a toggle's `.checked`) couldn't reach them. A tree
+of descriptions mounted in a second pass cost 13–50% of a rebuild; this
+costs about 5% (`benches/costs.rs`), the node steps the same, moved from
+the view to the first diff.
 
 ### Computed styles
 
 A `Computed` holds every property, inherited ones from the parent's.
 The cache key is (node, own states, ancestors' states): `node.base()`
-is the style at rest, taken in the view and held by the widget for
-layout; `node.resolve(states, ancestors)` at draw, for a node not at
+is the style at rest, taken when the widget finds its place and held by
+it for layout; `node.resolve(states, ancestors)` at draw, for a node not at
 rest or under an ancestor that isn't. Results are `Arc<Computed>`; the
 caches live in the `Sheet` (`RefCell`: views are single-threaded) and
 go with it. They grow with the distinct paths seen, bounded by the UI's
@@ -453,7 +480,7 @@ root node's, and what was measured is what the window lays out.
 
 ### Icons and images
 
-- `icon(node, source)`: its size from the theme (`width`, `height`, one
+- `icon(source)`: its size from the theme (`width`, `height`, one
   of them for both, else the font size), reserved before the file is
   found: no `Space` placeholders anywhere.
 - Symbolic svgs take `color` at draw, so a button's `:hover` and
@@ -477,7 +504,7 @@ root node's, and what was measured is what the window lays out.
   Animation). Draw reads them.
 - A box with `on_press` is a button: `:active` while pressed, the
   message on release over it, `mouse::Interaction::Pointer`.
-  `:disabled` when its node is marked so: nothing to press then.
+  `:disabled` when it's marked so: nothing to press then.
 - **Keyboard focus**: iced 0.14 has the `Focusable` trait and the
   `focus_next`/`focus_previous` operations. A focusable widget reports
   itself through `operate`; a `focus_scope` widget takes Tab and
@@ -644,7 +671,9 @@ for overlays at every event and every frame.
   are asked at draw, so they don't transition. A scrollbar's sizes are
   set at the view, so they follow no state, and the query doesn't find
   it.
-- Layout gets no context from the parent: nodes are explicit.
+- Layout gets no context from the parent: a widget finds its place
+  when its tree is made, so it has to be in a container of the toolkit,
+  or given its node.
 - A descendant's layout can't follow an ancestor's state.
 - Operations run on every window (`iced_exwlshell`): ids are unique per
   instance, focus moves inside a scope.

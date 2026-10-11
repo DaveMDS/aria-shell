@@ -138,33 +138,33 @@ impl Gadget for Custom {
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let output = self.script.as_ref().and_then(|s| ctx.scripts.output(s));
-        let mut button = ctx.node.child("button");
         if self.script.is_some()
             && self.config.hide_empty
             && output.is_none_or(|o| o.text.is_empty())
         {
-            return icssed::row(ctx.node, []).into();
-        }
-        for class in output.map(|o| o.classes.as_slice()).unwrap_or_default() {
-            button = button.class(class);
+            return icssed::row![].into();
         }
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         let icon = output
             .and_then(|o| o.icon.as_deref())
             .unwrap_or(&self.config.icon);
         if !icon.is_empty() {
-            let icons: &dyn icssed::Icons = ctx.icons;
-            parts.push(icssed::icon(button.child("icon"), (icons, icon)).into());
+            parts.push(ctx.icon(icon).into());
         }
         let text = self.text(output);
         if !text.is_empty() {
-            parts.push(icssed::text(button.child("label"), text).into());
+            parts.push(icssed::text(text).into());
         }
-        let button = mouse_area(icssed::button(button, parts).on_press(Message::Left))
+        let classes = output.map(|o| o.classes.as_slice()).unwrap_or_default();
+        let button = classes
+            .iter()
+            .fold(icssed::button(parts), |button, class| button.class(class))
+            .on_press(Message::Left);
+        let button = mouse_area(button)
             .on_right_press(Message::Right)
             .on_middle_press(Message::Middle)
             .on_scroll(Message::Scroll);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 }
 

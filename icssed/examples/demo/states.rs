@@ -22,7 +22,7 @@
 //! State a widget holds at runtime shows the same way: an open select is
 //! `:active`, an input whose text has the focus is `:focus`.
 
-use icssed::{Element, Node};
+use icssed::{Element, button, column, icon, row, text};
 
 use crate::Assets;
 
@@ -43,40 +43,23 @@ pub fn update(state: &mut State, message: Message) {
     state.presses += 1;
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let tile = |class: &str, text: &'static str, disabled: bool| -> Element<'a, Message> {
-        let tile = line.child("tile").class(class).disabled_if(disabled);
-        icssed::button(
-            tile,
-            [
-                icssed::icon(tile.child("icon"), assets.star.clone()).into(),
-                icssed::text(tile.child("label"), text).into(),
-            ],
-        )
-        .on_press(Message::Press)
-        .into()
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let tile = |class: &str, content: &'static str| {
+        button![icon(assets.star.clone()), text(content)]
+            .kind("tile")
+            .class(class)
+            .on_press(Message::Press)
     };
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    tile("hover", "Hover me", false),
-                    tile("press", "Press me", false),
-                    tile("focus", "Tab to me", false),
-                    tile("grow", "I grow", false),
-                    tile("hover", "Disabled", true),
-                ],
-            )
-            .into(),
-            icssed::text(
-                node.child("status"),
-                format!("Pressed {} times", state.presses),
-            )
-            .into(),
-        ],
-    )
+    column![
+        row![
+            tile("hover", "Hover me"),
+            tile("press", "Press me"),
+            tile("focus", "Tab to me"),
+            tile("grow", "I grow"),
+            tile("hover", "Disabled").disabled_if(true),
+        ]
+        .kind("line"),
+        text(format!("Pressed {} times", state.presses)).kind("status"),
+    ]
     .into()
 }

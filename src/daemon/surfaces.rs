@@ -165,7 +165,7 @@ impl AriaShell {
         let root = self.theme.root("launcher", self.scales.of(output.into()));
         let content = dialog_surface(
             root,
-            launcher.view(self.shared(), root),
+            launcher.view(self.shared()),
             launcher::Message::Nothing,
         );
         ui::size(
@@ -220,11 +220,7 @@ impl AriaShell {
     /// The exit menu's surface size on `output`: its content's.
     fn exiter_size(&self, exiter: &Exiter, output: &OutputInfo) -> (u32, u32) {
         let root = self.theme.root("exiter", self.scales.of(output.into()));
-        let content = dialog_surface(
-            root,
-            exiter.view(self.shared(), root),
-            exiter::Message::Nothing,
-        );
+        let content = dialog_surface(root, exiter.view(self.shared()), exiter::Message::Nothing);
         ui::size(
             &mut self.measure.borrow_mut(),
             EXITER,

@@ -508,30 +508,29 @@ impl Picker {
                 .into(),
         ];
         if self.toolbar() == i {
-            let dock = root.child("dock");
-            layers.push(icssed::column(dock, [self.toolbar_view(locale, dock)]).into());
+            // In iced's stack, which knows nothing of the element tree:
+            // given its place.
+            layers.push(
+                icssed::column![self.toolbar_view(locale)]
+                    .at(root.child("dock"))
+                    .into(),
+            );
         }
-        Some(icssed::column(root, [stack(layers).into()]).into())
+        Some(icssed::column![stack(layers)].at(root).into())
     }
 
     /// The toolbar: what's selected, or the hint; the buttons.
-    fn toolbar_view<'a>(&'a self, locale: &'a Locale, dock: Node<'a>) -> Element<'a, Message> {
-        let bar = dock.child("toolbar");
+    fn toolbar_view<'a>(&'a self, locale: &'a Locale) -> Element<'a, Message> {
         let selected = self.selection.is_some();
         let label = match self.selection {
             Some(s) => format!("{} × {}", s.rect.width, s.rect.height),
             None => locale.tr("screenshot.hint").to_owned(),
         };
         let button = |class: &str, key: &'static str, message: Option<Message>| {
-            let node = bar
-                .child("button")
+            let mut button = icssed::button![icssed::text(locale.tr(key))]
                 .class(class)
                 .class_if("primary", class == "save")
                 .disabled_if(message.is_none());
-            let mut button = icssed::button(
-                node,
-                [icssed::text(node.child("label"), locale.tr(key)).into()],
-            );
             if let Some(message) = message {
                 button = button.on_press(message);
             }
@@ -539,7 +538,7 @@ impl Picker {
         };
         let take = |d: Destination| selected.then_some(Message::Take(d));
         let mut children: Vec<Element<'a, Message>> = vec![
-            icssed::text(bar.child("label"), label).into(),
+            icssed::text(label).into(),
             button("all", "screenshot.all", Some(Message::All)),
             button("cancel", "screenshot.cancel", Some(Message::Cancel)),
         ];
@@ -562,7 +561,7 @@ impl Picker {
             "screenshot.save",
             take(Destination::File { edit: false }),
         ));
-        icssed::row(bar, children).into()
+        icssed::row(children).kind("toolbar").into()
     }
 }
 

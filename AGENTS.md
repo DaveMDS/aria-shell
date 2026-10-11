@@ -133,10 +133,11 @@ how): its widgets, styled by one sheet. `ui/theme.rs` compiles it from
 base, for a light or dark scheme (`:root.light` / `:root.dark`
 variables, `panel.dark { }` rules; the `Themes` gadget switches scheme
 and theme at runtime). Gadgets never hard-code colours, paddings,
-spacing or sizes: they derive a `Node` from `ctx.node`
-(`ctx.node.child("workspace").class_if("active", ..)`) and build the
-toolkit's widgets on it (`icssed::button(node, ..)`, `icssed::text`,
-`icssed::row`, ...). A new element or class is documented in
+spacing or sizes: they build the toolkit's widgets (`icssed::row![..]`,
+`icssed::button![..]`, `icssed::text`, ...) and say what each element is
+(`.kind("title")`, `.class_if("active", ..)`); where it is in the tree
+the toolkit finds (the bar makes a gadget's view `gadget.<kind>`). A
+new element or class is documented in
 `assets/aria.css`, in the element tree in the comment above its owner's
 rules, and given a neutral default there.
 

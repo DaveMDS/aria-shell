@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 
 use super::computed::Computed;
 use super::keyframes::{Frame, Keyframes};
-use super::node::{Ancestors, Names, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step};
+use super::node::{Ancestors, Name, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step};
 use super::parse::{self, Loc};
 use super::selector::{Ctx, Nth, Selector};
 use super::value::{self, Assets, Decl, Moving};
@@ -109,7 +109,6 @@ pub(crate) struct Rule {
 /// What grows as views ask: the names and nodes interned, the styles
 /// resolved. Bounded by the shapes of the UI, not by its data.
 pub(crate) struct Tree {
-    pub names: Names,
     pub nodes: Nodes,
     pub base: FxHashMap<NodeId, Arc<Computed>>,
     pub styles: FxHashMap<(NodeId, States, Ancestors), Arc<Computed>>,
@@ -143,9 +142,8 @@ impl Sheet {
     /// compiled for `scheme`. What can't be used is a warning and is
     /// skipped; a syntax error in any source is an error.
     pub fn load(sources: &[Source], scheme: Scheme) -> Result<(Sheet, Vec<Warning>), Error> {
-        let mut names = Names::default();
-        let light = names.intern(Scheme::Light.name());
-        let dark = names.intern(Scheme::Dark.name());
+        let light = Name::new(Scheme::Light.name());
+        let dark = Name::new(Scheme::Dark.name());
         let mut positional = Vec::new();
         let mut warnings = Vec::new();
         let warning = |source: &str, at: Loc, message: String| Warning {
@@ -163,7 +161,6 @@ impl Sheet {
         let mut files = Vec::new();
         for source in std::iter::once(&base).chain(sources) {
             let mut ctx = Ctx {
-                names: &mut names,
                 positional: &mut positional,
             };
             let mut found = Vec::new();
@@ -323,7 +320,6 @@ impl Sheet {
             initial: Arc::new(Computed::initial()),
             keyframes,
             tree: RefCell::new(Tree {
-                names,
                 nodes: Nodes::default(),
                 base: FxHashMap::default(),
                 styles: FxHashMap::default(),
@@ -336,9 +332,7 @@ impl Sheet {
     /// The root element of a surface, of type `kind`, at `scale` device
     /// pixels per logical one (the output's scale times the UI's).
     pub fn root(&self, kind: &str, scale: f32) -> Node<'_> {
-        let id = self.extend(None, |names| {
-            Step::Root(names.intern(kind), scale.to_bits())
-        });
+        let id = self.extend(None, Step::Root(Name::new(kind), scale.to_bits()));
         Node::new(self, id)
     }
 
@@ -357,14 +351,8 @@ impl Sheet {
         }
     }
 
-    pub(crate) fn extend(
-        &self,
-        prev: Option<NodeId>,
-        make: impl FnOnce(&mut Names) -> Step,
-    ) -> NodeId {
-        let mut tree = self.tree.borrow_mut();
-        let step = make(&mut tree.names);
-        tree.nodes.intern(prev, step)
+    pub(crate) fn extend(&self, prev: Option<NodeId>, step: Step) -> NodeId {
+        self.tree.borrow_mut().nodes.intern(prev, step)
     }
 
     pub(crate) fn node(&self, id: NodeId) -> NodeData {
@@ -372,8 +360,7 @@ impl Sheet {
     }
 
     pub(crate) fn path(&self, id: NodeId) -> String {
-        let tree = self.tree.borrow();
-        tree.nodes.path(id, &tree.names)
+        self.tree.borrow().nodes.path(id)
     }
 
     /// Which of the positional pseudo-classes the child at `index` of

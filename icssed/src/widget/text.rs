@@ -3,7 +3,7 @@
 //! letters as `text-box` says, cut with an ellipsis when it doesn't fit.
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::sync::Arc;
 
 use iced::advanced::layout::{self, Layout, Limits};
@@ -16,40 +16,75 @@ use iced::alignment::Vertical;
 use iced::widget::text::{LineHeight, Shaping, Wrapping};
 use iced::{Event, Length, Pixels, Point, Rectangle, Size};
 
+use super::place::{Place, placed};
 use crate::anim::Animated;
 use crate::layout::{snap, snap_up};
 use crate::paint::fade;
 use crate::query::Reported;
 use crate::style::{
-    Computed, EdgeOver, EdgeUnder, Node, Size as Len, States, TextAlign, TextOverflow,
-    TextTransform, WhiteSpace,
+    Computed, EdgeOver, EdgeUnder, Name, Node, Size as Len, States, TextAlign, TextOverflow,
+    TextTransform, WhiteSpace, name,
 };
 use crate::{Element, Renderer, Theme};
 
 type Paragraph = <Renderer as text::Renderer>::Paragraph;
 
 pub struct Text<'a> {
-    node: Node<'a>,
-    style: Arc<Computed>,
-    content: Cow<'a, str>,
+    place: Place<'a>,
+    /// `None`: a mark, its text its style's `content`.
+    content: Option<Cow<'a, str>>,
+    /// The text shown, where it isn't `content` as given: a mark's, or
+    /// one `text-transform` changes.
+    shown: OnceCell<Option<String>>,
 }
 
-/// `content`, as `node`'s style says (`text-transform` included).
-pub fn text<'a>(node: Node<'a>, content: impl Into<Cow<'a, str>>) -> Text<'a> {
-    let style = node.base();
-    let content = transform(content.into(), style.text_transform);
-    Text {
-        node,
-        style,
-        content,
-    }
+/// `content` in a `label`, as its style says (`text-transform`
+/// included).
+pub fn text<'a>(content: impl Into<Cow<'a, str>>) -> Text<'a> {
+    Text::new(name!("label"), Some(content.into()))
 }
 
-/// A mark: the text its node's `content` says (a menu item's check, a
+/// A `mark`: the text its style's `content` says (a menu item's check, a
 /// calendar's arrows), if any.
-pub fn mark<'a, Message>(node: Node<'a>) -> Element<'a, Message> {
-    let content = node.base().content.clone();
-    text(node, content.as_deref().unwrap_or("").to_owned()).into()
+pub fn mark<'a>() -> Text<'a> {
+    Text::new(name!("mark"), None)
+}
+
+impl<'a> Text<'a> {
+    fn new(kind: Name, content: Option<Cow<'a, str>>) -> Self {
+        Self {
+            place: Place::new(kind),
+            content,
+            shown: OnceCell::new(),
+        }
+    }
+
+    placed!(place);
+
+    fn node(&self) -> Node<'a> {
+        self.place.node()
+    }
+
+    fn style(&self) -> &Arc<Computed> {
+        self.place.style()
+    }
+
+    fn content(&self) -> &str {
+        let given = self.content.as_deref();
+        self.shown
+            .get_or_init(|| {
+                let style = self.style();
+                let content = given.unwrap_or(style.content.as_deref().unwrap_or(""));
+                match transform(Cow::Borrowed(content), style.text_transform) {
+                    Cow::Owned(changed) => Some(changed),
+                    Cow::Borrowed(_) if given.is_none() => Some(content.to_owned()),
+                    Cow::Borrowed(_) => None,
+                }
+            })
+            .as_deref()
+            .or(given)
+            .unwrap_or("")
+    }
 }
 
 fn transform(content: Cow<'_, str>, how: TextTransform) -> Cow<'_, str> {
@@ -152,8 +187,8 @@ fn trims(paragraph: &Paragraph, s: &Computed) -> ((f32, f32), f32) {
 
 impl Text<'_> {
     fn ellipsis(&self) -> bool {
-        self.style.text_overflow == TextOverflow::Ellipsis
-            && self.style.white_space == WhiteSpace::Nowrap
+        self.style().text_overflow == TextOverflow::Ellipsis
+            && self.style().white_space == WhiteSpace::Nowrap
     }
 }
 
@@ -165,7 +200,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         _renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node()));
     }
 
     fn size(&self) -> Size<Length> {
@@ -174,7 +209,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
             Len::Px(v) => Length::Fixed(v),
             Len::Fill => Length::Fill,
         };
-        Size::new(length(self.style.width), length(self.style.height))
+        Size::new(length(self.style().width), length(self.style().height))
     }
 
     fn tag(&self) -> tree::Tag {
@@ -183,16 +218,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
-            paragraph: Plain::new(spec(self.content.to_string(), &self.style, f32::INFINITY)),
+            paragraph: Plain::new(spec(
+                self.content().to_string(),
+                self.style(),
+                f32::INFINITY,
+            )),
             trim: (0.0, 0.0),
             baseline: 0.0,
             cut: RefCell::new(None),
-            animated: Animated::new(self.node),
+            animated: Animated::new(self.node()),
         })
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.state.downcast_mut::<State>().animated.diff(self.node);
+        tree.state
+            .downcast_mut::<State>()
+            .animated
+            .diff(self.node());
     }
 
     fn update(
@@ -213,8 +255,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
     }
 
     fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let s = &self.style;
-        let scale = self.node.scale();
+        let s = self.style();
+        let scale = self.node().scale();
         let state = tree.state.downcast_mut::<State>();
         // Its width when it isn't its content's: its own, its share, the
         // one it's stretched to. Shaped at it, it wraps and aligns there,
@@ -230,12 +272,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
             WhiteSpace::Normal => known.unwrap_or(limits.max().width),
             WhiteSpace::Nowrap => f32::INFINITY,
         };
-        if state.paragraph.update(spec(&self.content, s, shaped)) {
+        if state.paragraph.update(spec(self.content(), s, shaped)) {
             *state.cut.get_mut() = None;
         }
         (state.trim, state.baseline) = trims(state.paragraph.raw(), s);
 
-        let natural = if self.content.is_empty() {
+        let natural = if self.content().is_empty() {
             Size::ZERO
         } else {
             let bounds = state.paragraph.min_bounds();
@@ -280,17 +322,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        if self.content.is_empty() {
+        if self.content().is_empty() {
             return;
         }
         let state = tree.state.downcast_ref::<State>();
         // Its colour may follow an ancestor's state: `button:hover label`.
-        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node().resolve(States::NONE, &theme.ancestors);
         let moving = state.animated.style(&resolved, theme);
         let s = moving.as_ref().unwrap_or(&resolved);
         let color = fade(s.color, theme.opacity * s.opacity);
         let bounds = layout.bounds();
-        let scale = self.node.scale();
+        let scale = self.node().scale();
         // The first baseline on a whole device pixel.
         let mut y = bounds.y - state.trim.0;
         let baseline = y + state.baseline;
@@ -325,7 +367,7 @@ impl Text<'_> {
     /// The text cut to `width` with an ellipsis: the grapheme under the
     /// cut found with the shaped line's hit test.
     fn cut(&self, full: &Plain<Paragraph>, width: f32) -> Plain<Paragraph> {
-        let s = &self.style;
+        let s = self.style();
         let ellipsis = Plain::<Paragraph>::new(spec("…".to_string(), s, f32::INFINITY));
         let room = (width - ellipsis.min_bounds().width).max(0.0);
         let middle = full.min_bounds().height / 2.0;
@@ -333,11 +375,11 @@ impl Text<'_> {
             .raw()
             .hit_test(Point::new(room, middle))
             .map_or(0, |hit| hit.cursor())
-            .min(self.content.len());
-        while !self.content.is_char_boundary(at) {
+            .min(self.content().len());
+        while !self.content().is_char_boundary(at) {
             at -= 1;
         }
-        let kept = format!("{}…", self.content[..at].trim_end());
+        let kept = format!("{}…", self.content()[..at].trim_end());
         Plain::new(spec(kept, s, f32::INFINITY))
     }
 }

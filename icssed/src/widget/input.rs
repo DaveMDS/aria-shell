@@ -6,7 +6,7 @@
 //! label's is (`text-box`). iced draws the field: its colours are its
 //! nodes', but they don't transition.
 
-use std::sync::Arc;
+use std::cell::{Cell, Ref, RefCell};
 
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
@@ -19,44 +19,35 @@ use iced::widget::text_input::{self, TextInput};
 use iced::{Event, Length, Pixels, Point, Rectangle, Size, Vector, touch};
 
 use super::boxed::{BoxState, Boxed};
+use super::place::{self, Place, placed};
 use crate::layout::{flex, snap, snap_up};
 use crate::query::Reported;
-use crate::style::{Computed, Direction, EdgeOver, EdgeUnder, Node, States};
+use crate::style::{Direction, EdgeOver, EdgeUnder, Node, States, name};
 use crate::theme::FieldClass;
 use crate::{Element, Renderer, Theme};
 
 type Paragraph = <Renderer as text::Renderer>::Paragraph;
 
 pub struct Input<'a, Message> {
-    node: Node<'a>,
+    place: Place<'a>,
     field: Field<'a, Message>,
     leading: Vec<Element<'a, Message>>,
     trailing: Vec<Element<'a, Message>>,
 }
 
-/// `value` to edit: `node`, its `field` (`placeholder` shown while it's
-/// empty). Without [`Input::on_input`] it can't be edited.
-pub fn input<'a, Message: Clone + 'a>(
-    node: Node<'a>,
-    placeholder: &str,
-    value: &str,
-) -> Input<'a, Message> {
-    let field = node.child("field");
-    let style = field.base();
+/// `value` to edit: an `input`, its `field` (`placeholder` shown while
+/// it's empty). Without [`Input::on_input`] it can't be edited.
+pub fn input<'a, Message: Clone + 'a>(placeholder: &str, value: &str) -> Input<'a, Message> {
     let input = TextInput::new(placeholder, value)
-        .font(style.font)
-        .size(style.font_size)
-        .line_height(LineHeight::Absolute(Pixels(style.line_height_px)))
         .padding(0)
-        .width(Length::Fill)
-        .class(Some(FieldClass::new(field)));
+        .width(Length::Fill);
     Input {
-        node,
+        place: Place::new(name!("input")),
         field: Field {
-            node: field,
-            style,
-            disabled: node.is_disabled(),
-            input,
+            place: Place::new(name!("field")),
+            input: RefCell::new(Some(input)),
+            on_input: Cell::new(None),
+            ready: Cell::new(false),
         },
         leading: Vec::new(),
         trailing: Vec::new(),
@@ -64,32 +55,39 @@ pub fn input<'a, Message: Clone + 'a>(
 }
 
 impl<'a, Message: Clone + 'a> Input<'a, Message> {
-    /// What an edit sends: the new text. Ignored when its node is
-    /// `:disabled`.
-    pub fn on_input(mut self, on_input: impl Fn(String) -> Message + 'a) -> Self {
-        if !self.node.is_disabled() {
-            self.field.input = self.field.input.on_input(on_input);
-        }
+    placed!(place);
+
+    fn edit(
+        mut self,
+        f: impl FnOnce(
+            TextInput<'a, Message, Theme, Renderer>,
+        ) -> TextInput<'a, Message, Theme, Renderer>,
+    ) -> Self {
+        let slot = self.field.input.get_mut();
+        *slot = slot.take().map(f);
+        self
+    }
+
+    /// What an edit sends: the new text. Ignored when it's `:disabled`.
+    pub fn on_input(self, on_input: impl Fn(String) -> Message + 'a) -> Self {
+        self.field.on_input.set(Some(Box::new(on_input)));
         self
     }
 
     /// What Enter sends.
-    pub fn on_submit(mut self, message: Message) -> Self {
-        self.field.input = self.field.input.on_submit(message);
-        self
+    pub fn on_submit(self, message: Message) -> Self {
+        self.edit(|input| input.on_submit(message))
     }
 
     /// Its text shown as dots: a password's.
-    pub fn secure(mut self, secure: bool) -> Self {
-        self.field.input = self.field.input.secure(secure);
-        self
+    pub fn secure(self, secure: bool) -> Self {
+        self.edit(|input| input.secure(secure))
     }
 
     /// Its field's id, for the app to put the focus in it
     /// (`iced::widget::operation::focus`).
-    pub fn id(mut self, id: impl Into<Id>) -> Self {
-        self.field.input = self.field.input.id(id);
-        self
+    pub fn id(self, id: impl Into<Id>) -> Self {
+        self.edit(|input| input.id(id))
     }
 
     /// A child before the field: an icon.
@@ -112,47 +110,92 @@ impl<'a, Message: Clone + 'a> From<Input<'a, Message>> for Element<'a, Message> 
         children.push(Element::new(input.field));
         children.extend(input.trailing);
         Element::new(InputBox {
-            boxed: Boxed::new(input.node),
+            boxed: Boxed::placed(input.place),
             children,
             field,
         })
     }
 }
 
+type OnInput<'a, Message> = Box<dyn Fn(String) -> Message + 'a>;
+
 /// iced's text input in its box: laid out as a label is, its box from
 /// its capitals' top to its baseline, where iced centres a line box.
 /// Disabled, it's out of reach: no pointer or keys, no focus (iced's
 /// would still take it).
 struct Field<'a, Message> {
-    node: Node<'a>,
-    style: Arc<Computed>,
-    /// Its input's `:disabled`.
-    disabled: bool,
-    input: TextInput<'a, Message, Theme, Renderer>,
+    place: Place<'a>,
+    /// iced's input, given its style once the field has its node.
+    input: RefCell<Option<TextInput<'a, Message, Theme, Renderer>>>,
+    /// What an edit sends, given to the input unless it's disabled.
+    on_input: Cell<Option<OnInput<'a, Message>>>,
+    ready: Cell<bool>,
 }
 
-impl<Message: Clone> Widget<Message, Theme, Renderer> for Field<'_, Message> {
+impl<'a, Message: Clone + 'a> Field<'a, Message> {
+    fn node(&self) -> Node<'a> {
+        self.place.node()
+    }
+
+    /// Its input is `:disabled`.
+    fn disabled(&self) -> bool {
+        self.node().parent().is_some_and(Node::is_disabled)
+    }
+
+    /// The input, its style given the first time.
+    fn input(&self) -> Ref<'_, TextInput<'a, Message, Theme, Renderer>> {
+        if !self.ready.replace(true) {
+            let node = self.node();
+            let s = self.place.style();
+            let mut slot = self.input.borrow_mut();
+            let mut input = slot
+                .take()
+                .expect("an input")
+                .font(s.font)
+                .size(s.font_size)
+                .line_height(LineHeight::Absolute(Pixels(s.line_height_px)))
+                .class(FieldClass::new(node));
+            if let Some(on_input) = self.on_input.take()
+                && !self.disabled()
+            {
+                input = input.on_input(on_input);
+            }
+            *slot = Some(input);
+        }
+        Ref::map(self.input.borrow(), |input| {
+            input.as_ref().expect("an input")
+        })
+    }
+
+    fn input_mut(&mut self) -> &mut TextInput<'a, Message, Theme, Renderer> {
+        drop(self.input());
+        self.input.get_mut().as_mut().expect("an input")
+    }
+}
+
+impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Field<'a, Message> {
     fn size(&self) -> Size<Length> {
-        Widget::<Message, Theme, Renderer>::size(&self.input)
+        Widget::<Message, Theme, Renderer>::size(&*self.input())
     }
 
     fn tag(&self) -> tree::Tag {
-        Widget::<Message, Theme, Renderer>::tag(&self.input)
+        let input = self.input.borrow();
+        Widget::<Message, Theme, Renderer>::tag(input.as_ref().expect("an input"))
     }
 
     fn state(&self) -> tree::State {
-        Widget::<Message, Theme, Renderer>::state(&self.input)
+        Widget::<Message, Theme, Renderer>::state(&*self.input())
     }
 
     fn diff(&self, tree: &mut Tree) {
-        Widget::<Message, Theme, Renderer>::diff(&self.input, tree);
+        Widget::<Message, Theme, Renderer>::diff(&*self.input(), tree);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let s = &self.style;
-        let scale = self.node.scale();
+        let s = self.place.style().clone();
+        let scale = self.node().scale();
         let inner =
-            Widget::<Message, Theme, Renderer>::layout(&mut self.input, tree, renderer, limits);
+            Widget::<Message, Theme, Renderer>::layout(self.input_mut(), tree, renderer, limits);
         // One line box, its baseline where cosmic-text puts it, trimmed
         // as `text-box` says; the baseline on a whole device pixel.
         let line = inner.size().height;
@@ -194,7 +237,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Field<'_, Message> {
     ) {
         let inner = layout.children().next().expect("the input");
         Widget::<Message, Theme, Renderer>::draw(
-            &self.input,
+            &*self.input(),
             tree,
             renderer,
             theme,
@@ -216,12 +259,12 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Field<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if self.disabled && !matches!(event, Event::Window(_)) {
+        if self.disabled() && !matches!(event, Event::Window(_)) {
             return;
         }
         let inner = layout.children().next().expect("the input");
         Widget::<Message, Theme, Renderer>::update(
-            &mut self.input,
+            self.input_mut(),
             tree,
             event,
             inner,
@@ -243,7 +286,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Field<'_, Message> {
     ) -> mouse::Interaction {
         let inner = layout.children().next().expect("the input");
         Widget::<Message, Theme, Renderer>::mouse_interaction(
-            &self.input,
+            &*self.input(),
             tree,
             inner,
             cursor,
@@ -259,13 +302,13 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Field<'_, Message> {
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
-        if self.disabled {
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node()));
+        if self.disabled() {
             return;
         }
         let inner = layout.children().next().expect("the input");
         Widget::<Message, Theme, Renderer>::operate(
-            &mut self.input,
+            self.input_mut(),
             tree,
             inner,
             renderer,
@@ -309,15 +352,15 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        place::trees(self.boxed.node(), &self.children)
     }
 
     fn diff(&self, tree: &mut Tree) {
         tree.state
             .downcast_mut::<BoxState>()
             .animated
-            .diff(self.boxed.node);
-        tree.diff_children(&self.children);
+            .diff(self.boxed.node());
+        place::diff(self.boxed.node(), tree, &self.children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -327,7 +370,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
         flex(
             &style,
             style.flex_direction.unwrap_or(Direction::Row),
-            self.boxed.node.scale(),
+            self.boxed.node().scale(),
             &mut self.children,
             &mut tree.children,
             renderer,
@@ -395,7 +438,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
         | Event::Touch(touch::Event::FingerPressed { .. }) = event
             && over
-            && !self.boxed.node.is_disabled()
+            && !self.boxed.node().is_disabled()
             && !shell.is_event_captured()
         {
             tree.children[self.field]
@@ -435,7 +478,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
             .max()
             .unwrap_or_default();
         let over = cursor.is_over(self.boxed.border_box(layout.bounds()));
-        if inner == mouse::Interaction::None && over && !self.boxed.node.is_disabled() {
+        if inner == mouse::Interaction::None && over && !self.boxed.node().is_disabled() {
             mouse::Interaction::Text
         } else {
             inner
@@ -469,7 +512,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(None, bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         operation.traverse(&mut |operation| {
             for ((child, tree), layout) in self
                 .children

@@ -1,8 +1,9 @@
 //! A meter is a bar filled to a fraction:
-//! `icssed::meter(node, fraction)`, 0 to 1. A battery's charge, a disk's
+//! `icssed::meter(fraction)`, 0 to 1. A battery's charge, a disk's
 //! use; with `.label(text)` over it, a gauge.
 //!
-//!     icssed::meter(row.child("meter").class_if("warning", low), charge)
+//!     icssed::meter(charge)
+//!         .class_if("warning", low)
 //!         .label(format!("{:.0}%", charge * 100.0))
 //!
 //! - Its `fill` is the fraction of its content box wide, as tall as it.
@@ -13,7 +14,7 @@
 //!
 //! The slider moves the first one: the meter itself takes no input.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, meter, row, slider, text};
 
 use crate::Assets;
 
@@ -40,39 +41,20 @@ pub fn update(state: &mut State, message: Message) {
     state.level = level;
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
     let warning = state.level > 0.8;
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::meter(line.child("meter").class_if("warning", warning), state.level)
-                        .into(),
-                    icssed::slider(line.child("slider"), 0.0..=1.0, state.level, Message::Level)
-                        .step(0.01)
-                        .into(),
-                    icssed::text(
-                        line.child("label"),
-                        if warning { "Over 80%: .warning" } else { "Up to 80%" },
-                    )
-                    .into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    icssed::meter(line.child("meter").class("gauge"), 0.42)
-                        .label("CPU 42%")
-                        .into(),
-                    icssed::meter(line.child("meter").class("warning"), 0.85).into(),
-                ],
-            )
-            .into(),
-        ],
-    )
+    column![
+        row![
+            meter(state.level).class_if("warning", warning),
+            slider(0.0..=1.0, state.level, Message::Level).step(0.01),
+            text(if warning { "Over 80%: .warning" } else { "Up to 80%" }),
+        ]
+        .kind("line"),
+        row![
+            meter(0.42).class("gauge").label("CPU 42%"),
+            meter(0.85).class("warning"),
+        ]
+        .kind("line"),
+    ]
     .into()
 }

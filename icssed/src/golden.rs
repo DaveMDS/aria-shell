@@ -115,7 +115,7 @@ fn compare(name: &str, drawn: &Pixels) {
 /// A box with a label in it.
 fn boxed<'a>(parent: Node<'a>, kind: &str, class: &str, label: &'a str) -> Element<'a, ()> {
     let node = parent.child(kind).class_if(class, !class.is_empty());
-    crate::row(node, [crate::text(node.child("label"), label).into()]).into()
+    crate::row([crate::text(label).into()]).at(node).into()
 }
 
 fn star() -> IconFile {
@@ -150,13 +150,13 @@ fn golden_boxes() {
         Size::new(560.0, 48.0),
         |root| {
             crate::row(
-                root,
                 [
                     "fill", "border", "radius", "shadow", "inset", "sides", "four", "ring",
                     "outline", "faded", "scaled",
                 ]
-                .map(|class| crate::row(root.child("b").class(class), []).into()),
+                .map(|class| crate::row([]).kind("b").class(class).into()),
             )
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -182,36 +182,27 @@ fn golden_text() {
             let aligned = root.child("aligned");
             let pair = |untrimmed: bool, text: &'static str| -> Element<'_, ()> {
                 let node = root.child("pair").class_if("untrimmed", untrimmed);
-                crate::row(
-                    node,
-                    [
-                        crate::icon(node.child("icon"), star()).into(),
-                        crate::text(node.child("label"), text).into(),
-                    ],
-                )
-                .into()
+                crate::row([crate::icon(star()).into(), crate::text(text).into()])
+                    .at(node)
+                    .into()
             };
-            crate::column(
-                root,
-                [
-                    crate::text(root.child("label").class("big"), "Large, 20px").into(),
-                    crate::text(root.child("label").class("bold"), "Bold").into(),
-                    crate::text(root.child("label").class("caps"), "upper case").into(),
-                    boxed(root, "box", "wrap", long),
-                    boxed(root, "box", "cut", long),
-                    crate::column(
-                        aligned,
-                        [
-                            crate::text(aligned.child("label"), "Left").into(),
-                            crate::text(aligned.child("label").class("center"), "Centred").into(),
-                            crate::text(aligned.child("label").class("right"), "Right").into(),
-                        ],
-                    )
-                    .into(),
-                    pair(false, "Trimmed: Centred"),
-                    pair(true, "Untrimmed: Line Box"),
-                ],
-            )
+            crate::column([
+                crate::text("Large, 20px").class("big").into(),
+                crate::text("Bold").class("bold").into(),
+                crate::text("upper case").class("caps").into(),
+                boxed(root, "box", "wrap", long),
+                boxed(root, "box", "cut", long),
+                crate::column([
+                    crate::text("Left").into(),
+                    crate::text("Centred").class("center").into(),
+                    crate::text("Right").class("right").into(),
+                ])
+                .at(aligned)
+                .into(),
+                pair(false, "Trimmed: Centred"),
+                pair(true, "Untrimmed: Line Box"),
+            ])
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -219,31 +210,28 @@ fn golden_text() {
 }
 
 fn buttons(root: Node<'_>) -> Element<'_, ()> {
-    crate::focus_scope(crate::row(
-        root,
-        [
-            ("", "Default", false),
-            ("flat", "Flat", false),
-            ("primary", "Primary", false),
-            ("danger", "Danger", false),
-            ("", "Disabled", true),
-        ]
-        .map(|(class, label, disabled)| {
-            let node = root
-                .child("button")
-                .class_if(class, !class.is_empty())
-                .disabled_if(disabled);
-            crate::button(
-                node,
-                [
-                    crate::icon(node.child("icon"), star()).into(),
-                    crate::text(node.child("label"), label).into(),
-                ],
-            )
-            .on_press(())
-            .into()
-        }),
-    ))
+    crate::focus_scope(
+        crate::row(
+            [
+                ("", "Default", false),
+                ("flat", "Flat", false),
+                ("primary", "Primary", false),
+                ("danger", "Danger", false),
+                ("", "Disabled", true),
+            ]
+            .map(|(class, label, disabled)| {
+                let node = root
+                    .child("button")
+                    .class_if(class, !class.is_empty())
+                    .disabled_if(disabled);
+                crate::button([crate::icon(star()).into(), crate::text(label).into()])
+                    .at(node)
+                    .on_press(())
+                    .into()
+            }),
+        )
+        .at(root),
+    )
     .into()
 }
 
@@ -297,12 +285,12 @@ fn golden_flex() {
             let track = |class: &str, cells: &[&'static str]| -> Element<'_, ()> {
                 let node = root.child("track").class(class);
                 crate::row(
-                    node,
                     cells
                         .iter()
                         .map(|&cell| boxed(node, "cell", cell, cell))
                         .collect::<Vec<_>>(),
                 )
+                .at(node)
                 .into()
             };
             let menu = root.child("list");
@@ -310,30 +298,24 @@ fn golden_flex() {
                 ("Open", "Ctrl+O"),
                 ("A label far too long for its menu", "Ctrl+L"),
             ];
-            crate::column(
-                root,
-                [
-                    track("plain", &["fill", "fixed", "fill"]),
-                    track("center", &["fixed", "fixed"]),
-                    track("align", &["tall", "fixed"]),
-                    crate::column(
-                        menu,
-                        items.map(|(label, key)| {
-                            let item = menu.child("entry");
-                            crate::row(
-                                item,
-                                [
-                                    crate::icon(item.child("icon"), star()).into(),
-                                    crate::text(item.child("label"), label).into(),
-                                    crate::text(item.child("shortcut"), key).into(),
-                                ],
-                            )
-                            .into()
-                        }),
-                    )
-                    .into(),
-                ],
-            )
+            crate::column([
+                track("plain", &["fill", "fixed", "fill"]),
+                track("center", &["fixed", "fixed"]),
+                track("align", &["tall", "fixed"]),
+                crate::column(items.map(|(label, key)| {
+                    let item = menu.child("entry");
+                    crate::row([
+                        crate::icon(star()).into(),
+                        crate::text(label).into(),
+                        crate::text(key).kind("shortcut").into(),
+                    ])
+                    .at(item)
+                    .into()
+                }))
+                .at(menu)
+                .into(),
+            ])
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -370,14 +352,12 @@ fn golden_images() {
         Some(&dir),
         Size::new(200.0, 60.0),
         move |root| {
-            crate::row(
-                root,
-                [
-                    crate::icon(root.child("icon"), star()).into(),
-                    crate::row(root.child("tiled"), []).into(),
-                    crate::image(root.child("picture"), photo.clone()).into(),
-                ],
-            )
+            crate::row([
+                crate::icon(star()).into(),
+                crate::row([]).kind("tiled").into(),
+                crate::image(photo.clone()).kind("picture").into(),
+            ])
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -386,50 +366,35 @@ fn golden_images() {
 
 fn controls(root: Node<'_>) -> Element<'_, ()> {
     let line = root.child("line");
-    crate::focus_scope(crate::column(
-        root,
-        [
-            crate::row(
-                line,
-                [
-                    crate::toggle(line.child("toggle"), false, |_| ())
-                        .switch()
-                        .into(),
-                    crate::toggle(line.child("toggle"), true, |_| ())
-                        .switch()
-                        .into(),
-                    crate::toggle(line.child("toggle").disabled_if(true), true, |_| ())
-                        .switch()
-                        .into(),
-                ],
-            )
-            .into(),
-            crate::row(
-                line,
-                [
-                    crate::slider(line.child("slider"), 0.0..=100.0, 30.0, |_| ()).into(),
-                    crate::slider(
-                        line.child("slider").disabled_if(true),
-                        0.0..=1.0,
-                        0.7,
-                        |_| (),
-                    )
+    crate::focus_scope(
+        crate::column([
+            crate::row([
+                crate::toggle(false, |_| ()).switch().into(),
+                crate::toggle(true, |_| ()).switch().into(),
+                crate::toggle(true, |_| ())
+                    .disabled_if(true)
+                    .switch()
                     .into(),
-                ],
-            )
+            ])
+            .at(line)
             .into(),
-            crate::row(
-                line,
-                [
-                    crate::meter(line.child("meter"), 0.6).into(),
-                    crate::meter(line.child("meter").class("gauge"), 0.42)
-                        .label("CPU 42%")
-                        .into(),
-                ],
-            )
+            crate::row([
+                crate::slider(0.0..=100.0, 30.0, |_| ()).into(),
+                crate::slider(0.0..=1.0, 0.7, |_| ())
+                    .disabled_if(true)
+                    .into(),
+            ])
+            .at(line)
             .into(),
-        ],
-    ))
+            crate::row([
+                crate::meter(0.6).into(),
+                crate::meter(0.42).class("gauge").label("CPU 42%").into(),
+            ])
+            .at(line)
+            .into(),
+        ])
+        .at(root),
+    )
     .into()
 }
 
@@ -486,22 +451,21 @@ fn golden_toggles() {
             let toggle = line.child("toggle");
             let looks = |look: fn(crate::Toggle<'_, ()>) -> crate::Toggle<'_, ()>| {
                 crate::row(
-                    line,
                     [
                         (toggle, false, "Off"),
                         (toggle, true, "On"),
                         (toggle.disabled_if(true), true, "Off limits"),
                     ]
                     .map(|(node, on, text)| {
-                        look(crate::toggle(node, on, |_| ()).label(text)).into()
+                        look(crate::toggle(on, |_| ()).at(node).label(text)).into()
                     }),
                 )
+                .at(line)
                 .into()
             };
-            crate::focus_scope(crate::column(
-                root,
-                [looks(|t| t), looks(|t| t.check()), looks(|t| t.switch())],
-            ))
+            crate::focus_scope(
+                crate::column([looks(|t| t), looks(|t| t.check()), looks(|t| t.switch())]).at(root),
+            )
             .into()
         },
         |ui, _| {
@@ -524,29 +488,32 @@ fn golden_inputs() {
         |root| {
             let input = root.child("input");
             let peek = input.child("button").class("peek");
-            crate::column(
-                root,
-                [
-                    crate::input(input, "Placeholder", "")
-                        .on_input(|_| ())
-                        .into(),
-                    crate::input(input, "Search", "A value")
-                        .on_input(|_| ())
-                        .leading(crate::icon(input.child("icon"), star()))
-                        .into(),
-                    crate::input(input, "Password", "secret")
-                        .on_input(|_| ())
-                        .secure(true)
-                        .trailing(
-                            crate::button(peek, [crate::icon(peek.child("icon"), star()).into()])
-                                .on_press(()),
-                        )
-                        .into(),
-                    crate::input(input.disabled_if(true), "Disabled", "")
-                        .on_input(|_| ())
-                        .into(),
-                ],
-            )
+            crate::column([
+                crate::input("Placeholder", "")
+                    .at(input)
+                    .on_input(|_| ())
+                    .into(),
+                crate::input("Search", "A value")
+                    .at(input)
+                    .on_input(|_| ())
+                    .leading(crate::icon(star()))
+                    .into(),
+                crate::input("Password", "secret")
+                    .at(input)
+                    .on_input(|_| ())
+                    .secure(true)
+                    .trailing(
+                        crate::button([crate::icon(star()).into()])
+                            .at(peek)
+                            .on_press(()),
+                    )
+                    .into(),
+                crate::input("Disabled", "")
+                    .at(input.disabled_if(true))
+                    .on_input(|_| ())
+                    .into(),
+            ])
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -570,31 +537,29 @@ fn golden_scroll() {
             let rows = list.child("rows");
             let strip = scrolls.child("scroll").class("strip");
             let cells = strip.child("cells");
-            let scrolls = crate::row(
-                scrolls,
-                [
-                    crate::scroll(
-                        list,
-                        crate::column(
-                            rows,
-                            ["One", "Two", "Three", "Four", "Five", "Six", "Seven"]
-                                .map(|label| crate::text(rows.child("label"), label).into()),
-                        ),
+            let scrolls = crate::row([
+                crate::scroll(
+                    crate::column(
+                        ["One", "Two", "Three", "Four", "Five", "Six", "Seven"]
+                            .map(|label| crate::text(label).into()),
                     )
-                    .into(),
-                    crate::scroll(
-                        strip,
-                        crate::row(
-                            cells,
-                            ["A", "B", "C", "D", "E", "F", "G", "H"]
-                                .map(|label| boxed(cells, "cell", "", label)),
-                        ),
+                    .at(rows),
+                )
+                .at(list)
+                .into(),
+                crate::scroll(
+                    crate::row(
+                        ["A", "B", "C", "D", "E", "F", "G", "H"]
+                            .map(|label| boxed(cells, "cell", "", label)),
                     )
-                    .horizontal()
-                    .into(),
-                ],
-            );
-            crate::column(root, [scrolls.into()]).into()
+                    .at(cells),
+                )
+                .at(strip)
+                .horizontal()
+                .into(),
+            ])
+            .at(scrolls);
+            crate::column([scrolls.into()]).at(root).into()
         },
         |ui, _| {
             // The list a little down.
@@ -624,32 +589,30 @@ fn golden_menu() {
         Size::new(240.0, 320.0),
         |root| {
             use crate::MenuItem;
-            crate::focus_scope(crate::column(
-                root,
-                [crate::menu(
-                    root.child("menu"),
-                    [
-                        MenuItem::new("Open")
-                            .icon(star())
-                            .shortcut("Ctrl+O")
-                            .on_press(()),
-                        MenuItem::new("A label far too long for its menu")
-                            .shortcut("Ctrl+L")
-                            .on_press(()),
-                        MenuItem::new("Disabled"),
-                        MenuItem::separator(),
-                        MenuItem::new("Checked").check(true).on_press(()),
-                        MenuItem::new("Unchecked").check(false).on_press(()),
-                        MenuItem::new("Radio on").radio(true).on_press(()),
-                        MenuItem::new("Radio off").radio(false).on_press(()),
-                        MenuItem::separator(),
-                        MenuItem::new("More")
-                            .on_press(())
-                            .submenu(true, [MenuItem::new("Inside").icon(star()).on_press(())]),
-                        MenuItem::new("Folded").on_press(()).submenu(false, []),
-                    ],
-                )],
-            ))
+            crate::focus_scope(
+                crate::column([crate::menu([
+                    MenuItem::new("Open")
+                        .icon(star())
+                        .shortcut("Ctrl+O")
+                        .on_press(()),
+                    MenuItem::new("A label far too long for its menu")
+                        .shortcut("Ctrl+L")
+                        .on_press(()),
+                    MenuItem::new("Disabled"),
+                    MenuItem::separator(),
+                    MenuItem::new("Checked").check(true).on_press(()),
+                    MenuItem::new("Unchecked").check(false).on_press(()),
+                    MenuItem::new("Radio on").radio(true).on_press(()),
+                    MenuItem::new("Radio off").radio(false).on_press(()),
+                    MenuItem::separator(),
+                    MenuItem::new("More")
+                        .on_press(())
+                        .submenu(true, [MenuItem::new("Inside").icon(star()).on_press(())]),
+                    MenuItem::new("Folded").on_press(()).submenu(false, []),
+                ])
+                .into()])
+                .at(root),
+            )
             .into()
         },
         |ui, _| {
@@ -668,14 +631,14 @@ fn golden_tabs() {
         None,
         Size::new(280.0, 44.0),
         |root| {
-            crate::focus_scope(crate::column(
-                root,
-                [crate::tabs(
-                    root.child("tabs"),
+            crate::focus_scope(
+                crate::column([crate::tabs(
                     ["Overview", "Details", "Settings"]
                         .map(|title| crate::Tab::new(title, ()).active(title == "Details")),
-                )],
-            ))
+                )
+                .into()])
+                .at(root),
+            )
             .into()
         },
         |ui, sheet| {
@@ -697,21 +660,18 @@ fn golden_calendar() {
         None,
         Size::new(240.0, 300.0),
         |root| {
-            crate::column(
-                root,
-                [crate::calendar(
-                    root.child("calendar"),
-                    crate::Month::new(2026, 10),
-                    "October 2026",
-                    ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
-                )
-                .today(2026, 10, 10)
-                .selected(2026, 10, 15)
-                .on_previous(())
-                .on_next(())
-                .on_select(|_| ())
-                .into()],
+            crate::column([crate::calendar(
+                crate::Month::new(2026, 10),
+                "October 2026",
+                ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
             )
+            .today(2026, 10, 10)
+            .selected(2026, 10, 15)
+            .on_previous(())
+            .on_next(())
+            .on_select(|_| ())
+            .into()])
+            .at(root)
             .into()
         },
         |ui, sheet| {
@@ -736,22 +696,21 @@ fn golden_graphs() {
             let wave = |phase: f32, n: usize| {
                 (0..n).map(move |i| 50.0 + 40.0 * (i as f32 / 5.0 + phase).sin())
             };
-            crate::row(
-                root,
-                [
-                    crate::graph(root.child("graph"), 40)
-                        .series(wave(0.0, 40))
-                        .series_class("second", wave(1.5, 25))
-                        .max(100.0)
-                        .label("100")
-                        .into(),
-                    crate::graph(root.child("sparkline"), 20)
-                        .series(wave(0.5, 20))
-                        .max(100.0)
-                        .label("42%")
-                        .into(),
-                ],
-            )
+            crate::row([
+                crate::graph(40)
+                    .series(wave(0.0, 40))
+                    .series_class("second", wave(1.5, 25))
+                    .max(100.0)
+                    .label("100")
+                    .into(),
+                crate::graph(20)
+                    .kind("sparkline")
+                    .series(wave(0.5, 20))
+                    .max(100.0)
+                    .label("42%")
+                    .into(),
+            ])
+            .at(root)
             .into()
         },
         |_, _| {},
@@ -768,19 +727,14 @@ fn golden_tooltip() {
         Size::new(220.0, 70.0),
         |root| {
             let button = root.child("button");
-            crate::column(
-                root,
-                [crate::tooltip(
-                    crate::button(
-                        button,
-                        [crate::text(button.child("label"), "Rest here").into()],
-                    )
+            crate::column([crate::tooltip(
+                crate::button([crate::text("Rest here").into()])
+                    .at(button)
                     .on_press(()),
-                    root.child("tooltip"),
-                    "A tip, under what it's about",
-                )
-                .into()],
+                "A tip, under what it's about",
             )
+            .into()])
+            .at(root)
             .into()
         },
         |ui, sheet| {
@@ -801,16 +755,15 @@ fn golden_select() {
         None,
         Size::new(220.0, 160.0),
         |root| {
-            crate::focus_scope(crate::column(
-                root,
-                [crate::select(
-                    root.child("select"),
+            crate::focus_scope(
+                crate::column([crate::select(
                     ["Follow the system", "Light", "Dark"],
                     Some(2),
                     |_| (),
                 )
-                .into()],
-            ))
+                .into()])
+                .at(root),
+            )
             .into()
         },
         |ui, sheet| {

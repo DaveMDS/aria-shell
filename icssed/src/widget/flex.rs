@@ -16,13 +16,14 @@ use iced::keyboard::{self, key};
 use iced::{Event, Length, Rectangle, Size, Vector, touch};
 
 use super::boxed::{BoxState, Boxed};
+use super::place::{self, Place, placed};
 use crate::layout::flex;
 use crate::query::Reported;
-use crate::style::{Direction, Node, States};
+use crate::style::{Direction, Name, States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Flex<'a, Message> {
-    boxed: Boxed<'a>,
+    pub(crate) boxed: Boxed<'a>,
     /// The constructor's; the theme's `flex-direction` wins.
     direction: Direction,
     children: Vec<Element<'a, Message>>,
@@ -31,39 +32,70 @@ pub struct Flex<'a, Message> {
     id: Option<widget::Id>,
 }
 
-/// A box laying `children` out in a row.
+/// A `row` box laying `children` out in a row.
 pub fn row<'a, Message>(
-    node: Node<'a>,
     children: impl IntoIterator<Item = Element<'a, Message>>,
 ) -> Flex<'a, Message> {
-    Flex::new(node, Direction::Row, children)
+    Flex::of(name!("row"), Direction::Row, children)
 }
 
-/// A box laying `children` out in a column.
+/// A `column` box laying `children` out in a column.
 pub fn column<'a, Message>(
-    node: Node<'a>,
     children: impl IntoIterator<Item = Element<'a, Message>>,
 ) -> Flex<'a, Message> {
-    Flex::new(node, Direction::Column, children)
+    Flex::of(name!("column"), Direction::Column, children)
 }
 
-/// A row to press: give it an [`Flex::on_press`]. Its variants are
-/// classes of its node (`button.primary`), its look the theme's.
+/// A `button`: a row to press, given an [`Flex::on_press`]. Its
+/// variants are its classes (`button.primary`), its look the theme's.
 pub fn button<'a, Message>(
-    node: Node<'a>,
     children: impl IntoIterator<Item = Element<'a, Message>>,
 ) -> Flex<'a, Message> {
-    Flex::new(node, Direction::Row, children)
+    Flex::of(name!("button"), Direction::Row, children)
+}
+
+/// A row of any widgets: `row![icon(star), text("Save")]`.
+#[macro_export]
+macro_rules! row {
+    ($($child:expr),* $(,)?) => {
+        $crate::row([$(::core::convert::Into::<$crate::Element<'_, _>>::into($child)),*])
+    };
+}
+
+/// A column of any widgets.
+#[macro_export]
+macro_rules! column {
+    ($($child:expr),* $(,)?) => {
+        $crate::column([$(::core::convert::Into::<$crate::Element<'_, _>>::into($child)),*])
+    };
+}
+
+/// A button of any widgets.
+#[macro_export]
+macro_rules! button {
+    ($($child:expr),* $(,)?) => {
+        $crate::button([$(::core::convert::Into::<$crate::Element<'_, _>>::into($child)),*])
+    };
 }
 
 impl<'a, Message> Flex<'a, Message> {
-    fn new(
-        node: Node<'a>,
+    /// A `kind` box.
+    pub(crate) fn of(
+        kind: Name,
+        direction: Direction,
+        children: impl IntoIterator<Item = Element<'a, Message>>,
+    ) -> Self {
+        Self::placed(Place::new(kind), direction, children)
+    }
+
+    /// A box in `place`: a widget made of boxes gives its own.
+    pub(crate) fn placed(
+        place: Place<'a>,
         direction: Direction,
         children: impl IntoIterator<Item = Element<'a, Message>>,
     ) -> Self {
         Self {
-            boxed: Boxed::new(node),
+            boxed: Boxed::placed(place),
             direction,
             children: children.into_iter().collect(),
             on_press: None,
@@ -71,6 +103,8 @@ impl<'a, Message> Flex<'a, Message> {
             id: None,
         }
     }
+
+    placed!(boxed.place);
 
     /// Its iced id, for operations: where it is (an app opening a
     /// surface by it), focusing a button. Unique across windows: an
@@ -95,7 +129,7 @@ impl<'a, Message> Flex<'a, Message> {
     }
 
     fn pressable(&self) -> bool {
-        self.on_press.is_some() && !self.boxed.node.is_disabled()
+        self.on_press.is_some() && !self.boxed.node().is_disabled()
     }
 }
 
@@ -113,15 +147,15 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        place::trees(self.boxed.node(), &self.children)
     }
 
     fn diff(&self, tree: &mut Tree) {
         tree.state
             .downcast_mut::<BoxState>()
             .animated
-            .diff(self.boxed.node);
-        tree.diff_children(&self.children);
+            .diff(self.boxed.node());
+        place::diff(self.boxed.node(), tree, &self.children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -132,7 +166,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         flex(
             &style,
             direction,
-            self.boxed.node.scale(),
+            self.boxed.node().scale(),
             &mut self.children,
             &mut tree.children,
             renderer,
@@ -299,7 +333,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(self.id.as_ref(), bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         if self.pressable() {
             operation.focusable(
                 self.id.as_ref(),

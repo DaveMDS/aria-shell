@@ -140,11 +140,11 @@ Custom     (gadgets/custom.rs) impl Gadget: icon and/or label, a program per mou
   script() -> Option<scripts::Spec>                the `exec` for the daemon; its output read from `ctx.scripts`
 
 Menu       (menu.rs)        reusable component: Item tree (labels, toggles, separators, submenus unfolding in
-                            place) -> update(Message) -> Event, view(node, items): the toolkit's `menu`, the
+                            place) -> update(Message) -> Event, view(items): the toolkit's `menu`, the
                             submenus unfolded kept here (its widgets are controlled)
 
 Calendar   (calendar.rs)    reusable component, not a gadget: the month shown + Message + update +
-                            view(today, locale, node): the toolkit's `calendar`, the words the locale's
+                            view(today, locale): the toolkit's `calendar`, the words the locale's
 
 Popup      (popup.rs)       a gadget's popup's shape: `Side` (below a top bar's widget, above a bottom bar's),
                             `view` (the content in the `popup` root's box, an `icssed::surface` with its
@@ -175,7 +175,7 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
-  ui/toast.rs               node(root, n, output) / node_under(parent, n) / view(node, .., Extras) / surface(..):
+  ui/toast.rs               view(n, .., Extras) / surface(root, n, ..) / node(root, n) (for its shadow's room):
                             the one view of a notification, on its own layer surface (`Toasts`: one per
                             notification, `sync(&Notifications, outputs, focused, ..) -> Surfaces` after every
                             change, each measured, stacked from the configured corner with `placement` /
@@ -415,8 +415,8 @@ PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the p
                             bookmark of a listed place left out; the devices then the local mounts, the
                             shares (`volume()`, one row for all): `button.open` (icon, label, the usage
                             meter when known) and, while mounted,
-                            `button.eject` (disabled on `/`; nodes built disabled in `view`, so the icon takes
-                            `button:disabled`'s colour); as wide as the widest row
+                            `button.eject` (disabled on `/`, so the icon takes `button:disabled`'s colour); as
+                            wide as the widest row
   Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
            | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
            | MountDir(dir) -> Places(MountDir), closed | UnmountDir(dir) -> Places(UnmountDir)
@@ -455,7 +455,7 @@ Theme      (theme.rs)       daemon-owned styling: the toolkit's base, aria.css a
                             into one `icssed::Sheet` for one Scheme
   load / try_load(&Config, style, scheme)   what can't be used logged with its file:line:col, a syntax
                             error rejecting the user's file (a reload keeps the last good one)
-  root(kind, scale)         a surface's root node, what its view builds its nodes from
+  root(kind, scale)         a surface's root node: where its view is (`.at(root)`), and its style read
   scheme() / name()         what's loaded; `available()` lists the themes/*.css of every theme dir
   Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
                             keeps `style`/`scheme` at runtime and reloads (no persistence)
@@ -568,7 +568,7 @@ Two things flow between the daemon and the gadgets besides messages:
 
 - **`gadgets::Context`** goes *down*, into `view`. It holds
   `Shared` (`shared.rs`: `&Compositor`, `&Theme`, `&Icons`, `&Tray`,
-  `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `Node` (the toolkit's). A
+  `&Audio`, `&Network`, ...): daemon-owned, read-only. A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.
 - **`gadgets::Action`** comes *up*, out of `update`, in place of a bare
@@ -638,7 +638,7 @@ Two things flow between the daemon and the gadgets besides messages:
   :root.<scheme>`: a user theme's plain variable still beats the base's
   scheme one); a theme that only sets `:root` looks the same in both.
   The sheet gives every root the scheme as a class, so `panel.dark { }`
-  rules work without touching the nodes gadgets build. `aria.css`
+  rules work without touching the elements gadgets build. `aria.css`
   repeats both of the toolkit's palettes (`--bg`, `--accent`,
   `--warning`, ...), the same values, so a theme's palette restyles
   the toolkit's widgets too.
@@ -668,11 +668,13 @@ Two things flow between the daemon and the gadgets besides messages:
   for theme authors, the toolkit's base its widgets' and the
   properties; `[general] style` names a user theme loaded on top
   (`themes/<name>.css` in the config dirs, the XDG data dirs, then
-  `assets/`; or a path). In `view` every widget has a `Node`, built from
-  its surface's root (`Theme::root(kind, scale)`: `panel`, `popup`,
-  `launcher`, ...) down (`panel.top#2 > slot.start > gadget.workspaces
-  > button.workspace.active`): a `Copy` handle on the sheet, its style
-  resolved where it's made. Class names are the Rust roles (`panel`,
+  `assets/`; or a path). In `view` every widget is an element: its type
+  and classes said on it, its place found by the toolkit under the
+  container it's in, from its surface's root (`Theme::root(kind,
+  scale)`: `panel`, `popup`, `launcher`, ..., given with `.at(root)`)
+  down (`panel.top#2 > slot.start > gadget.workspaces >
+  button.workspace.active`; the bar puts each gadget's view in an
+  `icssed::slot` that makes it `gadget.<kind>`). Class names are the Rust roles (`panel`,
   `slot`, `gadget.clock`, `button.workspace`, ...), not the Python/GTK
   ones. A surface's size is its content's, laid out headlessly
   (`icssed::Measure`, one tree per surface; `ui::size`) with its root at
@@ -682,7 +684,7 @@ Two things flow between the daemon and the gadgets besides messages:
   transparent (`daemon(..).style`), the theme's `panel`/`popup`
   background is what shows, so `rgba` bars and rounded popups work.
   Gadgets must not hard-code colours, paddings, spacing or sizes:
-  derive nodes from `ctx.node` and build the toolkit's widgets on them.
+  build the toolkit's widgets and say what each element is.
 - **App icons** (`services/icons/`) are a daemon-owned source with the usual
   verbs. Resolution is `class` -> desktop entry (by id, `StartupWMClass`,
   `Exec` basename, reverse-DNS suffix) -> `Icon=` -> theme lookup, then

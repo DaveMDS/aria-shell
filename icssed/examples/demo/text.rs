@@ -1,7 +1,8 @@
-//! A text is a paragraph: `icssed::text(node, content)`. Its font, size,
+//! A text is a paragraph: `icssed::text(content)`, a `label`. Its font, size,
 //! weight, colour and alignment are the sheet's.
 //!
-//!     icssed::text(row.child("label").class("muted"), &item.name)
+//!     icssed::text(&item.name).class("muted")
+//!     icssed::text(&item.size).kind("size")
 //!
 //! - It wraps at words by its box's width; `white-space: nowrap` keeps
 //!   it on one line, and `text-overflow: ellipsis` cuts it with an
@@ -16,12 +17,12 @@
 //! - It's shaped once and kept: a text that doesn't change costs nothing
 //!   at the next view.
 //!
-//! `icssed::mark(node)` is a text whose words are the sheet's
+//! `icssed::mark()` is a text whose words are the sheet's
 //! (`content`): a check, an arrow, the bullets of this demo's Info.
 
 use std::borrow::Cow;
 
-use icssed::{Element, Node};
+use icssed::{Element, column, icon, row, text};
 
 use crate::Assets;
 
@@ -41,54 +42,32 @@ pub fn update(_state: &mut State, message: Message) {
     match message {}
 }
 
-pub fn view<'a>(_state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let label = |class: &str, text: &'static str| -> Element<'a, Message> {
-        icssed::text(line.child("label").class_if(class, !class.is_empty()), text).into()
+pub fn view<'a>(_state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let boxed = |class: &str, content: Cow<'static, str>| row![text(content)].kind("box").class(class);
+    let pair = |untrimmed: bool, content: &'static str| {
+        row![icon(assets.star.clone()), text(content)]
+            .kind("pair")
+            .class_if("untrimmed", untrimmed)
     };
-    let boxed = |class: &str, text: Cow<'static, str>| -> Element<'a, Message> {
-        let boxed = line.child("box").class(class);
-        icssed::row(boxed, [icssed::text(boxed.child("label"), text).into()]).into()
-    };
-    let pair = |untrimmed: bool, text: &'static str| -> Element<'a, Message> {
-        let pair = node.child("pair").class_if("untrimmed", untrimmed);
-        icssed::row(
-            pair,
-            [
-                icssed::icon(pair.child("icon"), assets.star.clone()).into(),
-                icssed::text(pair.child("label"), text).into(),
-            ],
-        )
-        .into()
-    };
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    label("small", "Small"),
-                    label("", "Regular"),
-                    label("large", "Large"),
-                    label("bold", "Bold"),
-                    label("italic", "Italic"),
-                    label("muted", "Muted"),
-                    label("caps", "Upper case"),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    boxed("wrap", LONG.into()),
-                    boxed("cut", LONG.into()),
-                    boxed("center", "Centred\nin its box".into()),
-                ],
-            )
-            .into(),
-            pair(false, "Trimmed: Centred On Its Letters"),
-            pair(true, "Untrimmed: Centred On Its Line Box"),
-        ],
-    )
+    column![
+        row![
+            text("Small").class("small"),
+            text("Regular"),
+            text("Large").class("large"),
+            text("Bold").class("bold"),
+            text("Italic").class("italic"),
+            text("Muted").class("muted"),
+            text("Upper case").class("caps"),
+        ]
+        .kind("line"),
+        row![
+            boxed("wrap", LONG.into()),
+            boxed("cut", LONG.into()),
+            boxed("center", "Centred\nin its box".into()),
+        ]
+        .kind("line"),
+        pair(false, "Trimmed: Centred On Its Letters"),
+        pair(true, "Untrimmed: Centred On Its Line Box"),
+    ]
     .into()
 }

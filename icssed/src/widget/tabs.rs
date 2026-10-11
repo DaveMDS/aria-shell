@@ -5,11 +5,12 @@
 
 use std::borrow::Cow;
 
-use super::flex::{button, row};
+use super::flex::{Flex, button, row};
 use super::focus::{Keys, arrow_scope};
+use super::place::placed;
 use super::text::text;
 use crate::Element;
-use crate::style::Node;
+use crate::style::name;
 
 /// One tab: its label, what its press sends.
 pub struct Tab<'a, Message> {
@@ -42,22 +43,36 @@ impl<'a, Message> Tab<'a, Message> {
     }
 }
 
-/// `tabs` in a row: `node`, a `tab` each.
+/// The `tabs`: a row, a `tab` each.
 pub fn tabs<'a, Message: Clone + 'a>(
-    node: Node<'a>,
     tabs: impl IntoIterator<Item = Tab<'a, Message>>,
-) -> Element<'a, Message> {
-    let tabs: Vec<Tab<'a, Message>> = tabs.into_iter().collect();
-    let count = tabs.len();
-    let buttons = tabs.into_iter().enumerate().map(|(i, tab)| {
-        let mut node = node.child_at("tab", i, count);
-        for class in &tab.classes {
-            node = node.class(class);
-        }
-        let node = node.class_if("active", tab.active);
-        button(node, [text(node.child("label"), tab.label).into()])
+) -> Tabs<'a, Message> {
+    let buttons = tabs.into_iter().map(|tab| {
+        tab.classes
+            .iter()
+            .fold(
+                button([text(tab.label).into()]).kind_of(name!("tab")),
+                |b, class| b.class(class),
+            )
+            .class_if("active", tab.active)
             .on_press(tab.on_press)
             .into()
     });
-    arrow_scope(Keys::LeftRight, row(node, buttons)).into()
+    Tabs {
+        row: row(buttons).kind_of(name!("tabs")),
+    }
+}
+
+pub struct Tabs<'a, Message> {
+    row: Flex<'a, Message>,
+}
+
+impl<'a, Message> Tabs<'a, Message> {
+    placed!(row.boxed.place);
+}
+
+impl<'a, Message: Clone + 'a> From<Tabs<'a, Message>> for Element<'a, Message> {
+    fn from(tabs: Tabs<'a, Message>) -> Self {
+        arrow_scope(Keys::LeftRight, tabs.row).into()
+    }
 }

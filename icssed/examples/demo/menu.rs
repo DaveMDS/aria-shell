@@ -1,8 +1,8 @@
-//! A menu is a list of items to pick from: `icssed::menu(node, items)`,
+//! A menu is a list of items to pick from: `icssed::menu(items)`,
 //! each item a `MenuItem`. It's a widget like any other, drawn where the
 //! view puts it: a popup is the app's surface with a menu inside.
 //!
-//!     icssed::menu(node, [
+//!     icssed::menu([
 //!         MenuItem::new("Open").icon(star).shortcut("Ctrl+O")
 //!             .on_press(Message::Open),
 //!         MenuItem::separator(),
@@ -24,7 +24,7 @@
 //! sheet's: `content` on `item > check` and `item > arrow`, picked by
 //! the item's classes.
 
-use icssed::{Element, MenuItem, Node};
+use icssed::{Element, MenuItem, column, menu, text};
 
 use crate::Assets;
 
@@ -57,15 +57,14 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let picked = match state.picked {
         Some(label) => format!("Picked: {label}"),
         None => "Nothing picked yet: click, or Tab to an item then Up, Down, Enter".into(),
     };
     let item = |label: &'static str| MenuItem::new(label).on_press(Message::Picked(label));
-    let menu = icssed::menu(
-        node.child("menu"),
-        [
+    column![
+        menu([
             item("Open").icon(assets.star.clone()).shortcut("Ctrl+O"),
             item("A label far too long for its menu, cut short").shortcut("Ctrl+L"),
             MenuItem::new("Paste, disabled").shortcut("Ctrl+V"),
@@ -87,11 +86,8 @@ pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element
                     item("Delete").class("danger"),
                 ],
             ),
-        ],
-    );
-    icssed::column(
-        node,
-        [menu, icssed::text(node.child("status"), picked).into()],
-    )
+        ]),
+        text(picked).kind("status"),
+    ]
     .into()
 }

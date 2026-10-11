@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::services::places::{
@@ -86,15 +86,17 @@ impl Gadget for PlacesGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let button = ctx.node.child("button");
-        let mut content = vec![ctx.icon(button.child("icon"), self.config.icon.as_str())];
+        let mut content: Vec<Element<'a, Message>> =
+            vec![ctx.icon(self.config.icon.as_str()).into()];
         if !self.config.label.is_empty() {
-            content.push(icssed::text(button.child("label"), self.config.label.as_str()).into());
+            content.push(icssed::text(self.config.label.as_str()).into());
         }
-        let button = icssed::button(button, content)
-            .on_press(Message::TogglePopup)
-            .id(self.popup.anchor());
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![
+            icssed::button(content)
+                .on_press(Message::TogglePopup)
+                .id(self.popup.anchor())
+        ]
+        .into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -102,8 +104,7 @@ impl Gadget for PlacesGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let list = ctx.node.child("list");
-        icssed::column(list, self.rows(ctx, list)).into()
+        icssed::column(self.rows(ctx)).kind("list").into()
     }
 }
 
@@ -131,27 +132,19 @@ impl PlacesGadget {
 
     /// Every row of the popup: a header and the places of each section
     /// shown, the empty ones left out.
-    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
+    fn rows<'a>(&'a self, ctx: Context<'a>) -> Vec<Element<'a, Message>> {
         let places = ctx.places.places();
         let shows_places = self.config.show.contains(&Group::Places);
         let mut rows = Vec::new();
         for &group in &self.config.show {
             let entries: Vec<Element<'a, Message>> = match group {
-                Group::Places => places.iter().map(|p| self.item(ctx, list, p)).collect(),
+                Group::Places => places.iter().map(|p| self.item(ctx, p)).collect(),
                 Group::Devices => {
-                    let devices = ctx
-                        .places
-                        .devices()
-                        .iter()
-                        .map(|d| self.device(ctx, list, d));
-                    let mounts = ctx.places.local_mounts().map(|m| self.mount(ctx, list, m));
+                    let devices = ctx.places.devices().iter().map(|d| self.device(ctx, d));
+                    let mounts = ctx.places.local_mounts().map(|m| self.mount(ctx, m));
                     devices.chain(mounts).collect()
                 }
-                Group::Network => ctx
-                    .places
-                    .shares()
-                    .map(|s| self.mount(ctx, list, s))
-                    .collect(),
+                Group::Network => ctx.places.shares().map(|s| self.mount(ctx, s)).collect(),
                 // A bookmark of a place listed above isn't repeated
                 // (GTK's file managers bookmark the home, often).
                 Group::Bookmarks => ctx
@@ -159,7 +152,7 @@ impl PlacesGadget {
                     .bookmarks()
                     .iter()
                     .filter(|b| !(shows_places && places.iter().any(|p| p.target == b.target)))
-                    .map(|p| self.item(ctx, list, p))
+                    .map(|p| self.item(ctx, p))
                     .collect(),
             };
             if entries.is_empty() {
@@ -171,40 +164,39 @@ impl PlacesGadget {
                 Group::Network => ctx.locale.tr("places.network"),
                 Group::Bookmarks => ctx.locale.tr("places.bookmarks"),
             };
-            let header = list.child("header").class(group.name());
             rows.push(
-                icssed::row(header, [icssed::text(header.child("title"), title).into()]).into(),
+                icssed::row![icssed::text(title).kind("title")]
+                    .kind("header")
+                    .class(group.name())
+                    .into(),
             );
             rows.extend(entries);
         }
         if rows.is_empty() {
-            rows.push(super::note(
-                list.child("empty"),
-                ctx.locale.tr("places.empty"),
-            ));
+            rows.push(
+                super::note(ctx.locale.tr("places.empty"))
+                    .kind("empty")
+                    .into(),
+            );
         }
         rows
     }
 
     /// A place: a button with its icon and its name.
-    fn item<'a>(&'a self, ctx: Context<'a>, list: Node<'a>, place: &Place) -> Element<'a, Message> {
+    fn item<'a>(&'a self, ctx: Context<'a>, place: &Place) -> Element<'a, Message> {
         let full = place.kind == Kind::Trash && ctx.places.trash_full();
-        let node = list
-            .child("item")
-            .class(place.kind.name())
-            .class_if("full", full);
         let label = match place.kind {
             Kind::Home => ctx.locale.tr("places.home").to_owned(),
             Kind::Trash => ctx.locale.tr("places.trash").to_owned(),
             _ => place.label.clone(),
         };
-        icssed::button(
-            node,
-            [
-                ctx.icon(node.child("icon"), self.icon_name(place.kind, full)),
-                icssed::text(node.child("label"), label).into(),
-            ],
-        )
+        icssed::button![
+            ctx.icon(self.icon_name(place.kind, full)),
+            icssed::text(label)
+        ]
+        .kind("item")
+        .class(place.kind.name())
+        .class_if("full", full)
         .on_press(Message::Open(place.target.clone()))
         .into()
     }
@@ -213,7 +205,7 @@ impl PlacesGadget {
     /// ⏏ beside it while mounted (as Nemo has it: nothing to eject before
     /// a mount), disabled on the root filesystem, which can't be
     /// unmounted but is mounted all the same.
-    fn device<'a>(&'a self, ctx: Context<'a>, list: Node<'a>, d: &Device) -> Element<'a, Message> {
+    fn device<'a>(&'a self, ctx: Context<'a>, d: &Device) -> Element<'a, Message> {
         let busy = ctx.places.busy(&d.path);
         let open = match &d.mount_point {
             Some(mount_point) => Message::Open(Target::Path(mount_point.clone())),
@@ -226,12 +218,6 @@ impl PlacesGadget {
         self.volume(
             ctx,
             Volume {
-                node: list
-                    .child("device")
-                    .class(d.kind.name())
-                    .class_if("mounted", d.mount_point.is_some())
-                    .class_if("locked", d.locked)
-                    .class_if("busy", busy),
                 icons: self.device_icons(d.kind),
                 name: d.name(ctx.locale),
                 usage: d.usage,
@@ -239,17 +225,18 @@ impl PlacesGadget {
                 eject,
             },
         )
+        .kind("device")
+        .class(d.kind.name())
+        .class_if("mounted", d.mount_point.is_some())
+        .class_if("locked", d.locked)
+        .class_if("busy", busy)
+        .into()
     }
 
     /// A mount UDisks2 doesn't know: a network share (`share`, no usage:
     /// `statvfs` would wait on the server) or a local FUSE or bind mount
     /// (with the devices, as a `device`); ⏏ while mounted.
-    fn mount<'a>(
-        &'a self,
-        ctx: Context<'a>,
-        list: Node<'a>,
-        share: &Mount,
-    ) -> Element<'a, Message> {
+    fn mount<'a>(&'a self, ctx: Context<'a>, share: &Mount) -> Element<'a, Message> {
         let busy = ctx.places.busy(&share.key());
         let dir = share.mount_point.clone();
         let open = if share.mounted {
@@ -275,11 +262,6 @@ impl PlacesGadget {
         self.volume(
             ctx,
             Volume {
-                node: list
-                    .child(if share.network { "share" } else { "device" })
-                    .class(share.family())
-                    .class_if("mounted", share.mounted)
-                    .class_if("busy", busy),
                 icons,
                 name: share.label.clone(),
                 usage: share.usage,
@@ -289,57 +271,55 @@ impl PlacesGadget {
                     .then(|| (!busy).then(|| Message::UnmountDir(dir))),
             },
         )
+        .kind(if share.network { "share" } else { "device" })
+        .class(share.family())
+        .class_if("mounted", share.mounted)
+        .class_if("busy", busy)
+        .into()
     }
 
-    /// A device's or a share's row: a button opening it with its icon,
-    /// its name and how full it is (when known), ⏏ beside it.
-    fn volume<'a>(&'a self, ctx: Context<'a>, v: Volume<'a>) -> Element<'a, Message> {
-        let node = v.node;
-        // Disabled where it's built: the icon and the label take
-        // `button:disabled`'s colour.
-        let open = node
-            .child("button")
+    /// A device's or a share's row (its type and classes the caller's):
+    /// a button opening it with its icon, its name and how full it is
+    /// (when known), ⏏ beside it.
+    fn volume<'a>(&'a self, ctx: Context<'a>, v: Volume) -> icssed::Flex<'a, Message> {
+        let mut parts: Vec<Element<'a, Message>> = vec![icssed::text(v.name).into()];
+        if let Some(usage) = v.usage {
+            parts.push(
+                icssed::meter(usage)
+                    .class_if("critical", usage >= 0.9)
+                    .into(),
+            );
+        }
+        let icon: Element<'a, Message> = match ctx.icons.first_of(&v.icons) {
+            Some(icon) => icssed::icon(icon.clone()).into(),
+            None => ctx.icon("").into(),
+        };
+        // Disabled, the icon and the label take `button:disabled`'s
+        // colour.
+        let mut open = icssed::button![icon, icssed::column(parts).kind("info")]
             .class("open")
             .class("flat")
             .disabled_if(v.open.is_none());
-        let info = open.child("info");
-        let mut parts: Vec<Element<'a, Message>> =
-            vec![icssed::text(info.child("label"), v.name).into()];
-        if let Some(usage) = v.usage {
-            let meter = info.child("meter").class_if("critical", usage >= 0.9);
-            parts.push(icssed::meter(meter, usage).into());
-        }
-        let icon: Element<'a, Message> = match ctx.icons.first_of(&v.icons) {
-            Some(icon) => icssed::icon(open.child("icon"), icon.clone()).into(),
-            None => ctx.icon(open.child("icon"), ""),
-        };
-        let mut open_button = icssed::button(open, [icon, icssed::column(info, parts).into()]);
         if let Some(message) = v.open {
-            open_button = open_button.on_press(message);
+            open = open.on_press(message);
         }
-        let mut buttons: Vec<Element<'a, Message>> = vec![open_button.into()];
+        let mut buttons: Vec<Element<'a, Message>> = vec![open.into()];
         if let Some(on_eject) = v.eject {
-            let eject = node
-                .child("button")
+            let mut eject = icssed::button![ctx.icon(self.symbolic(EJECT_ICON))]
                 .class("eject")
                 .class("flat")
                 .disabled_if(on_eject.is_none());
-            let mut button = icssed::button(
-                eject,
-                [ctx.icon(eject.child("icon"), self.symbolic(EJECT_ICON))],
-            );
             if let Some(message) = on_eject {
-                button = button.on_press(message);
+                eject = eject.on_press(message);
             }
-            buttons.push(button.into());
+            buttons.push(eject.into());
         }
-        icssed::row(node, buttons).into()
+        icssed::row(buttons)
     }
 }
 
 /// What [`PlacesGadget::volume`] draws.
-struct Volume<'a> {
-    node: Node<'a>,
+struct Volume {
     /// Best first.
     icons: Vec<String>,
     name: String,

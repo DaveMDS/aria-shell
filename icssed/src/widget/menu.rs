@@ -12,12 +12,13 @@
 
 use std::borrow::Cow;
 
-use super::flex::{button, column, row};
+use super::flex::{Flex, button, column, row};
 use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
+use super::place::placed;
 use super::text::{mark, text};
 use crate::Element;
-use crate::style::Node;
+use crate::style::name;
 
 /// One entry of a menu.
 pub struct MenuItem<'a, Message> {
@@ -113,89 +114,84 @@ impl<'a, Message> MenuItem<'a, Message> {
     }
 }
 
-/// `items` as a menu: `node`, a column.
+/// `items` as a `menu`, a column.
 pub fn menu<'a, Message: Clone + 'a>(
-    node: Node<'a>,
     items: impl IntoIterator<Item = MenuItem<'a, Message>>,
-) -> Element<'a, Message> {
-    arrow_scope(
-        Keys::UpDown,
-        column(node, level(node, items.into_iter().collect())),
-    )
-    .into()
+) -> Menu<'a, Message> {
+    Menu {
+        column: column(level(items.into_iter().collect())).kind_of(name!("menu")),
+    }
+}
+
+pub struct Menu<'a, Message> {
+    column: Flex<'a, Message>,
+}
+
+impl<'a, Message> Menu<'a, Message> {
+    placed!(column.boxed.place);
+}
+
+impl<'a, Message: Clone + 'a> From<Menu<'a, Message>> for Element<'a, Message> {
+    fn from(menu: Menu<'a, Message>) -> Self {
+        arrow_scope(Keys::UpDown, menu.column).into()
+    }
 }
 
 /// A level's elements: its items and separators, its unfolded submenus
 /// under their items.
-fn level<'a, Message: Clone + 'a>(
-    node: Node<'a>,
-    items: Vec<MenuItem<'a, Message>>,
-) -> Vec<Element<'a, Message>> {
+fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Element<'a, Message>> {
     let entries = || items.iter().filter_map(|item| item.entry.as_ref());
     // A column of marks, or of icons, when one item has one: the labels
     // line up.
     let marks = entries().any(|e| e.mark != Mark::None);
     let icons = entries().any(|e| e.icon.is_some());
-    let count: usize = items
-        .iter()
-        .map(|item| match &item.entry {
-            Some(Entry {
-                submenu: Some((true, _)),
-                ..
-            }) => 2,
-            _ => 1,
-        })
-        .sum();
-    let mut out = Vec::with_capacity(count);
+    let mut out = Vec::with_capacity(items.len());
     for item in items {
-        let at = out.len();
         let Some(entry) = item.entry else {
-            out.push(row(node.child_at("separator", at, count), []).into());
+            out.push(row([]).kind_of(name!("separator")).into());
             continue;
         };
-        let mut item = node.child_at("item", at, count);
-        for class in &entry.classes {
-            item = item.class(class);
-        }
         let (check, radio, checked) = match entry.mark {
             Mark::None => (false, false, false),
             Mark::Check(on) => (true, false, on),
             Mark::Radio(on) => (false, true, on),
         };
         let expanded = matches!(entry.submenu, Some((true, _)));
-        let item = item
+        let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(5);
+        if marks {
+            parts.push(mark().kind_of(name!("check")).into());
+        }
+        if icons {
+            parts.push(match entry.icon {
+                Some(source) => icon(source).into(),
+                None => row([]).kind_of(name!("icon")).into(),
+            });
+        }
+        parts.push(text(entry.label).into());
+        if let Some(shortcut) = entry.shortcut {
+            parts.push(text(shortcut).kind_of(name!("shortcut")).into());
+        }
+        if entry.submenu.is_some() {
+            parts.push(mark().kind_of(name!("arrow")).into());
+        }
+        let mut pressed = entry
+            .classes
+            .iter()
+            .fold(button(parts).kind_of(name!("item")), |b, class| {
+                b.class(class)
+            })
             .class_if("check", check)
             .class_if("radio", radio)
             .class_if("checked", checked)
             .class_if("submenu", entry.submenu.is_some())
             .class_if("expanded", expanded)
             .disabled_if(entry.on_press.is_none());
-        let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(5);
-        if marks {
-            parts.push(mark(item.child("check")));
-        }
-        if icons {
-            let slot = item.child("icon");
-            parts.push(match entry.icon {
-                Some(source) => icon(slot, source).into(),
-                None => row(slot, []).into(),
-            });
-        }
-        parts.push(text(item.child("label"), entry.label).into());
-        if let Some(shortcut) = entry.shortcut {
-            parts.push(text(item.child("shortcut"), shortcut).into());
-        }
-        if entry.submenu.is_some() {
-            parts.push(mark(item.child("arrow")));
-        }
-        let mut pressed = button(item, parts);
         if let Some(message) = entry.on_press {
             pressed = pressed.on_press(message);
         }
         out.push(pressed.into());
         if let Some((true, items)) = entry.submenu {
-            let submenu = node.child_at("submenu", out.len(), count);
-            out.push(column(submenu, level(submenu, items)).into());
+            out.push(column(level(items)).kind_of(name!("submenu")).into());
         }
     }
     out

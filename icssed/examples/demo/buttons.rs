@@ -1,13 +1,10 @@
-//! A button is a box that sends a message when pressed: `icssed::button`
-//! takes its node and its children, `.on_press(message)` makes it a
-//! button. Without `on_press` it's a plain box.
+//! A button is a box that sends a message when pressed: `button![..]`
+//! takes its children, `.on_press(message)` makes it a button. Without
+//! `on_press` it's a plain box.
 //!
-//!     let node = row.child("button").class("primary");
-//!     icssed::button(node, [
-//!         icssed::icon(node.child("icon"), star).into(),
-//!         icssed::text(node.child("label"), "Save").into(),
-//!     ])
-//!     .on_press(Message::Save)
+//!     button![icon(star), text("Save")]
+//!         .class("primary")
+//!         .on_press(Message::Save)
 //!
 //! Everything it looks like comes from the sheet. The toolkit's base
 //! styles the `button` kind and its classes `.flat`, `.primary` and
@@ -15,7 +12,7 @@
 //!
 //! - `:hover`, `:active` and `:focus` follow the pointer and the
 //!   keyboard: Tab moves the focus, Enter and Space press.
-//! - `disabled_if(true)` on the node makes it `:disabled`: it sends
+//! - `disabled_if(true)` makes it `:disabled`: it sends
 //!   nothing and takes no focus.
 //! - What a state changes, the children inherit: `button:hover { color }`
 //!   reaches its label and its icon.
@@ -26,7 +23,7 @@
 //! `:hover` rule changes its background and its children's colour, with
 //! a transition.
 
-use icssed::{Element, Node};
+use icssed::{Element, button, column, icon, row, text};
 
 use crate::Assets;
 
@@ -51,54 +48,26 @@ pub fn update(state: &mut State, message: Message) {
     };
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let row = node.child("row");
-    let button = |class: &str, label: &'static str, disabled: bool| -> Element<'a, Message> {
-        let button = row
-            .child("button")
-            .class_if(class, !class.is_empty())
-            .disabled_if(disabled);
-        icssed::button(
-            button,
-            [
-                icssed::icon(button.child("icon"), assets.star.clone()).into(),
-                icssed::text(button.child("label"), label).into(),
-            ],
-        )
-        .on_press(Message::Pressed(label))
-        .into()
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let button = |label: &'static str| {
+        button![icon(assets.star.clone()), text(label)].on_press(Message::Pressed(label))
     };
     let pressed = match state.pressed {
         None => "Nothing pressed yet: click, or Tab then Enter".to_string(),
         Some((name, 1)) => format!("Pressed: {name}"),
         Some((name, n)) => format!("Pressed: {name}, {n} times"),
     };
-    let card = node.child("card");
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                row,
-                [
-                    button("", "Default", false),
-                    button("flat", "Flat", false),
-                    button("primary", "Primary", false),
-                    button("danger", "Danger", false),
-                    button("", "Disabled", true),
-                    button("grow", "Grows", false),
-                ],
-            )
-            .into(),
-            icssed::text(node.child("status"), pressed).into(),
-            icssed::row(
-                card,
-                [
-                    icssed::icon(card.child("icon"), assets.star.clone()).into(),
-                    icssed::text(card.child("label"), "Hover the card").into(),
-                ],
-            )
-            .into(),
+    column![
+        row![
+            button("Default"),
+            button("Flat").class("flat"),
+            button("Primary").class("primary"),
+            button("Danger").class("danger"),
+            button("Disabled").disabled_if(true),
+            button("Grows").class("grow"),
         ],
-    )
+        text(pressed).kind("status"),
+        row![icon(assets.star.clone()), text("Hover the card")].kind("card"),
+    ]
     .into()
 }

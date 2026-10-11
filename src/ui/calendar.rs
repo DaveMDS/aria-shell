@@ -3,7 +3,7 @@
 //! its buttons. Weeks start on Monday; the words are the locale's.
 
 use chrono::{Datelike, Days, Months, NaiveDate};
-use icssed::{Element, Month, Node};
+use icssed::{Element, Month};
 
 use crate::locale::Locale;
 
@@ -38,18 +38,12 @@ impl Calendar {
     }
 
     /// The month as `node` (a `calendar`), `today` marked when it's in it.
-    pub fn view<'a>(
-        &self,
-        today: NaiveDate,
-        locale: &Locale,
-        node: Node<'a>,
-    ) -> Element<'a, Message> {
+    pub fn view<'a>(&self, today: NaiveDate, locale: &Locale) -> Element<'a, Message> {
         // Monday to Sunday, abbreviated in the language (any week does).
         let monday = self.month - Days::new(u64::from(self.month.weekday().num_days_from_monday()));
         let weekdays: [String; 7] =
             std::array::from_fn(|i| locale.naive_date(&(monday + Days::new(i as u64)), "%a"));
         icssed::calendar(
-            node,
             Month::new(self.month.year(), self.month.month()),
             locale.naive_date(&self.month, "%B %Y"),
             weekdays,

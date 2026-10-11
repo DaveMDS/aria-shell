@@ -1,11 +1,11 @@
 //! An input is a line of text to edit:
-//! `icssed::input(node, placeholder, value)`, iced's text input in a box
+//! `icssed::input(placeholder, value)`, iced's text input in a box
 //! of the toolkit. The app holds the text and gets every change.
 //!
-//!     icssed::input(row.child("input"), "Search", &self.search)
+//!     icssed::input("Search", &self.search)
 //!         .on_input(Message::Search)
 //!         .on_submit(Message::Go)
-//!         .leading(icssed::icon(node.child("icon"), search_icon))
+//!         .leading(icssed::icon(search_icon))
 //!
 //! - Without `on_input` it's read-only.
 //! - `.on_submit(m)` is sent on Enter.
@@ -20,7 +20,7 @@
 //! The text itself is `input > field`, with its `placeholder` and its
 //! `selection`: iced draws them, so their colours don't transition.
 
-use icssed::{Element, Node};
+use icssed::{Element, button, column, icon, input, row, text};
 
 use crate::Assets;
 
@@ -63,48 +63,32 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let search = line.child("input");
-    let password = line.child("input");
-    let peek = password
-        .child("button")
-        .class("peek")
-        .class_if("active", state.peek);
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let submitted = match &state.submitted {
         Some(text) => format!("Submitted: {text:?}"),
         None => "Type, then Enter".into(),
     };
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::input(search, "Search", &state.search)
-                        .on_input(Message::Search)
-                        .on_submit(Message::Submit)
-                        .leading(icssed::icon(search.child("icon"), assets.star.clone()))
-                        .into(),
-                    icssed::input(password, "Password", &state.password)
-                        .on_input(Message::Password)
-                        .secure(!state.peek)
-                        .trailing(
-                            icssed::button(
-                                peek,
-                                [icssed::icon(peek.child("icon"), assets.eye.clone()).into()],
-                            )
-                            .on_press(Message::Peek),
-                        )
-                        .into(),
-                    icssed::input(line.child("input").disabled_if(true), "Disabled", "")
-                        .on_input(Message::Search)
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::text(node.child("status"), submitted).into(),
-        ],
-    )
+    column![
+        row![
+            input("Search", &state.search)
+                .on_input(Message::Search)
+                .on_submit(Message::Submit)
+                .leading(icon(assets.star.clone())),
+            input("Password", &state.password)
+                .on_input(Message::Password)
+                .secure(!state.peek)
+                .trailing(
+                    button![icon(assets.eye.clone())]
+                        .class("peek")
+                        .class_if("active", state.peek)
+                        .on_press(Message::Peek),
+                ),
+            input("Disabled", "")
+                .disabled_if(true)
+                .on_input(Message::Search),
+        ]
+        .kind("line"),
+        text(submitted).kind("status"),
+    ]
     .into()
 }

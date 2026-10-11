@@ -62,16 +62,13 @@ impl Gadget for ScreenshotGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let button = ctx.node.child("button");
-        let icons: &dyn icssed::Icons = ctx.icons;
-        let icon = icssed::icon(button.child("icon"), (icons, self.icon.as_str()));
         let button = mouse_area(
-            icssed::button(button, [icon.into()])
+            icssed::button![ctx.icon(self.icon.as_str())]
                 .on_press(Message::Pick)
                 .id(self.popup.anchor()),
         )
         .on_right_press(Message::OpenMenu);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -83,9 +80,7 @@ impl Gadget for ScreenshotGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        self.menu
-            .view(ctx.node.child("menu"), items(ctx.locale))
-            .map(Message::Menu)
+        self.menu.view(items(ctx.locale)).map(Message::Menu)
     }
 }
 

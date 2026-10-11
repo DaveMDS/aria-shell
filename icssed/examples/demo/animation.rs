@@ -21,7 +21,7 @@
 //! on demand, its class taken off when the shake ends so it can shake
 //! again.
 
-use icssed::{Element, Node};
+use icssed::{Element, button, column, icon, row, text, toggle};
 
 use crate::Assets;
 
@@ -63,82 +63,44 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let labelled = |node: Node<'a>, text: &'static str| -> Element<'a, Message> {
-        icssed::text(node.child("label"), text).into()
+pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let (label, press) = match state.toast {
+        Some(_) => ("Dismiss", Message::Dismiss),
+        None => ("Toast", Message::Toast),
     };
-    let pulse = line.child("pulse");
-    let shaken = line
-        .child("box")
-        .class("shake")
-        .class_if("shaking", state.shaking);
-    let shake = line.child("button");
-    let lamp = line.child("lamp").class_if("lit", state.lit);
-    let toggle = node.child("line").child("button");
-    let mut toasts: Vec<Element<'a, Message>> = vec![
-        icssed::button(
-            toggle,
-            [labelled(
-                toggle,
-                if state.toast.is_some() {
-                    "Dismiss"
-                } else {
-                    "Toast"
-                },
-            )],
-        )
-        .on_press(if state.toast.is_some() {
-            Message::Dismiss
-        } else {
-            Message::Toast
-        })
-        .into(),
-    ];
+    let mut toasts: Vec<Element<'a, Message>> = vec![button![text(label)].on_press(press).into()];
     if let Some(leaving) = state.toast {
-        let toast = line.child("toast").class_if("leaving", leaving);
         toasts.push(
-            icssed::row(
-                toast,
-                [
-                    icssed::icon(toast.child("icon"), assets.star.clone()).into(),
-                    labelled(toast, "A toast: in, and out when dismissed"),
-                ],
-            )
+            row![
+                icon(assets.star.clone()),
+                text("A toast: in, and out when dismissed"),
+            ]
+            .kind("toast")
+            .class_if("leaving", leaving)
             .on_animation_end(Message::Toasted)
             .into(),
         );
     }
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::icon(line.child("spinner"), assets.star.clone()).into(),
-                    icssed::row(pulse, [labelled(pulse, "Pulse")]).into(),
-                    icssed::row(shaken, [labelled(shaken, "Shaken on demand")])
-                        .on_animation_end(Message::Shaken)
-                        .into(),
-                    icssed::button(shake, [labelled(shake, "Shake")])
-                        .on_press(Message::Shake)
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::row(
-                line,
-                [
-                    icssed::toggle(line.child("toggle"), state.lit, Message::Lit)
-                        .switch()
-                        .into(),
-                    icssed::row(lamp, [labelled(lamp, "A transition: colour, shadow, scale")])
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::row(line, toasts).into(),
-        ],
-    )
+    column![
+        row![
+            icon(assets.star.clone()).kind("spinner"),
+            row![text("Pulse")].kind("pulse"),
+            row![text("Shaken on demand")]
+                .kind("box")
+                .class("shake")
+                .class_if("shaking", state.shaking)
+                .on_animation_end(Message::Shaken),
+            button![text("Shake")].on_press(Message::Shake),
+        ]
+        .kind("line"),
+        row![
+            toggle(state.lit, Message::Lit).switch(),
+            row![text("A transition: colour, shadow, scale")]
+                .kind("lamp")
+                .class_if("lit", state.lit),
+        ]
+        .kind("line"),
+        row(toasts).kind("line"),
+    ]
     .into()
 }

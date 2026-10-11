@@ -14,7 +14,7 @@
 use iced::widget::{mouse_area, operation};
 use iced::{Subscription, Task, keyboard, widget};
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
@@ -223,9 +223,15 @@ impl Gadget for NetworkGadget {
         let summary = ctx.network.summary();
         let running = ctx.network.running();
         let wireless = ctx.network.wireless_enabled();
-        let button = ctx
-            .node
-            .child("button")
+        let mut parts: Vec<Element<'a, Message>> =
+            vec![ctx.icon(summary.icon_name(running, wireless)).into()];
+        if summary.vpn && self.config.show_vpn {
+            parts.push(ctx.icon(ICON_VPN).class("vpn").into());
+        }
+        if self.config.show_label && !summary.label.is_empty() {
+            parts.push(icssed::text(summary.label.clone()).into());
+        }
+        let button = icssed::button(parts)
             .class(match summary.kind {
                 _ if !running => "none",
                 Some(DeviceKind::Wifi) => "wifi",
@@ -241,21 +247,13 @@ impl Gadget for NetworkGadget {
             })
             .class_if("limited", summary.limited)
             .class_if("vpn", summary.vpn && self.config.show_vpn)
-            .class_if("off", running && !wireless);
-        let mut parts = vec![ctx.icon(button.child("icon"), summary.icon_name(running, wireless))];
-        if summary.vpn && self.config.show_vpn {
-            parts.push(ctx.icon(button.child("icon").class("vpn"), ICON_VPN));
-        }
-        if self.config.show_label && !summary.label.is_empty() {
-            parts.push(icssed::text(button.child("label"), summary.label.clone()).into());
-        }
-        let button = icssed::button(button, parts)
+            .class_if("off", running && !wireless)
             .on_press(Message::TogglePopup)
             .id(self.popup.anchor());
         let button = mouse_area(button)
             .on_middle_press(Message::FlipWireless)
             .on_right_press(Message::RunSettings);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -263,9 +261,7 @@ impl Gadget for NetworkGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let scroll = ctx.node.child("scroll");
-        let list = scroll.child("list");
-        icssed::scroll(scroll, icssed::column(list, self.rows(ctx, list))).into()
+        icssed::scroll(icssed::column(self.rows(ctx)).kind("list")).into()
     }
 
     fn popup_closed(&mut self) {
@@ -352,39 +348,38 @@ impl NetworkGadget {
     }
 
     /// Every row of the popup.
-    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
+    fn rows<'a>(&'a self, ctx: Context<'a>) -> Vec<Element<'a, Message>> {
         let net = ctx.network;
         let mut rows: Vec<Element<'a, Message>> = Vec::new();
-        let empty = |text: &'a str| super::note(list.child("empty"), text);
+        let empty = |text: &'a str| super::note(text).kind("empty").into();
         if !net.running() {
             rows.push(empty(ctx.locale.tr("network.not_running")));
         } else {
             let wifi_devices: Vec<&Device> = net.devices_of(DeviceKind::Wifi).collect();
             if !wifi_devices.is_empty() {
-                rows.push(wifi_header(ctx, list));
+                rows.push(wifi_header(ctx));
                 if !net.wireless_enabled() {
                     rows.push(empty(ctx.locale.tr("network.wifi_off")));
                 } else if net.access_points().is_empty() {
                     rows.push(empty(ctx.locale.tr("network.no_networks")));
                 } else {
-                    let count = net.access_points().len();
-                    for (i, ap) in net.access_points().iter().enumerate() {
-                        rows.push(self.ap_row(ctx, list, ap, (i, count)));
+                    for ap in net.access_points() {
+                        rows.push(self.ap_row(ctx, ap));
                     }
                 }
             }
             let wired: Vec<&Device> = net.devices_of(DeviceKind::Wired).collect();
             if !wired.is_empty() {
-                rows.push(header(list, "wired", ctx.locale.tr("network.wired")));
+                rows.push(header("wired", ctx.locale.tr("network.wired")));
                 for d in wired {
-                    rows.push(self.device_row(ctx, list, d));
+                    rows.push(self.device_row(ctx, d));
                 }
             }
             let vpns: Vec<&Profile> = net.vpns().collect();
             if !vpns.is_empty() {
-                rows.push(header(list, "vpn", ctx.locale.tr("network.vpn")));
+                rows.push(header("vpn", ctx.locale.tr("network.vpn")));
                 for p in vpns {
-                    rows.push(vpn_row(ctx, list, p));
+                    rows.push(vpn_row(ctx, p));
                 }
             }
             if rows.is_empty() {
@@ -392,14 +387,11 @@ impl NetworkGadget {
             }
         }
         if !self.config.settings_command.is_empty() {
-            let b = list.child("button").class("settings");
             rows.push(
-                icssed::button(
-                    b,
-                    [icssed::text(b.child("label"), ctx.locale.tr("network.settings")).into()],
-                )
-                .on_press(Message::RunSettings)
-                .into(),
+                icssed::button![icssed::text(ctx.locale.tr("network.settings"))]
+                    .class("settings")
+                    .on_press(Message::RunSettings)
+                    .into(),
             );
         }
         rows
@@ -407,28 +399,12 @@ impl NetworkGadget {
 
     /// A Wi‑Fi network: the strength icon, the name, the lock, the
     /// status; unfolded, its details or the password field below.
-    fn ap_row<'a>(
-        &'a self,
-        ctx: Context<'a>,
-        list: Node<'a>,
-        ap: &'a AccessPoint,
-        (i, count): (usize, usize),
-    ) -> Element<'a, Message> {
+    fn ap_row<'a>(&'a self, ctx: Context<'a>, ap: &'a AccessPoint) -> Element<'a, Message> {
         let locale = ctx.locale;
         let key = FailKey::Ssid(ap.ssid.clone());
         let failure = ctx.network.failure(&key);
         let attempting = ctx.network.attempting(&key);
         let expanded = self.expanded == Some(Row::Ap(ap.ssid.clone()));
-        let node = list
-            .child_at("ap", i, count)
-            .class_if("active", ap.active)
-            .class_if("connecting", ap.connecting || attempting)
-            .class_if("known", ap.known.is_some())
-            .class_if("secured", ap.security.secured())
-            .class_if("enterprise", ap.security == Security::Enterprise)
-            .class_if("expanded", expanded)
-            .class_if("failed", failure.is_some())
-            .attr("ssid", &ap.ssid);
         let status = if ap.active {
             Some(locale.tr("network.connected"))
         } else if ap.connecting || attempting {
@@ -455,7 +431,6 @@ impl NetworkGadget {
         };
         let mut parts: Vec<Element<'a, Message>> = vec![row_button(
             ctx,
-            node.child("button").class("flat"),
             RowLine {
                 icon: strength_icon(ap.strength),
                 name: &ap.ssid,
@@ -480,7 +455,7 @@ impl NetworkGadget {
                     extra.push(d.iface.clone());
                 }
                 lines.push(extra.join(" · "));
-                parts.push(details(node, lines));
+                parts.push(details(lines));
                 let mut actions: Vec<(&'static str, &'a str, Message)> = Vec::new();
                 if let Some(d) = device {
                     actions.push((
@@ -496,19 +471,20 @@ impl NetworkGadget {
                         Message::Forget(uuid.clone()),
                     ));
                 }
-                parts.push(actions_row(node, actions));
+                parts.push(actions_row(actions));
             } else if ap.security == Security::Enterprise {
-                parts.push(super::note(
-                    node.child("message"),
-                    locale.tr("network.enterprise"),
-                ));
+                parts.push(
+                    super::note(locale.tr("network.enterprise"))
+                        .kind("message")
+                        .into(),
+                );
             } else {
                 // A known one whose key was refused asks it again; the
                 // rest of the known ones offer to join or to be
                 // forgotten; an unknown one asks its key.
                 let mut actions: Vec<(&'static str, &'a str, Message)> = Vec::new();
                 if ap.known.is_none() || wrong_password {
-                    parts.push(self.auth(ctx, node, attempting));
+                    parts.push(self.auth(ctx, attempting));
                 } else {
                     actions.push((
                         "connect",
@@ -524,7 +500,7 @@ impl NetworkGadget {
                     ));
                 }
                 if !actions.is_empty() {
-                    parts.push(actions_row(node, actions));
+                    parts.push(actions_row(actions));
                 }
             }
         }
@@ -534,30 +510,27 @@ impl NetworkGadget {
                 FailReason::NoSecrets => locale.tr("network.needs_password"),
                 FailReason::Refused(_) | FailReason::Other => locale.tr("network.failed"),
             };
-            parts.push(super::note(node.child("message"), text));
+            parts.push(super::note(text).kind("message").into());
         }
-        icssed::column(node, parts).into()
+        icssed::column(parts)
+            .kind("ap")
+            .class_if("active", ap.active)
+            .class_if("connecting", ap.connecting || attempting)
+            .class_if("known", ap.known.is_some())
+            .class_if("secured", ap.security.secured())
+            .class_if("enterprise", ap.security == Security::Enterprise)
+            .class_if("expanded", expanded)
+            .class_if("failed", failure.is_some())
+            .attr("ssid", &ap.ssid)
+            .into()
     }
 
     /// A wired device: plugged and connected (unfold: the details and
     /// Disconnect), unplugged, or down (a click brings it up).
-    fn device_row<'a>(
-        &'a self,
-        ctx: Context<'a>,
-        list: Node<'a>,
-        d: &'a Device,
-    ) -> Element<'a, Message> {
+    fn device_row<'a>(&'a self, ctx: Context<'a>, d: &'a Device) -> Element<'a, Message> {
         let locale = ctx.locale;
         let active = d.state == DeviceState::Activated;
         let expanded = self.expanded == Some(Row::Device(d.path.clone()));
-        let node = list
-            .child("device")
-            .class("wired")
-            .class_if("active", active)
-            .class_if("connecting", d.state.is_connecting())
-            .class_if("unplugged", !d.carrier)
-            .class_if("expanded", expanded)
-            .attr("name", &d.iface);
         let status = if !d.carrier {
             locale.tr("network.unplugged")
         } else if active {
@@ -592,13 +565,8 @@ impl NetworkGadget {
             status: Some(status),
             chevron: (expanded || active).then_some((expanded, fold)),
         };
-        let button = node.child("button").class("flat");
-        let mut parts: Vec<Element<'a, Message>> = vec![row_button(
-            ctx,
-            button,
-            line,
-            on_press.unwrap_or(Message::Collapse),
-        )];
+        let mut parts: Vec<Element<'a, Message>> =
+            vec![row_button(ctx, line, on_press.unwrap_or(Message::Collapse))];
         if expanded && active {
             let mut lines = ip_lines(locale, d.ip4.as_ref(), d.ip6.as_ref());
             let mut extra = Vec::new();
@@ -610,44 +578,47 @@ impl NetworkGadget {
                 extra.push(d.hw_address.clone());
             }
             lines.push(extra.join(" · "));
-            parts.push(details(node, lines));
-            parts.push(actions_row(
-                node,
-                vec![(
-                    "disconnect",
-                    locale.tr("network.disconnect"),
-                    Message::Disconnect(d.path.clone()),
-                )],
-            ));
+            parts.push(details(lines));
+            parts.push(actions_row(vec![(
+                "disconnect",
+                locale.tr("network.disconnect"),
+                Message::Disconnect(d.path.clone()),
+            )]));
         }
-        icssed::column(node, parts).into()
+        icssed::column(parts)
+            .kind("device")
+            .class("wired")
+            .class_if("active", active)
+            .class_if("connecting", d.state.is_connecting())
+            .class_if("unplugged", !d.carrier)
+            .class_if("expanded", expanded)
+            .attr("name", &d.iface)
+            .into()
     }
 
     /// The password field with its eye and the Connect button.
-    fn auth<'a>(&'a self, ctx: Context<'a>, node: Node<'a>, busy: bool) -> Element<'a, Message> {
+    fn auth<'a>(&'a self, ctx: Context<'a>, busy: bool) -> Element<'a, Message> {
         let locale = ctx.locale;
-        let auth = node.child("auth").class_if("busy", busy);
-        let input = auth.child("input").disabled_if(busy);
-        let eye = icssed::toggle(
-            input.child("toggle").class("peek").class("plain"),
-            self.peek,
-            |_| Message::Peek,
-        )
-        .icon(ctx.named(if self.peek { ICON_CONCEAL } else { ICON_PEEK }));
-        let field = icssed::input(input, locale.tr("network.password"), &self.password)
+        let eye = icssed::toggle(self.peek, |_| Message::Peek)
+            .class("peek")
+            .class("plain")
+            .icon(ctx.named(if self.peek { ICON_CONCEAL } else { ICON_PEEK }));
+        let field = icssed::input(locale.tr("network.password"), &self.password)
+            .disabled_if(busy)
             .id(self.input.clone())
             .secure(!self.peek)
             .on_input(Message::Password)
             .on_submit(Message::Submit)
             .trailing(eye);
         let ready = !busy && !self.password.is_empty();
-        let connect = auth.child("button").class("connect").disabled_if(!ready);
-        let connect = icssed::button(
-            connect,
-            [icssed::text(connect.child("label"), locale.tr("network.connect")).into()],
-        )
-        .on_press(Message::Submit);
-        icssed::row(auth, [field.into(), connect.into()]).into()
+        let connect = icssed::button![icssed::text(locale.tr("network.connect"))]
+            .class("connect")
+            .disabled_if(!ready)
+            .on_press(Message::Submit);
+        icssed::row![field, connect]
+            .kind("auth")
+            .class_if("busy", busy)
+            .into()
     }
 }
 
@@ -662,74 +633,72 @@ struct RowLine<'a> {
     chevron: Option<(bool, Message)>,
 }
 
-/// The clickable line of a network or device row, `button`: the name
-/// and its badge in a `title` taking the room left, so the status and
-/// the chevron sit at the end; the chevron is a button of its own
+/// The clickable line of a network or device row, a `button.flat`: the
+/// name and its badge in a `title` taking the room left, so the status
+/// and the chevron sit at the end; the chevron is a button of its own
 /// inside it, which then doesn't fire.
-fn row_button<'a>(
-    ctx: Context<'a>,
-    button: Node<'a>,
-    line: RowLine<'a>,
-    on_press: Message,
-) -> Element<'a, Message> {
-    let title = button.child("title");
-    let mut name: Vec<Element<'a, Message>> =
-        vec![icssed::text(title.child("name"), line.name).into()];
+fn row_button<'a>(ctx: Context<'a>, line: RowLine<'a>, on_press: Message) -> Element<'a, Message> {
+    let mut name: Vec<Element<'a, Message>> = vec![icssed::text(line.name).kind("name").into()];
     if let Some(badge) = line.badge {
-        name.push(ctx.icon(title.child("icon").class("badge"), badge));
+        name.push(ctx.icon(badge).class("badge").into());
     }
     let mut parts: Vec<Element<'a, Message>> = vec![
-        ctx.icon(button.child("icon"), line.icon),
-        icssed::row(title, name).into(),
+        ctx.icon(line.icon).into(),
+        icssed::row(name).kind("title").into(),
     ];
     if let Some(status) = line.status {
-        parts.push(icssed::text(button.child("status"), status).into());
+        parts.push(icssed::text(status).kind("status").into());
     }
     if let Some((expanded, toggle)) = line.chevron {
-        let c = button
-            .child("button")
-            .class("chevron")
-            .class("plain")
-            .class_if("active", expanded);
         parts.push(
-            icssed::button(c, [icssed::mark(c.child("arrow"))])
+            icssed::button![icssed::mark().kind("arrow")]
+                .class("chevron")
+                .class("plain")
+                .class_if("active", expanded)
                 .on_press(toggle)
                 .into(),
         );
     }
-    icssed::button(button, parts).on_press(on_press).into()
+    icssed::button(parts)
+        .class("flat")
+        .on_press(on_press)
+        .into()
 }
 
 /// A section title.
-fn header<'a>(list: Node<'a>, class: &str, title: &'a str) -> Element<'a, Message> {
-    let header = list.child("header").class(class);
-    icssed::row(header, [icssed::text(header.child("title"), title).into()]).into()
+fn header<'a>(class: &str, title: &'a str) -> Element<'a, Message> {
+    icssed::row![icssed::text(title).kind("title")]
+        .kind("header")
+        .class(class)
+        .into()
 }
 
 /// The Wi‑Fi title with the scan button and the on/off toggle.
-fn wifi_header<'a>(ctx: Context<'a>, list: Node<'a>) -> Element<'a, Message> {
+fn wifi_header<'a>(ctx: Context<'a>) -> Element<'a, Message> {
     let on = ctx.network.wireless_enabled();
-    let header = list.child("header").class("wifi").class_if("off", !on);
-    let mut parts: Vec<Element<'a, Message>> =
-        vec![icssed::text(header.child("title"), ctx.locale.tr("network.wifi")).into()];
+    let mut parts: Vec<Element<'a, Message>> = vec![
+        icssed::text(ctx.locale.tr("network.wifi"))
+            .kind("title")
+            .into(),
+    ];
     if on {
-        let scan = header.child("button").class("scan");
         parts.push(
-            icssed::button(scan, [ctx.icon(scan.child("icon"), ICON_SCAN)])
+            icssed::button![ctx.icon(ICON_SCAN)]
+                .class("scan")
                 .on_press(Message::Scan)
                 .into(),
         );
     }
-    parts.push(
-        icssed::toggle(header.child("toggle"), on, Message::SetWireless)
-            .switch()
-            .into(),
-    );
-    icssed::row(header, parts).into()
+    parts.push(icssed::toggle(on, Message::SetWireless).switch().into());
+    icssed::row(parts)
+        .kind("header")
+        .class("wifi")
+        .class_if("off", !on)
+        .into()
 }
 
 /// A VPN profile with its toggle.
-fn vpn_row<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Profile) -> Element<'a, Message> {
+fn vpn_row<'a>(ctx: Context<'a>, p: &'a Profile) -> Element<'a, Message> {
     let locale = ctx.locale;
     let key = FailKey::Uuid(p.uuid.clone());
     let active = ctx.network.active_by_uuid(&p.uuid);
@@ -737,62 +706,58 @@ fn vpn_row<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Profile) -> Element<'a, 
     let connecting =
         ctx.network.attempting(&key) || active.is_some_and(|a| a.state == ActiveState::Activating);
     let failure = ctx.network.failure(&key);
-    let node = list
-        .child("vpn")
-        .class_if("active", on)
-        .class_if("connecting", connecting)
-        .class_if("failed", failure.is_some())
-        .attr("name", &p.id);
-    let line = node.child("line");
     let uuid = p.uuid.clone();
     let mut head: Vec<Element<'a, Message>> = vec![
-        ctx.icon(line.child("icon"), ICON_VPN),
-        icssed::text(line.child("name"), p.id.as_str()).into(),
+        ctx.icon(ICON_VPN).into(),
+        icssed::text(p.id.as_str()).kind("name").into(),
     ];
     if connecting {
-        head.push(icssed::text(line.child("status"), locale.tr("network.connecting")).into());
+        head.push(
+            icssed::text(locale.tr("network.connecting"))
+                .kind("status")
+                .into(),
+        );
     }
     head.push(
-        icssed::toggle(line.child("toggle"), on || connecting, move |v| {
-            Message::Vpn(uuid.clone(), v)
-        })
-        .switch()
-        .into(),
+        icssed::toggle(on || connecting, move |v| Message::Vpn(uuid.clone(), v))
+            .switch()
+            .into(),
     );
-    let mut parts: Vec<Element<'a, Message>> = vec![icssed::row(line, head).into()];
+    let mut parts: Vec<Element<'a, Message>> = vec![icssed::row(head).kind("line").into()];
     if let Some(f) = failure {
         let text = match &f.reason {
             FailReason::NoSecrets => locale.tr("network.needs_password"),
             FailReason::WrongPassword => locale.tr("network.wrong_password"),
             _ => locale.tr("network.failed"),
         };
-        parts.push(super::note(node.child("message"), text));
+        parts.push(super::note(text).kind("message").into());
     }
-    icssed::column(node, parts).into()
+    icssed::column(parts)
+        .kind("vpn")
+        .class_if("active", on)
+        .class_if("connecting", connecting)
+        .class_if("failed", failure.is_some())
+        .attr("name", &p.id)
+        .into()
 }
 
 /// The facts about a connection, one line each.
-fn details<'a>(node: Node<'a>, lines: Vec<String>) -> Element<'a, Message> {
-    let details = node.child("details");
+fn details<'a>(lines: Vec<String>) -> Element<'a, Message> {
     let lines = lines
         .into_iter()
-        .map(|l| icssed::text(details.child("line"), l).into());
-    icssed::column(details, lines).into()
+        .map(|l| icssed::text(l).kind("line").into());
+    icssed::column(lines).kind("details").into()
 }
 
 /// A row of text buttons (Disconnect, Forget).
-fn actions_row<'a>(
-    node: Node<'a>,
-    actions: Vec<(&'static str, &'a str, Message)>,
-) -> Element<'a, Message> {
-    let row = node.child("actions");
+fn actions_row<'a>(actions: Vec<(&'static str, &'a str, Message)>) -> Element<'a, Message> {
     let buttons = actions.into_iter().map(|(class, label, message)| {
-        let b = row.child("button").class(class);
-        icssed::button(b, [icssed::text(b.child("label"), label).into()])
+        icssed::button![icssed::text(label)]
+            .class(class)
             .on_press(message)
             .into()
     });
-    icssed::row(row, buttons).into()
+    icssed::row(buttons).kind("actions").into()
 }
 
 /// The IP lines of the details: addresses, gateway, DNS.

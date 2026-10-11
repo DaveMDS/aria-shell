@@ -1,52 +1,52 @@
 /*
- * demo#nodes
+ * demo#elements
  * ├─ list > entry[.picked][kind="folder"|"file"] > icon, label
  * ╰─ status                 the picked row's selector
  */
 
-demo#nodes {
+demo#elements {
   gap: 12px;
   align-items: start;
 }
-demo#nodes > list {
+demo#elements > list {
   width: 280px;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-demo#nodes entry {
+demo#elements entry {
   width: fill;
   gap: 8px;
   padding: 8px 12px;
   align-items: center;
 }
-demo#nodes entry > icon {
+demo#elements entry > icon {
   height: 16px;
   color: var(--muted);
 }
 
 /* Positions: the stripes, the first row. */
-demo#nodes entry:nth-child(even) {
+demo#elements entry:nth-child(even) {
   background: var(--border);
 }
-demo#nodes entry:first-child > label {
+demo#elements entry:first-child > label {
   font-weight: bold;
 }
 
 /* An attribute: the folders' icons. */
-demo#nodes entry[kind="folder"] > icon {
+demo#elements entry[kind="folder"] > icon {
   color: var(--warning);
 }
 
 /* A class: the row picked. */
-demo#nodes entry.picked {
+demo#elements entry.picked {
   background: var(--accent);
   color: var(--on-accent);
 }
-demo#nodes entry.picked > icon {
+demo#elements entry.picked > icon {
   color: var(--on-accent);
 }
 
-demo#nodes > status {
+demo#elements > status {
   font-family: monospace;
   color: var(--muted);
 }

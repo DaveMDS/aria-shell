@@ -50,51 +50,36 @@ fn star() -> IconFile {
 
 /// A bar: twelve gadgets, an icon and a label each.
 fn bar<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
-    icssed::row(
-        root,
-        (0..12).map(|i| {
-            let gadget = root.child("gadget");
-            icssed::button(
-                gadget,
-                [
-                    icssed::icon(gadget.child("icon"), icon.clone()).into(),
-                    icssed::text(gadget.child("label"), format!("Gadget {i}")).into(),
-                ],
-            )
-            .on_press(())
-            .into()
-        }),
-    )
+    icssed::row((0..12).map(|i| {
+        icssed::button![
+            icssed::icon(icon.clone()),
+            icssed::text(format!("Gadget {i}"))
+        ]
+        .kind("gadget")
+        .on_press(())
+        .into()
+    }))
+    .at(root)
     .into()
 }
 
 /// A menu: twenty items, an icon, a label and a shortcut each.
 fn menu<'a>(root: Node<'a>, icon: &IconFile) -> Element<'a, ()> {
-    icssed::menu(
-        root,
-        (0..20).map(|i| {
-            icssed::MenuItem::new(format!("Menu item number {i}"))
-                .icon(icon.clone())
-                .shortcut("Ctrl+K")
-                .on_press(())
-        }),
-    )
+    icssed::menu((0..20).map(|i| {
+        icssed::MenuItem::new(format!("Menu item number {i}"))
+            .icon(icon.clone())
+            .shortcut("Ctrl+K")
+            .on_press(())
+    }))
+    .at(root)
+    .into()
 }
 
 /// A list: five hundred rows of a label.
 fn list(root: Node<'_>) -> Element<'_, ()> {
-    icssed::column(
-        root,
-        (0..500).map(|i| {
-            let row = root.child("row");
-            icssed::row(
-                row,
-                [icssed::text(row.child("label"), format!("Row {i}")).into()],
-            )
-            .into()
-        }),
-    )
-    .into()
+    icssed::column((0..500).map(|i| icssed::row![icssed::text(format!("Row {i}"))].into()))
+        .at(root)
+        .into()
 }
 
 fn tree<'a>(

@@ -41,18 +41,14 @@ impl AriaShell {
             && dialog.is_window(window)
         {
             let root = self.theme.root("launcher", scale);
-            return dialog_surface(
-                root,
-                launcher.view(shared, root),
-                launcher::Message::Nothing,
-            )
-            .map(Message::Launcher);
+            return dialog_surface(root, launcher.view(shared), launcher::Message::Nothing)
+                .map(Message::Launcher);
         }
         if let Some((dialog, exiter)) = &self.exiter
             && dialog.is_window(window)
         {
             let root = self.theme.root("exiter", scale);
-            return dialog_surface(root, exiter.view(shared, root), exiter::Message::Nothing)
+            return dialog_surface(root, exiter.view(shared), exiter::Message::Nothing)
                 .map(Message::Exiter);
         }
         if self
@@ -238,5 +234,7 @@ pub(crate) fn dialog_surface<'a, M: Clone + 'a>(
     content: Element<'a, M>,
     nothing: M,
 ) -> Element<'a, M> {
-    icssed::surface(root, dialog::content(content, nothing)).into()
+    icssed::surface(dialog::content(content, nothing))
+        .at(root)
+        .into()
 }

@@ -23,11 +23,12 @@ use iced::widget::canvas::{Cache, Fill, Frame, Path, Stroke};
 use iced::{Color, Event, Length, Point, Rectangle, Size, Vector};
 
 use super::boxed::{BoxState, Boxed};
+use super::place::{self, placed};
 use super::text::text;
 use crate::layout::{content_box, flex, snap};
 use crate::paint::fade;
 use crate::query::Reported;
-use crate::style::{Direction, Node, States};
+use crate::style::{Direction, Node, States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Graph<'a, Message> {
@@ -43,10 +44,10 @@ pub struct Graph<'a, Message> {
     children: Vec<Element<'a, Message>>,
 }
 
-/// A graph `capacity` values wide: `node`.
-pub fn graph<'a, Message>(node: Node<'a>, capacity: usize) -> Graph<'a, Message> {
+/// A `graph` `capacity` values wide.
+pub fn graph<'a, Message>(capacity: usize) -> Graph<'a, Message> {
     Graph {
-        boxed: Boxed::new(node),
+        boxed: Boxed::of(name!("graph")),
         capacity: capacity.max(2),
         max: None,
         series: Vec::new(),
@@ -56,6 +57,8 @@ pub fn graph<'a, Message>(node: Node<'a>, capacity: usize) -> Graph<'a, Message>
 }
 
 impl<'a, Message> Graph<'a, Message> {
+    placed!(boxed.place);
+
     /// A series, its values oldest first: a `series`.
     pub fn series(mut self, values: impl IntoIterator<Item = f32>) -> Self {
         self.series.push((None, values.into_iter().collect()));
@@ -78,8 +81,7 @@ impl<'a, Message> Graph<'a, Message> {
     /// A text over it, its `label`.
     pub fn label(mut self, label: impl Into<Cow<'a, str>>) -> Self {
         self.children.clear();
-        self.children
-            .push(text(self.boxed.node.child("label"), label).into());
+        self.children.push(text(label).into());
         self
     }
 }
@@ -166,7 +168,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        place::trees(self.boxed.node(), &self.children)
     }
 
     fn diff(&self, tree: &mut Tree) {
@@ -174,8 +176,8 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
             .downcast_mut::<State>()
             .boxed
             .animated
-            .diff(self.boxed.node);
-        tree.diff_children(&self.children);
+            .diff(self.boxed.node());
+        place::diff(self.boxed.node(), tree, &self.children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -183,12 +185,12 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
             .boxed
             .layout_style(tree.state.downcast_ref::<State>().boxed.states);
         if self.parts.is_none() {
-            self.parts = Some(Parts::new(self.boxed.node, &self.series));
+            self.parts = Some(Parts::new(self.boxed.node(), &self.series));
         }
         flex(
             &s,
             Direction::Row,
-            self.boxed.node.scale(),
+            self.boxed.node().scale(),
             &mut self.children,
             &mut tree.children,
             renderer,
@@ -210,7 +212,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
         let Some(parts) = &self.parts else {
             return;
         };
-        let scale = self.boxed.node.scale();
+        let scale = self.boxed.node().scale();
         let s = self.boxed.layout_style(state.boxed.states);
         let content = content_box(layout.bounds().size(), &s, scale);
         self.boxed.draw(
@@ -318,13 +320,13 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(None, bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         // Its paths, across its content box.
         if let Some(parts) = &self.parts {
             let s = self
                 .boxed
                 .layout_style(tree.state.downcast_ref::<State>().boxed.states);
-            let content = content_box(layout.bounds().size(), &s, self.boxed.node.scale())
+            let content = content_box(layout.bounds().size(), &s, self.boxed.node().scale())
                 + Vector::new(layout.bounds().x, layout.bounds().y);
             for &node in parts.series.iter().chain([&parts.grid]) {
                 operation.custom(None, content, &mut Reported::new(node));

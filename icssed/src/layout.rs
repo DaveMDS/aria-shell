@@ -441,7 +441,7 @@ mod tests {
     use iced::{Rectangle, Size};
 
     use crate::measure::headless;
-    use crate::{Element, Node, Scheme, Sheet, Source};
+    use crate::{Element, Scheme, Sheet, Source};
 
     fn sheet(css: &str) -> Sheet {
         let (sheet, warnings) = Sheet::load(
@@ -466,14 +466,13 @@ mod tests {
     }
 
     /// A box with nothing in it: its size is its style's.
-    fn cell<'a>(parent: Node<'a>, class: &str) -> Element<'a, ()> {
-        crate::row(parent.child("cell").class(class), []).into()
+    fn cell(class: &str) -> Element<'_, ()> {
+        crate::row([]).kind("cell").class(class).into()
     }
 
     /// A box with one `fixed` child.
-    fn holding<'a>(parent: Node<'a>, class: &str, fixed: &str) -> Element<'a, ()> {
-        let node = parent.child("cell").class(class);
-        crate::row(node, [cell(node, fixed)]).into()
+    fn holding<'a>(class: &'a str, fixed: &'a str) -> Element<'a, ()> {
+        crate::row([cell(fixed)]).kind("cell").class(class).into()
     }
 
     fn rects(node: &layout::Node) -> Vec<Rectangle> {
@@ -499,11 +498,9 @@ mod tests {
         );
         let row = sheet.root("row", 1.0);
         let node = lay(
-            crate::row(
-                row,
-                [cell(row, "fill"), cell(row, "w80"), cell(row, "fill")],
-            )
-            .into(),
+            crate::row([cell("fill"), cell("w80"), cell("fill")])
+                .at(row)
+                .into(),
             MAX,
         );
         assert_eq!(node.size(), Size::new(300.0, 20.0));
@@ -527,10 +524,7 @@ mod tests {
              cell.fill { width: 50px; height: fill; }",
         );
         let row = sheet.root("row", 1.0);
-        let node = lay(
-            crate::row(row, [cell(row, "h20"), cell(row, "fill")]).into(),
-            MAX,
-        );
+        let node = lay(crate::row([cell("h20"), cell("fill")]).at(row).into(), MAX);
         assert_eq!(node.size(), Size::new(300.0, 20.0));
         assert_eq!(
             rects(&node),
@@ -548,11 +542,9 @@ mod tests {
         );
         let row = sheet.root("row", 1.0);
         let node = lay(
-            crate::row(
-                row,
-                [holding(row, "fill", "w40"), holding(row, "fill", "w40")],
-            )
-            .into(),
+            crate::row([holding("fill", "w40"), holding("fill", "w40")])
+                .at(row)
+                .into(),
             MAX,
         );
         assert_eq!(node.size(), Size::new(50.0, 12.0));
@@ -563,7 +555,7 @@ mod tests {
         let sheet = sheet("row { width: 100px; } cell { width: fill; height: 10px; }");
         let row = sheet.root("row", 1.0);
         let node = lay(
-            crate::row(row, [cell(row, "a"), cell(row, "b"), cell(row, "c")]).into(),
+            crate::row([cell("a"), cell("b"), cell("c")]).at(row).into(),
             MAX,
         );
         let widths: Vec<f32> = rects(&node).iter().map(|r| r.width).collect();
@@ -578,11 +570,9 @@ mod tests {
         );
         let row = sheet.root("row", 1.0);
         let node = lay(
-            crate::row(
-                row,
-                [holding(row, "fill", "w50"), holding(row, "fill", "w150")],
-            )
-            .into(),
+            crate::row([holding("fill", "w50"), holding("fill", "w150")])
+                .at(row)
+                .into(),
             MAX,
         );
         assert_eq!(node.size().width, 300.0);
@@ -601,26 +591,18 @@ mod tests {
         let row = sheet.root("row", 1.0);
         // Empty, they can go down to nothing: each gives up the same.
         let node = lay(
-            crate::row(
-                row,
-                [cell(row, "w100"), cell(row, "w100"), cell(row, "w100")],
-            )
-            .into(),
+            crate::row([cell("w100"), cell("w100"), cell("w100")])
+                .at(row)
+                .into(),
             MAX,
         );
         let widths: Vec<f32> = rects(&node).iter().map(|r| r.width).collect();
         assert_eq!(widths, [50.0, 50.0, 50.0]);
         // One holds 90px it can't give up: the others share the rest.
         let node = lay(
-            crate::row(
-                row,
-                [
-                    holding(row, "w100", "w90"),
-                    cell(row, "w100"),
-                    cell(row, "w100"),
-                ],
-            )
-            .into(),
+            crate::row([holding("w100", "w90"), cell("w100"), cell("w100")])
+                .at(row)
+                .into(),
             MAX,
         );
         let widths: Vec<f32> = rects(&node).iter().map(|r| r.width).collect();
@@ -638,22 +620,18 @@ mod tests {
         );
         let row = sheet.root("row", 1.0);
         const WIDE: &str = "A label far wider than its row";
-        let text = |class: &str| -> Element<'_, ()> {
-            crate::row(
-                row,
-                [crate::text(row.child("label").class(class), WIDE).into()],
-            )
-            .into()
+        let text = |class: &'static str| -> Element<'_, ()> {
+            crate::row([crate::text(WIDE).class(class).into()])
+                .at(row)
+                .into()
         };
         assert!(rects(&lay(text("whole"), MAX))[0].width > 40.0);
         assert_eq!(rects(&lay(text("cut"), MAX))[0].width, 40.0);
         let button = row.child("button");
         let node = lay(
-            crate::row(
-                row,
-                [crate::button(button, [crate::text(button.child("label"), WIDE).into()]).into()],
-            )
-            .into(),
+            crate::row([crate::button([crate::text(WIDE).into()]).at(button).into()])
+                .at(row)
+                .into(),
             MAX,
         );
         assert!(rects(&node)[0].width > 40.0);
@@ -667,7 +645,9 @@ mod tests {
         );
         let row = sheet.root("row", 1.0);
         let node = lay(
-            crate::row(row, [holding(row, "a", "w80"), holding(row, "b", "w80")]).into(),
+            crate::row([holding("a", "w80"), holding("b", "w80")])
+                .at(row)
+                .into(),
             MAX,
         );
         assert_eq!(node.size().width, 100.0);
@@ -684,7 +664,7 @@ mod tests {
              cell.w90 { width: 90px; min-width: 90px; height: 10px; }",
         );
         let row = sheet.root("row", 1.0);
-        let node = lay(crate::row(row, [holding(row, "a", "w90")]).into(), MAX);
+        let node = lay(crate::row([holding("a", "w90")]).at(row).into(), MAX);
         assert_eq!(rects(&node)[0].width, 50.0);
         assert_eq!(rects(&node.children()[0])[0].width, 90.0);
     }
@@ -697,11 +677,9 @@ mod tests {
         );
         let column = sheet.root("column", 1.0);
         let node = lay(
-            crate::column(
-                column,
-                [holding(column, "a", "w50"), holding(column, "b", "w90")],
-            )
-            .into(),
+            crate::column([holding("a", "w50"), holding("b", "w90")])
+                .at(column)
+                .into(),
             MAX,
         );
         assert_eq!(node.size(), Size::new(94.0, 24.0));
@@ -719,11 +697,9 @@ mod tests {
         );
         let column = sheet.root("column", 1.0);
         let node = lay(
-            crate::column(
-                column,
-                [holding(column, "a", "w50"), holding(column, "b", "w90")],
-            )
-            .into(),
+            crate::column([holding("a", "w50"), holding("b", "w90")])
+                .at(column)
+                .into(),
             MAX,
         );
         // The second can't go under its 90px: it overflows the column.
@@ -741,10 +717,7 @@ mod tests {
         );
         let lay_row = |class: &str| {
             let row = sheet.root("row", 1.0).class(class);
-            lay(
-                crate::row(row, [cell(row, "a"), cell(row, "b")]).into(),
-                MAX,
-            )
+            lay(crate::row([cell("a"), cell("b")]).at(row).into(), MAX)
         };
         assert_eq!(
             rects(&lay_row("center")),
@@ -757,7 +730,7 @@ mod tests {
         // Stretched across by default: an auto height takes the row's.
         let sheet = super::tests::sheet("row { height: 60px; } cell { width: 40px; }");
         let row = sheet.root("row", 1.0);
-        let node = lay(crate::row(row, [cell(row, "a")]).into(), MAX);
+        let node = lay(crate::row([cell("a")]).at(row).into(), MAX);
         assert_eq!(rects(&node), [rect(0.0, 0.0, 40.0, 60.0)]);
     }
 
@@ -768,7 +741,7 @@ mod tests {
              cell { width: 20px; height: 20px; margin: 3px; }",
         );
         let row = sheet.root("row", 1.0);
-        let node = lay(crate::row(row, [cell(row, "a")]).into(), MAX);
+        let node = lay(crate::row([cell("a")]).at(row).into(), MAX);
         // 5 + 2 + 10, then the cell's own margin box: 26 wide.
         assert_eq!(
             node.size(),
@@ -785,10 +758,7 @@ mod tests {
         );
         let scale = 1.5;
         let row = sheet.root("row", scale);
-        let node = lay(
-            crate::row(row, [cell(row, "a"), cell(row, "b")]).into(),
-            MAX,
-        );
+        let node = lay(crate::row([cell("a"), cell("b")]).at(row).into(), MAX);
         for r in rects(&node).iter().chain([node.bounds()].iter()) {
             for v in [r.x, r.y, r.width, r.height] {
                 let device = v * scale;
@@ -803,7 +773,7 @@ mod tests {
             sheet("popup { box-shadow: 0 3px 8px black; } cell { width: 100px; height: 40px; }");
         let popup = sheet.root("popup", 1.0);
         let node = lay(
-            crate::surface(popup, crate::row(popup, [cell(popup, "a")])).into(),
+            crate::surface(crate::row([cell("a")])).at(popup).into(),
             MAX,
         );
         // Blur 8 on every side, the offset moving 3 of it down.

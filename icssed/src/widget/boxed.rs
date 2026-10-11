@@ -20,16 +20,17 @@ use iced::advanced::widget::operation::Focusable;
 use iced::advanced::{Shell, mouse};
 use iced::{Length, Rectangle, Size, Transformation};
 
+use super::place::Place;
 use crate::anim::Animated;
 use crate::layout::{length, snap};
 use crate::paint::{draw_box, draw_outline, fade};
 use crate::style::{Ancestors, Computed, Node, States};
 use crate::{Renderer, Theme};
 
-/// A styled box: its node, its style at rest.
+/// A styled box: its place, and through it its node and its style at
+/// rest.
 pub(crate) struct Boxed<'a> {
-    pub node: Node<'a>,
-    pub style: Arc<Computed>,
+    pub place: Place<'a>,
 }
 
 /// What a box keeps in the widget tree.
@@ -87,17 +88,30 @@ pub(crate) fn border_box(bounds: Rectangle, s: &Computed, scale: f32) -> Rectang
 }
 
 impl<'a> Boxed<'a> {
-    pub fn new(node: Node<'a>) -> Self {
-        Self {
-            style: node.base(),
-            node,
-        }
+    /// A `kind` box, wherever it's put.
+    pub fn of(kind: crate::style::Name) -> Self {
+        Self::placed(Place::new(kind))
+    }
+
+    pub fn placed(place: Place<'a>) -> Self {
+        Self { place }
+    }
+
+    #[inline]
+    pub fn node(&self) -> Node<'a> {
+        self.place.node()
+    }
+
+    /// Its style at rest.
+    #[inline]
+    pub fn style(&self) -> &Arc<Computed> {
+        self.place.style()
     }
 
     pub fn state(&self) -> BoxState {
         BoxState {
             states: States::NONE,
-            animated: Animated::new(self.node),
+            animated: Animated::new(self.node()),
             drawn: Cell::new(None),
         }
     }
@@ -106,31 +120,31 @@ impl<'a> Boxed<'a> {
     /// its ancestors' can't (they reach it only at draw).
     pub fn layout_style(&self, states: States) -> Arc<Computed> {
         if states.is_empty() {
-            self.style.clone()
+            self.style().clone()
         } else {
-            self.node.resolve(states, &Ancestors::default())
+            self.node().resolve(states, &Ancestors::default())
         }
     }
 
     /// Its size as iced sees it: its margin box.
     pub fn size(&self) -> Size<Length> {
-        let m = self.style.margin;
+        let m = self.style().margin;
         Size::new(
-            length(self.style.width, m.horizontal()),
-            length(self.style.height, m.vertical()),
+            length(self.style().width, m.horizontal()),
+            length(self.style().height, m.vertical()),
         )
     }
 
     /// Its border box at rest, in its margin box `bounds`: where the
     /// pointer counts as over it.
     pub fn border_box(&self, bounds: Rectangle) -> Rectangle {
-        border_box(bounds, &self.style, self.node.scale())
+        border_box(bounds, self.style(), self.node().scale())
     }
 
     /// The states it follows: those some rule sees, and `own` (a
     /// button's hover and press, whatever the theme says).
     pub fn tracked(&self, own: States) -> States {
-        self.node.sensitivity().any() | own
+        self.node().sensitivity().any() | own
     }
 
     /// Draws it in its margin box `bounds`, shown within `viewport`: its
@@ -148,10 +162,11 @@ impl<'a> Boxed<'a> {
         cursor: mouse::Cursor,
         content: impl FnOnce(&mut Renderer, &Theme, &renderer::Style, mouse::Cursor),
     ) {
-        let resolved = self.node.resolve(state.states, &theme.ancestors);
+        let node = self.node();
+        let resolved = node.resolve(state.states, &theme.ancestors);
         let moving = state.animated.style(&resolved, theme);
         let s = moving.as_ref().unwrap_or(&resolved);
-        let bounds = border_box(bounds, s, self.node.scale());
+        let bounds = border_box(bounds, s, node.scale());
         let transformation = s.transformation(bounds);
         state.drawn.set(transformation);
         let cursor = state.local(cursor);
@@ -161,14 +176,12 @@ impl<'a> Boxed<'a> {
                 // What its children get: its states, where a descendant's
                 // style can see them or inherits what they change (a
                 // `color`); its opacity.
-                let seen = state.states & self.node.sensitivity().any();
+                let seen = state.states & node.sensitivity().any();
                 let since = state.animated.since;
                 let derived;
                 let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity
                 {
-                    derived = theme
-                        .under(self.node.depth(), seen, since)
-                        .with_opacity(opacity);
+                    derived = theme.under(node.depth(), seen, since).with_opacity(opacity);
                     &derived
                 } else {
                     theme
@@ -200,7 +213,7 @@ impl<'a> Boxed<'a> {
         if tracked.contains(States::HOVER) {
             state.states = state
                 .states
-                .with(States::HOVER, over && !self.node.is_disabled());
+                .with(States::HOVER, over && !self.node().is_disabled());
         }
         let changed = before ^ state.states;
         if changed.is_empty() {
@@ -210,7 +223,7 @@ impl<'a> Boxed<'a> {
         if tracked.intersects(changed) {
             shell.request_redraw();
             // A state its own style sees may change its layout too.
-            if self.node.sensitivity().own.intersects(changed) {
+            if self.node().sensitivity().own.intersects(changed) {
                 let after = self.layout_style(state.states);
                 if !self.layout_style(before).same_layout(&after) {
                     shell.invalidate_layout();

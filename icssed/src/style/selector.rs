@@ -7,7 +7,7 @@
 
 use cssparser::{ParseError, Parser, ToCss, Token};
 
-use super::node::{Ancestors, Element, Name, Names, States};
+use super::node::{Ancestors, Element, Name, States};
 use super::value::{Error, describe};
 
 fn fail<T>(message: impl Into<String>) -> Result<T, Error> {
@@ -189,10 +189,9 @@ impl Nth {
     }
 }
 
-/// What parsing selectors adds to: the names, and the positional
-/// pseudo-classes the sheet uses.
+/// What parsing selectors adds to: the positional pseudo-classes the
+/// sheet uses.
 pub(crate) struct Ctx<'a> {
-    pub names: &'a mut Names,
     pub positional: &'a mut Vec<Nth>,
 }
 
@@ -264,10 +263,10 @@ fn compound(p: &mut Parser, ctx: &mut Ctx) -> Result<Compound, Error> {
             break;
         };
         match token.clone() {
-            Token::Ident(kind) if !any => c.kind = Some(ctx.names.intern(&kind)),
+            Token::Ident(kind) if !any => c.kind = Some(Name::new(&kind)),
             Token::Delim('*') if !any => {}
             Token::Delim('.') => match p.next_including_whitespace()?.clone() {
-                Token::Ident(class) => c.classes.push(ctx.names.intern(&class)),
+                Token::Ident(class) => c.classes.push(Name::new(&class)),
                 t => {
                     return fail(format!(
                         "expected a class name, found `{}`",
@@ -275,7 +274,7 @@ fn compound(p: &mut Parser, ctx: &mut Ctx) -> Result<Compound, Error> {
                     ));
                 }
             },
-            Token::IDHash(id) => c.ids.push(ctx.names.intern(&id)),
+            Token::IDHash(id) => c.ids.push(Name::new(&id)),
             Token::Hash(id) => {
                 return fail(format!(
                     "`#{id}` isn't an id selector: an id starts with a letter (CSS escapes the rest: `#\\3{}`)",
@@ -283,7 +282,7 @@ fn compound(p: &mut Parser, ctx: &mut Ctx) -> Result<Compound, Error> {
                 ));
             }
             Token::SquareBracketBlock => {
-                let attr = p.parse_nested_block(|p| attribute(p, ctx))?;
+                let attr = p.parse_nested_block(attribute)?;
                 c.attrs.push(attr);
             }
             Token::Colon => pseudo_class(p, ctx, &mut c)?,
@@ -307,9 +306,9 @@ fn compound(p: &mut Parser, ctx: &mut Ctx) -> Result<Compound, Error> {
 }
 
 /// `[name]` or `[name="value"]`.
-fn attribute(p: &mut Parser, ctx: &mut Ctx) -> Result<Attr, Error> {
+fn attribute(p: &mut Parser) -> Result<Attr, Error> {
     p.skip_whitespace();
-    let name = ctx.names.intern(&p.expect_ident_cloned()?);
+    let name = Name::new(&p.expect_ident_cloned()?);
     p.skip_whitespace();
     if p.is_exhausted() {
         return Ok(Attr { name, value: None });
@@ -332,7 +331,7 @@ fn attribute(p: &mut Parser, ctx: &mut Ctx) -> Result<Attr, Error> {
     p.skip_whitespace();
     Ok(Attr {
         name,
-        value: Some(ctx.names.intern(&value)),
+        value: Some(Name::new(&value)),
     })
 }
 

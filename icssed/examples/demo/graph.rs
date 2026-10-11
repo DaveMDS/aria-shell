@@ -1,8 +1,8 @@
 //! A graph draws series of values, oldest first, as lines with the area
-//! under them: `icssed::graph(node, capacity)` and one `.series(values)`
+//! under them: `icssed::graph(capacity)` and one `.series(values)`
 //! or more. A CPU's load, a network's traffic.
 //!
-//!     icssed::graph(node.child("graph"), 60)
+//!     icssed::graph(60)
 //!         .series_class("down", self.down.iter().copied())
 //!         .series_class("up", self.up.iter().copied())
 //!         .label("1 MB/s")
@@ -22,7 +22,7 @@
 
 use std::collections::VecDeque;
 
-use icssed::{Element, Node};
+use icssed::{Element, button, column, graph, row, text};
 
 use crate::Assets;
 
@@ -87,40 +87,27 @@ pub fn update(state: &mut State, message: Message) {
     }
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let more = node.child("button");
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::graph(line.child("graph"), CAPACITY)
-                        .series(state.load.iter().copied())
-                        .max(100.0)
-                        .label("100%")
-                        .into(),
-                    icssed::graph(line.child("graph").class("traffic"), CAPACITY)
-                        .series_class("down", state.down.iter().copied())
-                        .series_class("up", state.up.iter().copied())
-                        .label("1 MB/s")
-                        .into(),
-                    icssed::graph(line.child("sparkline"), CAPACITY / 2)
-                        .series(state.load.iter().copied())
-                        .max(100.0)
-                        .label(format!(
-                            "CPU {:.0}%",
-                            state.load.back().copied().unwrap_or(0.0)
-                        ))
-                        .into(),
-                ],
-            )
-            .into(),
-            icssed::button(more, [icssed::text(more.child("label"), "Four more values").into()])
-                .on_press(Message::Sample)
-                .into(),
-        ],
-    )
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
+    let cpu = format!("CPU {:.0}%", state.load.back().copied().unwrap_or(0.0));
+    column![
+        row![
+            graph(CAPACITY)
+                .series(state.load.iter().copied())
+                .max(100.0)
+                .label("100%"),
+            graph(CAPACITY)
+                .class("traffic")
+                .series_class("down", state.down.iter().copied())
+                .series_class("up", state.up.iter().copied())
+                .label("1 MB/s"),
+            graph(CAPACITY / 2)
+                .kind("sparkline")
+                .series(state.load.iter().copied())
+                .max(100.0)
+                .label(cpu),
+        ]
+        .kind("line"),
+        button![text("Four more values")].on_press(Message::Sample),
+    ]
     .into()
 }

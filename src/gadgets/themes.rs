@@ -104,20 +104,17 @@ impl Gadget for Themes {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let button = ctx.node.child("button");
         let name = match ctx.theme.scheme() {
             Scheme::Light => &self.config.light_icon,
             Scheme::Dark => &self.config.dark_icon,
         };
-        let icons: &dyn icssed::Icons = ctx.icons;
-        let icon = icssed::icon(button.child("icon"), (icons, name.as_str()));
         let button = mouse_area(
-            icssed::button(button, [icon.into()])
+            icssed::button![ctx.icon(name.as_str())]
                 .on_press(Message::Toggle)
                 .id(self.popup.anchor()),
         )
         .on_right_press(Message::OpenMenu);
-        icssed::row(ctx.node, [button.into()]).into()
+        icssed::row![button].into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -130,7 +127,7 @@ impl Gadget for Themes {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         self.menu
-            .view(ctx.node.child("menu"), self.items(ctx.theme, ctx.locale))
+            .view(self.items(ctx.theme, ctx.locale))
             .map(Message::Menu)
     }
 }

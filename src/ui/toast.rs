@@ -46,21 +46,11 @@ pub enum Message {
     Invoke(u32, String),
 }
 
-/// The root node of notification `n`'s surface, from `root` (a
-/// `notification` root, at its output's scale): its urgency as a
-/// class, its id, the app and the output as attributes (the id isn't
-/// an `#id`: a selector's can't start with a digit).
-pub fn node<'a>(root: Node<'a>, n: &Notification, output: &str) -> Node<'a> {
-    classify(root, n).attr("output", output)
-}
-
-/// The node of notification `n` shown under `parent` (a popup list).
-pub fn node_under<'a>(parent: Node<'a>, n: &Notification) -> Node<'a> {
-    classify(parent.child("notification"), n)
-}
-
-fn classify<'a>(node: Node<'a>, n: &Notification) -> Node<'a> {
-    node.class(n.urgency.name())
+/// The root node of notification `n`'s surface, as [`view`] makes it,
+/// from `root` (a `notification` root at its output's scale, its output
+/// as an attribute): for the room its shadow takes.
+pub fn node<'a>(root: Node<'a>, n: &Notification) -> Node<'a> {
+    root.class(n.urgency.name())
         .attr("id", &n.id.to_string())
         .attr("app", &n.app_name)
 }
@@ -72,6 +62,8 @@ pub struct Extras {
     pub age: Option<String>,
     /// A ✕ button that dismisses it.
     pub close: bool,
+    /// Not seen yet: `.unseen`.
+    pub unseen: bool,
 }
 
 /// "now", "5 min", "2 h", "yesterday", or the date, for the popup.
@@ -103,53 +95,55 @@ fn icon<'a>(
     })
 }
 
-/// `n` in its box, `node`. A left click anywhere but on a button
-/// activates it, a right click dismisses it.
+/// `n` in its box, a `notification`: its urgency as a class, its id and
+/// the app as attributes (the id isn't an `#id`: a selector's can't
+/// start with a digit). A left click anywhere but on a button activates
+/// it, a right click dismisses it.
 pub fn view<'a>(
-    node: Node<'a>,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
     extras: Extras,
 ) -> Element<'a, Message> {
-    let head = node.child("head");
-    let texts = head.child("texts");
-    let line = texts.child("line");
     let mut first: Vec<Element<'a, Message>> =
-        vec![icssed::text(line.child("summary"), n.summary.as_str()).into()];
+        vec![icssed::text(n.summary.as_str()).kind("summary").into()];
     if let Some(age) = extras.age {
-        first.push(icssed::text(line.child("time"), age).into());
+        first.push(icssed::text(age).kind("time").into());
     }
     if extras.close {
-        let close = line.child("button").class("close").class("flat");
         first.push(
-            icssed::button(close, [icssed::mark(close.child("cross"))])
+            icssed::button![icssed::mark().kind("cross")]
+                .class("close")
+                .class("flat")
                 .on_press(Message::Dismiss(n.id))
                 .into(),
         );
     }
-    let mut lines: Vec<Element<'a, Message>> = vec![icssed::row(line, first).into()];
+    let mut lines: Vec<Element<'a, Message>> = vec![icssed::row(first).kind("line").into()];
     if !n.body.is_empty() {
-        lines.push(icssed::text(texts.child("body"), n.body.as_str()).into());
+        lines.push(icssed::text(n.body.as_str()).kind("body").into());
     }
     let mut top: Vec<Element<'a, Message>> = Vec::new();
     if let Some(icon) = icon(n, notifications, icons) {
-        top.push(icssed::icon(head.child("icon"), icon.clone()).into());
+        top.push(icssed::icon(icon.clone()).into());
     }
-    top.push(icssed::column(texts, lines).into());
-    let mut content: Vec<Element<'a, Message>> = vec![icssed::row(head, top).into()];
+    top.push(icssed::column(lines).kind("texts").into());
+    let mut content: Vec<Element<'a, Message>> = vec![icssed::row(top).kind("head").into()];
     if n.buttons().next().is_some() {
-        let actions = node.child("actions");
-        let count = n.buttons().count();
-        let buttons = n.buttons().enumerate().map(|(i, (key, label))| {
-            let b = actions.child_at("button", i, count);
-            icssed::button(b, [icssed::text(b.child("label"), label.as_str()).into()])
+        let buttons = n.buttons().map(|(key, label)| {
+            icssed::button![icssed::text(label.as_str())]
                 .on_press(Message::Invoke(n.id, key.clone()))
                 .into()
         });
-        content.push(icssed::row(actions, buttons).into());
+        content.push(icssed::row(buttons).kind("actions").into());
     }
-    mouse_area(icssed::column(node, content))
+    let notification = icssed::column(content)
+        .kind("notification")
+        .class(n.urgency.name())
+        .class_if("unseen", extras.unseen)
+        .attr("id", &n.id.to_string())
+        .attr("app", &n.app_name);
+    mouse_area(notification)
         .on_press(Message::Activate(n.id))
         .on_right_press(Message::Dismiss(n.id))
         .into()
@@ -234,12 +228,14 @@ impl Toasts {
             let stack = theme.root("notifications", scale).base();
             let edge = popup::padding(stack.padding);
             let gap = stack.row_gap as i32;
-            let node = node(theme.root("notification", scale), n, output_name);
-            let room = popup::room(node);
+            let root = theme
+                .root("notification", scale)
+                .attr("output", output_name);
+            let room = popup::room(node(root, n));
             let size = crate::ui::size(
                 &mut m.measure.borrow_mut(),
                 toast.window,
-                surface(node, n, notifications, icons),
+                surface(root, n, notifications, icons),
                 crate::ui::room_on(info),
             );
             let offset = offsets.entry(toast.output).or_insert(0);
@@ -345,28 +341,30 @@ impl Toasts {
         output: &str,
         scale: f32,
     ) -> Element<'a, Message> {
-        let root = theme.root("notification", scale);
+        let root = theme.root("notification", scale).attr("output", output);
         let Some(n) = self
             .toasts
             .iter()
             .find(|t| t.window == window)
             .and_then(|t| notifications.get(t.id))
         else {
-            return icssed::column(root, []).into();
+            return icssed::column![].at(root).into();
         };
-        surface(node(root, n, output), n, notifications, icons)
+        surface(root, n, notifications, icons)
     }
 }
 
-/// The content of notification `n`'s own surface: its view in its box
-/// `node` (its [`node`]), with its shadow's room around.
+/// The content of notification `n`'s own surface: its view as `root`'s
+/// box, with its shadow's room around.
 pub fn surface<'a>(
-    node: Node<'a>,
+    root: Node<'a>,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
 ) -> Element<'a, Message> {
-    icssed::surface(node, view(node, n, notifications, icons, Extras::default())).into()
+    icssed::surface(view(n, notifications, icons, Extras::default()))
+        .at(root)
+        .into()
 }
 
 /// The layer-shell anchor of the toasts in corner `position`.

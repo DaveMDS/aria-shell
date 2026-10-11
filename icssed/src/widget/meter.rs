@@ -14,10 +14,11 @@ use iced::{Event, Length, Rectangle, Size, Vector};
 
 use super::boxed::{BoxState, Boxed};
 use super::flex::row;
+use super::place::{self, placed};
 use super::text::text;
 use crate::layout::{content_box, flex, snap};
 use crate::query::Reported;
-use crate::style::{Direction, Node, States};
+use crate::style::{Direction, States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Meter<'a, Message> {
@@ -27,25 +28,26 @@ pub struct Meter<'a, Message> {
     children: Vec<Element<'a, Message>>,
 }
 
-/// A bar filled to `fraction`, from 0 to 1: `node`, and its `fill`.
-pub fn meter<'a, Message: Clone + 'a>(node: Node<'a>, fraction: f32) -> Meter<'a, Message> {
+/// A `meter` filled to `fraction`, from 0 to 1, and its `fill`.
+pub fn meter<'a, Message: Clone + 'a>(fraction: f32) -> Meter<'a, Message> {
     Meter {
-        boxed: Boxed::new(node),
+        boxed: Boxed::of(name!("meter")),
         fraction: if fraction.is_nan() {
             0.0
         } else {
             fraction.clamp(0.0, 1.0)
         },
-        children: vec![row(node.child("fill"), []).into()],
+        children: vec![row([]).kind_of(name!("fill")).into()],
     }
 }
 
 impl<'a, Message: Clone + 'a> Meter<'a, Message> {
+    placed!(boxed.place);
+
     /// A text over it, its `label`: a gauge.
     pub fn label(mut self, label: impl Into<Cow<'a, str>>) -> Self {
         self.children.truncate(1);
-        self.children
-            .push(text(self.boxed.node.child("label"), label).into());
+        self.children.push(text(label).into());
         self
     }
 }
@@ -64,22 +66,22 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Meter<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        place::trees(self.boxed.node(), &self.children)
     }
 
     fn diff(&self, tree: &mut Tree) {
         tree.state
             .downcast_mut::<BoxState>()
             .animated
-            .diff(self.boxed.node);
-        tree.diff_children(&self.children);
+            .diff(self.boxed.node());
+        place::diff(self.boxed.node(), tree, &self.children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
         let s = self
             .boxed
             .layout_style(tree.state.downcast_ref::<BoxState>().states);
-        let scale = self.boxed.node.scale();
+        let scale = self.boxed.node().scale();
         // The meter around its label, as a row.
         let (fill, label) = self.children.split_at_mut(1);
         let (fill_tree, label_tree) = tree.children.split_at_mut(1);
@@ -196,7 +198,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Meter<'_, Message> {
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(None, bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         operation.traverse(&mut |operation| {
             for ((child, tree), layout) in self
                 .children

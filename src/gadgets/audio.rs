@@ -15,7 +15,7 @@
 use iced::mouse::ScrollDelta;
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, IconSource, Node};
+use icssed::{Element, IconSource};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
@@ -156,7 +156,7 @@ impl Gadget for AudioGadget {
         if self.config.show_microphone {
             buttons.push(self.bar_button(ctx, Kind::Input));
         }
-        icssed::row(ctx.node, buttons).into()
+        icssed::row(buttons).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -164,49 +164,43 @@ impl Gadget for AudioGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let scroll = ctx.node.child("scroll");
-        let list = scroll.child("list");
         let mut rows: Vec<Element<'a, Message>> = Vec::new();
         for (kind, title) in self.groups(ctx.locale) {
             let channels: Vec<&Channel> = ctx.audio.channels_of(kind).collect();
             if channels.is_empty() {
                 continue;
             }
-            let section = list.child("section").class(kind_class(kind));
             rows.push(
-                icssed::row(
-                    section,
-                    [icssed::text(section.child("title"), title).into()],
-                )
-                .into(),
+                icssed::row![icssed::text(title).kind("title")]
+                    .kind("section")
+                    .class(kind_class(kind))
+                    .into(),
             );
             for c in channels {
-                rows.push(self.channel_view(ctx, list, c));
+                rows.push(self.channel_view(ctx, c));
             }
         }
         if self.config.show_players {
             for p in ctx.audio.players() {
-                rows.push(player_view(ctx, list, p));
+                rows.push(player_view(ctx, p));
             }
         }
         if rows.is_empty() {
-            rows.push(super::note(
-                list.child("empty"),
-                ctx.locale.tr("audio.empty"),
-            ));
-        }
-        if !self.config.mixer_command.is_empty() {
-            let mixer = list.child("button").class("mixer");
             rows.push(
-                icssed::button(
-                    mixer,
-                    [icssed::text(mixer.child("label"), ctx.locale.tr("audio.mixer")).into()],
-                )
-                .on_press(Message::RunMixer)
-                .into(),
+                super::note(ctx.locale.tr("audio.empty"))
+                    .kind("empty")
+                    .into(),
             );
         }
-        icssed::scroll(scroll, icssed::column(list, rows)).into()
+        if !self.config.mixer_command.is_empty() {
+            rows.push(
+                icssed::button![icssed::text(ctx.locale.tr("audio.mixer"))]
+                    .class("mixer")
+                    .on_press(Message::RunMixer)
+                    .into(),
+            );
+        }
+        icssed::scroll(icssed::column(rows).kind("list")).into()
     }
 }
 
@@ -217,23 +211,20 @@ impl AudioGadget {
     fn bar_button<'a>(&'a self, ctx: Context<'a>, kind: Kind) -> Element<'a, Message> {
         let device = ctx.audio.default_of(kind);
         let muted = device.is_none_or(|c| c.muted);
-        let button = ctx
-            .node
-            .child("button")
-            .class(kind_class(kind))
-            .class_if("muted", muted)
-            .class_if("none", device.is_none());
         let name = match device {
             Some(c) => c.icon_name(),
             None if kind == Kind::Input => ICON_INPUT_MUTED,
             None => ICON_MUTED,
         };
-        let mut content = vec![ctx.icon(button.child("icon"), name)];
+        let mut content: Vec<Element<'a, Message>> = vec![ctx.icon(name).into()];
         if self.config.show_percent {
             let value = device.map_or(0.0, |c| c.volume);
-            content.push(icssed::text(button.child("label"), percent(value)).into());
+            content.push(icssed::text(percent(value)).into());
         }
-        let button = icssed::button(button, content)
+        let button = icssed::button(content)
+            .class(kind_class(kind))
+            .class_if("muted", muted)
+            .class_if("none", device.is_none())
             .on_press(Message::TogglePopup(kind))
             .id(self.popup.anchor_nth(anchor(kind)));
         mouse_area(button)
@@ -257,70 +248,40 @@ impl AudioGadget {
 
     /// A row: the mute button with the icon, then the name (a radio
     /// making a device the default) with the percent, over the slider.
-    fn channel_view<'a>(
-        &'a self,
-        ctx: Context<'a>,
-        list: Node<'a>,
-        c: &'a Channel,
-    ) -> Element<'a, Message> {
-        let node = list
-            .child("channel")
-            .class(kind_class(c.kind))
-            .class_if("muted", c.muted)
-            .class_if("default", c.default)
-            .attr("name", &c.name);
+    fn channel_view<'a>(&'a self, ctx: Context<'a>, c: &'a Channel) -> Element<'a, Message> {
         let (kind, index) = (c.kind, c.index);
-        let mute_button = icssed::toggle(node.child("toggle").class("mute"), c.muted, move |m| {
-            Message::Mute(kind, index, m)
-        })
-        .icon(channel_icon(ctx, c));
-        let info = node.child("info");
-        let head = info.child("head");
+        let mute = icssed::toggle(c.muted, move |m| Message::Mute(kind, index, m))
+            .class("mute")
+            .icon(channel_icon(ctx, c));
         // A device's name is a radio: ● the default, ○ a click makes it
         // so (on the default too, a click that changes nothing).
         let label: Element<'a, Message> = if is_device(c) {
-            let radio = head
-                .child("button")
+            icssed::button![icssed::mark().kind("check"), icssed::text(c.label.as_str())]
                 .class("radio")
-                .class_if("active", c.default);
-            icssed::button(
-                radio,
-                [
-                    icssed::mark(radio.child("check")),
-                    icssed::text(radio.child("label"), c.label.as_str()).into(),
-                ],
-            )
-            .on_press(Message::SetDefault(c.kind, c.index))
-            .into()
+                .class_if("active", c.default)
+                .on_press(Message::SetDefault(c.kind, c.index))
+                .into()
         } else {
-            icssed::text(head.child("name"), c.label.as_str()).into()
+            icssed::text(c.label.as_str()).kind("name").into()
         };
-        let head = icssed::row(
-            head,
-            [
-                label,
-                icssed::text(head.child("value"), percent(c.volume)).into(),
-            ],
-        );
+        let head = icssed::row![label, icssed::text(percent(c.volume)).kind("value")].kind("head");
         let mut parts: Vec<Element<'a, Message>> = vec![head.into()];
         if c.has_volume {
-            let (kind, index) = (c.kind, c.index);
             parts.push(
-                icssed::slider(
-                    info.child("slider"),
-                    0.0..=self.config.max_volume,
-                    c.volume * 100.0,
-                    move |v| Message::Volume(kind, index, v),
-                )
+                icssed::slider(0.0..=self.config.max_volume, c.volume * 100.0, move |v| {
+                    Message::Volume(kind, index, v)
+                })
                 .step(1.0)
                 .into(),
             );
         }
-        icssed::row(
-            node,
-            [mute_button.into(), icssed::column(info, parts).into()],
-        )
-        .into()
+        icssed::row![mute, icssed::column(parts).kind("info")]
+            .kind("channel")
+            .class(kind_class(c.kind))
+            .class_if("muted", c.muted)
+            .class_if("default", c.default)
+            .attr("name", &c.name)
+            .into()
     }
 }
 
@@ -341,77 +302,67 @@ fn channel_icon<'a>(ctx: Context<'a>, c: &'a Channel) -> IconSource<'a> {
 /// The cover (or the player's icon) beside the title, artist and album;
 /// the transport buttons. No volume: the player's stream is in the
 /// mixer already.
-fn player_view<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Player) -> Element<'a, Message> {
-    let node = list
-        .child("player")
-        .class(match p.status {
-            PlaybackStatus::Playing => "playing",
-            PlaybackStatus::Paused => "paused",
-            PlaybackStatus::Stopped => "stopped",
-        })
-        .attr("name", &p.identity);
-    let info = node.child("info");
-    let cover: Element<'a, Message> = match ctx
+fn player_view<'a>(ctx: Context<'a>, p: &'a Player) -> Element<'a, Message> {
+    let cover = match ctx
         .audio
         .cover(&p.bus)
         .or_else(|| p.desktop_entry.as_deref().and_then(|id| ctx.icons.get(id)))
     {
-        Some(icon) => icssed::icon(info.child("cover"), icon.clone()).into(),
-        None => ctx.icon(info.child("cover"), ""),
+        Some(icon) => icssed::icon(icon.clone()),
+        None => ctx.icon(""),
     };
-    let texts = info.child("texts");
     let title = if p.title.is_empty() {
         &p.identity
     } else {
         &p.title
     };
     let mut lines: Vec<Element<'a, Message>> =
-        vec![icssed::text(texts.child("title"), title.as_str()).into()];
+        vec![icssed::text(title.as_str()).kind("title").into()];
     for (class, value) in [("artist", &p.artist), ("album", &p.album)] {
         if !value.is_empty() {
-            lines.push(icssed::text(texts.child(class), value.as_str()).into());
+            lines.push(icssed::text(value.as_str()).kind(class).into());
         }
     }
-    let controls = node.child("controls");
     let bus = &p.bus;
+    // Disabled, the icon takes `:disabled`'s colour.
     let transport = |class: &str, icon: &'a str, enabled: bool, message: Message| {
-        // Disabled where it's built: the icon takes `:disabled`'s colour.
-        let b = controls
-            .child("button")
+        icssed::button![ctx.icon(icon)]
             .class(class)
             .class("flat")
-            .disabled_if(!enabled);
-        icssed::button(b, [ctx.icon(b.child("icon"), icon)])
+            .disabled_if(!enabled)
             .on_press(message)
-            .into()
     };
     let play_icon = if p.status == PlaybackStatus::Playing {
         ICON_PAUSE
     } else {
         ICON_PLAY
     };
-    let buttons: Vec<Element<'a, Message>> = vec![
-        transport(
-            "previous",
-            ICON_PREVIOUS,
-            p.can_go_previous,
-            Message::Previous(bus.clone()),
-        ),
-        transport(
-            "play",
-            play_icon,
-            p.can_play || p.can_pause,
-            Message::PlayPause(bus.clone()),
-        ),
-        transport("next", ICON_NEXT, p.can_go_next, Message::Next(bus.clone())),
-    ];
-    icssed::column(
-        node,
-        [
-            icssed::row(info, [cover, icssed::column(texts, lines).into()]).into(),
-            icssed::row(controls, buttons).into(),
-        ],
-    )
+    icssed::column![
+        icssed::row![cover.kind("cover"), icssed::column(lines).kind("texts")].kind("info"),
+        icssed::row![
+            transport(
+                "previous",
+                ICON_PREVIOUS,
+                p.can_go_previous,
+                Message::Previous(bus.clone()),
+            ),
+            transport(
+                "play",
+                play_icon,
+                p.can_play || p.can_pause,
+                Message::PlayPause(bus.clone()),
+            ),
+            transport("next", ICON_NEXT, p.can_go_next, Message::Next(bus.clone())),
+        ]
+        .kind("controls"),
+    ]
+    .kind("player")
+    .class(match p.status {
+        PlaybackStatus::Playing => "playing",
+        PlaybackStatus::Paused => "paused",
+        PlaybackStatus::Stopped => "stopped",
+    })
+    .attr("name", &p.identity)
     .into()
 }
 

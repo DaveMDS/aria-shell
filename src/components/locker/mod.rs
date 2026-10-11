@@ -265,43 +265,40 @@ impl Locker {
     /// A lock surface: its root `root` (`locker[output=..]`), filling
     /// it, the box centred in it.
     pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
-        let node = root.child("box");
         let icons: &'a dyn icssed::Icons = shared.icons;
         let mut items: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_avatar {
-            let n = node.child("avatar");
             items.push(match &self.avatar {
-                Some(handle) => icssed::image(n, handle.clone()).into(),
-                None => icssed::icon(n, (icons, "avatar-default")).into(),
+                Some(handle) => icssed::image(handle.clone()).kind("avatar").into(),
+                None => icssed::icon((icons, "avatar-default"))
+                    .kind("avatar")
+                    .into(),
             });
         }
         if self.config.show_username {
-            items.push(icssed::text(node.child("username"), self.display_name.as_str()).into());
+            items.push(
+                icssed::text(self.display_name.as_str())
+                    .kind("username")
+                    .into(),
+            );
         }
         if self.config.show_time {
             let text = shared.locale.date(&self.now, &self.config.time_format);
-            items.push(icssed::text(node.child("time"), text).into());
+            items.push(icssed::text(text).kind("time").into());
         }
         if self.config.show_date {
             let text = shared.locale.date(&self.now, &self.config.date_format);
-            items.push(icssed::text(node.child("date"), text).into());
+            items.push(icssed::text(text).kind("date").into());
         }
         let busy = self.state == State::Busy;
-        let auth = node
-            .child("auth")
-            .class_if("error", matches!(self.state, State::Failed(_)))
-            .class_if("busy", busy);
         let mut fields: Vec<Element<'a, Message>> = Vec::new();
         if self.config.password_prompt {
-            let input = auth.child("input");
             // The eye: the password in clear while it's on.
-            let peek = input
-                .child("toggle")
+            let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };
+            let eye = icssed::toggle(self.peek, |_| Message::TogglePeek)
                 .class("peek")
                 .class("plain")
                 .disabled_if(busy);
-            let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };
-            let eye = icssed::toggle(peek, self.peek, |_| Message::TogglePeek);
             // Words, when the icon theme has no eye.
             let eye = if shared.icons.get_name(name, None).is_some() {
                 eye.icon((icons, name))
@@ -312,15 +309,12 @@ impl Locker {
                     "locker.show_password"
                 }))
             };
-            let mut field = icssed::input(
-                input,
-                shared.locale.tr("locker.enter_password"),
-                &self.password,
-            )
-            .id(self.input.clone())
-            .secure(!self.peek)
-            .on_submit(Message::Submit)
-            .trailing(eye);
+            let mut field =
+                icssed::input(shared.locale.tr("locker.enter_password"), &self.password)
+                    .id(self.input.clone())
+                    .secure(!self.peek)
+                    .on_submit(Message::Submit)
+                    .trailing(eye);
             if !busy {
                 field = field.on_input(Message::Password);
             }
@@ -333,19 +327,25 @@ impl Locker {
             State::Idle => None,
         };
         if let Some(text) = message {
-            fields.push(icssed::text(auth.child("message"), text).into());
+            fields.push(icssed::text(text).kind("message").into());
         }
-        let button = auth.child("button").class("primary").disabled_if(busy);
         fields.push(
-            icssed::button(
-                button,
-                [icssed::text(button.child("label"), shared.locale.tr("locker.unlock")).into()],
-            )
-            .on_press(Message::Submit)
-            .into(),
+            icssed::button![icssed::text(shared.locale.tr("locker.unlock"))]
+                .class("primary")
+                .disabled_if(busy)
+                .on_press(Message::Submit)
+                .into(),
         );
-        items.push(icssed::column(auth, fields).into());
-        icssed::column(root, [icssed::column(node, items).into()]).into()
+        items.push(
+            icssed::column(fields)
+                .kind("auth")
+                .class_if("error", matches!(self.state, State::Failed(_)))
+                .class_if("busy", busy)
+                .into(),
+        );
+        icssed::column![icssed::column(items).kind("box")]
+            .at(root)
+            .into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

@@ -12,7 +12,7 @@
 
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
@@ -83,7 +83,18 @@ impl Gadget for PowerGadget {
             .filter(|_| self.config.show_profile)
             .map(|p| p.active.as_str());
         if battery.is_some() || profile.is_some() {
-            let mut button = ctx.node.child("button").class("status");
+            let mut content: Vec<Element<'a, Message>> = Vec::new();
+            if let Some(b) = battery {
+                content.push(ctx.icon(b.icon_name()).class("battery").into());
+                if self.config.show_percent {
+                    let percent = format!("{:.0}%", b.percentage);
+                    content.push(icssed::text(percent).into());
+                }
+            }
+            if let Some(p) = profile {
+                content.push(ctx.icon(profile_icon(p)).class("profile").into());
+            }
+            let mut button = icssed::button(content).class("status");
             if let Some(b) = battery {
                 button = button.class(b.state.name()).class_if(
                     match b.warning {
@@ -96,19 +107,8 @@ impl Gadget for PowerGadget {
             if let Some(p) = profile {
                 button = button.class(profile_class(p));
             }
-            let mut content: Vec<Element<'a, Message>> = Vec::new();
-            if let Some(b) = battery {
-                content.push(ctx.icon(button.child("icon").class("battery"), b.icon_name()));
-                if self.config.show_percent {
-                    let percent = format!("{:.0}%", b.percentage);
-                    content.push(icssed::text(button.child("label"), percent).into());
-                }
-            }
-            if let Some(p) = profile {
-                content.push(ctx.icon(button.child("icon").class("profile"), profile_icon(p)));
-            }
             parts.push(
-                icssed::button(button, content)
+                button
                     .on_press(Message::TogglePopup)
                     .id(self.popup.anchor())
                     .into(),
@@ -116,24 +116,21 @@ impl Gadget for PowerGadget {
         }
         if self.config.show_idle {
             let inhibited = ctx.idle.inhibited();
-            let button = ctx
-                .node
-                .child("button")
-                .class("idle")
-                .class_if("inhibited", inhibited)
-                .class_if("playing", ctx.idle.held_by_player());
             let name = if inhibited {
                 &self.config.inhibit_icon
             } else {
                 &self.config.idle_icon
             };
             parts.push(
-                icssed::button(button, [ctx.icon(button.child("icon"), name.as_str())])
+                icssed::button![ctx.icon(name.as_str())]
+                    .class("idle")
+                    .class_if("inhibited", inhibited)
+                    .class_if("playing", ctx.idle.held_by_player())
                     .on_press(Message::ToggleIdle)
                     .into(),
             );
         }
-        mouse_area(icssed::row(ctx.node, parts))
+        mouse_area(icssed::row(parts))
             .on_middle_press(Message::ToggleIdle)
             .on_right_press(Message::RunSettings)
             .into()
@@ -144,8 +141,7 @@ impl Gadget for PowerGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let list = ctx.node.child("list");
-        icssed::column(list, self.rows(ctx, list)).into()
+        icssed::column(self.rows(ctx)).kind("list").into()
     }
 }
 
@@ -183,10 +179,10 @@ fn battery_status(locale: &Locale, b: &Battery) -> String {
 
 impl PowerGadget {
     /// Every part of the popup.
-    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
+    fn rows<'a>(&'a self, ctx: Context<'a>) -> Vec<Element<'a, Message>> {
         let mut rows = Vec::new();
         if let Some(b) = ctx.power.battery() {
-            rows.push(battery(ctx, list, b));
+            rows.push(battery(ctx, b));
             let mut lines = Vec::new();
             if b.energy_rate > 0.0 && b.state != State::Full {
                 lines.push(ctx.locale.fmt(
@@ -198,15 +194,14 @@ impl PowerGadget {
                 lines.push(ctx.locale.fmt("power.health", &[("n", &format!("{c:.0}"))]));
             }
             if !lines.is_empty() {
-                let details = list.child("details");
                 let lines = lines
                     .into_iter()
-                    .map(|l| icssed::text(details.child("line"), l).into());
-                rows.push(icssed::column(details, lines).into());
+                    .map(|l| icssed::text(l).kind("line").into());
+                rows.push(icssed::column(lines).kind("details").into());
             }
         }
         if !ctx.power.devices().is_empty() {
-            rows.push(header(list, "devices", ctx.locale.tr("power.devices")));
+            rows.push(header("devices", ctx.locale.tr("power.devices")));
             for d in ctx.power.devices() {
                 let name = if d.model.is_empty() {
                     ctx.locale.tr("power.device").to_owned()
@@ -218,24 +213,20 @@ impl PowerGadget {
                 } else {
                     &d.icon
                 };
-                let node = list.child("device");
                 rows.push(
-                    icssed::row(
-                        node,
-                        [
-                            ctx.icon(node.child("icon"), icon_name),
-                            icssed::text(node.child("name"), name).into(),
-                            icssed::text(node.child("percent"), format!("{:.0}%", d.percentage))
-                                .into(),
-                        ],
-                    )
+                    icssed::row![
+                        ctx.icon(icon_name),
+                        icssed::text(name).kind("name"),
+                        icssed::text(format!("{:.0}%", d.percentage)).kind("percent"),
+                    ]
+                    .kind("device")
                     .into(),
                 );
             }
         }
         if let Some(p) = ctx.power.profiles() {
-            rows.push(header(list, "profile", ctx.locale.tr("power.profile")));
-            rows.push(profiles(ctx, list, &p.available, &p.active));
+            rows.push(header("profile", ctx.locale.tr("power.profile")));
+            rows.push(profiles(ctx, &p.available, &p.active));
             if !p.degraded.is_empty() {
                 let reason = match p.degraded.as_str() {
                     "lap-detected" => ctx.locale.tr("power.degraded.lap"),
@@ -243,108 +234,86 @@ impl PowerGadget {
                     other => other,
                 };
                 let text = ctx.locale.fmt("power.degraded", &[("reason", &reason)]);
-                rows.push(super::note(list.child("message"), text));
+                rows.push(super::note(text).kind("message").into());
             }
         }
-        rows.push(self.idle(ctx, list));
+        rows.push(self.idle(ctx));
         if ctx.idle.held_by_player() && !ctx.idle.inhibited() {
             let text = ctx.locale.tr("power.held_by_player");
-            rows.push(super::note(list.child("message"), text));
+            rows.push(super::note(text).kind("message").into());
         }
         if !self.config.settings_command.is_empty() {
-            let b = list.child("button").class("settings");
             rows.push(
-                icssed::button(
-                    b,
-                    [icssed::text(b.child("label"), ctx.locale.tr("power.settings")).into()],
-                )
-                .on_press(Message::RunSettings)
-                .into(),
+                icssed::button![icssed::text(ctx.locale.tr("power.settings"))]
+                    .class("settings")
+                    .on_press(Message::RunSettings)
+                    .into(),
             );
         }
         rows
     }
 
     /// "Keep awake" and its toggle.
-    fn idle<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Element<'a, Message> {
+    fn idle<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let inhibited = ctx.idle.inhibited();
-        let node = list
-            .child("idle")
-            .class_if("inhibited", inhibited)
-            .class_if("playing", ctx.idle.held_by_player());
         let name = if inhibited {
             &self.config.inhibit_icon
         } else {
             &self.config.idle_icon
         };
-        icssed::row(
-            node,
-            [
-                ctx.icon(node.child("icon"), name.as_str()),
-                icssed::text(node.child("title"), ctx.locale.tr("power.keep_awake")).into(),
-                icssed::toggle(node.child("toggle"), inhibited, Message::SetIdle)
-                    .switch()
-                    .into(),
-            ],
-        )
+        icssed::row![
+            ctx.icon(name.as_str()),
+            icssed::text(ctx.locale.tr("power.keep_awake")).kind("title"),
+            icssed::toggle(inhibited, Message::SetIdle).switch(),
+        ]
+        .kind("idle")
+        .class_if("inhibited", inhibited)
+        .class_if("playing", ctx.idle.held_by_player())
         .into()
     }
 }
 
 /// The battery: its icon, the percent, what it's doing.
-fn battery<'a>(ctx: Context<'a>, list: Node<'a>, b: &'a Battery) -> Element<'a, Message> {
-    let node = list
-        .child("battery")
-        .class(b.state.name())
-        .class_if("low", b.warning == Warning::Low)
-        .class_if("critical", b.warning == Warning::Critical);
-    icssed::row(
-        node,
-        [
-            ctx.icon(node.child("icon"), b.icon_name()),
-            icssed::text(node.child("percent"), format!("{:.0}%", b.percentage)).into(),
-            icssed::text(node.child("status"), battery_status(ctx.locale, b)).into(),
-        ],
-    )
+fn battery<'a>(ctx: Context<'a>, b: &'a Battery) -> Element<'a, Message> {
+    icssed::row![
+        ctx.icon(b.icon_name()),
+        icssed::text(format!("{:.0}%", b.percentage)).kind("percent"),
+        icssed::text(battery_status(ctx.locale, b)).kind("status"),
+    ]
+    .kind("battery")
+    .class(b.state.name())
+    .class_if("low", b.warning == Warning::Low)
+    .class_if("critical", b.warning == Warning::Critical)
     .into()
 }
 
 /// A section's title.
-fn header<'a>(list: Node<'a>, class: &str, title: &'a str) -> Element<'a, Message> {
-    let header = list.child("header").class(class);
-    icssed::row(header, [icssed::text(header.child("title"), title).into()]).into()
+fn header<'a>(class: &str, title: &'a str) -> Element<'a, Message> {
+    icssed::row![icssed::text(title).kind("title")]
+        .kind("header")
+        .class(class)
+        .into()
 }
 
 /// The profile picker: a button per profile, the active one marked, its
 /// icon over its name.
-fn profiles<'a>(
-    ctx: Context<'a>,
-    list: Node<'a>,
-    available: &[String],
-    active: &str,
-) -> Element<'a, Message> {
-    let node = list.child("profiles");
+fn profiles<'a>(ctx: Context<'a>, available: &[String], active: &str) -> Element<'a, Message> {
     // Known ones in their order, then whatever else the daemon has.
     let ordered = PROFILES
         .iter()
         .filter_map(|p| available.iter().find(|a| a == p))
         .chain(available.iter().filter(|a| !PROFILES.contains(&a.as_str())));
     let buttons = ordered.map(|p| {
-        let b = node
-            .child("button")
-            .class(profile_class(p))
-            .class_if("active", p == active);
-        icssed::button(
-            b,
-            [
-                ctx.icon(b.child("icon"), profile_icon(p)),
-                icssed::text(b.child("label"), profile_label(ctx.locale, p)).into(),
-            ],
-        )
+        icssed::button![
+            ctx.icon(profile_icon(p)),
+            icssed::text(profile_label(ctx.locale, p)),
+        ]
+        .class(profile_class(p))
+        .class_if("active", p == active)
         .on_press(Message::SetProfile(p.clone()))
         .into()
     });
-    icssed::row(node, buttons).into()
+    icssed::row(buttons).kind("profiles").into()
 }
 
 #[cfg(test)]

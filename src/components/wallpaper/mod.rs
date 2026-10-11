@@ -459,7 +459,7 @@ impl Wallpapers {
     ) -> Element<'a, M> {
         let root = theme.root("wallpaper", scale).attr("output", output);
         let Some(show) = self.output_of(window).and_then(|o| self.show_of(o)) else {
-            return icssed::column(root, []).into();
+            return icssed::column![].at(root).into();
         };
         let image = show
             .shown
@@ -478,7 +478,7 @@ impl Wallpapers {
                     .height(Length::Fill),
             })
         });
-        icssed::column(root, picture).into()
+        icssed::column(picture).at(root).into()
     }
 
     /// What to watch: the folders and files of the sources.

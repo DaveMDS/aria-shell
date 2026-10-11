@@ -9,26 +9,27 @@ use iced::advanced::widget::{Operation, Tree, Widget};
 use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::{Event, Length, Point, Rectangle, Size, Vector};
 
+use super::place::{self, Place, placed};
 use crate::layout::snap_up;
-use crate::style::{Node, Sides};
+use crate::style::{Node, Sides, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Surface<'a, Message> {
-    /// The room around the content: left, top, right, bottom.
-    room: [f32; 4],
+    place: Place<'a>,
     content: Element<'a, Message>,
 }
 
-/// `content`, whose root box is `node`, with the room its shadow needs.
-pub fn surface<'a, Message>(
-    node: Node<'a>,
-    content: impl Into<Element<'a, Message>>,
-) -> Surface<'a, Message> {
-    let room = Surface::<Message>::room(node);
+/// `content` as the surface's box, with the room its shadow needs: a
+/// root's, given with `at`.
+pub fn surface<'a, Message>(content: impl Into<Element<'a, Message>>) -> Surface<'a, Message> {
     Surface {
-        room: [room.left, room.top, room.right, room.bottom],
+        place: Place::new(name!("surface")),
         content: content.into(),
     }
+}
+
+impl<'a, Message> Surface<'a, Message> {
+    placed!(place);
 }
 
 impl<Message> Surface<'_, Message> {
@@ -55,15 +56,22 @@ impl<Message> Widget<Message, Theme, Renderer> for Surface<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
+        place::being(self.place.node(), || vec![Tree::new(&self.content)])
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
+        place::being(self.place.node(), || {
+            tree.diff_children(std::slice::from_ref(&self.content));
+        });
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let [left, top, right, bottom] = self.room;
+        let Sides {
+            top,
+            right,
+            bottom,
+            left,
+        } = Self::room(self.place.node());
         let room = Size::new(left + right, top + bottom);
         let content = self
             .content

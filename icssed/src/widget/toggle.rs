@@ -2,18 +2,19 @@
 //! has the focus, asks for the other value; `.checked` while it's on. It
 //! looks one of three ways: a button that stays pressed, a check box
 //! (`.check`), a switch (`.switch`), the last two with the toolkit's part
-//! before its icon and its label. It makes all its nodes itself, as a
-//! menu's items do, so its classes reach them all. The switch's knob
-//! slides as the theme says: the base moves it with a transform, by the
-//! switch's width less its padding and the knob's.
+//! before its icon and its label. Its classes reach them all, whenever
+//! they're given. The switch's knob slides as the theme says: the base
+//! moves it with a transform, by the switch's width less its padding
+//! and the knob's.
 
 use std::borrow::Cow;
 
-use super::flex::{button, row};
+use super::flex::{Flex, row};
 use super::icon::{IconSource, icon};
+use super::place::{Place, placed};
 use super::text::{mark, text};
 use crate::Element;
-use crate::style::Node;
+use crate::style::{Direction, name};
 
 /// How a toggle looks.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -24,7 +25,7 @@ enum Look {
 }
 
 pub struct Toggle<'a, Message> {
-    node: Node<'a>,
+    place: Place<'a>,
     on: bool,
     /// What a press sends: the other value's message.
     press: Message,
@@ -33,16 +34,15 @@ pub struct Toggle<'a, Message> {
     label: Option<Cow<'a, str>>,
 }
 
-/// `node` on or off: a button that stays pressed, unless `check` or
+/// A `toggle` on or off: a button that stays pressed, unless `check` or
 /// `switch` says otherwise. `on_toggle` makes what a press sends from the
 /// value it asks for.
 pub fn toggle<'a, Message: Clone + 'a>(
-    node: Node<'a>,
     on: bool,
     on_toggle: impl Fn(bool) -> Message,
 ) -> Toggle<'a, Message> {
     Toggle {
-        node,
+        place: Place::new(name!("toggle")),
         on,
         press: on_toggle(!on),
         look: Look::Button,
@@ -52,6 +52,8 @@ pub fn toggle<'a, Message: Clone + 'a>(
 }
 
 impl<'a, Message> Toggle<'a, Message> {
+    placed!(place);
+
     /// A check box: `.check`, its `check > mark` first.
     pub fn check(mut self) -> Self {
         self.look = Look::Check;
@@ -79,28 +81,37 @@ impl<'a, Message> Toggle<'a, Message> {
 
 impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message> {
     fn from(toggle: Toggle<'a, Message>) -> Self {
-        let mut node = toggle.node.class_if("checked", toggle.on);
+        let mut place = toggle.place;
+        if toggle.on {
+            place.class("checked");
+        }
         let part: Option<Element<'a, Message>> = match toggle.look {
             Look::Button => None,
             Look::Check => {
-                node = node.class("check");
-                let check = node.child("check");
-                Some(row(check, [mark(check.child("mark"))]).into())
+                place.class("check");
+                Some(
+                    row([mark().kind_of(name!("mark")).into()])
+                        .kind_of(name!("check"))
+                        .into(),
+                )
             }
             Look::Switch => {
-                node = node.class("switch");
-                let switch = node.child("switch");
-                Some(row(switch, [row(switch.child("knob"), []).into()]).into())
+                place.class("switch");
+                Some(
+                    row([row([]).kind_of(name!("knob")).into()])
+                        .kind_of(name!("switch"))
+                        .into(),
+                )
             }
         };
-        let icon = toggle
-            .icon
-            .map(|source| icon(node.child("icon"), source).into());
-        let label = toggle
-            .label
-            .map(|label| text(node.child("label"), label).into());
-        button(node, part.into_iter().chain(icon).chain(label))
-            .on_press(toggle.press)
-            .into()
+        let icon = toggle.icon.map(|source| icon(source).into());
+        let label = toggle.label.map(|label| text(label).into());
+        Flex::placed(
+            place,
+            Direction::Row,
+            part.into_iter().chain(icon).chain(label),
+        )
+        .on_press(toggle.press)
+        .into()
     }
 }

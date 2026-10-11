@@ -24,10 +24,11 @@ use iced::{Event, Length, Point, Rectangle, Size, Vector, touch};
 
 use super::boxed::{BoxState, Boxed};
 use super::menu::{MenuItem, menu};
+use super::place::{self, placed};
 use super::text::{mark, text};
 use crate::layout::{flex, snap};
 use crate::query::Reported;
-use crate::style::{Direction, Node, States};
+use crate::style::{Direction, States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Select<'a, Message> {
@@ -44,11 +45,10 @@ pub struct Select<'a, Message> {
     opened: bool,
 }
 
-/// One of `options`, `selected` if any: `node`, its `label` and
+/// One of `options`, `selected` if any: a `select`, its `label` and
 /// `arrow`, its options a `menu`. Picking one sends `on_select` with
 /// its index.
 pub fn select<'a, Message: Clone + 'a, S: Into<Cow<'a, str>>>(
-    node: Node<'a>,
     options: impl IntoIterator<Item = S>,
     selected: Option<usize>,
     on_select: impl Fn(usize) -> Message + 'a,
@@ -56,7 +56,6 @@ pub fn select<'a, Message: Clone + 'a, S: Into<Cow<'a, str>>>(
     let options: Vec<Cow<'a, str>> = options.into_iter().map(Into::into).collect();
     let count = options.len();
     let selected = selected.filter(|&i| i < count);
-    let label = node.child("label");
     let shown = selected.map(|i| options[i].clone()).unwrap_or_default();
     let items = options.into_iter().enumerate().map(|(i, option)| {
         MenuItem::new(option)
@@ -64,9 +63,9 @@ pub fn select<'a, Message: Clone + 'a, S: Into<Cow<'a, str>>>(
             .on_press(on_select(i))
     });
     Select {
-        boxed: Boxed::new(node),
-        children: vec![text(label, shown).into(), mark(node.child("arrow"))],
-        list: menu(node.child("menu"), items),
+        boxed: Boxed::of(name!("select")),
+        children: vec![text(shown).into(), mark().kind_of(name!("arrow")).into()],
+        list: menu(items).into(),
         count,
         selected,
         on_select: Box::new(on_select),
@@ -76,11 +75,12 @@ pub fn select<'a, Message: Clone + 'a, S: Into<Cow<'a, str>>>(
 }
 
 impl<'a, Message: Clone + 'a> Select<'a, Message> {
+    placed!(boxed.place);
+
     /// What it shows while nothing's chosen: its `label.placeholder`.
     pub fn placeholder(mut self, placeholder: impl Into<Cow<'a, str>>) -> Self {
         if self.selected.is_none() {
-            let label = self.boxed.node.child("label").class("placeholder");
-            self.children[0] = text(label, placeholder).into();
+            self.children[0] = text(placeholder).class("placeholder").into();
         }
         self
     }
@@ -97,9 +97,11 @@ impl<'a, Message: Clone + 'a> Select<'a, Message> {
         self.opened = opened;
         self
     }
+}
 
+impl<Message> Select<'_, Message> {
     fn enabled(&self) -> bool {
-        !self.boxed.node.is_disabled() && self.count > 0
+        !self.boxed.node().is_disabled() && self.count > 0
     }
 }
 
@@ -140,20 +142,20 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Select<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        let mut trees: Vec<Tree> = self.children.iter().map(Tree::new).collect();
-        trees.push(Tree::new(&self.list));
-        trees
+        let mut children: Vec<&Element<'_, Message>> = self.children.iter().collect();
+        children.push(&self.list);
+        place::trees(self.boxed.node(), &children)
     }
 
     fn diff(&self, tree: &mut Tree) {
         let state = tree.state.downcast_mut::<State>();
-        state.boxed.animated.diff(self.boxed.node);
+        state.boxed.animated.diff(self.boxed.node());
         if self.on_open.is_some() {
             state.set_open(self.opened);
         }
         let mut children: Vec<&Element<'_, Message>> = self.children.iter().collect();
         children.push(&self.list);
-        tree.diff_children(&children);
+        place::diff(self.boxed.node(), tree, &children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
@@ -164,7 +166,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Select<'_, Message> {
         flex(
             &style,
             Direction::Row,
-            self.boxed.node.scale(),
+            self.boxed.node().scale(),
             &mut self.children,
             &mut tree.children[..shown],
             renderer,
@@ -315,7 +317,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Select<'_, Message> {
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(None, bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         if self.enabled() {
             operation.focusable(None, bounds, &mut tree.state.downcast_mut::<State>().boxed);
         }
@@ -352,7 +354,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Select<'_, Message> {
             tree: tree.children.last_mut().expect("the options' tree"),
             state,
             about,
-            scale: self.boxed.node.scale(),
+            scale: self.boxed.node().scale(),
         };
         Some(overlay::Element::new(Box::new(list)))
     }

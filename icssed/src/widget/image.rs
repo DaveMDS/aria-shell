@@ -15,27 +15,37 @@ use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
 use iced::{Event, Length, Point, Radians, Rectangle, Size};
 
+use super::place::{Place, placed};
 use crate::anim::Animated;
 use crate::layout::snap;
 use crate::query::Reported;
-use crate::style::{Computed, Node, ObjectFit, Size as Len, States};
+use crate::style::{Computed, Node, ObjectFit, Size as Len, States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Image<'a> {
-    node: Node<'a>,
-    style: Arc<Computed>,
+    place: Place<'a>,
     handle: image::Handle,
 }
 
-pub fn image<'a>(node: Node<'a>, handle: impl Into<image::Handle>) -> Image<'a> {
+/// `handle`'s picture in an `image`.
+pub fn image<'a>(handle: impl Into<image::Handle>) -> Image<'a> {
     Image {
-        style: node.base(),
-        node,
+        place: Place::new(name!("image")),
         handle: handle.into(),
     }
 }
 
-impl Image<'_> {
+impl<'a> Image<'a> {
+    placed!(place);
+
+    fn node(&self) -> Node<'a> {
+        self.place.node()
+    }
+
+    fn style(&self) -> &Arc<Computed> {
+        self.place.style()
+    }
+
     fn own(&self, renderer: &Renderer) -> Size {
         renderer
             .measure_image(&self.handle)
@@ -51,7 +61,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
         _renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node()));
     }
 
     fn tag(&self) -> tree::Tag {
@@ -59,11 +69,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(Animated::new(self.node))
+        tree::State::new(Animated::new(self.node()))
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.state.downcast_mut::<Animated>().diff(self.node);
+        tree.state.downcast_mut::<Animated>().diff(self.node());
     }
 
     fn update(
@@ -86,12 +96,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
             Len::Px(v) => Length::Fixed(v),
             Len::Fill => Length::Fill,
         };
-        Size::new(length(self.style.width), length(self.style.height))
+        Size::new(length(self.style().width), length(self.style().height))
     }
 
     fn layout(&mut self, _tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let s = &self.style;
-        let scale = self.node.scale();
+        let s = self.style();
+        let scale = self.node().scale();
         let own = self.own(renderer);
         let ratio = if own.height > 0.0 {
             own.width / own.height
@@ -133,7 +143,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
         if own.width <= 0.0 || own.height <= 0.0 {
             return;
         }
-        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node().resolve(States::NONE, &theme.ancestors);
         let moving = tree
             .state
             .downcast_ref::<Animated>()

@@ -37,8 +37,11 @@ pub fn padding(sides: icssed::style::Sides) -> Padding {
 
 /// A popup surface's content: a gadget's popup `content` in the box of
 /// root `root` (`popup[output=..]`), with its shadow's room around.
-pub fn view<'a, M: Clone + 'a>(root: Node<'a>, content: Element<'a, M>) -> Element<'a, M> {
-    icssed::surface(root, icssed::column(root, [content])).into()
+pub fn view<'a, M: Clone + 'a>(
+    root: Node<'a>,
+    content: impl Into<Element<'a, M>>,
+) -> Element<'a, M> {
+    icssed::surface(icssed::column![content]).at(root).into()
 }
 
 /// Placement of a popup of surface size `size` hanging off a widget

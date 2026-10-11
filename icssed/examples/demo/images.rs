@@ -1,7 +1,7 @@
-//! Pictures come two ways: as an element, `icssed::image(node, handle)`,
+//! Pictures come two ways: as an element, `icssed::image(handle)`,
 //! or as a box's background, from the sheet.
 //!
-//!     icssed::image(node.child("picture").class("cover"), self.photo.clone())
+//!     icssed::image(self.photo.clone()).class("cover")
 //!
 //! - `object-fit` says how an image fills its box: `fill` stretches it,
 //!   `contain` shows it whole, `cover` fills the box and cuts the rest;
@@ -16,7 +16,7 @@
 //! keeps its corners at any size. The three boxes below are rows with a
 //! label, all of it in `images.css`.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, image, row, text};
 
 use crate::Assets;
 
@@ -32,37 +32,23 @@ pub fn update(_state: &mut State, message: Message) {
     match message {}
 }
 
-pub fn view<'a>(_state: &'a State, node: Node<'a>, assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
-    let fitted = |class: &str| -> Element<'a, Message> {
-        let cell = line.child("fitted");
-        icssed::column(
-            cell,
-            [
-                icssed::image(cell.child("picture").class(class), assets.photo.clone()).into(),
-                icssed::text(cell.child("label"), format!("object-fit: {class}")).into(),
-            ],
-        )
-        .into()
+pub fn view<'a>(_state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
+    let fitted = |class: &str| {
+        column![
+            image(assets.photo.clone()).kind("picture").class(class),
+            text(format!("object-fit: {class}")),
+        ]
+        .kind("fitted")
     };
-    let boxed = |class: &str, text: &'static str| -> Element<'a, Message> {
-        let boxed = line.child("box").class(class);
-        icssed::row(boxed, [icssed::text(boxed.child("label"), text).into()]).into()
-    };
-    icssed::column(
-        node,
-        [
-            icssed::row(line, [fitted("fill"), fitted("contain"), fitted("cover")]).into(),
-            icssed::row(
-                line,
-                [
-                    boxed("tiled", "Tiled"),
-                    boxed("framed", "A 9-patch"),
-                    boxed("scenery", "Cover"),
-                ],
-            )
-            .into(),
-        ],
-    )
+    let boxed = |class: &str, content: &'static str| row![text(content)].kind("box").class(class);
+    column![
+        row![fitted("fill"), fitted("contain"), fitted("cover")].kind("line"),
+        row![
+            boxed("tiled", "Tiled"),
+            boxed("framed", "A 9-patch"),
+            boxed("scenery", "Cover"),
+        ]
+        .kind("line"),
+    ]
     .into()
 }

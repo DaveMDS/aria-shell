@@ -1,10 +1,9 @@
 /*
  * demo#surface
  * ├─ controls > toggle.check > label
- * ├─ edge                   where the surface would end
- * │  ╰─ popup[.deep]        the surface's root box
- * │     ╰─ entry > icon, label
- * ╰─ status                 the room its shadow takes
+ * ╰─ edge                   where the surface would end
+ *    ╰─ popup[.deep]        the surface's box
+ *       ╰─ entry > icon, label
  */
 
 demo#surface {
@@ -36,8 +35,4 @@ demo#surface entry {
 }
 demo#surface entry > icon {
   height: 16px;
-}
-demo#surface > status {
-  font-family: monospace;
-  color: var(--muted);
 }

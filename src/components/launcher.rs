@@ -24,7 +24,7 @@ use iced::keyboard::{self, Key};
 use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{operation, scrollable};
 use iced::{Event, Rectangle, Subscription, Task, widget, window};
-use icssed::{Element, Node};
+use icssed::Element;
 
 use crate::components::exiter::{self, ExiterConfig};
 use crate::config::{self, RawSection, Section};
@@ -476,75 +476,61 @@ impl Launcher {
             .flat_map(|b| b.icons.iter().map(String::as_str))
     }
 
-    /// Its dialog's box, `root`: the exit menu's buttons, the search
-    /// field, the results.
-    pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
+    /// Its dialog's box: the exit menu's buttons, the search field, the
+    /// results.
+    pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
         let icons: &'a dyn icssed::Icons = shared.icons;
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         let buttons: Vec<&exiter::Button> = self.actions().collect();
         if !buttons.is_empty() {
-            let actions = root.child("actions");
             let buttons = buttons.into_iter().map(|button| {
-                let b = actions.child("button").class(&button.name).class("flat");
                 let icon = match shared.icons.first_of(&button.icons) {
-                    Some(icon) => icssed::icon(b.child("icon"), icon.clone()),
-                    None => icssed::icon(b.child("icon"), (icons, "")),
+                    Some(icon) => icssed::icon(icon.clone()),
+                    None => icssed::icon((icons, "")),
                 };
-                icssed::button(b, [icon.into()])
+                icssed::button![icon]
+                    .class(&button.name)
+                    .class("flat")
                     .on_press(Message::Exit(button.name.clone()))
                     .into()
             });
-            parts.push(icssed::row(actions, buttons).into());
+            parts.push(icssed::row(buttons).kind("actions").into());
         }
         parts.push(
-            icssed::input(
-                root.child("input"),
-                shared.locale.tr("launcher.search"),
-                &self.query,
-            )
-            .id(self.input.clone())
-            .on_input(Message::Query)
-            .on_submit(Message::Submit)
-            .into(),
+            icssed::input(shared.locale.tr("launcher.search"), &self.query)
+                .id(self.input.clone())
+                .on_input(Message::Query)
+                .on_submit(Message::Submit)
+                .into(),
         );
-        let scroll = root.child("scroll");
-        let list = scroll.child("list");
         let rows = self.rows();
-        let count = rows.len();
         let items = rows.iter().enumerate().filter_map(|(i, &row)| {
             let entry = self.entry(row.result())?;
-            let node = list
-                .child_at("item", i, count)
-                .class_if("action", matches!(row, Row::Action(..)))
-                .class_if("selected", i == self.selected);
             let icon = match shared.icons.get(&entry.id) {
-                Some(icon) => icssed::icon(node.child("icon"), icon.clone()),
-                None => icssed::icon(node.child("icon"), (icons, "")),
+                Some(icon) => icssed::icon(icon.clone()),
+                None => icssed::icon((icons, "")),
             };
             // An action row: its name under the entry's icon. An entry
             // with actions: a chevron at the end, a button of its own
             // (it takes the press before the row does).
-            let texts = node.child("texts");
             let mut lines: Vec<Element<'a, Message>> = Vec::new();
             let mut chevron: Option<Element<'a, Message>> = None;
             match row {
                 Row::Action(_, a) => {
                     let action = entry.actions.get(a)?;
-                    lines.push(icssed::text(texts.child("title"), action.name.as_str()).into());
+                    lines.push(icssed::text(action.name.as_str()).kind("title").into());
                 }
                 Row::App(r) => {
-                    lines.push(icssed::text(texts.child("title"), entry.name.as_str()).into());
+                    lines.push(icssed::text(entry.name.as_str()).kind("title").into());
                     if let Some(comment) = &entry.comment {
-                        lines.push(icssed::text(texts.child("subtitle"), comment.as_str()).into());
+                        lines.push(icssed::text(comment.as_str()).kind("subtitle").into());
                     }
                     if !entry.actions.is_empty() {
-                        let c = node
-                            .child("button")
-                            .class("chevron")
-                            .class("plain")
-                            .class_if("active", self.expanded == Some(r));
                         chevron = Some(
-                            icssed::button(c, [icssed::mark(c.child("arrow"))])
+                            icssed::button![icssed::mark().kind("arrow")]
+                                .class("chevron")
+                                .class("plain")
+                                .class_if("active", self.expanded == Some(r))
                                 .on_press(Message::Toggle(r))
                                 .into(),
                         );
@@ -552,22 +538,25 @@ impl Launcher {
                 }
             }
             let mut parts: Vec<Element<'a, Message>> =
-                vec![icon.into(), icssed::column(texts, lines).into()];
+                vec![icon.into(), icssed::column(lines).kind("texts").into()];
             parts.extend(chevron);
             Some(
-                icssed::button(node, parts)
+                icssed::button(parts)
+                    .kind("item")
+                    .class_if("action", matches!(row, Row::Action(..)))
+                    .class_if("selected", i == self.selected)
                     .on_press(Message::Activate(row))
                     .id(self.row_id(i))
                     .into(),
             )
         });
         parts.push(
-            icssed::scroll(scroll, icssed::column(list, items))
+            icssed::scroll(icssed::column(items).kind("list"))
                 .id(self.list.clone())
                 .on_scroll(Message::Scrolled)
                 .into(),
         );
-        icssed::column(root, parts).into()
+        icssed::column(parts).into()
     }
 
     /// The keys the search field doesn't handle itself (Esc is one it

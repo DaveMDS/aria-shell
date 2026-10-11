@@ -1,9 +1,9 @@
 //! A select is one of a list of options:
-//! `icssed::select(node, options, selected, Message::Choose)`, the
+//! `icssed::select(options, selected, Message::Choose)`, the
 //! choice an index the app holds. Pressed, it opens its options under it
 //! as a menu (over it where there's no room), the one chosen checked.
 //!
-//!     icssed::select(row.child("select"), ["Light", "Dark"], self.scheme, Message::Scheme)
+//!     icssed::select(["Light", "Dark"], self.scheme, Message::Scheme)
 //!         .placeholder("Pick a scheme")
 //!
 //! - `.placeholder(t)` is shown while nothing is chosen (`None`).
@@ -17,7 +17,7 @@
 //! with an `icssed::menu` there, and tells the select whether they're
 //! open.
 
-use icssed::{Element, Node};
+use icssed::{Element, column, row, select, text};
 
 use crate::Assets;
 
@@ -46,33 +46,18 @@ pub fn update(state: &mut State, message: Message) {
     state.choice = Some(choice);
 }
 
-pub fn view<'a>(state: &'a State, node: Node<'a>, _assets: &'a Assets) -> Element<'a, Message> {
-    let line = node.child("line");
+pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
     let chosen = match state.choice {
         Some(i) => format!("Chosen: {}", SCHEMES[i]),
         None => "Nothing chosen yet".into(),
     };
-    icssed::column(
-        node,
-        [
-            icssed::row(
-                line,
-                [
-                    icssed::select(line.child("select"), SCHEMES, state.choice, Message::Choose)
-                        .placeholder("Pick a scheme")
-                        .into(),
-                    icssed::select(
-                        line.child("select").disabled_if(true),
-                        ["Disabled"],
-                        Some(0),
-                        Message::Choose,
-                    )
-                    .into(),
-                ],
-            )
-            .into(),
-            icssed::text(node.child("status"), chosen).into(),
-        ],
-    )
+    column![
+        row![
+            select(SCHEMES, state.choice, Message::Choose).placeholder("Pick a scheme"),
+            select(["Disabled"], Some(0), Message::Choose).disabled_if(true),
+        ]
+        .kind("line"),
+        text(chosen).kind("status"),
+    ]
     .into()
 }

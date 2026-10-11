@@ -16,11 +16,12 @@ use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
 use iced::{Event, Length, Radians, Rectangle, Size};
 
+use super::place::{Place, placed};
 use crate::anim::Animated;
 use crate::layout::snap;
 use crate::paint::fade;
 use crate::query::Reported;
-use crate::style::{Computed, Node, Size as Len, States};
+use crate::style::{Computed, Node, Size as Len, States, name};
 use crate::{Element, Renderer, Theme};
 
 /// Where named icons come from: the app's (a freedesktop icon theme,
@@ -68,25 +69,34 @@ impl<'a, S: Into<Cow<'a, str>>> From<(&'a dyn Icons, S)> for IconSource<'a> {
 }
 
 pub struct Icon<'a> {
-    node: Node<'a>,
-    style: Arc<Computed>,
+    place: Place<'a>,
     source: IconSource<'a>,
 }
 
-pub fn icon<'a>(node: Node<'a>, source: impl Into<IconSource<'a>>) -> Icon<'a> {
+/// `source` in an `icon`.
+pub fn icon<'a>(source: impl Into<IconSource<'a>>) -> Icon<'a> {
     Icon {
-        style: node.base(),
-        node,
+        place: Place::new(name!("icon")),
         source: source.into(),
     }
 }
 
-impl Icon<'_> {
+impl<'a> Icon<'a> {
+    placed!(place);
+
+    fn node(&self) -> Node<'a> {
+        self.place.node()
+    }
+
+    fn style(&self) -> &Arc<Computed> {
+        self.place.style()
+    }
+
     /// Its size when not `fill`: `width` and `height`, one of them for
     /// both, else the font size.
     fn natural(&self) -> Size {
-        let s = &self.style;
-        let scale = self.node.scale();
+        let s = self.style();
+        let scale = self.node().scale();
         let px = |len: Len| match len {
             Len::Px(v) => Some(snap(v, scale)),
             _ => None,
@@ -109,7 +119,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         _renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.custom(None, layout.bounds(), &mut Reported::new(self.node));
+        operation.custom(None, layout.bounds(), &mut Reported::new(self.node()));
     }
 
     fn tag(&self) -> tree::Tag {
@@ -117,11 +127,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(Animated::new(self.node))
+        tree::State::new(Animated::new(self.node()))
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.state.downcast_mut::<Animated>().diff(self.node);
+        tree.state.downcast_mut::<Animated>().diff(self.node());
     }
 
     fn update(
@@ -145,8 +155,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
             _ => Length::Fixed(px),
         };
         Size::new(
-            length(self.style.width, natural.width),
-            length(self.style.height, natural.height),
+            length(self.style().width, natural.width),
+            length(self.style().height, natural.height),
         )
     }
 
@@ -159,13 +169,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         };
         layout::Node::new(Size::new(
             axis(
-                self.style.width,
+                self.style().width,
                 natural.width,
                 limits.min().width,
                 limits.max().width,
             ),
             axis(
-                self.style.height,
+                self.style().height,
                 natural.height,
                 limits.min().height,
                 limits.max().height,
@@ -187,13 +197,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         let file = match &self.source {
             IconSource::File(file) => Some(file.clone()),
             IconSource::Named { icons, name } => {
-                icons.lookup(name, bounds.width.max(bounds.height), self.node.scale())
+                icons.lookup(name, bounds.width.max(bounds.height), self.node().scale())
             }
         };
         let Some(file) = file else {
             return;
         };
-        let resolved = self.node.resolve(States::NONE, &theme.ancestors);
+        let resolved = self.node().resolve(States::NONE, &theme.ancestors);
         let moving = tree
             .state
             .downcast_ref::<Animated>()

@@ -160,8 +160,6 @@ struct Entry {
     gadget: AnyGadget,
     /// The `id` of its `[Name:id]` section: `gadget.<kind>#<id>`.
     id: Option<String>,
-    /// Its place among its slot's gadgets, and their count.
-    at: (usize, usize),
 }
 
 #[derive(Clone, Debug)]
@@ -197,13 +195,11 @@ impl Panel {
                 .iter()
                 .filter_map(|name| Some((name, AnyGadget::create(name, shell, output)?)))
                 .collect();
-            let count = created.len();
-            for (i, (name, gadget)) in created.into_iter().enumerate() {
+            for (name, gadget) in created {
                 gadgets.push(Entry {
                     slot,
                     gadget,
                     id: instance_id(name).map(str::to_owned),
-                    at: (i, count),
                 });
             }
         }
@@ -230,16 +226,6 @@ impl Panel {
         };
         let root = theme.root("panel", self.scale).class(position);
         with_id(root, instance_id(&self.section)).attr("output", &self.output_name)
-    }
-
-    /// `panel > slot.<slot> > gadget.<kind>[#instance]`, at its place.
-    fn gadget_node<'a>(root: Node<'a>, e: &Entry) -> Node<'a> {
-        let node = root
-            .child("slot")
-            .class(e.slot.name())
-            .child_at("gadget", e.at.0, e.at.1)
-            .class(e.gadget.kind());
-        with_id(node, e.id.as_deref())
     }
 
     /// `popup[output=..]`, the root of a popup of this bar.
@@ -525,25 +511,28 @@ impl Panel {
     }
 
     pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
-        let root = self.root(shared.theme);
-        let slot = |slot: Slot| -> Element<'a, Message> {
+        let ctx = Context { shared };
+        let slot = |slot: Slot| {
             let gadgets = self
                 .gadgets
                 .iter()
                 .enumerate()
                 .filter(move |(_, e)| e.slot == slot)
                 .map(move |(i, e)| {
-                    let node = Self::gadget_node(root, e);
-                    let ctx = Context { shared, node };
-                    e.gadget.view(ctx).map(move |m| Message::Gadget(i, m))
+                    // Its view is the gadget's box, `gadget.<kind>[#instance]`.
+                    let view = e.gadget.view(ctx).map(move |m| Message::Gadget(i, m));
+                    let gadget = icssed::slot(view).kind("gadget").class(e.gadget.kind());
+                    match &e.id {
+                        Some(id) => gadget.named(id),
+                        None => gadget,
+                    }
+                    .into()
                 });
-            icssed::row(root.child("slot").class(slot.name()), gadgets).into()
+            icssed::row(gadgets).kind("slot").class(slot.name())
         };
-        icssed::row(
-            root,
-            [slot(Slot::Start), slot(Slot::Center), slot(Slot::End)],
-        )
-        .into()
+        icssed::row![slot(Slot::Start), slot(Slot::Center), slot(Slot::End)]
+            .at(self.root(shared.theme))
+            .into()
     }
 
     /// Content of the popup surface `id`: the gadget's popup view in a
@@ -558,11 +547,19 @@ impl Panel {
             .popups
             .get(&id)
             .and_then(|p| Some((p.gadget, self.gadgets.get(p.gadget)?)))?;
-        let root = self.popup_root(shared.theme);
-        let node = with_id(root.child("gadget").class(e.gadget.kind()), e.id.as_deref());
-        let ctx = Context { shared, node };
-        let content = e.gadget.popup_view(ctx).map(move |m| Message::Gadget(i, m));
-        Some(popup::view(root, content))
+        let content = e
+            .gadget
+            .popup_view(Context { shared })
+            .map(move |m| Message::Gadget(i, m));
+        // In a box of its own, `gadget.<kind>[#instance]`.
+        let gadget = icssed::column![content]
+            .kind("gadget")
+            .class(e.gadget.kind());
+        let gadget = match &e.id {
+            Some(id) => gadget.named(id),
+            None => gadget,
+        };
+        Some(popup::view(self.popup_root(shared.theme), gadget))
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

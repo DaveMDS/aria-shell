@@ -18,9 +18,10 @@ use iced::{Event, Length, Point, Rectangle, Size, Vector, touch};
 use super::boxed::{BoxState, Boxed};
 use super::flex::row;
 use super::meter::meter;
+use super::place::{self, placed};
 use crate::layout::{Sizing, snap};
 use crate::query::Reported;
-use crate::style::{Node, States};
+use crate::style::{States, name};
 use crate::{Element, Renderer, Theme};
 
 pub struct Slider<'a, Message> {
@@ -35,10 +36,9 @@ pub struct Slider<'a, Message> {
     children: [Element<'a, Message>; 2],
 }
 
-/// `value` in `range`: `node`, its `track > fill`, its `knob`. A move
-/// sends `on_change` with the new value.
+/// `value` in `range`: a `slider`, its `track > fill`, its `knob`. A
+/// move sends `on_change` with the new value.
 pub fn slider<'a, Message: Clone + 'a>(
-    node: Node<'a>,
     range: RangeInclusive<f32>,
     value: f32,
     on_change: impl Fn(f32) -> Message + 'a,
@@ -55,7 +55,7 @@ pub fn slider<'a, Message: Clone + 'a>(
         0.0
     };
     Slider {
-        boxed: Boxed::new(node),
+        boxed: Boxed::of(name!("slider")),
         start,
         end,
         value,
@@ -63,13 +63,15 @@ pub fn slider<'a, Message: Clone + 'a>(
         on_change: Box::new(on_change),
         on_release: None,
         children: [
-            meter(node.child("track"), fraction).into(),
-            row(node.child("knob"), []).into(),
+            meter(fraction).kind_of(name!("track")).into(),
+            row([]).kind_of(name!("knob")).into(),
         ],
     }
 }
 
-impl<Message> Slider<'_, Message> {
+impl<'a, Message> Slider<'a, Message> {
+    placed!(boxed.place);
+
     /// The values it takes: the range's start and its multiples of
     /// `step` on (a hundredth of the range if not given).
     pub fn step(mut self, step: f32) -> Self {
@@ -84,7 +86,7 @@ impl<Message> Slider<'_, Message> {
     }
 
     fn enabled(&self) -> bool {
-        !self.boxed.node.is_disabled() && self.end > self.start
+        !self.boxed.node().is_disabled() && self.end > self.start
     }
 
     fn step_size(&self) -> f32 {
@@ -99,7 +101,7 @@ impl<Message> Slider<'_, Message> {
     }
 
     /// The value under `x`, by the track's `layout`.
-    fn at(&self, layout: Layout<'_>, x: f32) -> f32 {
+    fn value_at(&self, layout: Layout<'_>, x: f32) -> f32 {
         let track = layout.children().next().expect("a track").bounds();
         let fraction = if track.width > 0.0 {
             ((x - track.x) / track.width).clamp(0.0, 1.0)
@@ -143,7 +145,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        place::trees(self.boxed.node(), &self.children)
     }
 
     fn diff(&self, tree: &mut Tree) {
@@ -151,15 +153,15 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
             .downcast_mut::<State>()
             .boxed
             .animated
-            .diff(self.boxed.node);
-        tree.diff_children(&self.children);
+            .diff(self.boxed.node());
+        place::diff(self.boxed.node(), tree, &self.children);
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
         let s = self
             .boxed
             .layout_style(tree.state.downcast_ref::<State>().boxed.states);
-        let scale = self.boxed.node.scale();
+        let scale = self.boxed.node().scale();
         let sizing = Sizing::new(&s, scale, limits);
         let room = sizing.room();
         let [track, knob] = &mut self.children;
@@ -273,14 +275,14 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
             {
                 state.boxed.states = state.boxed.states.with(States::ACTIVE, true);
                 shell.capture_event();
-                cursor.position().map(|p| self.at(layout, p.x))
+                cursor.position().map(|p| self.value_at(layout, p.x))
             }
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. })
                 if dragged =>
             {
                 shell.capture_event();
-                cursor.land().position().map(|p| self.at(layout, p.x))
+                cursor.land().position().map(|p| self.value_at(layout, p.x))
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. })
@@ -381,7 +383,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
     ) {
         let bounds = self.boxed.border_box(layout.bounds());
         operation.container(None, bounds);
-        operation.custom(None, bounds, &mut Reported::new(self.boxed.node));
+        operation.custom(None, bounds, &mut Reported::new(self.boxed.node()));
         if self.enabled() {
             operation.focusable(None, bounds, &mut tree.state.downcast_mut::<State>().boxed);
         }

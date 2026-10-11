@@ -113,25 +113,15 @@ impl Gadget for TrayGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let count = ctx.tray.items.len();
-        let icons: &dyn icssed::Icons = ctx.icons;
         let items = ctx.tray.items.iter().enumerate().map(|(n, item)| {
-            let node = ctx
-                .node
-                .child_at("button", n, count)
-                .class_if("passive", item.props.status == Status::Passive)
-                .class_if("attention", item.props.status == Status::NeedsAttention);
             let file = item.pixmap_icon().or_else(|| {
                 item.icon_name()
                     .and_then(|name| ctx.icons.get_name(name, item.icon_theme_path()))
             });
             // Its room is kept until the icon is known.
             let icon = match file {
-                Some(file) => icssed::icon(node.child("icon"), file.clone()),
-                None => icssed::icon(
-                    node.child("icon"),
-                    (icons, item.icon_name().unwrap_or_default()),
-                ),
+                Some(file) => icssed::icon(file.clone()),
+                None => ctx.icon(item.icon_name().unwrap_or_default()),
             };
             let key = item.key.clone();
             let has_menu = item.props.menu.is_some();
@@ -145,7 +135,9 @@ impl Gadget for TrayGadget {
             } else {
                 Message::ContextMenu(key.clone())
             };
-            let button = icssed::button(node, [icon.into()])
+            let button = icssed::button![icon]
+                .class_if("passive", item.props.status == Status::Passive)
+                .class_if("attention", item.props.status == Status::NeedsAttention)
                 .on_press(left)
                 .id(self.popup.anchor_nth(n));
             let scroll_key = key.clone();
@@ -155,7 +147,7 @@ impl Gadget for TrayGadget {
                 .on_scroll(move |delta| Message::Scroll(scroll_key.clone(), delta))
                 .into()
         });
-        icssed::row(ctx.node, items).into()
+        icssed::row(items).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -168,15 +160,9 @@ impl Gadget for TrayGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let node = ctx.node.child("menu");
         match self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key)) {
-            Some(menu) => self
-                .menu
-                .view(node, menu.items().to_vec())
-                .map(Message::Menu),
-            None => {
-                icssed::column(node, [icssed::text(node.child("label"), LOADING).into()]).into()
-            }
+            Some(menu) => self.menu.view(menu.items().to_vec()).map(Message::Menu),
+            None => icssed::column![icssed::text(LOADING)].kind("menu").into(),
         }
     }
 }

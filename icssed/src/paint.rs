@@ -47,8 +47,21 @@ fn radius([tl, tr, br, bl]: [f32; 4]) -> Radius {
     }
 }
 
-/// What a box draws under its children, in its border box `bounds`.
-pub(crate) fn draw_box(renderer: &mut Renderer, s: &Computed, bounds: Rectangle, opacity: f32) {
+/// A box in its border box `bounds`: its background, its border, then
+/// `over` (its children, its outline) over them. A background image is
+/// drawn in a layer of its own, and wgpu draws layers in the order
+/// they're made, over what's already in the layer around them: what
+/// comes after it goes in a layer made after it, clipped to `viewport`
+/// (a new layer's clip isn't the one around it), or it's drawn under
+/// the picture.
+pub(crate) fn draw_box(
+    renderer: &mut Renderer,
+    s: &Computed,
+    bounds: Rectangle,
+    viewport: Rectangle,
+    opacity: f32,
+    over: impl FnOnce(&mut Renderer),
+) {
     let w = s.border_width;
     let widths = [w.top, w.right, w.bottom, w.left];
     let colors = s.border_color.map(|c| fade(c, opacity));
@@ -88,76 +101,85 @@ pub(crate) fn draw_box(renderer: &mut Renderer, s: &Computed, bounds: Rectangle,
             background,
         );
     }
-    if let Some(picture) = &s.background_image {
-        draw_background(renderer, s, picture, bounds, corners, opacity);
-    }
-    if let Some(nine) = &s.border_image {
-        draw_nine(renderer, nine, bounds, widths, opacity);
-    } else if uniform && !border_in_quad {
-        renderer.fill_quad(
-            Quad {
-                bounds,
-                border: Border {
-                    color: colors[0],
-                    width: widths[0],
-                    radius: radius(corners),
+    // The border, or the 9-patch in its place, and the inset shadow, then
+    // what goes over the box.
+    let edges = |renderer: &mut Renderer| {
+        if let Some(nine) = &s.border_image {
+            draw_nine(renderer, nine, bounds, widths, opacity);
+        } else if uniform && !border_in_quad {
+            renderer.fill_quad(
+                Quad {
+                    bounds,
+                    border: Border {
+                        color: colors[0],
+                        width: widths[0],
+                        radius: radius(corners),
+                    },
+                    shadow: Shadow::default(),
+                    snap: true,
                 },
-                shadow: Shadow::default(),
-                snap: true,
-            },
-            Color::TRANSPARENT,
-        );
-    } else if !shows.is_empty() && !uniform {
-        let square = corners.iter().all(|r| *r == 0.0);
-        if square && alike {
-            // Square and of one colour: four quads, no paths.
-            for (i, side) in sides(bounds, widths).into_iter().enumerate() {
-                if shows.contains(&i) {
-                    fill(renderer, side, colors[i]);
+                Color::TRANSPARENT,
+            );
+        } else if !shows.is_empty() && !uniform {
+            let square = corners.iter().all(|r| *r == 0.0);
+            if square && alike {
+                // Square and of one colour: four quads, no paths.
+                for (i, side) in sides(bounds, widths).into_iter().enumerate() {
+                    if shows.contains(&i) {
+                        fill(renderer, side, colors[i]);
+                    }
                 }
+            } else {
+                draw_sides(renderer, bounds, widths, corners, colors, &shows, alike);
             }
-        } else {
-            draw_sides(renderer, bounds, widths, corners, colors, &shows, alike);
         }
-    }
-    if let Some(inset) = s.inset_shadow {
-        // Bands inside the border, along the sides the offset points
-        // away from.
-        let inner = Rectangle {
-            x: bounds.x + w.left,
-            y: bounds.y + w.top,
-            width: (bounds.width - w.left - w.right).max(0.0),
-            height: (bounds.height - w.top - w.bottom).max(0.0),
-        };
-        let color = fade(inset.color, opacity);
-        let x = inset.x.clamp(-inner.width, inner.width);
-        let y = inset.y.clamp(-inner.height, inner.height);
-        if y > 0.0 {
-            fill(renderer, Rectangle { height: y, ..inner }, color);
-        } else if y < 0.0 {
-            fill(
-                renderer,
-                Rectangle {
-                    y: inner.y + inner.height + y,
-                    height: -y,
-                    ..inner
-                },
-                color,
-            );
+        if let Some(inset) = s.inset_shadow {
+            // Bands inside the border, along the sides the offset points
+            // away from.
+            let inner = Rectangle {
+                x: bounds.x + w.left,
+                y: bounds.y + w.top,
+                width: (bounds.width - w.left - w.right).max(0.0),
+                height: (bounds.height - w.top - w.bottom).max(0.0),
+            };
+            let color = fade(inset.color, opacity);
+            let x = inset.x.clamp(-inner.width, inner.width);
+            let y = inset.y.clamp(-inner.height, inner.height);
+            if y > 0.0 {
+                fill(renderer, Rectangle { height: y, ..inner }, color);
+            } else if y < 0.0 {
+                fill(
+                    renderer,
+                    Rectangle {
+                        y: inner.y + inner.height + y,
+                        height: -y,
+                        ..inner
+                    },
+                    color,
+                );
+            }
+            if x > 0.0 {
+                fill(renderer, Rectangle { width: x, ..inner }, color);
+            } else if x < 0.0 {
+                fill(
+                    renderer,
+                    Rectangle {
+                        x: inner.x + inner.width + x,
+                        width: -x,
+                        ..inner
+                    },
+                    color,
+                );
+            }
         }
-        if x > 0.0 {
-            fill(renderer, Rectangle { width: x, ..inner }, color);
-        } else if x < 0.0 {
-            fill(
-                renderer,
-                Rectangle {
-                    x: inner.x + inner.width + x,
-                    width: -x,
-                    ..inner
-                },
-                color,
-            );
+        over(renderer);
+    };
+    match &s.background_image {
+        Some(picture) => {
+            draw_background(renderer, s, picture, bounds, corners, opacity);
+            renderer.with_layer(viewport, edges);
         }
+        None => edges(renderer),
     }
 }
 

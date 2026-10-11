@@ -218,6 +218,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
             renderer,
             theme,
             layout.bounds(),
+            *viewport,
             cursor,
             |renderer, theme, style, cursor| {
                 let paint = |node: Node<'_>| {

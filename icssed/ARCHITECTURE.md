@@ -407,8 +407,12 @@ root node's, and what was measured is what the window lays out.
   image rotates (its own `rotation`), which is what a spinner needs.
 - **Background images and 9-patches**: CSS's `background-image` and
   `border-image`, the image sliced at load (iced draws whole images:
-  no source rectangle), the slices drawn stretched; an image larger
-  than its box drawn in a layer that clips it.
+  no source rectangle), the slices drawn stretched; a background image
+  drawn in a layer that clips it to the border box. What the box draws
+  after it (its border, its children, its outline) goes in a layer of
+  its own made after that one, clipped to the viewport: wgpu draws a
+  layer over everything in the layer around it, so in that one it
+  would go under the picture.
 - **Paths** (a graph's series): painted as SVG's (`fill`, `stroke`,
   `stroke-width`), kept in iced's geometry cache until the values, the
   size or the paint change.

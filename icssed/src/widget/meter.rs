@@ -122,6 +122,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Meter<'_, Message> {
             renderer,
             theme,
             layout.bounds(),
+            *viewport,
             cursor,
             |renderer, theme, style, cursor| {
                 for ((child, tree), layout) in self

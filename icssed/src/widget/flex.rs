@@ -156,6 +156,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
             renderer,
             theme,
             layout.bounds(),
+            *viewport,
             cursor,
             |renderer, theme, style, cursor| {
                 for ((child, tree), layout) in self

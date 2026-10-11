@@ -133,10 +133,10 @@ impl<'a> Boxed<'a> {
         self.node.sensitivity().any() | own
     }
 
-    /// Draws it in its margin box `bounds`: its box, then `content` (its
-    /// children, given the theme and the text style they're drawn with,
-    /// and the pointer where they are), then its outline. Its transform
-    /// moves all of it.
+    /// Draws it in its margin box `bounds`, shown within `viewport`: its
+    /// box, then `content` (its children, given the theme and the text
+    /// style they're drawn with, and the pointer where they are), then
+    /// its outline. Its transform moves all of it.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
@@ -144,6 +144,7 @@ impl<'a> Boxed<'a> {
         renderer: &mut Renderer,
         theme: &Theme,
         bounds: Rectangle,
+        viewport: Rectangle,
         cursor: mouse::Cursor,
         content: impl FnOnce(&mut Renderer, &Theme, &renderer::Style, mouse::Cursor),
     ) {
@@ -156,26 +157,28 @@ impl<'a> Boxed<'a> {
         let cursor = state.local(cursor);
         let paint = |renderer: &mut Renderer| {
             let opacity = theme.opacity * s.opacity;
-            draw_box(renderer, s, bounds, opacity);
-            // What its children get: its states, where a descendant's
-            // style can see them or inherits what they change (a
-            // `color`); its opacity.
-            let seen = state.states & self.node.sensitivity().any();
-            let since = state.animated.since;
-            let derived;
-            let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity {
-                derived = theme
-                    .under(self.node.depth(), seen, since)
-                    .with_opacity(opacity);
-                &derived
-            } else {
-                theme
-            };
-            let style = renderer::Style {
-                text_color: fade(s.color, opacity),
-            };
-            content(renderer, theme, &style, cursor);
-            draw_outline(renderer, s, bounds, opacity);
+            draw_box(renderer, s, bounds, viewport, opacity, |renderer| {
+                // What its children get: its states, where a descendant's
+                // style can see them or inherits what they change (a
+                // `color`); its opacity.
+                let seen = state.states & self.node.sensitivity().any();
+                let since = state.animated.since;
+                let derived;
+                let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity
+                {
+                    derived = theme
+                        .under(self.node.depth(), seen, since)
+                        .with_opacity(opacity);
+                    &derived
+                } else {
+                    theme
+                };
+                let style = renderer::Style {
+                    text_color: fade(s.color, opacity),
+                };
+                content(renderer, theme, &style, cursor);
+                draw_outline(renderer, s, bounds, opacity);
+            });
         };
         match transformation {
             Some(transformation) => renderer.with_transformation(transformation, paint),

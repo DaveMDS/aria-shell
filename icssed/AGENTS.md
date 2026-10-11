@@ -328,6 +328,11 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
 - An overlay can tell whether its content sent a message by giving it
   a `Shell` of its own and `merge`-ing it afterwards (the select closes
   on a pick that way).
+- A layer (`with_layer`) is drawn over everything in the layer around
+  it, also what's drawn there after it: draw what must go over it in
+  a layer made after it. A layer's clip is its own bounds, not cut by
+  the clip around it: give it the viewport, not something larger.
+  tiny-skia draws in order, so the golden images don't show this.
 - tiny-skia (the headless renderer, the golden images) places a
   stretched image on a grid as coarse as its stretch and doesn't round
   an image's corners: right on wgpu only.

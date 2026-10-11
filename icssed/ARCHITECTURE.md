@@ -54,7 +54,7 @@ crate itself (AGENTS.md, "What things cost").
   renderer, no GPU, no window): the single source of truth for sizes.
 - **Tests without a compositor**: layout, events and pixels through
   iced's runtime `UserInterface` and the tiny-skia renderer, at any
-  scale; the wgpu path through the gallery in a nested Sway.
+  scale; the wgpu path through the demo in a nested Sway.
 
 ## The road: three shapes weighed
 
@@ -104,7 +104,7 @@ A workspace member (`icssed/`), its own `Cargo.toml`, depending on:
 - `rustc-hash` for the interner and caches (a node lookup: 65ns with
   std's SipHash, 32ns with FxHash, measured); `log`.
 - dev: `iced` with `tokio`, `tokio`, `notify` and `env_logger`, for the
-  gallery (its theme file watched).
+  demo (its sheets and theme watched).
 
 `iced` is pinned to what `iced_exwlshell` runs on; the toolkit moves
 when Aria can. The modules are mapped in AGENTS.md.
@@ -285,7 +285,7 @@ computed values:
 - draw reads it from the node as well: an icon's size in device
   pixels, which picks a png theme's `@2` directory.
 
-A new scale is a new root, so a rebuilt view. The gallery learns it
+A new scale is a new root, so a rebuilt view. The demo learns it
 from iced (`window::scale_factor`, `window::Event::Rescaled`); Aria
 asks `window::scale_factor` of `iced_exwlshell` when a surface appears
 and when its output changes (no event tells it).
@@ -583,9 +583,9 @@ They come in a few kinds:
 
 - **Boxes** (`row`, `column`, `button`, and what's made of them: a
   toggle is a button holding its icon and its label, and a check box's
-  mark or a switch's knob before them; tabs are buttons in a row; a
-  menu is a column of buttons; a calendar is boxes and texts). Their
-  states, painting and animation are `widget/boxed.rs`'s.
+  mark, a radio's dot or a switch's knob before them; tabs are buttons
+  in a row; a menu is a column of buttons; a calendar is boxes and
+  texts). Their states, painting and animation are `widget/boxed.rs`'s.
 - **Boxes placing their children their own way**: a meter's fill at
   its fraction, a slider's knob on its value (its track a meter), a
   graph's paths in its content box. Their box model is `layout::Sizing`.
@@ -628,15 +628,19 @@ renderer: pointer moves, presses, keys, text, frames at chosen times,
 RGBA screenshots at any scale); golden images per widget and state, at
 scale 1 and 1.5, with embedded fonts so the system's don't change them,
 tiny-skia only (wgpu draws differently by a few levels). The wgpu path
-is checked with the gallery in a nested headless Sway. How, and the
+is checked with the demo in a nested headless Sway. How, and the
 traps: AGENTS.md, "Verifying".
 
-## The gallery
+## The demo
 
-`examples/gallery.rs`, a plain `iced::application` window (no
-layer-shell): every widget in its states side by side, the theme file
-given on the command line and reloaded on change, light and dark. It's
-where a theme is written and looked at.
+`examples/demo/`, a plain `iced::application` window (no layer-shell),
+after gtk4-demo: a demo per widget and per subject, each shown live
+with its description, its Rust and its CSS. Its first page, the
+overview, is every widget at once in its states, as the base and the
+theme draw them, with nothing of the demo's own: where a theme is
+written and looked at, for a design that holds together. The theme file
+given on the command line and the demos' sheets are reloaded on
+change; light and dark.
 
 ## Performance
 
@@ -687,7 +691,7 @@ for overlays at every event and every frame.
   transition), not each item's. A box keyed per child (`.keyed(key)`)
   would carry them along.
 - `stack`: children on top of each other (a badge on an icon).
-- States forced on a box in the gallery, as a browser's devtools do.
+- States forced on a box in the demo, as a browser's devtools do.
 
 ## To decide
 

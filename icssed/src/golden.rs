@@ -312,7 +312,7 @@ fn golden_flex() {
 /// Images drawn at their own size only: tiny-skia (iced 0.14) places a
 /// stretched image on a grid as coarse as its stretch, and doesn't round
 /// an image's corners. Stretched ones (9-patches, `object-fit`) are seen
-/// in the gallery, on wgpu; their slicing is the style tests'.
+/// in the demo, on wgpu; their slicing is the style tests'.
 #[test]
 fn golden_images() {
     // The theme's images, made the same each time.
@@ -413,17 +413,18 @@ fn golden_controls_focused_and_dragged() {
     );
 }
 
-/// The three looks of a toggle, off, on and disabled; the focus on the
+/// The four looks of a toggle, off, on and disabled; the focus on the
 /// check box.
 #[test]
 fn golden_toggles() {
     scene(
         "toggles",
-        "toggle, toggle > check, toggle > switch, toggle > switch > knob { transition: none; } \
+        "toggle, toggle > check, toggle > radio, toggle > radio > dot, toggle > switch, \
+         toggle > switch > knob { transition: none; } \
          column { gap: 8px; } line { gap: 10px; align-items: center; } \
          toggle.check.checked > check > mark { content: \"x\"; }",
         None,
-        Size::new(320.0, 110.0),
+        Size::new(320.0, 140.0),
         |root| {
             let looks = |look: fn(crate::Toggle<'_, ()>) -> crate::Toggle<'_, ()>| {
                 crate::row(
@@ -439,7 +440,13 @@ fn golden_toggles() {
                 .kind("line")
             };
             crate::focus_scope(
-                crate::column![looks(|t| t), looks(|t| t.check()), looks(|t| t.switch())].at(root),
+                crate::column![
+                    looks(|t| t),
+                    looks(|t| t.check()),
+                    looks(|t| t.radio()),
+                    looks(|t| t.switch())
+                ]
+                .at(root),
             )
             .into()
         },

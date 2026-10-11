@@ -24,9 +24,10 @@
 //! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
 //! │  ╰─ button > icon | label
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
-//!    ├─ row > button[.flat|.primary|.danger|.active][:disabled] > icon | label
+//!    ├─ row > button[.flat|.primary|.danger][:disabled] > icon | label
 //!    ├─ row > button.plain[.active] > icon | label
-//!    ├─ row > button.radio[.active] > check, label
+//!    ├─ row > toggle.radio[.checked] > radio, label
+//!    ├─ row > toggle[.check|.switch|.plain][.checked] > check | switch | icon, label
 //!    ╰─ tabs > tab[.active] > label
 //! ```
 
@@ -70,7 +71,6 @@ const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
     (Some("flat"), true, true, false),
     (Some("primary"), true, false, true),
     (Some("danger"), true, false, true),
-    (Some("active"), true, false, true),
     (None, false, false, true),
     (Some("primary"), false, false, true),
     (Some("danger"), false, false, true),
@@ -426,13 +426,12 @@ impl AriaShell {
         let radios = (0..RADIOS).map(|i| {
             let on = i == showcase.radio;
             let label = match on {
-                true => "button.radio.active",
-                false => "button.radio",
+                true => "toggle.radio.checked",
+                false => "toggle.radio",
             };
-            icssed::button![icssed::mark().kind("check"), icssed::text(label)]
-                .class("radio")
-                .class_if("active", on)
-                .on_press(Shell::Showcase(Message::Radio(i)))
+            icssed::toggle(on, move |_| Shell::Showcase(Message::Radio(i)))
+                .radio()
+                .label(label)
                 .into()
         });
         children.push(icssed::row(radios).into());

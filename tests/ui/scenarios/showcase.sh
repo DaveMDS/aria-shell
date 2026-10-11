@@ -16,11 +16,11 @@ assert_eq "$(count_widgets 'osd.volume')" 1 "the OSD"
 assert_eq "$(count_widgets 'notification.normal')" 1 "a notification"
 assert_eq "$(count_widgets 'notification.critical')" 1 "a critical one"
 assert_eq "$(count_widgets 'gadget#showcase > button')" 3 "the bar's buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > row > button')" 17 "the other buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > button')" 14 "the other buttons"
 assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.danger')" 2 "a danger one, and disabled"
 assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.plain')" 3 "three plain ones"
-assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.radio')" 2 "two radios"
-assert_eq "$(count_widgets 'popup#showcase > buttons > row > toggle')" 4 "four toggles"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > toggle.radio')" 2 "two radios"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > toggle')" 6 "four toggles and the radios"
 assert_eq "$(count_widgets 'popup#showcase > buttons > tabs > tab')" 3 "tabs, one open"
 assert_no_surface launcher
 assert_no_surface exiter
@@ -45,9 +45,9 @@ click_widget 'popup#showcase button.plain:nth-child(1)'
 assert_eq "$(count_widgets 'popup#showcase button.plain.active:nth-child(1)')" 1 "the first plain one on"
 click_widget 'popup#showcase button.plain:nth-child(1)'
 assert_eq "$(count_widgets 'popup#showcase button.plain.active:nth-child(1)')" 0 "and off again"
-click_widget 'popup#showcase button.radio:nth-child(2)'
-assert_eq "$(count_widgets 'popup#showcase button.radio.active:nth-child(2)')" 1 "the second radio chosen"
-assert_eq "$(count_widgets 'popup#showcase button.radio.active')" 1 "only it"
+click_widget 'popup#showcase toggle.radio:nth-child(2)'
+assert_eq "$(count_widgets 'popup#showcase toggle.radio.checked:nth-child(2)')" 1 "the second radio chosen"
+assert_eq "$(count_widgets 'popup#showcase toggle.radio.checked')" 1 "only it"
 click_widget 'popup#showcase toggle.switch'
 assert_eq "$(count_widgets 'popup#showcase toggle.switch.checked')" 1 "the switch on"
 click_widget 'popup#showcase tabs > tab:nth-child(3)'

@@ -1,7 +1,7 @@
 /*
  * demo#toggle
  * ╰─ line                   one per look
- *    ╰─ toggle[.check|.switch][.checked] > icon, label   the toolkit's
+ *    ╰─ toggle[.check|.radio|.switch][.checked] > icon, label   the toolkit's
  */
 
 demo#toggle {

@@ -253,13 +253,12 @@ impl AudioGadget {
         let mute = icssed::toggle(c.muted, move |m| Message::Mute(kind, index, m))
             .class("mute")
             .icon(channel_icon(ctx, c));
-        // A device's name is a radio: ● the default, ○ a click makes it
+        // A device's name is a radio: on the default, a click makes it
         // so (on the default too, a click that changes nothing).
         let label: Element<'a, Message> = if is_device(c) {
-            icssed::button![icssed::mark().kind("check"), icssed::text(c.label.as_str())]
-                .class("radio")
-                .class_if("active", c.default)
-                .on_press(Message::SetDefault(c.kind, c.index))
+            icssed::toggle(c.default, move |_| Message::SetDefault(kind, index))
+                .radio()
+                .label(c.label.as_str())
                 .into()
         } else {
             icssed::text(c.label.as_str()).kind("name").into()

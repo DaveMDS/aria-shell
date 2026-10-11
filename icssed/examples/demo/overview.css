@@ -1,0 +1,24 @@
+/*
+ * demo#overview
+ * ├─ line                   one per family of widgets, then their
+ * │                         disabled states
+ * │  ╰─ button[.flat|.primary|.danger|.peek], toggle[.check|.radio|.switch],
+ * │     slider, meter, input, select   the toolkit's
+ * ├─ tabs
+ * ╰─ panels > menu, calendar, graph
+ */
+
+demo#overview {
+  gap: 16px;
+}
+demo#overview > line,
+demo#overview > panels {
+  gap: 12px;
+  align-items: center;
+}
+demo#overview > panels {
+  align-items: start;
+}
+demo#overview button.peek.active > icon {
+  color: var(--accent);
+}

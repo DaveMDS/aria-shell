@@ -272,14 +272,15 @@ button.danger:disabled {
  * =======
  *
  * A value on or off (`icssed::toggle`): a button whose press asks for the
- * other value, `.checked` while it's on. It looks one of three ways,
+ * other value, `.checked` while it's on. It looks one of four ways,
  * picked by the call: a button that stays pressed, a check box
- * (`.check`), a switch (`.switch`), the last two with the toolkit's part
- * before its icon and its label. Tab moves the focus to it, Enter and
- * Space flip it.
+ * (`.check`), a radio (`.radio`: one chosen among a few), a switch
+ * (`.switch`), the last three with the toolkit's part before its icon
+ * and its label. Tab moves the focus to it, Enter and Space flip it.
  *
- * toggle[.check|.switch][.checked]
+ * toggle[.check|.radio|.switch][.checked]
  * ├─ check > mark      (.check) the box, and its mark: its content
+ * ├─ radio > dot       (.radio) the circle, and its dot
  * ├─ switch > knob     (.switch) the track, and its knob
  * ├─ icon              if it has one
  * ╰─ label             if it has one
@@ -324,10 +325,12 @@ toggle.checked:disabled {
   color: var(--muted);
 }
 
-/* A check box and a switch: no button around them. */
+/* A check box, a radio and a switch: no button around them. */
 toggle.check,
+toggle.radio,
 toggle.switch,
 toggle.check.checked,
+toggle.radio.checked,
 toggle.switch.checked {
   padding: 0;
   gap: 8px;
@@ -337,15 +340,18 @@ toggle.switch.checked {
   color: inherit;
 }
 toggle.check:disabled,
+toggle.radio:disabled,
 toggle.switch:disabled {
   opacity: 0.5;
 }
 /* The focus is shown on the toolkit's part, around its own shape. */
 toggle.check:focus,
+toggle.radio:focus,
 toggle.switch:focus {
   outline: none;
 }
 toggle.check:focus > check,
+toggle.radio:focus > radio,
 toggle.switch:focus > switch {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -374,6 +380,32 @@ toggle.check > check > mark {
 }
 toggle.check.checked > check > mark {
   content: "✓";
+}
+
+toggle.radio > radio {
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: var(--bg);
+  transition: background-color 120ms, border-color 120ms;
+}
+toggle.radio:hover > radio {
+  border-color: var(--accent);
+}
+toggle.radio.checked > radio {
+  border-color: var(--accent);
+}
+toggle.radio > radio > dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  transition: background-color 120ms;
+}
+toggle.radio.checked > radio > dot {
+  background: var(--accent);
 }
 
 toggle.switch > switch {

@@ -69,6 +69,7 @@ macro_rules! demos {
 }
 
 demos! {
+    "Overview" => [overview],
     "Widgets" => [
         buttons, toggle, slider, meter, input, select, menu, tabs, calendar, graph, tooltip,
         scroll,

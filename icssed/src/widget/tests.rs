@@ -382,7 +382,8 @@ fn a_box_is_found_and_focused_by_its_id() {
 }
 
 /// The base's controls, without their transitions.
-const CONTROLS: &str = "toggle, toggle > check, toggle > switch, toggle > switch > knob, \
+const CONTROLS: &str = "toggle, toggle > check, toggle > radio, toggle > radio > dot, \
+                        toggle > switch, toggle > switch > knob, \
                         slider > knob { transition: none; }";
 
 #[test]
@@ -408,6 +409,39 @@ fn a_toggle_asks_for_the_other_state() {
         ui.messages,
         [Message::Toggled(true), Message::Toggled(false)]
     );
+}
+
+#[test]
+fn a_radio_asks_for_itself() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let view = |chosen: &'static str| -> Element<'_, Message> {
+        crate::row(["a", "b", "c"].map(|name| {
+            crate::toggle(name == chosen, move |_| Message::Pressed(name))
+                .radio()
+                .label(name)
+                .into()
+        }))
+        .at(root)
+        .into()
+    };
+    let mut ui = Harness::new(view("a"), Size::new(200.0, 40.0), 1.0);
+    assert_eq!(
+        ui.find(&sheet, "toggle.radio.checked:nth-child(1)").len(),
+        1
+    );
+    ui.click_on(&sheet, "toggle.radio:nth-child(2)");
+    assert_eq!(ui.messages, [Message::Pressed("b")]);
+    ui.rebuild(view("b"));
+    assert_eq!(ui.find(&sheet, "toggle.radio.checked").len(), 1);
+    assert_eq!(
+        ui.find(&sheet, "toggle.radio.checked:nth-child(2) > radio > dot")
+            .len(),
+        1
+    );
+    // The chosen one asks for itself again: nothing changes.
+    ui.click_on(&sheet, "toggle.radio:nth-child(2)");
+    assert_eq!(ui.messages, [Message::Pressed("b"), Message::Pressed("b")]);
 }
 
 /// A slider from 0 to 100 at `value`: 160px wide, its track from 8 to

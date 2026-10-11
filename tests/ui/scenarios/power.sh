@@ -36,14 +36,14 @@ shot_surface popup popup
 assert_eq "$(count_widgets 'popup gadget.power battery.discharging')" 1 "the battery"
 assert_eq "$(count_widgets 'popup gadget.power details line')" 2 "power draw and health"
 assert_eq "$(count_widgets 'popup gadget.power device')" 1 "the mouse"
-assert_eq "$(count_widgets 'popup gadget.power profiles button')" 3 "three profiles"
-assert_eq "$(count_widgets 'popup gadget.power profiles button.balanced.active')" 1 "balanced is active"
+assert_eq "$(count_widgets 'popup gadget.power profiles toggle')" 3 "three profiles"
+assert_eq "$(count_widgets 'popup gadget.power profiles toggle.balanced.checked')" 1 "balanced is active"
 
 # A profile picked goes to the daemon; one it picks shows.
-click_widget 'popup gadget.power profiles button.performance'
+click_widget 'popup gadget.power profiles toggle.performance'
 assert_eq "$(upower_event)" "set-profile performance"
 settle 0.5
-assert_eq "$(count_widgets 'popup gadget.power profiles button.performance.active')" 1 "performance is active"
+assert_eq "$(count_widgets 'popup gadget.power profiles toggle.performance.checked')" 1 "performance is active"
 upower_send "profile power-saver"
 assert_eq "$(count_widgets 'gadget.power > button.status.power-saver')" 2 "the daemon's pick on the bars"
 upower_send "degraded high-operating-temperature"

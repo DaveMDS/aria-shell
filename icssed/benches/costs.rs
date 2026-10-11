@@ -118,20 +118,34 @@ fn tree<'a>(
 }
 
 fn main() {
-    let gallery = include_str!("../examples/gallery.css");
-    let dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/examples"));
-    time("sheet: base and the gallery's, loaded", 200, || {
-        black_box(
-            Sheet::load(
-                &[Source {
-                    name: "gallery.css",
-                    text: gallery,
-                    dir: Some(dir),
-                }],
-                Scheme::Light,
+    // The demo's sheets, its frame's and every demo's: a theme's worth.
+    let dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/examples/demo"));
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .expect("the demo's directory")
+        .map(|entry| entry.expect("an entry").path())
+        .filter(|path| path.extension().is_some_and(|e| e == "css"))
+        .collect();
+    files.sort();
+    let texts: Vec<(String, String)> = files
+        .iter()
+        .map(|path| {
+            let name = path.file_name().expect("a name").to_string_lossy();
+            (
+                name.into_owned(),
+                std::fs::read_to_string(path).expect("readable"),
             )
-            .expect("loads"),
-        );
+        })
+        .collect();
+    let sources: Vec<Source> = texts
+        .iter()
+        .map(|(name, text)| Source {
+            name,
+            text,
+            dir: Some(dir),
+        })
+        .collect();
+    time("sheet: base and the demo's, loaded", 200, || {
+        black_box(Sheet::load(&sources, Scheme::Light).expect("loads"));
     });
     let (sheet, _) = Sheet::load(
         &[Source {

@@ -70,27 +70,15 @@
  * The toolkit's (`button`, `.flat`, `.primary`, `.danger`), and the
  * shell's variants, set as classes by the code:
  *
- * button[.active|.plain|.radio]
+ * button[.plain]
  * ├─ icon
- * ├─ label
- * ╰─ check     (.radio) its mark: ● / ○
+ * ╰─ label
  *
- * button.active    the one chosen among a few: the power profile
  * button.plain     just its colour: muted, the text's when hovered or .active;
  *                  a row's chevron (.active: open)
- * button.radio     one of a group, .active the chosen one: its `check`
- *                  (● / ○, accent on the chosen one), then its `label`
  */
 button > icon {
   height: 16px;
-}
-button.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-button.active:hover {
-  border-color: var(--fg);
 }
 button.plain {
   padding: 4px;
@@ -104,39 +92,15 @@ button.plain.active {
   background: transparent;
   color: var(--fg);
 }
-button.radio {
-  padding: 2px 4px;
-  gap: 6px;
-  justify-content: start;
-  border-color: transparent;
-  background: transparent;
-}
-button.radio.active {
-  border-color: transparent;
-  background: transparent;
-  color: var(--fg);
-}
-button.radio:hover,
-button.radio.active:hover {
-  border-color: transparent;
-  background: var(--border);
-}
-button.radio > check {
-  color: var(--muted);
-  content: "○";
-}
-button.radio.active > check {
-  color: var(--accent);
-  content: "●";
-}
 
 /*
  * Toggles
  * =======
  *
- * The toolkit's (`toggle`, `.check`, `.switch`, `.checked` while it's
- * on: do-not-disturb, mute), and the shell's variant, set as a class by
- * the code:
+ * The toolkit's (`toggle`, `.check`, `.radio`, `.switch`, `.checked`
+ * while it's on: do-not-disturb, mute; the one chosen among a few: the
+ * power profile as a pressed button, the default device as a radio),
+ * and the shell's variant, set as a class by the code:
  *
  * toggle.plain     just its colour: muted, the text's when hovered or
  *                  .checked; a password's peek (.checked: shown)
@@ -1014,7 +978,7 @@ gadget.places info > meter.critical > fill {
  *    │  ├─ name
  *    │  ╰─ percent
  *    ├─ profiles                         a row
- *    │  ╰─ button.<profile>[.active]     .active: the one in use
+ *    │  ╰─ toggle.<profile>[.checked]    .checked: the one in use
  *    │     ├─ icon
  *    │     ╰─ label
  *    ├─ idle[.inhibited][.playing]       "Keep awake"
@@ -1078,7 +1042,7 @@ gadget.power device > percent {
 gadget.power profiles {
   gap: 4px;
 }
-gadget.power profiles > button {
+gadget.power profiles > toggle {
   width: fill;
   flex-direction: column;
   gap: 4px;
@@ -1468,8 +1432,8 @@ gadget.system-monitor monitor > actions.none > label {
  *       │  ├─ toggle.mute[.checked] > icon  mute, on or off: the device's / app's icon
  *       │  ╰─ info                         a column
  *       │     ├─ head                      a row
- *       │     │  ├─ button.radio[.active]  a device's name (see `button.radio`): .active
- *       │     │  │  ├─ check               the default, a click on another makes it so
+ *       │     │  ├─ toggle.radio[.checked]  a device's name: .checked the default,
+ *       │     │  │  ├─ radio > dot         a click on another makes it so
  *       │     │  │  ╰─ label
  *       │     │  ├─ name                   a stream's name
  *       │     │  ╰─ value                  the percent
@@ -1516,7 +1480,7 @@ gadget.audio channel head {
   gap: 8px;
   align-items: center;
 }
-gadget.audio channel head > button.radio > label,
+gadget.audio channel head > toggle.radio > label,
 gadget.audio channel head > name {
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1524,10 +1488,10 @@ gadget.audio channel head > name {
 gadget.audio channel head > name {
   width: fill;
 }
-gadget.audio channel head > button.radio {
+gadget.audio channel head > toggle.radio {
   width: fill;
 }
-gadget.audio channel.default head > button.radio > label {
+gadget.audio channel.default head > toggle.radio > label {
   font-weight: bold;
 }
 gadget.audio channel head > value {

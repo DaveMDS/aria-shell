@@ -38,16 +38,17 @@ What the toolkit holds to; a change that breaks one is the wrong change.
   its line in the reference, and a neutral default in the base.
 - **No `Space` fillers**: in a row, the child that takes the free room
   has `width: fill` (as `flex-grow: 1` does), set in the theme.
-- **Every widget is in the gallery and tested**: shown in its states;
-  its layout, style and behaviour tested without a compositor, its look
-  by golden images at two scales.
+- **Every widget is in the demo and tested**: a demo of its own, and
+  on the overview with every other, in its states; its layout, style
+  and behaviour tested without a compositor, its look by golden images
+  at two scales.
 - **Vanilla iced, public API only**: no fork; anything vendored is
   temporary and marked.
 
 ## Commands
 
 ```bash
-cargo run -p icssed --example gallery [-- theme.css]   # every widget; `d` toggles light/dark; the theme reloads on save
+cargo run -p icssed --example demo [-- theme.css]      # every widget: the overview, then a demo each; the theme reloads on save
 cargo test -p icssed                                   # style, layout, widgets, golden images
 ICSSED_GOLDEN=bless cargo test -p icssed golden            # accept a visual change meant to show (look at it first)
 cargo bench -p icssed --features testing               # what it costs: before and after a change
@@ -151,7 +152,7 @@ to choose.
 | `surface(content).at(root)` | a surface's root: `content` is its box, and it adds the room the box's shadow needs, so a popup's size includes it; `Surface::room(root)` is that room, for placing the surface |
 | `slot(view).kind(k).class(c)` | nothing of its own: `view`'s top widget is the slot's element, with its own classes too; a frame says what a page is, a bar what a gadget is |
 | `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
-| `toggle(on, Message::Wifi).icon(s).label(t)`, `.check()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a switch (`switch > knob`) |
+| `toggle(on, Message::Wifi).icon(s).label(t)`, `.check()`, `.radio()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a radio (`radio > dot`), a switch (`switch > knob`); a radio, or a group of pressed buttons, is `toggle(p == chosen, move \|_\| Choose(p))` |
 | `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
 | `meter(fraction).label(text)` | with a label, a gauge |
 | `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
@@ -207,7 +208,7 @@ surface closes.
   `knob`, `label`, `icon`, `menu`, `item`, `field`, `series`, `day`, ...
   gets the base's rules for the toolkit's parts. Scope your rules
   (`lanes > track`), or choose names the base doesn't use. The
-  gallery's `track` once took a slider's fill height away, and test
+  old gallery's `track` once took a slider's fill height away, and test
   fixtures named `menu`/`item` got the menu's padding.
 - **States**: `:hover`, `:active` and `:focus` are tracked only on
   nodes some rule can see them on, so a moving pointer over unthemed UI
@@ -256,7 +257,8 @@ A view only describes its widgets: their nodes are found in the diff
 that follows, so the view costs less and the rebuild a little more
 (~5%) than when views built their nodes themselves.
 
-Loading a theme (the base and the gallery's) takes 0.5 ms.
+Loading a theme (the base, the demo's frame and every demo's sheet)
+takes 1 ms.
 
 - **An idle UI costs nothing.** A frame comes only when a tracked state
   changes, or while an animation runs. A `:hover` rule on a big list
@@ -299,7 +301,7 @@ src/widget/    place.rs (where a widget is: Place, what a container hands its ch
                scroll.rs, menu.rs, tabs.rs, calendar.rs, graph.rs, tooltip.rs,
                select.rs, tests.rs
 assets/base.css               the reference and the neutral defaults
-examples/gallery.{rs,css}     every widget in every state
+examples/demo/                the demo: overview.{rs,css} every widget at once, a demo each
 tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
 ```
 
@@ -383,13 +385,14 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
    from the palette's variables. No positional pseudo-classes (every
    app's lists would split by them) and no `url()` (the base has no
    directory at runtime).
-3. A section in the gallery (`examples/gallery.rs` and `gallery.css`,
-   whose header has the gallery's element tree). Use names the base
-   doesn't use, or scope them.
+3. A demo of its own (`examples/demo/<name>.rs` and `.css`, listed in
+   `main.rs`'s `demos!`), and its place on the overview
+   (`overview.rs`), in its states, with nothing of the app's: the
+   base's look beside every other widget's.
 4. Tests: behaviour with the `Harness` in `widget/tests.rs`, a golden
    scene in `golden.rs` at both scales, a bench row if it's on a hot
    path.
-5. Look at it in the gallery on wgpu at scale 1.5, light and dark (see
+5. Look at it in the demo on wgpu at scale 1.5, light and dark (see
    "Verifying"); then the docs: its calls in the table above,
    ARCHITECTURE.md where its design adds something (a kind of widget, a
    limit, what's not done), the costs here if a bench moved.
@@ -444,28 +447,29 @@ yourself.
   padding and background are lost.
 - Bless only after looking at the images.
 
-### The gallery on wgpu, in a headless nested Sway
+### The demo on wgpu, in a headless nested Sway
 
 `tests/ui/lib.sh` gives the input vocabulary (`pointer`, `click`, `key`,
 `type_text`, `inject "scroll 3"`, `settle`); `aria-inject` comes from
 `cargo build -p aria-inject`. A run, from the repository's root (build
-the gallery first):
+the demo first), on the overview:
 
 ```sh
-out=/tmp/gallery-run; mkdir -p "$out"
+out=/tmp/demo-run; mkdir -p "$out"
 cat > "$out/inner.sh" <<'EOF'
 #!/bin/sh
 . "$ARIA_UI_ROOT/tests/ui/lib.sh"
 inject_start
 inject "layout 1500 1350"        # the output's resolution: pointer positions are then a screenshot's pixels
-"$ARIA_UI_ROOT/target/debug/examples/gallery" > "$GAL_OUT/gallery.log" 2>&1 &
+"$ARIA_UI_ROOT/target/debug/examples/demo" > "$DEMO_OUT/demo.log" 2>&1 &
 pid=$!
-sleep 2.5
+sleep 3
 pointer 1490 1340; settle        # out of the way
-grim "$GAL_OUT/light.png"        # the whole output, in device pixels
-key d; settle; grim "$GAL_OUT/dark.png"
-pointer 450 300; inject click; settle
-grim -g "0,100 400x150" "$GAL_OUT/clicked.png"   # -g takes logical pixels: device ones / 1.5
+grim "$DEMO_OUT/light.png"       # the whole output, in device pixels
+pointer 1443 40; inject click; settle   # the Dark switch
+grim "$DEMO_OUT/dark.png"
+pointer 893 186; inject click; settle   # a radio
+grim -g "240,40 600x100" "$DEMO_OUT/clicked.png"   # -g takes logical pixels: device ones / 1.5
 kill $pid; inject_stop; swaymsg exit
 EOF
 chmod +x "$out/inner.sh"
@@ -475,13 +479,14 @@ default_border none
 exec "$out/inner.sh"
 CONF
 WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=gles2 \
-  GAL_OUT="$out" ARIA_UI_ROOT="$PWD" \
+  DEMO_OUT="$out" ARIA_UI_ROOT="$PWD" \
   timeout 90 dbus-run-session -- sway -c "$out/sway.conf" > "$out/sway.log" 2>&1
 ```
 
 Use `WLR_RENDERER=pixman` without a `/dev/dri/renderD*`. Find positions
-in a first whole screenshot; the gallery's page scrolls with
-`inject "scroll 30"` over it. Never `hyprctl`.
+in a first whole screenshot; another demo is a click on its entry in
+the sidebar, and a pane scrolls with `inject "scroll 30"` over it.
+Never `hyprctl`.
 
 ## Conventions
 
@@ -491,5 +496,5 @@ subjects look like `Toolkit: the menu`: informal, no Conventional
 Commits, no attribution lines. Run `cargo fmt` before committing; never
 push. Keep this file (rules, calls, costs, traps), ARCHITECTURE.md
 (design and reasons, limits, what's not done, what's to decide),
-`base.css` (the reference) and the gallery's tree comment current with
-every change.
+`base.css` (the reference) and the demos (their descriptions, their
+sheets' tree comments, the overview) current with every change.

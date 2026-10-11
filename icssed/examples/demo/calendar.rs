@@ -25,7 +25,8 @@ use crate::Assets;
 
 pub const TITLE: &str = "Calendar";
 
-const MONTHS: [&str; 12] = [
+/// The months' names: the toolkit has no locale.
+pub const MONTHS: [&str; 12] = [
     "January",
     "February",
     "March",
@@ -96,7 +97,7 @@ pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
 }
 
 /// Today's date, in UTC: (year, month, day).
-fn today() -> (i32, u32, u32) {
+pub fn today() -> (i32, u32, u32) {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());

@@ -25,13 +25,6 @@
         {
             "type": "node-terminal",
             "request": "launch",
-            "name": "icssed gallery",
-            "command": "cargo run -p icssed --example gallery",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "node-terminal",
-            "request": "launch",
             "name": "Tests",
             "command": "cargo test --workspace",
             "cwd": "${workspaceFolder}"

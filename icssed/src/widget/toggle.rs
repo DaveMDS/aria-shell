@@ -1,11 +1,16 @@
 //! A value on or off: a button whose press, or Enter or Space while it
 //! has the focus, asks for the other value; `.checked` while it's on. It
-//! looks one of three ways: a button that stays pressed, a check box
-//! (`.check`), a switch (`.switch`), the last two with the toolkit's part
-//! before its icon and its label. Its classes reach them all, whenever
-//! they're given. The switch's knob slides as the theme says: the base
-//! moves it with a transform, by the switch's width less its padding
-//! and the knob's.
+//! looks one of four ways: a button that stays pressed, a check box
+//! (`.check`), a radio (`.radio`), a switch (`.switch`), the last three
+//! with the toolkit's part before its icon and its label. Its classes
+//! reach them all, whenever they're given. The switch's knob slides as
+//! the theme says: the base moves it with a transform, by the switch's
+//! width less its padding and the knob's.
+//!
+//! A radio is a toggle that chooses: one among a few is on, a press on
+//! any asks for it (`toggle(p == chosen, move |_| Choose(p))`), on the
+//! chosen one too, a message that changes nothing. The pressed button
+//! does the same, the radio's group as buttons side by side.
 
 use std::borrow::Cow;
 
@@ -21,6 +26,7 @@ use crate::style::{Direction, name};
 enum Look {
     Button,
     Check,
+    Radio,
     Switch,
 }
 
@@ -34,8 +40,8 @@ pub struct Toggle<'a, Message> {
     label: Option<Cow<'a, str>>,
 }
 
-/// A `toggle` on or off: a button that stays pressed, unless `check` or
-/// `switch` says otherwise. `on_toggle` makes what a press sends from the
+/// A `toggle` on or off: a button that stays pressed, unless `check`,
+/// `radio` or `switch` says otherwise. `on_toggle` makes what a press sends from the
 /// value it asks for.
 pub fn toggle<'a, Message: Clone + 'a>(
     on: bool,
@@ -57,6 +63,12 @@ impl<'a, Message> Toggle<'a, Message> {
     /// A check box: `.check`, its `check > mark` first.
     pub fn check(mut self) -> Self {
         self.look = Look::Check;
+        self
+    }
+
+    /// A radio: `.radio`, its `radio > dot` first.
+    pub fn radio(mut self) -> Self {
+        self.look = Look::Radio;
         self
     }
 
@@ -92,6 +104,14 @@ impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message>
                 Some(
                     row([mark().kind_of(name!("mark")).into()])
                         .kind_of(name!("check"))
+                        .into(),
+                )
+            }
+            Look::Radio => {
+                place.class("radio");
+                Some(
+                    row([row([]).kind_of(name!("dot")).into()])
+                        .kind_of(name!("radio"))
                         .into(),
                 )
             }

@@ -33,10 +33,11 @@ runs the shell inside a nested `sway` with no display output (see
 `icssed/` is the UI toolkit being written for the shell, a crate of
 its own that knows nothing of it: icssed/AGENTS.md says
 how to use it and work on it (its rules, calls, costs and traps),
-icssed/ARCHITECTURE.md how it's built and why. Its gallery shows
-every widget, styled by a theme reloaded when its file changes:
+icssed/ARCHITECTURE.md how it's built and why. Its demo shows
+every widget, all at once on its first page, styled by a theme
+reloaded when its file changes:
 ```bash
-cargo run -p icssed --example gallery [-- theme.css]   # `d`: light/dark
+cargo run -p icssed --example demo [-- theme.css]      # the switch at the top: light/dark
 cargo test -p icssed                                   # golden images too: ICSSED_GOLDEN=bless accepts a change meant to show
 cargo bench -p icssed --features testing               # what it costs, before and after a change
 ```

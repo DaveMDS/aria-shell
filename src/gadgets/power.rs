@@ -295,25 +295,22 @@ fn header<'a>(class: &str, title: &'a str) -> Element<'a, Message> {
         .into()
 }
 
-/// The profile picker: a button per profile, the active one marked, its
-/// icon over its name.
+/// The profile picker: a pressed button per profile, the active one
+/// `.checked`, its icon over its name.
 fn profiles<'a>(ctx: Context<'a>, available: &[String], active: &str) -> Element<'a, Message> {
     // Known ones in their order, then whatever else the daemon has.
     let ordered = PROFILES
         .iter()
         .filter_map(|p| available.iter().find(|a| a == p))
         .chain(available.iter().filter(|a| !PROFILES.contains(&a.as_str())));
-    let buttons = ordered.map(|p| {
-        icssed::button![
-            ctx.icon(profile_icon(p)),
-            icssed::text(profile_label(ctx.locale, p)),
-        ]
-        .class(profile_class(p))
-        .class_if("active", p == active)
-        .on_press(Message::SetProfile(p.clone()))
-        .into()
+    let toggles = ordered.map(|p| {
+        icssed::toggle(p == active, move |_| Message::SetProfile(p.clone()))
+            .icon(ctx.named(profile_icon(p)))
+            .label(profile_label(ctx.locale, p))
+            .class(profile_class(p))
+            .into()
     });
-    icssed::row(buttons).kind("profiles").into()
+    icssed::row(toggles).kind("profiles").into()
 }
 
 #[cfg(test)]

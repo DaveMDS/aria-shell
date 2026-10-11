@@ -11,16 +11,16 @@ assert_eq "$(surfaces | tr ';' '\n' | grep -c showcase)" 1 "on one output"
 assert_eq "$(count_widgets 'popup gadget.clock calendar')" 1 "the calendar"
 assert_eq "$(count_widgets 'popup gadget.themes menu > item')" 3 "a menu: light, dark, base"
 [ "$(count_widgets 'launcher item')" -gt 0 ] || { echo "no launcher with results"; false; }
-assert_eq "$(count_widgets 'exiter > button')" 6 "the exit menu"
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "the exit menu"
 assert_eq "$(count_widgets 'osd.volume')" 1 "the OSD"
 assert_eq "$(count_widgets 'notification.normal')" 1 "a notification"
 assert_eq "$(count_widgets 'notification.critical')" 1 "a critical one"
 assert_eq "$(count_widgets 'gadget#showcase > button')" 3 "the bar's buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button')" 17 "the other buttons"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button.danger')" 2 "a danger one, and disabled"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button.plain')" 3 "three plain ones"
-assert_eq "$(count_widgets 'popup#showcase > buttons > button.radio')" 2 "two radios"
-assert_eq "$(count_widgets 'popup#showcase > buttons > tabs > button.tab')" 3 "tabs, one open"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > button')" 17 "the other buttons"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.danger')" 2 "a danger one, and disabled"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.plain')" 3 "three plain ones"
+assert_eq "$(count_widgets 'popup#showcase > buttons > row > button.radio')" 2 "two radios"
+assert_eq "$(count_widgets 'popup#showcase > buttons > tabs > tab')" 3 "tabs, one open"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase
@@ -34,10 +34,10 @@ click_widget 'panel[output="HEADLESS-1"] gadget.themes > button'
 assert_eq "$(aria debug theme)" "style=- scheme=light" "light again"
 
 # Inert: a click on a part does nothing, the showcase stays.
-click_widget 'exiter > button.suspend'
+click_widget 'exiter > row > button.suspend'
 click_widget 'launcher item'
 assert_surface showcase
-assert_eq "$(count_widgets 'exiter > button')" 6 "still the grid"
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "still the grid"
 
 # The sample plain buttons, radios and tabs follow a click.
 click_widget 'popup#showcase button.plain:nth-child(1)'
@@ -47,9 +47,9 @@ assert_eq "$(count_widgets 'popup#showcase button.plain.active:nth-child(1)')" 0
 click_widget 'popup#showcase button.radio:nth-child(2)'
 assert_eq "$(count_widgets 'popup#showcase button.radio.active:nth-child(2)')" 1 "the second radio chosen"
 assert_eq "$(count_widgets 'popup#showcase button.radio.active')" 1 "only it"
-click_widget 'popup#showcase tabs > button.tab:nth-child(3)'
-assert_eq "$(count_widgets 'popup#showcase tabs > button.tab.active:nth-child(3)')" 1 "the third tab open"
-assert_eq "$(count_widgets 'popup#showcase tabs > button.tab.active')" 1 "only it"
+click_widget 'popup#showcase tabs > tab:nth-child(3)'
+assert_eq "$(count_widgets 'popup#showcase tabs > tab.active:nth-child(3)')" 1 "the third tab open"
+assert_eq "$(count_widgets 'popup#showcase tabs > tab.active')" 1 "only it"
 
 # Escape (it has the keyboard since the click).
 key Escape; settle 0.5

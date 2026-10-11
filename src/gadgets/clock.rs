@@ -2,8 +2,9 @@
 //! A click opens a month calendar in a popup.
 
 use chrono::{DateTime, Local};
-use iced::{Element, Subscription};
+use iced::Subscription;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
@@ -72,29 +73,23 @@ impl Gadget for Clock {
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let button = ctx.node.child("button");
-        let label = ctx.theme.text(
-            &button.child("text"),
-            ctx.locale.date(&self.now, &self.config.format),
-        );
-        self.popup
-            .anchor(ctx.theme.button(&button, label).on_press(Message::Toggle))
+        let time = ctx.locale.date(&self.now, &self.config.format);
+        let button = icssed::button(button, [icssed::text(button.child("label"), time).into()])
+            .on_press(Message::Toggle)
+            .id(self.popup.anchor());
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
         Some(&mut self.popup)
     }
 
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        Calendar::size(ctx.theme, &ctx.node.child("calendar"))
-    }
-
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         self.calendar
             .view(
                 self.now.date_naive(),
-                ctx.theme,
                 ctx.locale,
-                &ctx.node.child("calendar"),
+                ctx.node.child("calendar"),
             )
             .map(Message::Calendar)
     }

@@ -23,10 +23,10 @@ use std::sync::Arc;
 
 use iced::keyboard::{self, key::Named};
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
-use iced::widget::{Space, container, image, stack};
+use iced::widget::{image, stack};
 use iced::{
-    Alignment, Color, ContentFit, Element, Event, Length, Point, Rectangle, Renderer, Size,
-    Subscription, mouse, window::Id,
+    Color, ContentFit, Event, Length, Point, Rectangle, Renderer, Size, Subscription, mouse,
+    window::Id,
 };
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
@@ -36,7 +36,8 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use crate::locale::Locale;
 use crate::services::screenshot::{Destination, Frozen, Rect, Shot};
 use crate::ui::Surfaces;
-use crate::ui::theme::{self, Node, Theme};
+use crate::ui::theme::Theme;
+use icssed::{Element, Node};
 
 /// How near an edge, in logical pixels, a press grabs it.
 const GRIP: f32 = 10.0;
@@ -467,15 +468,20 @@ impl Picker {
         }
     }
 
+    /// What surface `window` shows, at `scale`: its output's picture,
+    /// the overlay, the toolbar on the focused one.
     pub fn view<'a>(
         &'a self,
         window: Id,
         theme: &'a Theme,
         locale: &'a Locale,
+        scale: f32,
     ) -> Option<Element<'a, Message>> {
         let i = self.surface_of(window)?;
         let surface = &self.surfaces[i];
-        let root = Node::root("screenshot").attr("output", surface.name.clone());
+        let root = theme
+            .root("screenshot", scale)
+            .attr("output", &surface.name);
         let local = |r: Rect| {
             Rectangle::new(
                 Point::new((r.x - surface.rect.x) as f32, (r.y - surface.rect.y) as f32),
@@ -488,7 +494,7 @@ impl Picker {
             selection: self.selection.map(|s| s.rect).filter(on_this).map(local),
             hover: self.hover().filter(on_this).map(local),
             dragging: matches!(self.drag, Some(Drag::Move { .. })),
-            look: Paint::of(theme, &root),
+            look: Paint::of(root),
         };
         let mut layers: Vec<Element<'a, Message>> = vec![
             image(surface.picture.clone())
@@ -502,43 +508,38 @@ impl Picker {
                 .into(),
         ];
         if self.toolbar() == i {
-            layers.push(
-                container(self.toolbar_view(theme, locale, &root))
-                    .padding(theme.resolve(&root).padding)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(Alignment::Center)
-                    .align_y(Alignment::End)
-                    .into(),
-            );
+            let dock = root.child("dock");
+            layers.push(icssed::column(dock, [self.toolbar_view(locale, dock)]).into());
         }
-        Some(theme.tag(&root, stack(layers)).into())
+        Some(icssed::column(root, [stack(layers).into()]).into())
     }
 
-    fn toolbar_view<'a>(
-        &'a self,
-        theme: &'a Theme,
-        locale: &'a Locale,
-        root: &Node,
-    ) -> Element<'a, Message> {
-        let bar = root.child("toolbar");
+    /// The toolbar: what's selected, or the hint; the buttons.
+    fn toolbar_view<'a>(&'a self, locale: &'a Locale, dock: Node<'a>) -> Element<'a, Message> {
+        let bar = dock.child("toolbar");
         let selected = self.selection.is_some();
         let label = match self.selection {
             Some(s) => format!("{} × {}", s.rect.width, s.rect.height),
             None => locale.tr("screenshot.hint").to_owned(),
         };
-        let button = |class: &'static str, key: &'static str, message: Option<Message>| {
+        let button = |class: &str, key: &'static str, message: Option<Message>| {
             let node = bar
                 .child("button")
                 .class(class)
-                .class_if("primary", class == "save");
-            let text = theme.text(&node.child("text"), locale.tr(key));
-            Element::from(theme.button(&node, text).on_press_maybe(message))
+                .class_if("primary", class == "save")
+                .disabled_if(message.is_none());
+            let mut button = icssed::button(
+                node,
+                [icssed::text(node.child("label"), locale.tr(key)).into()],
+            );
+            if let Some(message) = message {
+                button = button.on_press(message);
+            }
+            button.into()
         };
         let take = |d: Destination| selected.then_some(Message::Take(d));
-        let mut children = vec![
-            Element::from(theme.text(&bar.child("text"), label)),
-            Element::from(Space::new().width(Length::Fixed(theme.resolve(&bar).gap))),
+        let mut children: Vec<Element<'a, Message>> = vec![
+            icssed::text(bar.child("label"), label).into(),
             button("all", "screenshot.all", Some(Message::All)),
             button("cancel", "screenshot.cancel", Some(Message::Cancel)),
         ];
@@ -561,9 +562,7 @@ impl Picker {
             "screenshot.save",
             take(Destination::File { edit: false }),
         ));
-        theme
-            .container(&bar, theme.row(&bar, children).align_y(Alignment::Center))
-            .into()
+        icssed::row(bar, children).into()
     }
 }
 
@@ -624,37 +623,41 @@ fn shift_inside(r: Rect, bounds: Rect) -> Rect {
     Rect::new(x, y, r.width, r.height)
 }
 
-/// The theme's colours and sizes for the overlay's drawing.
+/// The theme's colours and sizes for the overlay's drawing: the
+/// background of `shade` around the selection, of `hover` on the window
+/// under the pointer with its border, `selection`'s border, the
+/// `selection > handle` squares (their `height`, background, border).
 struct Paint {
     shade: Color,
-    hover: (Option<Color>, Color, f32),
+    hover: (Color, Color, f32),
     selection: (Color, f32),
     handle: (Color, Color, f32, f32),
 }
 
 impl Paint {
-    fn of(theme: &Theme, root: &Node) -> Self {
-        let shade = theme.resolve(&root.child("shade"));
-        let hover = theme.resolve(&root.child("hover"));
+    fn of(root: Node<'_>) -> Self {
+        let shade = root.child("shade").base();
+        let hover = root.child("hover").base();
         let selection = root.child("selection");
-        let outline = theme.resolve(&selection);
-        let handle = theme.resolve(&selection.child("handle"));
-        let px = |l: Option<theme::Length>, default: f32| match l {
-            Some(theme::Length::Px(v)) => v,
-            _ => default,
+        let outline = selection.base();
+        let handle = selection.child("handle").base();
+        let side = match handle.height {
+            icssed::style::Size::Px(v) => v,
+            _ => 0.0,
         };
         Self {
-            shade: shade.background.unwrap_or(Color::TRANSPARENT),
-            hover: (hover.background, hover.border().color, hover.border().width),
-            selection: (
-                outline.border.top.color.unwrap_or(Color::WHITE),
-                outline.border().width,
+            shade: shade.background,
+            hover: (
+                hover.background,
+                hover.border_color[0],
+                hover.border_width.top,
             ),
+            selection: (outline.border_color[0], outline.border_width.top),
             handle: (
-                handle.background.unwrap_or(Color::WHITE),
-                handle.border().color,
-                handle.border().width,
-                px(handle.height, 8.0),
+                handle.background,
+                handle.border_color[0],
+                handle.border_width.top,
+                side,
             ),
         }
     }
@@ -670,7 +673,7 @@ struct Overlay {
     look: Paint,
 }
 
-impl canvas::Program<Message> for Overlay {
+impl canvas::Program<Message, icssed::Theme> for Overlay {
     type State = ();
 
     fn update(
@@ -693,7 +696,7 @@ impl canvas::Program<Message> for Overlay {
         &self,
         _state: &(),
         renderer: &Renderer,
-        _theme: &iced::Theme,
+        _theme: &icssed::Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
@@ -718,7 +721,7 @@ impl canvas::Program<Message> for Overlay {
         }
         if let Some(h) = self.hover {
             let (fill, border, width) = self.look.hover;
-            if let Some(fill) = fill {
+            if fill.a > 0.0 {
                 frame.fill_rectangle(h.position(), h.size(), fill);
             }
             if width > 0.0 {

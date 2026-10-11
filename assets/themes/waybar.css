@@ -1,82 +1,64 @@
 /*
- * Waybar: the look of waybar's default style, translucent grey bar with
- * coloured gadget cells.
+ * Waybar: the look of waybar's default style, a translucent grey bar
+ * with coloured gadget cells. The popups and the dialogs keep the
+ * colour scheme's palette.
  *
- * Ported from the GTK-era theme. The original marked the active
- * workspace and the hovered cells with inset box-shadows (a 3px line
- * along the bottom edge); iced has no inset shadows, so those are
- * plain backgrounds here. See assets/base.css for the element tree and
- * the supported properties.
+ * See assets/base.css for the element trees, icssed/assets/base.css for
+ * the properties.
  */
-
-:root {
-  --aria-bg: rgba(43, 48, 59, 0.5);
-  --aria-fg: #eff1f5;
-
-  --aria-muted: #9ca0b0;
-  --aria-accent: #1e66f5;
-  --aria-on-accent: #eff1f5;
-  --aria-urgent: #d20f39;
-  --aria-warning: #df8e1d;
-  --aria-border: #ccd0da;
-  --aria-separator: #ccd0da;
-  --aria-popup-bg: #eff1f5;
-}
-
-:root {
-  font-family: Roboto;
-}
 
 :root {
   --color-gray: #64727d;
   --color-green: #2ecc71;
   --color-yellow: #f1c40f;
+  font-family: Roboto;
 }
 
-
-panel {
-  /* `otf-font-awesome` is required to be installed for icons */
-  /* font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif; */
+/* `panel:root`, as a plain `panel` loses to base.css's `:root` font. */
+panel:root {
   font-size: 13px;
+}
+panel {
   min-height: 30px;
-  color: var(--aria-fg);
+  background: rgba(43, 48, 59, 0.5);
+  color: #eff1f5;
   box-shadow: inset 0 -3px rgba(100, 114, 125, 0.5);
 }
 
-panel slot {
+/* Gadgets sit flush against each other, as high as the bar, so a
+   background covers the whole cell. */
+panel > slot {
   padding: 0;
   gap: 0;
 }
-gadget {
+panel gadget {
   padding: 0 10px;
-  height: fill;
 }
 
-gadget.clock text {
+gadget.clock > button > label {
   font-weight: normal;
 }
 
-/* gadget: workspaces */
 gadget.workspaces {
   padding: 0;
   gap: 0;
 }
-gadget.workspaces button.workspace {
+gadget.workspaces > button.workspace {
+  padding: 0 5px;
   border: none;
   border-radius: 0;
-  padding: 0 5px;
-  height: fill;
-  color: var(--aria-fg);
+  background: transparent;
+  color: #eff1f5;
 }
-gadget.workspaces button.workspace:hover {
+gadget.workspaces > button.workspace:hover {
   background: rgba(255, 255, 255, 0.1);
 }
-gadget.workspaces button.workspace.active {
+gadget.workspaces > button.workspace.active {
   background: var(--color-gray);
   box-shadow: inset 0 -3px #ffffff;
 }
-gadget.workspaces button.workspace.urgent {
-  background: var(--aria-urgent);
+gadget.workspaces > button.workspace.urgent {
+  background: var(--danger);
 }
 
 gadget.clock {
@@ -92,6 +74,5 @@ gadget.audio {
 }
 
 popup {
-  border-radius: 0;
-  border: 3px solid var(--aria-border);
+  border: 3px solid var(--border);
 }

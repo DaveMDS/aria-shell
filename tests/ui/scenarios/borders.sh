@@ -3,8 +3,8 @@
 # the border, then the padding), are drawn sharp on the pixel grid
 # wherever the bar puts the box, and a button's follow its `:hover`
 # (a transparent side keeps the room of the one shown on hover, the
-# button doesn't move; `height: auto`: the content's height, not the
-# bar's). Inset shadows: bands inside the box taking no room, a child's
+# button doesn't move; centred in its gadget: the content's height, not
+# the bar's). Inset shadows: bands inside the box taking no room, a child's
 # over its parent's (waybar's underline). Told apart by the pixels
 # sampled below (pure colours, opaque, the bar black).
 
@@ -22,8 +22,10 @@ gadget.screenshot > button {
   background: #000000;
   box-shadow: inset 0 -3px #ff00ff;
 }
+gadget.themes {
+  align-items: center;
+}
 gadget.themes > button {
-  height: auto;
   background: #000000;
   padding: 0 4px;
   border-bottom: 4px solid #ff0000;
@@ -43,8 +45,8 @@ sample() { grim -g "$1,$2 1x1" -t ppm - | tail -c 3 | od -An -tu1 | tr -s ' ' | 
 black="0 0 0"; red="255 0 0"; green="0 255 0"; blue="0 0 255"; yellow="255 255 0"
 cyan="0 255 255"; magenta="255 0 255"
 
-# The content area of the button: its box reaches 4 px (padding) + 2 px
-# (the left border) further left, 4 px (the bottom border) further down.
+# The button's border box: its bottom border is its last 4 px, its left
+# one its first 2.
 set -- $(widget 'panel[output="HEADLESS-1"] gadget.themes > button')
 x=$1; y=$2; w=$3; h=$4
 cx=$((x + w / 2))
@@ -53,37 +55,36 @@ shot bar "$((x - 60)),0 $((w + 120))x$((y + h + 10))"
 assert_eq "$(sample "$cx" 0)" "$blue" "the panel's top border"
 assert_eq "$(sample "$cx" 1)" "$blue" "2 px of it"
 assert_eq "$(sample "$cx" 2)" "$black" "no more"
-assert_eq "$(sample "$cx" $((y + h)))" "$red" "the button's bottom border, below the content"
-assert_eq "$(sample "$cx" $((y + h + 3)))" "$red" "4 px of it"
-assert_eq "$(sample "$cx" $((y + h + 4)))" "$black" "no more"
-assert_eq "$(sample $((x - 6)) $((y + h / 2)))" "$black" "a transparent left side"
+assert_eq "$(sample "$cx" $((y + h - 4)))" "$red" "the button's bottom border"
+assert_eq "$(sample "$cx" $((y + h - 1)))" "$red" "4 px of it"
+assert_eq "$(sample "$cx" $((y + h)))" "$black" "no more"
+assert_eq "$(sample "$x" $((y + h / 2)))" "$black" "a transparent left side"
 
 # Hovered: the bottom turns green, the left side yellow. Sharp: the row
 # across the left edge is the bar, then two whole yellow pixels, then
-# the button's white (the widget's position is a whole pixel down from
-# the layout's, the box snapped to the nearest: the side is found, not
-# expected at x - 6). The corner where they meet is the bottom's.
+# the button's white (the side is found around x, not expected there).
+# The corner where they meet is the bottom's.
 pointer "$cx" $((y + h / 2))
 settle 0.5
 shot bar-hover "$((x - 60)),0 $((w + 120))x$((y + h + 10))"
 assert_eq "$(widget 'panel[output="HEADLESS-1"] gadget.themes > button')" "$x $y $w $h" "nothing moves"
-assert_eq "$(sample "$cx" $((y + h)))" "$green" "hover: the bottom border"
+assert_eq "$(sample "$cx" $((y + h - 1)))" "$green" "hover: the bottom border"
 row=""; left=""
-for i in 9 8 7 6 5 4 3 2; do
-    case $(sample $((x - i)) $((y + h / 2))) in
+for i in -3 -2 -1 0 1 2 3 4; do
+    case $(sample $((x + i)) $((y + h / 2))) in
         "$black") row="${row}k" ;;
-        "$yellow") row="${row}y"; [ -n "$left" ] || left=$((x - i)) ;;
+        "$yellow") row="${row}y"; [ -n "$left" ] || left=$((x + i)) ;;
         "255 255 255") row="${row}w" ;;
         *) row="${row}?" ;;
     esac
 done
 echo "$row" | grep -qx 'k*yyw*' || { echo "left edge on hover: $row (k bar, y border, w button)"; exit 1; }
-assert_eq "$(sample "$left" $((y + h + 3)))" "$green" "the corner is the bottom's"
+assert_eq "$(sample "$left" $((y + h - 1)))" "$green" "the corner is the bottom's"
 
 pointer 1000 600
 settle 0.5
-assert_eq "$(sample "$cx" $((y + h)))" "$red" "back from hover"
-assert_eq "$(sample $((x - 6)) $((y + h / 2)))" "$black" "the left border transparent again"
+assert_eq "$(sample "$cx" $((y + h - 1)))" "$red" "back from hover"
+assert_eq "$(sample "$x" $((y + h / 2)))" "$black" "the left border transparent again"
 
 # The bar's inset shadow along its bottom, where nothing covers it (the
 # button above is shorter than the bar); the screenshot button, as tall
@@ -96,7 +97,7 @@ assert_eq "$(sample "$cx" $((bar_h - 3)))" "$black" "no more"
 set -- $(widget 'panel[output="HEADLESS-1"] gadget.screenshot > button')
 sx=$(($1 + $3 / 2))
 shot bar-inset "$(($1 - 40)),0 $(($3 + 80))x$bar_h"
-assert_eq "$(($2 + $4))" "$bar_h" "the button's content down to the bar's bottom"
+assert_eq "$(($2 + $4))" "$bar_h" "the button down to the bar's bottom"
 assert_eq "$(sample "$sx" $((bar_h - 1)))" "$magenta" "the button's inset shadow over the bar's"
 assert_eq "$(sample "$sx" $((bar_h - 3)))" "$magenta" "3 px of it"
 assert_eq "$(sample "$sx" $((bar_h - 4)))" "$black" "no more"

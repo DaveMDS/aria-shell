@@ -13,9 +13,9 @@
 //! `ctx.audio`; what the user does goes back as `Action::Audio`.
 
 use iced::mouse::ScrollDelta;
-use iced::widget::{Space, column, mouse_area, row, scrollable};
-use iced::{Alignment, Element, Length};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
@@ -25,16 +25,6 @@ use crate::services::audio::{
     Channel, Command, ICON_HIGH, ICON_INPUT, ICON_INPUT_MUTED, ICON_LOW, ICON_MEDIUM, ICON_MUTED,
     Kind, PlaybackStatus, Player,
 };
-use crate::ui::menu::{RADIO_OFF, RADIO_ON};
-use crate::ui::theme::{self, Node};
-
-/// Icon size when the theme doesn't set `height` on an `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-/// Cover size when the theme doesn't set `height` on `cover`.
-const DEFAULT_COVER_SIZE: f32 = 64.0;
-/// Popup width and height cap when the theme doesn't size `list`.
-const DEFAULT_LIST_WIDTH: f32 = 380.0;
-const DEFAULT_LIST_HEIGHT: f32 = 600.0;
 
 const ICON_STREAM: &str = "multimedia-player-symbolic";
 const ICON_PREVIOUS: &str = "media-skip-backward-symbolic";
@@ -162,14 +152,11 @@ impl Gadget for AudioGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let mut buttons = vec![self.bar_button(&ctx, Kind::Output)];
+        let mut buttons = vec![self.bar_button(ctx, Kind::Output)];
         if self.config.show_microphone {
-            buttons.push(self.bar_button(&ctx, Kind::Input));
+            buttons.push(self.bar_button(ctx, Kind::Input));
         }
-        ctx.theme
-            .row(&ctx.node, buttons)
-            .align_y(Alignment::Center)
-            .into()
+        icssed::row(ctx.node, buttons).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -177,8 +164,8 @@ impl Gadget for AudioGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
+        let scroll = ctx.node.child("scroll");
+        let list = scroll.child("list");
         let mut rows: Vec<Element<'a, Message>> = Vec::new();
         for (kind, title) in self.groups(ctx.locale) {
             let channels: Vec<&Channel> = ctx.audio.channels_of(kind).collect();
@@ -186,102 +173,48 @@ impl Gadget for AudioGadget {
                 continue;
             }
             let section = list.child("section").class(kind_class(kind));
-            let t = section.child("title");
             rows.push(
-                theme
-                    .container(&section, theme.text(&t, title))
-                    .width(Length::Fill)
-                    .into(),
+                icssed::row(
+                    section,
+                    [icssed::text(section.child("title"), title).into()],
+                )
+                .into(),
             );
             for c in channels {
-                rows.push(self.channel_view(&ctx, &list, c));
+                rows.push(self.channel_view(ctx, list, c));
             }
         }
         if self.config.show_players {
             for p in ctx.audio.players() {
-                rows.push(self.player_view(&ctx, &list, p));
+                rows.push(player_view(ctx, list, p));
             }
         }
         if rows.is_empty() {
-            let empty = list.child("empty");
-            rows.push(
-                theme
-                    .container(&empty, theme.text(&empty, ctx.locale.tr("audio.empty")))
-                    .width(Length::Fill)
-                    .align_x(Alignment::Center)
-                    .into(),
-            );
+            rows.push(super::note(
+                list.child("empty"),
+                ctx.locale.tr("audio.empty"),
+            ));
         }
         if !self.config.mixer_command.is_empty() {
             let mixer = list.child("button").class("mixer");
-            let label = iced::widget::container(
-                theme.text(&mixer.child("text"), ctx.locale.tr("audio.mixer")),
-            )
-            .width(Length::Fill)
-            .align_x(Alignment::Center);
             rows.push(
-                theme
-                    .button(&mixer, label)
-                    .on_press(Message::RunMixer)
-                    .width(Length::Fill)
-                    .into(),
+                icssed::button(
+                    mixer,
+                    [icssed::text(mixer.child("label"), ctx.locale.tr("audio.mixer")).into()],
+                )
+                .on_press(Message::RunMixer)
+                .into(),
             );
         }
-        let content = theme.column(&list, rows).width(Length::Fill);
-        let (_, capped) = self.list_height(&ctx);
-        if capped {
-            scrollable(content).height(Length::Fill).into()
-        } else {
-            content.into()
-        }
+        icssed::scroll(scroll, icssed::column(list, rows)).into()
     }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let width = self.list_width(&ctx);
-        let (height, _) = self.list_height(&ctx);
-        (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
-    }
-}
-
-/// Which popup anchor (and wheel) a bar button is.
-fn anchor(kind: Kind) -> usize {
-    match kind {
-        Kind::Output | Kind::Stream => 0,
-        Kind::Input => 1,
-    }
-}
-
-/// An output or an input, which can be made the default; not a stream.
-fn is_device(c: &Channel) -> bool {
-    matches!(c.kind, Kind::Output | Kind::Input)
-}
-
-/// A device's radio, `channel > button.radio[.active] > check, label`.
-fn radio_node(channel: &Node, c: &Channel) -> Node {
-    channel
-        .child("button")
-        .class("radio")
-        .class_if("active", c.default)
-}
-
-fn kind_class(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Output => "output",
-        Kind::Input => "input",
-        Kind::Stream => "stream",
-    }
-}
-
-fn percent(v: f32) -> String {
-    format!("{}%", (v * 100.0).round() as i32)
 }
 
 impl AudioGadget {
     /// The bar button of a default device: its level icon, the percent
     /// with `show_percent`; left click the popup, wheel and middle
     /// click on the device, right click `mixer_command`.
-    fn bar_button<'a>(&'a self, ctx: &Context<'a>, kind: Kind) -> Element<'a, Message> {
-        let theme = ctx.theme;
+    fn bar_button<'a>(&'a self, ctx: Context<'a>, kind: Kind) -> Element<'a, Message> {
         let device = ctx.audio.default_of(kind);
         let muted = device.is_none_or(|c| c.muted);
         let button = ctx
@@ -295,19 +228,15 @@ impl AudioGadget {
             None if kind == Kind::Input => ICON_INPUT_MUTED,
             None => ICON_MUTED,
         };
-        let icon = self.icon(ctx, &button.child("icon"), name);
-        let mut content = row![icon]
-            .spacing(theme.resolve(&button).gap)
-            .align_y(Alignment::Center);
+        let mut content = vec![ctx.icon(button.child("icon"), name)];
         if self.config.show_percent {
-            let text = button.child("text");
             let value = device.map_or(0.0, |c| c.volume);
-            content = content.push(theme.container(&text, theme.text(&text, percent(value))));
+            content.push(icssed::text(button.child("label"), percent(value)).into());
         }
-        let button = theme
-            .button(&button, content)
-            .on_press(Message::TogglePopup(kind));
-        mouse_area(self.popup.anchor_nth(anchor(kind), button))
+        let button = icssed::button(button, content)
+            .on_press(Message::TogglePopup(kind))
+            .id(self.popup.anchor_nth(anchor(kind)));
+        mouse_area(button)
             .on_middle_press(Message::ToggleMute(kind))
             .on_right_press(Message::RunMixer)
             .on_scroll(move |delta| Message::Scroll(kind, delta))
@@ -326,376 +255,188 @@ impl AudioGadget {
         groups
     }
 
-    /// A themed icon by name, at the node's `height` (its `width` if
-    /// there's no height), or a blank of that size.
-    fn icon<'a>(&'a self, ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> {
-        let style = ctx.theme.resolve(node);
-        let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
-        match ctx.icons.get_name(name, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        }
-    }
-
-    fn icon_size(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        let style = ctx.theme.resolve(node);
-        px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE)
-    }
-
-    /// A channel's icon: an output's level, the microphone for an
-    /// input (the server's `device.icon_name`s are rarely in a theme),
-    /// a stream's application (its desktop entry, else the icon name
-    /// it gave, else a generic player).
-    fn channel_icon<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        node: &Node,
-        c: &Channel,
-    ) -> Element<'a, Message> {
-        let style = ctx.theme.resolve(node);
-        let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
-        let icon = match c.kind {
-            Kind::Output | Kind::Input => ctx.icons.get_name(c.icon_name(), None),
-            Kind::Stream => c
-                .app
-                .as_deref()
-                .and_then(|app| ctx.icons.get(app))
-                .or_else(|| c.icon.as_deref().and_then(|n| ctx.icons.get_name(n, None)))
-                .or_else(|| ctx.icons.get_name(ICON_STREAM, None)),
-        };
-        match icon {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        }
-    }
-
-    fn channel_node(&self, list: &Node, c: &Channel) -> Node {
-        list.child("channel")
-            .class(kind_class(c.kind))
-            .class_if("muted", c.muted)
-            .class_if("default", c.default)
-            .attr("name", c.name.clone())
-    }
-
-    /// A row: the mute button with the icon, then the name (a button
+    /// A row: the mute button with the icon, then the name (a radio
     /// making a device the default) with the percent, over the slider.
     fn channel_view<'a>(
         &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
+        ctx: Context<'a>,
+        list: Node<'a>,
         c: &'a Channel,
     ) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let node = self.channel_node(list, c);
+        let node = list
+            .child("channel")
+            .class(kind_class(c.kind))
+            .class_if("muted", c.muted)
+            .class_if("default", c.default)
+            .attr("name", &c.name);
         let mute = node
             .child("button")
             .class("mute")
             .class_if("active", c.muted);
-        let mute_button = theme
-            .button(&mute, self.channel_icon(ctx, &mute.child("icon"), c))
+        let mute_button = icssed::button(mute, [channel_icon(ctx, mute.child("icon"), c)])
             .on_press(Message::Mute(c.kind, c.index, !c.muted));
+        let info = node.child("info");
+        let head = info.child("head");
         // A device's name is a radio: ● the default, ○ a click makes it
         // so (on the default too, a click that changes nothing).
         let label: Element<'a, Message> = if is_device(c) {
-            let radio = radio_node(&node, c);
-            let glyph = if c.default { RADIO_ON } else { RADIO_OFF };
-            let content = row![
-                theme.text(&radio.child("check"), glyph),
-                theme.text(&radio.child("label"), &c.label),
-            ]
-            .spacing(theme.resolve(&radio).gap)
-            .align_y(Alignment::Center);
-            theme
-                .button(&radio, content)
-                .on_press(Message::SetDefault(c.kind, c.index))
-                .into()
+            let radio = head
+                .child("button")
+                .class("radio")
+                .class_if("active", c.default);
+            icssed::button(
+                radio,
+                [
+                    icssed::mark(radio.child("check")),
+                    icssed::text(radio.child("label"), c.label.as_str()).into(),
+                ],
+            )
+            .on_press(Message::SetDefault(c.kind, c.index))
+            .into()
         } else {
-            let name = node.child("name");
-            theme
-                .container(&name, theme.text(&name.child("text"), &c.label))
-                .into()
+            icssed::text(head.child("name"), c.label.as_str()).into()
         };
-        let head = row![
-            label,
-            Space::new().width(Length::Fill),
-            theme.text(&node.child("value"), percent(c.volume)),
-        ]
-        .align_y(Alignment::Center)
-        .width(Length::Fill);
+        let head = icssed::row(
+            head,
+            [
+                label,
+                icssed::text(head.child("value"), percent(c.volume)).into(),
+            ],
+        );
         let mut parts: Vec<Element<'a, Message>> = vec![head.into()];
         if c.has_volume {
             let (kind, index) = (c.kind, c.index);
             parts.push(
-                theme
-                    .slider(
-                        &node.child("slider"),
-                        0.0..=self.config.max_volume,
-                        c.volume * 100.0,
-                        1.0,
-                        move |v| Message::Volume(kind, index, v),
-                    )
-                    .into(),
-            );
-        }
-        let body = column(parts)
-            .spacing(theme.resolve(&node).gap)
-            .width(Length::Fill);
-        theme
-            .container(
-                &node,
-                row![mute_button, body]
-                    .spacing(theme.resolve(&node).gap)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::Fill)
-            .into()
-    }
-
-    /// The height of a channel's row, padding included.
-    fn channel_height(&self, ctx: &Context<'_>, list: &Node, c: &Channel) -> f32 {
-        let theme = ctx.theme;
-        let node = self.channel_node(list, c);
-        let s = theme.resolve(&node);
-        let mute = node.child("button").class("mute");
-        let ms = theme.resolve(&mute);
-        let button = self.icon_size(ctx, &mute.child("icon")) + ms.inset().y();
-        // The name: the radio's label on a device, else plain.
-        let (name, text) = if is_device(c) {
-            let radio = radio_node(&node, c);
-            let label = radio.child("label");
-            (radio, label)
-        } else {
-            let name = node.child("name");
-            let text = name.child("text");
-            (name, text)
-        };
-        let ns = theme.resolve(&name);
-        let head = (theme
-            .measure(&text, &c.label)
-            .height
-            .max(theme.line_height(&text))
-            + ns.inset().y())
-        .max(theme.line_height(&node.child("value")));
-        let mut body = head;
-        if c.has_volume {
-            body += s.gap + self.slider_height(ctx, &node.child("slider"));
-        }
-        button.max(body) + s.inset().y()
-    }
-
-    fn slider_height(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        let s = ctx.theme.resolve(node);
-        let handle = ctx.theme.resolve(&node.child("handle"));
-        px(s.height)
-            .unwrap_or(4.0)
-            .max(px(handle.width).unwrap_or(12.0))
-    }
-
-    fn player_node(&self, list: &Node, p: &Player) -> Node {
-        list.child("player")
-            .class(match p.status {
-                PlaybackStatus::Playing => "playing",
-                PlaybackStatus::Paused => "paused",
-                PlaybackStatus::Stopped => "stopped",
-            })
-            .attr("name", p.identity.clone())
-    }
-
-    /// The cover (or the player's icon) beside the title, artist and
-    /// album; the transport buttons. No volume: the player's stream is
-    /// in the mixer already.
-    fn player_view<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
-        p: &'a Player,
-    ) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let node = self.player_node(list, p);
-        let s = theme.resolve(&node);
-        let cover_node = node.child("cover");
-        let cover_style = theme.resolve(&cover_node);
-        let cover_size = px(cover_style.height.or(cover_style.width)).unwrap_or(DEFAULT_COVER_SIZE);
-        let cover: Element<'a, Message> = match ctx
-            .audio
-            .cover(&p.bus)
-            .or_else(|| p.desktop_entry.as_deref().and_then(|id| ctx.icons.get(id)))
-        {
-            Some(icon) => icon.view(cover_size, cover_style.color),
-            None => Space::new().width(cover_size).height(cover_size).into(),
-        };
-        let mut texts: Vec<Element<'a, Message>> = Vec::new();
-        let title = node.child("title");
-        texts.push(
-            theme
-                .text(
-                    &title,
-                    if p.title.is_empty() {
-                        &p.identity
-                    } else {
-                        &p.title
-                    },
+                icssed::slider(
+                    info.child("slider"),
+                    0.0..=self.config.max_volume,
+                    c.volume * 100.0,
+                    move |v| Message::Volume(kind, index, v),
                 )
+                .step(1.0)
                 .into(),
-        );
-        for (class, value) in [("artist", &p.artist), ("album", &p.album)] {
-            if !value.is_empty() {
-                texts.push(theme.text(&node.child(class), value).into());
-            }
-        }
-        let info = row![
-            cover,
-            column(texts).spacing(s.gap / 2.0).width(Length::Fill)
-        ]
-        .spacing(s.gap)
-        .align_y(Alignment::Center)
-        .width(Length::Fill);
-
-        let controls = node.child("controls");
-        let bus = p.bus.clone();
-        let transport = |class: &'static str, icon: &str, enabled: bool, message: Message| {
-            // Disabled already here: the icon's colour is resolved when
-            // the view is built, not in the button's style closure.
-            let b = controls
-                .child("button")
-                .class(class)
-                .class("flat")
-                .disabled_if(!enabled);
-            let mut button = theme.button(&b, self.icon(ctx, &b.child("icon"), icon));
-            if enabled {
-                button = button.on_press(message);
-            }
-            button
-        };
-        let play_icon = if p.status == PlaybackStatus::Playing {
-            ICON_PAUSE
-        } else {
-            ICON_PLAY
-        };
-        let buttons = row![
-            transport(
-                "previous",
-                ICON_PREVIOUS,
-                p.can_go_previous,
-                Message::Previous(bus.clone()),
-            ),
-            transport(
-                "play",
-                play_icon,
-                p.can_play || p.can_pause,
-                Message::PlayPause(bus.clone()),
-            ),
-            transport("next", ICON_NEXT, p.can_go_next, Message::Next(bus.clone())),
-        ]
-        .spacing(theme.resolve(&controls).gap)
-        .align_y(Alignment::Center);
-        let parts: Vec<Element<'a, Message>> = vec![
-            info.into(),
-            theme
-                .container(&controls, buttons)
-                .width(Length::Fill)
-                .align_x(Alignment::Center)
-                .into(),
-        ];
-        theme
-            .container(&node, column(parts).spacing(s.gap).width(Length::Fill))
-            .width(Length::Fill)
-            .into()
-    }
-
-    /// The height of a player's block, padding included.
-    fn player_height(&self, ctx: &Context<'_>, list: &Node, p: &Player) -> f32 {
-        let theme = ctx.theme;
-        let node = self.player_node(list, p);
-        let s = theme.resolve(&node);
-        let cover = node.child("cover");
-        let cs = theme.resolve(&cover);
-        let cover_size = px(cs.height.or(cs.width)).unwrap_or(DEFAULT_COVER_SIZE);
-        let mut lines = theme.line_height(&node.child("title"));
-        for (class, value) in [("artist", &p.artist), ("album", &p.album)] {
-            if !value.is_empty() {
-                lines += s.gap / 2.0 + theme.line_height(&node.child(class));
-            }
-        }
-        let info = cover_size.max(lines);
-        let controls = node.child("controls");
-        let ctl = theme.resolve(&controls);
-        let b = controls.child("button").class("flat");
-        let bs = theme.resolve(&b);
-        let buttons = self.icon_size(ctx, &b.child("icon")) + bs.inset().y() + ctl.inset().y();
-        info + s.gap + buttons + s.inset().y()
-    }
-
-    fn list_width(&self, ctx: &Context<'_>) -> f32 {
-        px(ctx.theme.resolve(&ctx.node.child("list")).width).unwrap_or(DEFAULT_LIST_WIDTH)
-    }
-
-    /// The popup height: the sections, rows, players and the mixer
-    /// button (or the empty text) with the gaps, within the list's
-    /// padding, capped by its `height`; whether it was capped (then
-    /// the content scrolls).
-    fn list_height(&self, ctx: &Context<'_>) -> (f32, bool) {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
-        let s = theme.resolve(&list);
-        let mut heights: Vec<f32> = Vec::new();
-        for (kind, title) in self.groups(ctx.locale) {
-            let channels: Vec<&Channel> = ctx.audio.channels_of(kind).collect();
-            if channels.is_empty() {
-                continue;
-            }
-            let section = list.child("section").class(kind_class(kind));
-            let ss = theme.resolve(&section);
-            let t = section.child("title");
-            heights
-                .push(theme.measure(&t, title).height.max(theme.line_height(&t)) + ss.inset().y());
-            for c in channels {
-                heights.push(self.channel_height(ctx, &list, c));
-            }
-        }
-        if self.config.show_players {
-            for p in ctx.audio.players() {
-                heights.push(self.player_height(ctx, &list, p));
-            }
-        }
-        if heights.is_empty() {
-            let empty = list.child("empty");
-            let es = theme.resolve(&empty);
-            heights.push(
-                theme
-                    .measure(&empty, ctx.locale.tr("audio.empty"))
-                    .height
-                    .max(theme.line_height(&empty))
-                    + es.inset().y(),
             );
         }
-        if !self.config.mixer_command.is_empty() {
-            let mixer = list.child("button").class("mixer");
-            let ms = theme.resolve(&mixer);
-            let t = mixer.child("text");
-            heights.push(
-                theme
-                    .measure(&t, ctx.locale.tr("audio.mixer"))
-                    .height
-                    .max(theme.line_height(&t))
-                    + ms.inset().y(),
-            );
-        }
-        let height = heights.iter().sum::<f32>()
-            + s.gap * heights.len().saturating_sub(1) as f32
-            + s.inset().y();
-        let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
-        if height > cap {
-            (cap, true)
-        } else {
-            (height, false)
-        }
+        icssed::row(
+            node,
+            [mute_button.into(), icssed::column(info, parts).into()],
+        )
+        .into()
     }
 }
 
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
+/// A channel's icon: an output's level, the microphone for an input
+/// (the server's `device.icon_name`s are rarely in a theme), a stream's
+/// application (its desktop entry, else the icon name it gave, else a
+/// generic player).
+fn channel_icon<'a>(ctx: Context<'a>, node: Node<'a>, c: &'a Channel) -> Element<'a, Message> {
+    match c.kind {
+        Kind::Output | Kind::Input => ctx.icon(node, c.icon_name()),
+        Kind::Stream => match c.app.as_deref().and_then(|app| ctx.icons.get(app)) {
+            Some(icon) => icssed::icon(node, icon.clone()).into(),
+            None => ctx.icon(node, c.icon.as_deref().unwrap_or(ICON_STREAM)),
+        },
+    }
+}
+
+/// The cover (or the player's icon) beside the title, artist and album;
+/// the transport buttons. No volume: the player's stream is in the
+/// mixer already.
+fn player_view<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Player) -> Element<'a, Message> {
+    let node = list
+        .child("player")
+        .class(match p.status {
+            PlaybackStatus::Playing => "playing",
+            PlaybackStatus::Paused => "paused",
+            PlaybackStatus::Stopped => "stopped",
+        })
+        .attr("name", &p.identity);
+    let info = node.child("info");
+    let cover: Element<'a, Message> = match ctx
+        .audio
+        .cover(&p.bus)
+        .or_else(|| p.desktop_entry.as_deref().and_then(|id| ctx.icons.get(id)))
+    {
+        Some(icon) => icssed::icon(info.child("cover"), icon.clone()).into(),
+        None => ctx.icon(info.child("cover"), ""),
+    };
+    let texts = info.child("texts");
+    let title = if p.title.is_empty() {
+        &p.identity
+    } else {
+        &p.title
+    };
+    let mut lines: Vec<Element<'a, Message>> =
+        vec![icssed::text(texts.child("title"), title.as_str()).into()];
+    for (class, value) in [("artist", &p.artist), ("album", &p.album)] {
+        if !value.is_empty() {
+            lines.push(icssed::text(texts.child(class), value.as_str()).into());
+        }
+    }
+    let controls = node.child("controls");
+    let bus = &p.bus;
+    let transport = |class: &str, icon: &'a str, enabled: bool, message: Message| {
+        // Disabled where it's built: the icon takes `:disabled`'s colour.
+        let b = controls
+            .child("button")
+            .class(class)
+            .class("flat")
+            .disabled_if(!enabled);
+        icssed::button(b, [ctx.icon(b.child("icon"), icon)])
+            .on_press(message)
+            .into()
+    };
+    let play_icon = if p.status == PlaybackStatus::Playing {
+        ICON_PAUSE
+    } else {
+        ICON_PLAY
+    };
+    let buttons: Vec<Element<'a, Message>> = vec![
+        transport(
+            "previous",
+            ICON_PREVIOUS,
+            p.can_go_previous,
+            Message::Previous(bus.clone()),
+        ),
+        transport(
+            "play",
+            play_icon,
+            p.can_play || p.can_pause,
+            Message::PlayPause(bus.clone()),
+        ),
+        transport("next", ICON_NEXT, p.can_go_next, Message::Next(bus.clone())),
+    ];
+    icssed::column(
+        node,
+        [
+            icssed::row(info, [cover, icssed::column(texts, lines).into()]).into(),
+            icssed::row(controls, buttons).into(),
+        ],
+    )
+    .into()
+}
+
+/// An output or an input, which can be made the default; not a stream.
+fn is_device(c: &Channel) -> bool {
+    matches!(c.kind, Kind::Output | Kind::Input)
+}
+
+fn kind_class(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Output => "output",
+        Kind::Input => "input",
+        Kind::Stream => "stream",
+    }
+}
+
+fn percent(v: f32) -> String {
+    format!("{}%", (v * 100.0).round() as i32)
+}
+
+/// Which popup anchor (and wheel) a bar button is.
+fn anchor(kind: Kind) -> usize {
+    match kind {
+        Kind::Output | Kind::Stream => 0,
+        Kind::Input => 1,
     }
 }

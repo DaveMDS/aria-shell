@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use iced::{Subscription, Task};
 use zbus::Connection;
 
-use crate::services::icons::Icon;
+use crate::services::icons::{self, Icon};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -346,7 +346,7 @@ impl Audio {
             Some(path) => {
                 let path = PathBuf::from(percent_decode(path));
                 self.covers
-                    .insert(player.bus.clone(), (url.clone(), Icon::from_path(path)));
+                    .insert(player.bus.clone(), (url.clone(), icons::from_path(path)));
             }
             None => {
                 log::debug!("audio: cover {url:?} of {} not loaded", player.bus);

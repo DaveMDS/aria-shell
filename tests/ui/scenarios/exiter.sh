@@ -9,45 +9,45 @@ assert_no_surface exiter
 aria exiter show; settle 0.8
 assert_surface exiter
 assert_eq "$(surfaces | tr ';' '\n' | grep -c grab)" 2 "one grab per output"
-assert_eq "$(count_widgets 'exiter > button')" 6 "six buttons"
-assert_eq "$(count_widgets 'exiter > button.lock.selected')" 1 "the first is selected"
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "six buttons"
+assert_eq "$(count_widgets 'exiter > row > button.lock.selected')" 1 "the first is selected"
 shot_surface exiter exiter
 
 # A click runs a plain action and closes.
-click_widget 'exiter > button.suspend'
+click_widget 'exiter > row > button.suspend'
 assert_no_surface exiter
 assert_eq "$(cat "$exits")" "suspend"
 
 # The keyboard: Right Right Enter is the third button.
 aria exiter show; settle 0.8
 key Right; key Right
-assert_eq "$(count_widgets 'exiter > button.hibernate.selected')" 1 "selection moved"
+assert_eq "$(count_widgets 'exiter > row > button.hibernate.selected')" 1 "selection moved"
 key Return; settle 0.5
 assert_no_surface exiter
 assert_eq "$(tail -n 1 "$exits")" "hibernate"
 
 # A dangerous one asks: Escape goes back to the grid, Enter confirms.
 aria exiter show; settle 0.8
-click_widget 'exiter > button.reboot'
+click_widget 'exiter > row > button.reboot'
 assert_surface exiter
 assert_eq "$(count_widgets 'exiter > confirm')" 1 "the confirmation"
 assert_eq "$(count_widgets 'exiter confirm > countdown')" 1 "with its countdown"
-assert_eq "$(count_widgets 'exiter > button')" 0 "no grid meanwhile"
+assert_eq "$(count_widgets 'exiter > row > button')" 0 "no grid meanwhile"
 shot_surface exiter-confirm exiter
 key Escape
 assert_surface exiter
-assert_eq "$(count_widgets 'exiter > button')" 6 "the grid again"
-click_widget 'exiter > button.reboot'
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "the grid again"
+click_widget 'exiter > row > button.reboot'
 key Return; settle 0.5
 assert_no_surface exiter
 assert_eq "$(tail -n 1 "$exits")" "reboot"
 
 # Cancel by click; then the countdown (3 s) runs it alone.
 aria exiter show; settle 0.8
-click_widget 'exiter > button.shutdown'
-click_widget 'exiter confirm > button.cancel'
-assert_eq "$(count_widgets 'exiter > button')" 6 "cancelled"
-click_widget 'exiter > button.shutdown'
+click_widget 'exiter > row > button.shutdown'
+click_widget 'exiter confirm > buttons > button.cancel'
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "cancelled"
+click_widget 'exiter > row > button.shutdown'
 sleep 3.6
 assert_no_surface exiter
 assert_eq "$(tail -n 1 "$exits")" "shutdown"
@@ -63,7 +63,7 @@ assert_no_surface exiter
 
 # Lock from the menu (the command is our own CLI); Enter unlocks.
 aria exiter show; settle 0.8
-click_widget 'exiter > button.lock'
+click_widget 'exiter > row > button.lock'
 settle 0.8
 assert_no_surface exiter
 assert_surface locker
@@ -86,7 +86,7 @@ assert_eq "$(count_widgets 'exiter > confirm')" 1 "the exit menu on reboot's con
 key Escape
 assert_no_surface launcher
 assert_surface exiter
-assert_eq "$(count_widgets 'exiter > button')" 6 "Escape: its grid"
+assert_eq "$(count_widgets 'exiter > row > button')" 6 "Escape: its grid"
 key Escape
 assert_no_surface exiter
 

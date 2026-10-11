@@ -7,9 +7,11 @@
 //! tens of milliseconds later), [`Icons::apply`] installs it,
 //! [`Icons::resolve`] fills a per-class cache the daemon keeps warm for
 //! the windows that exist, and `view` only reads it with [`Icons::get`].
-//! Handles are created once here and cloned into the view: iced caches
-//! decoded images by handle id, a fresh handle every frame would decode
-//! every frame.
+//! Named icons the same way ([`Icons::resolve_name`]); the toolkit asks
+//! for them at draw ([`icssed::Icons`]), from that cache only, without
+//! allocating. Handles are created once here and cloned into the view:
+//! iced caches decoded images by handle id, a fresh handle every frame
+//! would decode every frame.
 //!
 //! The index is rebuilt when a watched directory (`applications/`, the
 //! theme dirs) changes, so an app installed while the shell runs gets
@@ -24,8 +26,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
+use iced::Task;
 use iced::widget::{image, svg};
-use iced::{Color, Element, Length, Task};
 
 use crate::config::{self, Config, GeneralConfig};
 use desktop::DesktopDb;
@@ -38,48 +40,24 @@ const LOOKUP_SIZE: u32 = 32;
 /// Shown for windows whose class resolves to nothing.
 const FALLBACK: &str = "application-x-executable";
 
-/// A resolved icon, ready to draw.
-#[derive(Debug, Clone)]
-pub enum Icon {
-    Svg {
-        handle: svg::Handle,
-        /// A `-symbolic` icon: a monochrome shape meant to take the
-        /// text colour.
-        symbolic: bool,
-    },
-    Raster(image::Handle),
-}
+/// A resolved icon, ready to draw: an svg (a `-symbolic` one takes the
+/// text's colour) or a raster.
+pub use icssed::IconFile as Icon;
 
-impl Icon {
-    pub fn from_path(path: PathBuf) -> Self {
-        if path.extension().is_some_and(|e| e == "svg") {
-            let symbolic = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .is_some_and(|s| s.ends_with("-symbolic"));
-            Self::Svg {
-                handle: svg::Handle::from_path(path),
-                symbolic,
-            }
-        } else {
-            Self::Raster(image::Handle::from_path(path))
+/// The icon in file `path`: an svg, symbolic when its name ends in
+/// `-symbolic`, else a raster.
+pub fn from_path(path: PathBuf) -> Icon {
+    if path.extension().is_some_and(|e| e == "svg") {
+        let symbolic = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.ends_with("-symbolic"));
+        Icon::Svg {
+            handle: svg::Handle::from_path(path),
+            symbolic,
         }
-    }
-
-    /// The icon as a `size`-pixel square; `color` tints symbolic icons.
-    pub fn view<'a, M: 'a>(&self, size: f32, color: Option<Color>) -> Element<'a, M> {
-        let size = Length::Fixed(size);
-        match self {
-            Self::Svg { handle, symbolic } => {
-                let color = color.filter(|_| *symbolic);
-                svg(handle.clone())
-                    .width(size)
-                    .height(size)
-                    .style(move |_, _| svg::Style { color })
-                    .into()
-            }
-            Self::Raster(handle) => image(handle.clone()).width(size).height(size).into(),
-        }
+    } else {
+        Icon::Image(image::Handle::from_path(path))
     }
 }
 
@@ -136,9 +114,10 @@ pub struct Icons {
     index: Option<Arc<Index>>,
     /// Window class -> its icon (`None`: nothing found, don't retry).
     cache: HashMap<String, Option<Icon>>,
-    /// Plain icon names (tray items), with the extra directory each
-    /// was looked up in; always resolves to something.
-    named: HashMap<(String, Option<PathBuf>), Icon>,
+    /// Plain icon names, from the theme; always resolves to something.
+    named: HashMap<String, Icon>,
+    /// Names looked up in an app's own directory first (tray items).
+    named_in: HashMap<(String, PathBuf), Icon>,
 }
 
 impl Icons {
@@ -158,6 +137,7 @@ impl Icons {
             index: None,
             cache: HashMap::new(),
             named: HashMap::new(),
+            named_in: HashMap::new(),
         }
     }
 
@@ -187,6 +167,7 @@ impl Icons {
                 self.index = Some(index);
                 self.cache.clear();
                 self.named.clear();
+                self.named_in.clear();
             }
         }
     }
@@ -215,7 +196,7 @@ impl Icons {
         if self.cache.contains_key(class) {
             return;
         }
-        let icon = lookup(index, &self.overrides, class).map(Icon::from_path);
+        let icon = lookup(index, &self.overrides, class).map(from_path);
         if icon.is_none() {
             log::debug!("no icon for window class {class:?}");
         }
@@ -235,21 +216,33 @@ impl Icons {
         let Some(index) = &self.index else {
             return;
         };
-        let key = (name.to_owned(), dir.map(PathBuf::from));
-        if self.named.contains_key(&key) {
+        let known = match dir {
+            Some(dir) => self
+                .named_in
+                .contains_key(&(name.to_owned(), PathBuf::from(dir))),
+            None => self.named.contains_key(name),
+        };
+        if known {
             return;
         }
-        let found = key
-            .1
-            .as_deref()
-            .and_then(|d| find_in_dir(d, name, 0))
+        let found = dir
+            .and_then(|d| find_in_dir(Path::new(d), name, 0))
             .or_else(|| index.icons.lookup(name, LOOKUP_SIZE))
             .or_else(|| index.icons.lookup(FALLBACK, LOOKUP_SIZE));
         let Some(path) = found else {
             log::debug!("no icon named {name:?}, and no fallback");
             return;
         };
-        self.named.insert(key, Icon::from_path(path));
+        let icon = from_path(path);
+        match dir {
+            Some(dir) => {
+                self.named_in
+                    .insert((name.to_owned(), PathBuf::from(dir)), icon);
+            }
+            None => {
+                self.named.insert(name.to_owned(), icon);
+            }
+        }
     }
 
     /// Whether the theme has an icon called `name` (a hash probe; the
@@ -260,9 +253,14 @@ impl Icons {
             .is_some_and(|i| i.icons.lookup(name, LOOKUP_SIZE).is_some())
     }
 
-    /// The icon called `name`, once resolved.
+    /// The icon called `name`, once resolved; from an app's own
+    /// directory `dir` first (that lookup allocates its key: not while
+    /// drawing).
     pub fn get_name(&self, name: &str, dir: Option<&str>) -> Option<&Icon> {
-        self.named.get(&(name.to_owned(), dir.map(PathBuf::from)))
+        match dir {
+            Some(dir) => self.named_in.get(&(name.to_owned(), PathBuf::from(dir))),
+            None => self.named.get(name),
+        }
     }
 
     /// For a caller with alternatives, best first (every one of them
@@ -282,6 +280,15 @@ impl Icons {
     /// is built, which reads them anyway).
     pub fn watch_dirs(&self) -> &[PathBuf] {
         self.index.as_ref().map_or(&[], |index| &index.watch)
+    }
+}
+
+/// The toolkit's named icons are the theme's, as resolved: a hash probe,
+/// at draw. Their size doesn't pick the file yet (scale-1 directories,
+/// svg first: iced scales them).
+impl icssed::Icons for Icons {
+    fn lookup(&self, name: &str, _size: f32, _scale: f32) -> Option<Icon> {
+        self.named.get(name).cloned()
     }
 }
 

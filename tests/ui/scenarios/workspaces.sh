@@ -34,19 +34,21 @@ shot_gadget bar-window
 # A title change follows.
 retitle_window aria-one "Window one, renamed"
 settle 0.5
-set -- $(widget "$p1 gadget.workspaces > title > text")
+set -- $(widget "$p1 gadget.workspaces > title > label")
 old_w=$3
 assert_eq "$(count_widgets "$p1 gadget.workspaces > title[class=\"aria-one\"]")" 1 "still the title"
 
 # A title longer than the room left: one line all the same, cut where
-# the start slot (a third of the bar) ends.
+# the start slot (a third of the bar inside its padding) ends.
+set -- $(widget "$p1 slot.start")
+slot_end=$(($1 + $3))
 set -- $(widget "$p1 gadget.workspaces > title")
 short_h=$4
 retitle_window aria-one "$(printf 'A very long window title %.0s' 1 2 3 4 5 6 7 8)"
 settle 0.5
 set -- $(widget "$p1 gadget.workspaces > title")
 assert_eq "$4" "$short_h" "a long title on one line"
-[ "$(($1 + $3))" -le 640 ] || { echo "the long title past the start slot: $*"; exit 1; }
+[ "$(($1 + $3))" -le "$slot_end" ] || { echo "the long title past the start slot ($slot_end): $*"; exit 1; }
 shot_gadget bar-long-title
 retitle_window aria-one "Window one, renamed"
 

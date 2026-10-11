@@ -11,19 +11,13 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, row};
-use iced::{Alignment, Element, Length, Size};
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::services::places::{
     Command, Device, DeviceKind, Group, Kind, Mount, Place, PlacesConfig, Target,
 };
-use crate::ui::graph;
-use crate::ui::theme::{self, Node};
-
-/// Icon size when the theme doesn't set `height` on an `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
 
 pub struct PlacesGadget {
     config: PlacesConfig,
@@ -41,10 +35,6 @@ pub enum Message {
     MountDir(PathBuf),
     UnmountDir(PathBuf),
 }
-
-/// A themed part of the popup and its size, built together so the
-/// popup's size and its content can't disagree.
-type Block<'a> = (Element<'a, Message>, Size);
 
 impl Gadget for PlacesGadget {
     type Config = PlacesConfig;
@@ -96,21 +86,15 @@ impl Gadget for PlacesGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let button = ctx.node.child("button");
-        let mut content = vec![icon(&ctx, &button.child("icon"), &self.config.icon)];
+        let mut content = vec![ctx.icon(button.child("icon"), self.config.icon.as_str())];
         if !self.config.label.is_empty() {
-            let label = button.child("label");
-            content.push(theme.text(&label, self.config.label.as_str()).into());
+            content.push(icssed::text(button.child("label"), self.config.label.as_str()).into());
         }
-        let content = row(content)
-            .spacing(theme.resolve(&button).gap)
-            .align_y(Alignment::Center);
-        self.popup.anchor(
-            theme
-                .button(&button, content)
-                .on_press(Message::TogglePopup),
-        )
+        let button = icssed::button(button, content)
+            .on_press(Message::TogglePopup)
+            .id(self.popup.anchor());
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -119,20 +103,7 @@ impl Gadget for PlacesGadget {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let list = ctx.node.child("list");
-        let rows: Vec<Element<'a, Message>> = self.rows(&ctx).into_iter().map(|(e, _)| e).collect();
-        ctx.theme.column(&list, rows).width(Length::Fill).into()
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let list = ctx.node.child("list");
-        let s = ctx.theme.resolve(&list);
-        let rows = self.rows(&ctx);
-        let content = rows.iter().map(|(_, size)| size.width).fold(0.0, f32::max);
-        let width = px(s.width).unwrap_or(content + s.inset().x());
-        let height = rows.iter().map(|(_, size)| size.height).sum::<f32>()
-            + s.gap * rows.len().saturating_sub(1) as f32
-            + s.inset().y();
-        (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
+        icssed::column(list, self.rows(ctx, list)).into()
     }
 }
 
@@ -158,29 +129,28 @@ impl PlacesGadget {
         }
     }
 
-    /// Every row of the popup with its size: a header and the places
-    /// of each section shown, the empty ones left out.
-    fn rows<'a>(&'a self, ctx: &Context<'a>) -> Vec<Block<'a>> {
-        let list = ctx.node.child("list");
+    /// Every row of the popup: a header and the places of each section
+    /// shown, the empty ones left out.
+    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
         let places = ctx.places.places();
         let shows_places = self.config.show.contains(&Group::Places);
         let mut rows = Vec::new();
         for &group in &self.config.show {
-            let entries: Vec<Block<'a>> = match group {
-                Group::Places => places.iter().map(|p| self.item(ctx, &list, p)).collect(),
+            let entries: Vec<Element<'a, Message>> = match group {
+                Group::Places => places.iter().map(|p| self.item(ctx, list, p)).collect(),
                 Group::Devices => {
                     let devices = ctx
                         .places
                         .devices()
                         .iter()
-                        .map(|d| self.device(ctx, &list, d));
-                    let mounts = ctx.places.local_mounts().map(|m| self.mount(ctx, &list, m));
+                        .map(|d| self.device(ctx, list, d));
+                    let mounts = ctx.places.local_mounts().map(|m| self.mount(ctx, list, m));
                     devices.chain(mounts).collect()
                 }
                 Group::Network => ctx
                     .places
                     .shares()
-                    .map(|s| self.mount(ctx, &list, s))
+                    .map(|s| self.mount(ctx, list, s))
                     .collect(),
                 // A bookmark of a place listed above isn't repeated
                 // (GTK's file managers bookmark the home, often).
@@ -189,7 +159,7 @@ impl PlacesGadget {
                     .bookmarks()
                     .iter()
                     .filter(|b| !(shows_places && places.iter().any(|p| p.target == b.target)))
-                    .map(|p| self.item(ctx, &list, p))
+                    .map(|p| self.item(ctx, list, p))
                     .collect(),
             };
             if entries.is_empty() {
@@ -201,75 +171,49 @@ impl PlacesGadget {
                 Group::Network => ctx.locale.tr("places.network"),
                 Group::Bookmarks => ctx.locale.tr("places.bookmarks"),
             };
-            rows.push(header(ctx, &list, group, title));
+            let header = list.child("header").class(group.name());
+            rows.push(
+                icssed::row(header, [icssed::text(header.child("title"), title).into()]).into(),
+            );
             rows.extend(entries);
         }
         if rows.is_empty() {
-            let empty = list.child("empty");
-            let text = ctx.locale.tr("places.empty");
-            let size = padded(ctx.theme, &empty, ctx.theme.measure(&empty, text));
-            rows.push((
-                ctx.theme
-                    .container(&empty, ctx.theme.text(&empty, text))
-                    .width(Length::Fill)
-                    .into(),
-                size,
+            rows.push(super::note(
+                list.child("empty"),
+                ctx.locale.tr("places.empty"),
             ));
         }
         rows
     }
 
     /// A place: a button with its icon and its name.
-    fn item<'a>(&'a self, ctx: &Context<'a>, list: &Node, place: &Place) -> Block<'a> {
-        let theme = ctx.theme;
+    fn item<'a>(&'a self, ctx: Context<'a>, list: Node<'a>, place: &Place) -> Element<'a, Message> {
         let full = place.kind == Kind::Trash && ctx.places.trash_full();
         let node = list
             .child("item")
             .class(place.kind.name())
             .class_if("full", full);
-        let i = node.child("icon");
-        let l = node.child("label");
         let label = match place.kind {
             Kind::Home => ctx.locale.tr("places.home").to_owned(),
             Kind::Trash => ctx.locale.tr("places.trash").to_owned(),
             _ => place.label.clone(),
         };
-        let s = theme.resolve(&node);
-        let icon_size = padded(theme, &i, Size::new(icon_size(ctx, &i), icon_size(ctx, &i)));
-        let text = theme.measure(&l, &label);
-        let text = padded(
-            theme,
-            &l,
-            Size::new(text.width, text.height.max(theme.line_height(&l))),
-        );
-        let size = Size::new(
-            icon_size.width + s.gap + text.width + s.inset().x(),
-            icon_size.height.max(text.height) + s.inset().y(),
-        );
-        let content = row![
-            icon(ctx, &i, &self.icon_name(place.kind, full)),
-            theme.text(&l, label).width(Length::Fill),
-        ]
-        .spacing(s.gap)
-        .align_y(Alignment::Center)
-        .width(Length::Fill);
-        (
-            theme
-                .button(&node, content)
-                .width(Length::Fill)
-                .on_press(Message::Open(place.target.clone()))
-                .into(),
-            size,
+        icssed::button(
+            node,
+            [
+                ctx.icon(node.child("icon"), self.icon_name(place.kind, full)),
+                icssed::text(node.child("label"), label).into(),
+            ],
         )
+        .on_press(Message::Open(place.target.clone()))
+        .into()
     }
-}
 
-impl PlacesGadget {
     /// A device: its icon, its name and, while mounted, how full it is;
     /// ⏏ beside it while mounted (as Nemo has it: nothing to eject before
     /// a mount), disabled on the root filesystem, which can't be
     /// unmounted but is mounted all the same.
-    fn device<'a>(&'a self, ctx: &Context<'a>, list: &Node, d: &Device) -> Block<'a> {
+    fn device<'a>(&'a self, ctx: Context<'a>, list: Node<'a>, d: &Device) -> Element<'a, Message> {
         let busy = ctx.places.busy(&d.path);
         let open = match &d.mount_point {
             Some(mount_point) => Message::Open(Target::Path(mount_point.clone())),
@@ -300,7 +244,12 @@ impl PlacesGadget {
     /// A mount UDisks2 doesn't know: a network share (`share`, no usage:
     /// `statvfs` would wait on the server) or a local FUSE or bind mount
     /// (with the devices, as a `device`); ⏏ while mounted.
-    fn mount<'a>(&'a self, ctx: &Context<'a>, list: &Node, share: &Mount) -> Block<'a> {
+    fn mount<'a>(
+        &'a self,
+        ctx: Context<'a>,
+        list: Node<'a>,
+        share: &Mount,
+    ) -> Element<'a, Message> {
         let busy = ctx.places.busy(&share.key());
         let dir = share.mount_point.clone();
         let open = if share.mounted {
@@ -344,92 +293,61 @@ impl PlacesGadget {
 
     /// A device's or a share's row: a button opening it with its icon,
     /// its name and how full it is (when known), ⏏ beside it.
-    fn volume<'a>(&'a self, ctx: &Context<'a>, v: Volume) -> Block<'a> {
-        let theme = ctx.theme;
+    fn volume<'a>(&'a self, ctx: Context<'a>, v: Volume<'a>) -> Element<'a, Message> {
         let node = v.node;
-        let s = theme.resolve(&node);
-
-        // Disabled already here, not only once iced draws it: the icon
-        // and the label take their colour from `button:disabled` too.
+        // Disabled where it's built: the icon and the label take
+        // `button:disabled`'s colour.
         let open = node
             .child("button")
             .class("open")
             .class("flat")
             .disabled_if(v.open.is_none());
-        let os = theme.resolve(&open);
-        let i = open.child("icon");
         let info = open.child("info");
-        let l = info.child("label");
-        let meter = info.child("meter");
-        let icon_box = padded(theme, &i, Size::new(icon_size(ctx, &i), icon_size(ctx, &i)));
-        let text = theme.measure(&l, &v.name);
-        let text = padded(
-            theme,
-            &l,
-            Size::new(text.width, text.height.max(theme.line_height(&l))),
-        );
-        let mut info_height = text.height;
         let mut parts: Vec<Element<'a, Message>> =
-            vec![theme.text(&l, v.name).width(Length::Fill).into()];
+            vec![icssed::text(info.child("label"), v.name).into()];
         if let Some(usage) = v.usage {
-            let meter = meter.class_if("critical", usage >= 0.9);
-            info_height +=
-                theme.resolve(&info).gap + px(theme.resolve(&meter).height).unwrap_or(8.0);
-            parts.push(graph::meter(theme, &meter, usage));
+            let meter = info.child("meter").class_if("critical", usage >= 0.9);
+            parts.push(icssed::meter(meter, usage).into());
         }
-        let info_size = padded(theme, &info, Size::new(text.width, info_height));
-        let chrome = |s: &theme::Style| Size::new(s.inset().x(), s.inset().y());
-        let open_chrome = chrome(&os);
-        let mut size = Size::new(
-            icon_box.width + os.gap + info_size.width + open_chrome.width,
-            icon_box.height.max(info_size.height) + open_chrome.height,
-        );
-        let content = row![
-            icon_view(ctx, &i, ctx.icons.first_of(&v.icons)),
-            theme.column(&info, parts).width(Length::Fill),
-        ]
-        .spacing(os.gap)
-        .align_y(Alignment::Center)
-        .width(Length::Fill);
-        let mut buttons: Vec<Element<'a, Message>> = vec![
-            theme
-                .button(&open, content)
-                .width(Length::Fill)
-                .on_press_maybe(v.open)
-                .into(),
-        ];
-
+        let icon: Element<'a, Message> = match ctx.icons.first_of(&v.icons) {
+            Some(icon) => icssed::icon(open.child("icon"), icon.clone()).into(),
+            None => ctx.icon(open.child("icon"), ""),
+        };
+        let mut open_button = icssed::button(open, [icon, icssed::column(info, parts).into()]);
+        if let Some(message) = v.open {
+            open_button = open_button.on_press(message);
+        }
+        let mut buttons: Vec<Element<'a, Message>> = vec![open_button.into()];
         if let Some(on_eject) = v.eject {
             let eject = node
                 .child("button")
                 .class("eject")
                 .class("flat")
                 .disabled_if(on_eject.is_none());
-            let ei = eject.child("icon");
-            let es = chrome(&theme.resolve(&eject));
-            let ei_size = padded(
-                theme,
-                &ei,
-                Size::new(icon_size(ctx, &ei), icon_size(ctx, &ei)),
+            let mut button = icssed::button(
+                eject,
+                [ctx.icon(eject.child("icon"), self.symbolic(EJECT_ICON))],
             );
-            size.width += s.gap + ei_size.width + es.width;
-            size.height = size.height.max(ei_size.height + es.height);
-            buttons.push(
-                theme
-                    .button(&eject, icon(ctx, &ei, &self.symbolic(EJECT_ICON)))
-                    .on_press_maybe(on_eject)
-                    .into(),
-            );
+            if let Some(message) = on_eject {
+                button = button.on_press(message);
+            }
+            buttons.push(button.into());
         }
-        let content = row(buttons)
-            .spacing(s.gap)
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
-        (
-            theme.container(&node, content).width(Length::Fill).into(),
-            Size::new(size.width + s.inset().x(), size.height + s.inset().y()),
-        )
+        icssed::row(node, buttons).into()
     }
+}
+
+/// What [`PlacesGadget::volume`] draws.
+struct Volume<'a> {
+    node: Node<'a>,
+    /// Best first.
+    icons: Vec<String>,
+    name: String,
+    usage: Option<f32>,
+    /// What a click does; `None`: disabled.
+    open: Option<Message>,
+    /// ⏏: `None` not there, `Some(None)` disabled.
+    eject: Option<Option<Message>>,
 }
 
 const EJECT_ICON: &str = "media-eject";
@@ -443,83 +361,3 @@ const ENCRYPTED_ICONS: &[&str] = &[
     "security-high",
     "folder",
 ];
-
-/// What [`PlacesGadget::volume`] draws.
-struct Volume {
-    node: Node,
-    /// Best first.
-    icons: Vec<String>,
-    name: String,
-    usage: Option<f32>,
-    /// What a click does; `None`: disabled.
-    open: Option<Message>,
-    /// ⏏: `None` not there, `Some(None)` disabled.
-    eject: Option<Option<Message>>,
-}
-
-/// A section's title.
-fn header<'a>(ctx: &Context<'a>, list: &Node, group: Group, title: &'a str) -> Block<'a> {
-    let theme = ctx.theme;
-    let header = list.child("header").class(group.name());
-    let t = header.child("title");
-    let text = theme.measure(&t, title);
-    let text = padded(
-        theme,
-        &t,
-        Size::new(text.width, text.height.max(theme.line_height(&t))),
-    );
-    (
-        theme
-            .container(
-                &header,
-                theme
-                    .container(&t, theme.text(&t, title))
-                    .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .into(),
-        padded(theme, &header, text),
-    )
-}
-
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
-    }
-}
-
-/// `content` with the node's padding around.
-fn padded(theme: &theme::Theme, node: &Node, content: Size) -> Size {
-    let s = theme.resolve(node);
-    Size::new(
-        content.width + s.inset().x(),
-        content.height + s.inset().y(),
-    )
-}
-
-fn icon_size(ctx: &Context<'_>, node: &Node) -> f32 {
-    let style = ctx.theme.resolve(node);
-    px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE)
-}
-
-/// A themed icon by name, at the node's `height` (its `width` if
-/// there's no height), or a blank of that size.
-fn icon<'a>(ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> {
-    icon_view(ctx, node, ctx.icons.get_name(name, None))
-}
-
-/// [`icon`] for an icon already looked up.
-fn icon_view<'a>(
-    ctx: &Context<'a>,
-    node: &Node,
-    icon: Option<&crate::services::icons::Icon>,
-) -> Element<'a, Message> {
-    let style = ctx.theme.resolve(node);
-    let size = icon_size(ctx, node);
-    let icon = match icon {
-        Some(icon) => icon.view(size, style.color),
-        None => Space::new().width(size).height(size).into(),
-    };
-    ctx.theme.container(node, icon).into()
-}

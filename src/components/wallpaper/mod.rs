@@ -26,9 +26,9 @@ use std::time::{Duration, Instant, SystemTime};
 use iced::advanced::widget::{self, Widget};
 use iced::advanced::{self, Layout, layout, mouse, renderer};
 use iced::futures::{Stream, stream};
-use iced::widget::{Space, image};
+use iced::widget::image;
 use iced::window::Id;
-use iced::{ContentFit, Element, Length, Rectangle, Size, Subscription, Task};
+use iced::{ContentFit, Length, Rectangle, Size, Subscription, Task};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
@@ -37,7 +37,8 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use crate::config::{Config, RawSection, Section};
 use crate::services::idle::parse_duration;
 use crate::ui::Surfaces;
-use crate::ui::theme::{Node, Theme};
+use crate::ui::theme::Theme;
+use icssed::Element;
 use show::Show;
 
 /// `[wallpaper]` / `[wallpaper:<connector>]` section.
@@ -446,12 +447,20 @@ impl Wallpapers {
         self.shows.get(name)
     }
 
-    /// Surface `window`'s picture, on output `output` (its name).
-    pub fn view<'a, M: 'a>(&'a self, window: Id, theme: &'a Theme, output: &str) -> Element<'a, M> {
+    /// Surface `window`'s picture, on output `output` (its name), in
+    /// its `wallpaper` root at `scale` (whose background shows around a
+    /// `contain`ed picture).
+    pub fn view<'a, M: Clone + 'a>(
+        &'a self,
+        window: Id,
+        theme: &'a Theme,
+        output: &str,
+        scale: f32,
+    ) -> Element<'a, M> {
+        let root = theme.root("wallpaper", scale).attr("output", output);
         let Some(show) = self.output_of(window).and_then(|o| self.show_of(o)) else {
-            return Space::new().into();
+            return icssed::column(root, []).into();
         };
-        let root = Node::root("wallpaper").attr("output", output.to_owned());
         let image = show
             .shown
             .as_deref()
@@ -460,21 +469,16 @@ impl Wallpapers {
                 Picture::Ready(handle, _) => Some(handle),
                 _ => None,
             });
-        let picture: Element<'a, M> = match image {
-            Some(handle) => Element::new(Uploaded {
+        let picture = image.map(|handle| {
+            Element::new(Uploaded {
                 handle: handle.clone(),
                 image: image::Image::new(handle.clone())
                     .content_fit(show.config.fit.content_fit())
                     .width(Length::Fill)
                     .height(Length::Fill),
-            }),
-            None => Space::new().into(),
-        };
-        theme
-            .container(&root, picture)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            })
+        });
+        icssed::column(root, picture).into()
     }
 
     /// What to watch: the folders and files of the sources.

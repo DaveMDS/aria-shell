@@ -93,8 +93,9 @@ or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
 quoting and run directly, no implicit shell, `aria-shell` meaning this
-binary. A popup's size is `Gadget::popup_size(ctx)`, a function of the
-state, re-asked after every update. Only the surfaces
+binary. A surface's size is its content's, measured
+(`icssed::Measure`, `ui::size`): a popup's when it opens and again
+after every update. Only the surfaces
 `Message::redraw_scope` names get a new frame: a new top-level message,
 or a change that reaches another surface, needs its scope (or a
 `Message::Redraw`) — see ARCHITECTURE.md's facts about the crates. See
@@ -113,9 +114,11 @@ of these.
   surfaces says what to do with them as a `ui::Surfaces`; only the
   daemon turns that into the runtime's messages.
 - `gadgets/`: the bar's gadgets, their contract in `gadgets/mod.rs`.
-- `ui/`: the building blocks of every surface: the theme (`ui/theme/`),
-  the reusable pieces (the menu, the calendar, the graphs) and the
-  shapes things are shown in (a gadget's popup, a notification's toast).
+- `ui/`: the building blocks of every surface: the theme
+  (`ui/theme.rs`), the reusable pieces (the menu, the calendar: the
+  state the toolkit's controlled widgets leave to their host), the
+  shapes things are shown in (a gadget's popup, a notification's toast)
+  and the measuring.
 - the daemon: `main.rs` (`Message`, the router `update`) and `daemon/`
   (the rest of `AriaShell`, by subject).
 - the plumbing at the top: `config.rs`, `commands.rs`, `process.rs`,
@@ -124,16 +127,18 @@ of these.
 The arrows go one way: gadgets and components use services and `ui/`,
 never each other's helpers.
 
-Styling lives in `ui/theme/`: a CSS-like file (`assets/base.css` always,
-plus `[general] style`), loaded for a light or dark scheme
-(`:root.light` / `:root.dark` variables, `panel.dark { }` rules; the
-`Themes` gadget switches scheme and theme at runtime), resolved per
-widget in `view`. Gadgets never
-hard-code colours, paddings or spacing: they derive a `theme::Node` from
-`ctx.node` (`ctx.node.child("workspace").class_if("active", ..)`) and
-build widgets with `ctx.theme.button/container/text/row`. A new element
-or class is documented in `assets/base.css`, in the element tree in the
-comment above its owner's rules, and given a neutral default there.
+Every view is built with the toolkit, `icssed` (icssed/AGENTS.md says
+how): its widgets, styled by one sheet. `ui/theme.rs` compiles it from
+`assets/base.css` (always) and `[general] style`, over the toolkit's own
+base, for a light or dark scheme (`:root.light` / `:root.dark`
+variables, `panel.dark { }` rules; the `Themes` gadget switches scheme
+and theme at runtime). Gadgets never hard-code colours, paddings,
+spacing or sizes: they derive a `Node` from `ctx.node`
+(`ctx.node.child("workspace").class_if("active", ..)`) and build the
+toolkit's widgets on it (`icssed::button(node, ..)`, `icssed::text`,
+`icssed::row`, ...). A new element or class is documented in
+`assets/base.css`, in the element tree in the comment above its owner's
+rules, and given a neutral default there.
 
 The config format is the one the Python implementation had, kept
 compatible on purpose; nothing else of its structure (`Singleton`/

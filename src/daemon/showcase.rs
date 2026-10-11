@@ -11,43 +11,41 @@
 //! hover still shows; only the sample plain buttons, radios and tabs
 //! follow a click. Escape, a click beside the parts or the command
 //! again close it; a theme change redraws it like any surface. Its own
-//! layout (the room around the parts and between them) isn't themed.
+//! layout, the room around the parts and between them, is base.css's
+//! (`showcase`).
 //!
 //! ```text
-//! (the surface)                             its own roots, side by side
+//! showcase > parts > column                 its own boxes; in them, the parts' roots
 //! ├─ popup > gadget.clock | gadget.themes   the calendar, a menu
 //! ├─ launcher
 //! ├─ exiter
 //! ├─ osd.volume
 //! ├─ notification.normal | notification.critical
 //! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
-//! │  ╰─ button > icon | text
+//! │  ╰─ button > icon | label
 //! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
-//!    ├─ button[.flat|.primary|.danger|.active][:disabled] > icon | text
-//!    ├─ button.plain[.active] > icon | text
-//!    ├─ button.radio[.active] > check, label
-//!    ╰─ tabs > button.tab[.active] > text
+//!    ├─ row > button[.flat|.primary|.danger|.active][:disabled] > icon | label
+//!    ├─ row > button.plain[.active] > icon | label
+//!    ├─ row > button.radio[.active] > check, label
+//!    ╰─ tabs > tab[.active] > label
 //! ```
 
-use iced::widget::{column, container, mouse_area, row};
+use iced::widget::mouse_area;
 use iced::window::Id;
-use iced::{Alignment, Element, Event, Length, Subscription, Task, keyboard};
+use iced::{Event, Subscription, Task, keyboard};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::OutputId;
+use icssed::{Element, Node, Tab};
 
 use crate::components::exiter::Exiter;
 use crate::components::launcher::Launcher;
-use crate::components::osd::{self, Osd};
-use crate::components::panel::Panel;
+use crate::components::osd;
 use crate::daemon::view::dialog_surface;
 use crate::gadgets::{AnyGadget, Context};
 use crate::locale::Locale;
 use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
-use crate::ui::menu::{RADIO_OFF, RADIO_ON};
-use crate::ui::tabs::{self, Tab};
-use crate::ui::theme::{self, Node};
 use crate::ui::{popup, toast};
 use crate::{AriaShell, Message as Shell};
 
@@ -90,24 +88,13 @@ const TABS: usize = 3;
 /// The icon the sample buttons draw.
 const BUTTON_ICON: &str = "dialog-information-symbolic";
 
-/// The room around the parts and between them.
-const PADDING: f32 = 24.0;
-const GAP: f32 = 24.0;
-
-/// The room around the buttons in their popup's box, and between them.
-const BUTTONS_PADDING: f32 = 12.0;
-const BUTTONS_GAP: f32 = 8.0;
-
-/// An icon's size when the theme doesn't say.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-
 pub(crate) struct Showcase {
     pub window: Id,
     pub output: OutputId,
     launcher: Launcher,
     exiter: Exiter,
-    /// With their popup's node, `popup[output=..] > gadget.<kind>`.
-    gadgets: Vec<(AnyGadget, Node)>,
+    /// Their popups show, as `popup[output=..] > gadget.<kind>`.
+    gadgets: Vec<AnyGadget>,
     notifications: Vec<Notification>,
     osd: osd::Content,
     /// A press landed beside the parts: the release closes.
@@ -148,7 +135,7 @@ impl Showcase {
             .chain(self.osd.icon.as_deref())
             .map(str::to_owned)
             .chain(notifications)
-            .chain(self.gadgets.iter().flat_map(|(g, _)| g.icon_names()))
+            .chain(self.gadgets.iter().flat_map(AnyGadget::icon_names))
             .chain([BUTTON_ICON.to_owned()])
     }
 
@@ -216,15 +203,7 @@ fn nothing<T>(_: T) -> Shell {
     Shell::Showcase(Message::Nothing)
 }
 
-/// A part, at its surface's size, taking the presses on it.
-fn part(content: Element<'_, Shell>, (w, h): (u32, u32)) -> Element<'_, Shell> {
-    container(inert(content))
-        .width(w as f32)
-        .height(h as f32)
-        .into()
-}
-
-/// `content`, taking the presses on it.
+/// A part, taking the presses on it.
 fn inert(content: Element<'_, Shell>) -> Element<'_, Shell> {
     mouse_area(content).on_press(nothing(())).into()
 }
@@ -243,15 +222,9 @@ impl AriaShell {
             "opening the showcase on output {:?} as window {window:?}",
             output.name
         );
-        let popup_root =
-            Node::root("popup").attr("output", output.name.clone().unwrap_or_default());
         let gadgets = GADGETS
             .iter()
-            .filter_map(|name| {
-                let gadget = AnyGadget::create(name, &self.config, &output)?;
-                let node = popup_root.child("gadget").class(gadget.kind());
-                Some((gadget, node))
-            })
+            .filter_map(|name| AnyGadget::create(name, &self.config, &output))
             .collect();
         self.showcase = Some(Showcase {
             window,
@@ -344,243 +317,194 @@ impl AriaShell {
         }
     }
 
-    /// The parts in three columns, centred: the popups, the launcher,
-    /// then the exit menu, the OSD and the toasts.
-    pub(crate) fn showcase_view<'a>(&'a self, showcase: &'a Showcase) -> Element<'a, Shell> {
+    /// The parts side by side, on the showcase's surface (at `scale`),
+    /// each in its root as on its own surface.
+    pub(crate) fn showcase_view<'a>(
+        &'a self,
+        showcase: &'a Showcase,
+        scale: f32,
+    ) -> Element<'a, Shell> {
         let shared = self.shared();
         let theme = &self.theme;
         let output = self.output_name(showcase.output);
-        let popups = showcase.gadgets.iter().map(|(gadget, node)| {
-            let ctx = Context {
-                shared,
-                node: node.clone(),
-            };
-            let size = popup::surface_size(theme, gadget.popup_size(ctx.clone()));
-            let box_node = node
-                .parent()
-                .cloned()
-                .unwrap_or_else(|| Node::root("popup"));
-            part(
-                popup::view(theme, &box_node, gadget.popup_view(ctx).map(nothing)),
-                size,
-            )
+        let popup = theme.root("popup", scale).attr("output", output);
+        let popups = showcase.gadgets.iter().map(|gadget| {
+            let node = popup.child("gadget").class(gadget.kind());
+            let content = gadget.popup_view(Context { shared, node }).map(nothing);
+            inert(popup::view(popup, content))
         });
-        let launcher = part(
-            dialog_surface(
-                theme,
-                "launcher",
-                showcase.launcher.view(shared).map(nothing),
-                nothing(()),
-            ),
-            Launcher::size(theme),
-        );
-        let exiter = part(
-            dialog_surface(
-                theme,
-                "exiter",
-                showcase.exiter.view(shared).map(nothing),
-                nothing(()),
-            ),
-            showcase.exiter.size(theme, &self.locale),
-        );
-        let osd = part(
-            osd::view(theme, &self.icons, &showcase.osd, output),
-            Osd::size(theme),
-        );
-        let toasts = showcase.notifications.iter().map(|n| {
-            let node = toast::node(n, output);
-            let size = toast::surface_size(theme, &node, n, &self.notifications, &self.icons);
-            part(
-                toast::surface(theme, &node, n, &self.notifications, &self.icons).map(nothing),
-                size,
-            )
-        });
-        let parts = row![
-            column(popups).spacing(GAP),
+        let launcher = theme.root("launcher", scale);
+        let launcher = dialog_surface(
             launcher,
-            column![exiter, osd].extend(toasts).spacing(GAP),
-            column![
-                inert(self.bar_buttons_view()),
-                inert(self.buttons_view(showcase))
-            ]
-            .spacing(GAP),
-        ]
-        .spacing(GAP);
-        let content = container(parts)
-            .padding(PADDING)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::Center)
-            .align_y(Alignment::Center);
-        mouse_area(content)
+            showcase.launcher.view(shared, launcher).map(nothing),
+            nothing(()),
+        );
+        let exiter = theme.root("exiter", scale);
+        let exiter = dialog_surface(
+            exiter,
+            showcase.exiter.view(shared, exiter).map(nothing),
+            nothing(()),
+        );
+        let osd_node = osd::node(theme.root("osd", scale), &showcase.osd, output);
+        let osd = inert(osd::view(osd_node, &self.icons, &showcase.osd, output));
+        let toasts = showcase.notifications.iter().map(|n| {
+            let node = toast::node(theme.root("notification", scale), n, output);
+            inert(toast::surface(node, n, &self.notifications, &self.icons).map(nothing))
+        });
+        let root = theme.root("showcase", scale);
+        let parts = root.child("parts");
+        let column = |i: usize, children: Vec<Element<'a, Shell>>| -> Element<'a, Shell> {
+            icssed::column(parts.child_at("column", i, 4), children).into()
+        };
+        let parts = icssed::row(
+            parts,
+            [
+                column(0, popups.collect()),
+                column(1, vec![launcher]),
+                column(2, [exiter, osd].into_iter().chain(toasts).collect()),
+                column(
+                    3,
+                    vec![
+                        inert(self.bar_buttons_view(scale)),
+                        inert(self.buttons_view(showcase, scale)),
+                    ],
+                ),
+            ],
+        );
+        mouse_area(icssed::column(root, [parts.into()]))
             .on_press(Shell::Showcase(Message::PressedOutside))
             .on_release(Shell::Showcase(Message::Released))
             .into()
     }
 
-    /// A bar as thick as the real ones, with the bar's buttons in a
-    /// gadget of no kind: only the rules every gadget gets apply.
-    fn bar_buttons_view(&self) -> Element<'_, Shell> {
-        let theme = &self.theme;
-        let panel = Node::root("panel");
+    /// A bar, with the bar's buttons in a gadget of no kind: only the
+    /// rules every gadget gets apply.
+    fn bar_buttons_view(&self, scale: f32) -> Element<'_, Shell> {
+        let panel = self.theme.root("panel", scale);
         let slot = panel.child("slot").class("start");
-        let gadget = slot.child("gadget").id("showcase");
+        let gadget = slot.child_at("gadget", 0, 1).id("showcase");
         let count = BAR_BUTTONS.len();
         let buttons = BAR_BUTTONS.iter().enumerate().map(|(i, &(icon, label))| {
-            let node = gadget.child("button").nth(i, count);
-            let content = self.button_content(&node, icon, label.map(str::to_owned));
-            theme.button(&node, content).on_press(nothing(())).into()
+            let node = gadget.child_at("button", i, count);
+            let content = self.button_content(node, icon, label.map(str::to_owned));
+            icssed::button(node, content).on_press(nothing(())).into()
         });
-        let buttons = row(buttons)
-            .spacing(theme.resolve(&gadget).gap)
-            .height(Length::Fill)
-            .align_y(Alignment::Center);
-        let slot = theme
-            .row(&slot, [theme.container(&gadget, buttons).into()])
-            .height(Length::Fill)
-            .align_y(Alignment::Center);
-        theme
-            .container(&panel, slot)
-            .height(Panel::themed_height(theme, &panel) as f32)
-            .into()
+        let gadget: Element<'_, Shell> = icssed::row(gadget, buttons).into();
+        icssed::row(panel, [icssed::row(slot, [gadget]).into()]).into()
     }
 
     /// The other kinds of buttons, in a popup's box, each labelled by
     /// the selector that styles it.
-    fn buttons_view<'a>(&'a self, showcase: &Showcase) -> Element<'a, Shell> {
-        let theme = &self.theme;
-        let popup = Node::root("popup").id("showcase");
+    fn buttons_view<'a>(&'a self, showcase: &Showcase, scale: f32) -> Element<'a, Shell> {
+        let popup = self.theme.root("popup", scale).id("showcase");
         let list = popup.child("buttons");
-        let count = BUTTONS.len();
-        let mut buttons = BUTTONS
-            .iter()
-            .enumerate()
-            .map(|(i, &(class, enabled, icon, text))| {
-                let mut node = list.child("button").nth(i, count).disabled_if(!enabled);
-                let mut label = "button".to_owned();
-                if let Some(class) = class {
-                    node = node.class(class);
-                    label = format!("{label}.{class}");
-                }
-                if !enabled {
-                    label.push_str(":disabled");
-                }
-                let content = self.button_content(&node, icon, text.then_some(label));
-                theme
-                    .button(&node, content)
-                    .on_press_maybe(enabled.then(|| nothing(())))
+        // The rows of buttons, the plain ones', the radios', the tabs.
+        let count = BUTTONS.len().div_ceil(BUTTONS_ROW) + 3;
+        let mut children: Vec<Element<'a, Shell>> = Vec::new();
+        for (k, chunk) in BUTTONS.chunks(BUTTONS_ROW).enumerate() {
+            // The plain ones after the flat ones.
+            if k == 2 {
+                let row = list.child_at("row", children.len(), count);
+                children.push(icssed::row(row, self.plains_view(showcase, row)).into());
+            }
+            let row = list.child_at("row", children.len(), count);
+            let buttons = chunk
+                .iter()
+                .enumerate()
+                .map(|(i, &(class, enabled, icon, text))| {
+                    let mut node = row.child_at("button", i, chunk.len()).disabled_if(!enabled);
+                    let mut label = "button".to_owned();
+                    if let Some(class) = class {
+                        node = node.class(class);
+                        label = format!("{label}.{class}");
+                    }
+                    if !enabled {
+                        label.push_str(":disabled");
+                    }
+                    let content = self.button_content(node, icon, text.then_some(label));
+                    let button = icssed::button(node, content);
+                    match enabled {
+                        true => button.on_press(nothing(())),
+                        false => button,
+                    }
                     .into()
-            })
-            .collect::<Vec<Element<'_, Shell>>>();
-        let mut rows: Vec<Element<'_, Shell>> = Vec::new();
-        while !buttons.is_empty() {
-            let rest = buttons.split_off(BUTTONS_ROW.min(buttons.len()));
-            let first = std::mem::replace(&mut buttons, rest);
-            rows.push(
-                row(first)
-                    .spacing(BUTTONS_GAP)
-                    .align_y(Alignment::Center)
-                    .into(),
-            );
+                });
+            children.push(icssed::row(row, buttons).into());
         }
-        let plains = PLAINS.iter().enumerate().map(|(i, &(icon, text))| {
-            let on = showcase.plains[i];
-            let node = list
-                .child("button")
-                .class("plain")
-                .class_if("active", on)
-                .nth(i, PLAINS.len());
-            let label = if on {
-                "button.plain.active"
-            } else {
-                "button.plain"
-            };
-            let content = self.button_content(&node, icon, text.then(|| label.to_owned()));
-            theme
-                .button(&node, content)
-                .on_press(Shell::Showcase(Message::Plain(i)))
-                .into()
-        });
-        // After the flat ones.
-        rows.insert(
-            2,
-            row(plains)
-                .spacing(BUTTONS_GAP)
-                .align_y(Alignment::Center)
-                .into(),
-        );
+        let row = list.child_at("row", children.len(), count);
         let radios = (0..RADIOS).map(|i| {
             let on = i == showcase.radio;
-            let node = list
-                .child("button")
+            let node = row
+                .child_at("button", i, RADIOS)
                 .class("radio")
-                .class_if("active", on)
-                .nth(i, RADIOS);
-            let (glyph, label) = match on {
-                true => (RADIO_ON, "button.radio.active"),
-                false => (RADIO_OFF, "button.radio"),
+                .class_if("active", on);
+            let label = match on {
+                true => "button.radio.active",
+                false => "button.radio",
             };
-            let content = row![
-                theme.text(&node.child("check"), glyph),
-                theme.text(&node.child("label"), label),
-            ]
-            .spacing(theme.resolve(&node).gap)
-            .align_y(Alignment::Center);
-            theme
-                .button(&node, content)
-                .on_press(Shell::Showcase(Message::Radio(i)))
-                .into()
+            icssed::button(
+                node,
+                [
+                    icssed::mark(node.child("check")),
+                    icssed::text(node.child("label"), label).into(),
+                ],
+            )
+            .on_press(Shell::Showcase(Message::Radio(i)))
+            .into()
         });
-        rows.push(row(radios).spacing(BUTTONS_GAP).into());
+        children.push(icssed::row(row, radios).into());
         let tabs = (0..TABS).map(|i| {
             let active = i == showcase.tab;
-            Tab {
-                name: None,
-                label: if active {
-                    "button.tab.active"
-                } else {
-                    "button.tab"
-                },
-                active,
-                on_press: Shell::Showcase(Message::Tab(i)),
-            }
+            let label = match active {
+                true => "tab.active",
+                false => "tab",
+            };
+            Tab::new(label, Shell::Showcase(Message::Tab(i))).active(active)
         });
-        let tabs = tabs::view(theme, &list.child("tabs"), tabs, Length::Shrink);
-        let content = theme.container(
-            &popup,
-            column(rows)
-                .push(tabs)
-                .spacing(BUTTONS_GAP)
-                .padding(BUTTONS_PADDING),
-        );
-        container(content).padding(theme.shadow_room(&popup)).into()
+        let node = list.child_at("tabs", children.len(), count);
+        children.push(icssed::tabs(node, tabs));
+        popup::view(popup, icssed::column(list, children).into())
     }
 
-    /// A sample button's content: the icon, the label, or both.
-    fn button_content(&self, node: &Node, icon: bool, label: Option<String>) -> Element<'_, Shell> {
-        let mut content: Vec<Element<'_, Shell>> = Vec::new();
+    /// The sample plain buttons, in their row `row`.
+    fn plains_view<'a>(&'a self, showcase: &Showcase, row: Node<'a>) -> Vec<Element<'a, Shell>> {
+        PLAINS
+            .iter()
+            .enumerate()
+            .map(|(i, &(icon, text))| {
+                let on = showcase.plains[i];
+                let node = row
+                    .child_at("button", i, PLAINS.len())
+                    .class("plain")
+                    .class_if("active", on);
+                let label = match on {
+                    true => "button.plain.active",
+                    false => "button.plain",
+                };
+                let content = self.button_content(node, icon, text.then(|| label.to_owned()));
+                icssed::button(node, content)
+                    .on_press(Shell::Showcase(Message::Plain(i)))
+                    .into()
+            })
+            .collect()
+    }
+
+    /// A sample button's content, in its box `node`: the icon, the
+    /// label, or both.
+    fn button_content<'a>(
+        &'a self,
+        node: Node<'a>,
+        icon: bool,
+        label: Option<String>,
+    ) -> Vec<Element<'a, Shell>> {
+        let icons: &'a dyn icssed::Icons = &self.icons;
+        let mut content = Vec::new();
         if icon {
-            content.push(self.button_icon(&node.child("icon")));
+            content.push(icssed::icon(node.child("icon"), (icons, BUTTON_ICON)).into());
         }
         if let Some(label) = label {
-            content.push(self.theme.text(&node.child("text"), label).into());
+            content.push(icssed::text(node.child("label"), label).into());
         }
-        row(content)
-            .spacing(self.theme.resolve(node).gap)
-            .align_y(Alignment::Center)
-            .into()
-    }
-
-    /// A sample button's icon, at the theme's `height` for `node`.
-    fn button_icon(&self, node: &Node) -> Element<'_, Shell> {
-        let style = self.theme.resolve(node);
-        let size = match style.height.or(style.width) {
-            Some(theme::Length::Px(px)) => px,
-            _ => DEFAULT_ICON_SIZE,
-        };
-        match self.icons.get_name(BUTTON_ICON, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => iced::widget::Space::new().width(size).height(size).into(),
-        }
+        content
     }
 }

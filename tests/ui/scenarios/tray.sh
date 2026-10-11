@@ -51,9 +51,7 @@ set -- $(surfaces | tr ';' '\n' | grep ' popup ' | sed 's/.* \([0-9]*\)x\([0-9]*
 shot_surface menu-unfolded popup
 
 # A disabled row does nothing; a row click is an event and closes it.
-# (Rows count dbus entries, the hidden one excluded: Open, separator,
-# Options, Disabled, Quit.)
-click_widget 'menu > item:nth-child(4)'
+click_widget 'menu > item:disabled'
 sni_quiet
 assert_surface popup
 click_widget 'menu > submenu > item.checked'

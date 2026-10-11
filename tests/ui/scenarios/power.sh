@@ -25,7 +25,7 @@ upower_send "device MX_Master 40"
 assert_contains "$(aria debug power)" "battery=64% discharging"
 assert_contains "$(aria debug power)" "profile=balanced available=power-saver,balanced,performance"
 assert_eq "$(count_widgets 'gadget.power > button.status.discharging.balanced')" 2 "battery and profile on both bars"
-assert_eq "$(count_widgets 'gadget.power > button.status > text')" 2 "the percent"
+assert_eq "$(count_widgets 'gadget.power > button.status > label')" 2 "the percent"
 assert_contains "$(aria debug idle)" "power=battery"
 assert_contains "$(aria debug idle)" "armed=lock=30m"
 

@@ -36,7 +36,7 @@ assert_eq "$((x + w))" $((1920 - 8)) "8px from the right edge"
 assert_eq "$y" "$top" "under the bar, 8px down"
 [ "$h" -gt 40 ] || { echo "toast too short: $h"; exit 1; }
 first_h=$h
-assert_eq "$(count_widgets 'notification#'"$id1"' icon')" 1 "icon drawn"
+assert_eq "$(count_widgets 'notification[id="'"$id1"'"] icon')" 1 "icon drawn"
 assert_eq "$(count_widgets 'notification body')" 1
 shot toast-1 "$x,$y ${w}x$h"
 
@@ -52,7 +52,7 @@ set -- $(toast_geo 2)
 y2=${3#*,}; h2=${4#*x}
 assert_eq "$y2" "$top" "the newest at the corner"
 assert_eq "$y1" $((y2 + h2 + 8)) "the first pushed down by it, with the gap"
-set -- $(widget 'notification#'"$id2"' summary')
+set -- $(widget 'notification[id="'"$id2"'"] summary')
 assert_eq "$2" $((top + 1 + 10)) "newest on top (summary inside its border and padding)"
 shot toasts-2 "0,0 1920x300"
 
@@ -60,7 +60,7 @@ shot toasts-2 "0,0 1920x300"
 nsend -r "$id1" -t 0 "First replaced" "tiny"
 settle
 assert_eq "$(count_widgets 'notification')" 2 "still two"
-assert_eq "$(count_widgets 'notification#'"$id1"'')" 1 "same id"
+assert_eq "$(count_widgets 'notification[id="'"$id1"'"]')" 1 "same id"
 set -- $(toast_geo 1)
 h=${4#*x}
 [ "$h" -lt "$first_h" ] || { echo "replacement didn't shrink: $first_h -> $h"; exit 1; }
@@ -73,7 +73,7 @@ set -- $(toast_geo)
 assert_eq "${3#*,}" "$top" "the survivor took the first place"
 
 # A right click dismisses.
-click_widget_with right 'notification#'"$id2"' summary'
+click_widget_with right 'notification[id="'"$id2"'"] summary'
 assert_eq "$(count_widgets 'notification')" 0 "dismissed"
 
 # Actions: buttons, the clicked key goes back to the client; the

@@ -9,6 +9,8 @@ members = [".", "icssed", "tests/ui/inject", "tests/ui/sni", "tests/ui/mpris", "
 [dependencies]
 iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "svg", "image-without-codecs", "canvas"] }
 iced_exwlshell = "0.20.1"
+# The UI toolkit: every view's widgets, styled by the theme.
+icssed = { path = "icssed" }
 iced_wayland_subscriber = "0.20.1"
 configparser = { version = "3", features = ["indexmap"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "unstable-locales"] }

@@ -3,18 +3,14 @@
 //! screen at once. Its settings are the daemon's `[Screenshot]`
 //! section, `icon` its own.
 
-use iced::Element;
-use iced::widget::{Space, mouse_area};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::services::screenshot::{Command, Destination, ScreenshotConfig, Target};
 use crate::ui::menu::{self, Item, Menu};
-use crate::ui::theme;
-
-/// Icon size when the theme doesn't set `height` on `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
 
 const ID_WINDOW: i32 = 0;
 const ID_SCREEN: i32 = 1;
@@ -66,26 +62,16 @@ impl Gadget for ScreenshotGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let button = ctx.node.child("button");
-        let icon_node = button.child("icon");
-        let style = theme.resolve(&icon_node);
-        let size = style
-            .height
-            .or(style.width)
-            .and_then(|l| match l {
-                theme::Length::Px(px) => Some(px),
-                _ => None,
-            })
-            .unwrap_or(DEFAULT_ICON_SIZE);
-        let icon: Element<'a, Message> = match ctx.icons.get_name(&self.icon, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        };
-        let button = theme.button(&button, icon).on_press(Message::Pick);
-        mouse_area(self.popup.anchor(button))
-            .on_right_press(Message::OpenMenu)
-            .into()
+        let icons: &dyn icssed::Icons = ctx.icons;
+        let icon = icssed::icon(button.child("icon"), (icons, self.icon.as_str()));
+        let button = mouse_area(
+            icssed::button(button, [icon.into()])
+                .on_press(Message::Pick)
+                .id(self.popup.anchor()),
+        )
+        .on_right_press(Message::OpenMenu);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -97,19 +83,9 @@ impl Gadget for ScreenshotGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let node = ctx.node.child("menu");
         self.menu
-            .view(ctx.theme, &node, items(ctx.locale))
+            .view(ctx.node.child("menu"), items(ctx.locale))
             .map(Message::Menu)
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let node = ctx.node.child("menu");
-        let size = self.menu.size(ctx.theme, &node, &items(ctx.locale));
-        (
-            size.width.ceil().max(1.0) as u32,
-            size.height.ceil().max(1.0) as u32,
-        )
     }
 }
 

@@ -3,11 +3,12 @@
 use std::path::Path;
 
 use iced::window::Id;
-use iced::{Element, Event, Length, Subscription, widget};
+use iced::{Event, Subscription};
+use iced_wayland_subscriber::OutputId;
+use icssed::{Element, Node};
 
 use crate::components::{dialog, exiter, launcher, panel, picker};
 use crate::daemon::showcase;
-use crate::ui::theme::{Node, Theme};
 use crate::{AriaShell, Message, commands, ui, watch};
 use panel::Panel;
 use picker::Picker;
@@ -15,31 +16,34 @@ use picker::Picker;
 impl AriaShell {
     pub(crate) fn view(&self, window: Id) -> Element<'_, Message> {
         let shared = self.shared();
+        let output = self.window_output(window);
+        let scale = output.map_or(1.0, |o| self.scales.of(o));
+        let name = output.map_or("", |o| self.output_name(o));
         if let Some(locker) = &self.locker
             && locker.has_window(window)
         {
-            let output = locker.output_of(window).map_or("", |o| self.output_name(o));
-            return locker.view(shared, output).map(Message::Locker);
+            let root = self.theme.root("locker", scale).attr("output", name);
+            return locker.view(shared, root).map(Message::Locker);
         }
         if let Some(view) = self
             .picker
             .as_ref()
-            .and_then(|p| p.view(window, &self.theme, &self.locale))
+            .and_then(|p| p.view(window, &self.theme, &self.locale, scale))
         {
             return view.map(Message::Picker);
         }
         if let Some(showcase) = &self.showcase
             && showcase.window == window
         {
-            return self.showcase_view(showcase);
+            return self.showcase_view(showcase, scale);
         }
         if let Some((dialog, launcher)) = &self.launcher
             && dialog.is_window(window)
         {
+            let root = self.theme.root("launcher", scale);
             return dialog_surface(
-                &self.theme,
-                "launcher",
-                launcher.view(shared),
+                root,
+                launcher.view(shared, root),
                 launcher::Message::Nothing,
             )
             .map(Message::Launcher);
@@ -47,13 +51,9 @@ impl AriaShell {
         if let Some((dialog, exiter)) = &self.exiter
             && dialog.is_window(window)
         {
-            return dialog_surface(
-                &self.theme,
-                "exiter",
-                exiter.view(shared),
-                exiter::Message::Nothing,
-            )
-            .map(Message::Exiter);
+            let root = self.theme.root("exiter", scale);
+            return dialog_surface(root, exiter.view(shared, root), exiter::Message::Nothing)
+                .map(Message::Exiter);
         }
         if self
             .launcher
@@ -64,12 +64,10 @@ impl AriaShell {
         {
             return dialog::grab_view();
         }
-        if let Some(output) = self.wallpapers.output_of(window) {
-            return self
-                .wallpapers
-                .view(window, &self.theme, self.output_name(output));
+        if self.wallpapers.output_of(window).is_some() {
+            return self.wallpapers.view(window, &self.theme, name, scale);
         }
-        if let Some(output) = self.toasts.output_of(window) {
+        if self.toasts.output_of(window).is_some() {
             return self
                 .toasts
                 .view(
@@ -77,24 +75,65 @@ impl AriaShell {
                     &self.theme,
                     &self.notifications,
                     &self.icons,
-                    self.output_name(output),
+                    name,
+                    scale,
                 )
                 .map(Message::Toast);
         }
-        if let Some(output) = self.osd.output_of(window) {
-            return self
-                .osd
-                .view(&self.theme, &self.icons, self.output_name(output));
+        if self.osd.output_of(window).is_some() {
+            return self.osd.view(&self.theme, &self.icons, name, scale);
         }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
-        if let Some((&owner, panel)) = self.panels.iter().find(|(_, p)| p.has_popup(window)) {
-            return panel
-                .popup_view(window, shared)
-                .map(move |m| Message::Panel(owner, m));
+        if let Some((&owner, view)) = self
+            .panels
+            .iter()
+            .find_map(|(id, p)| Some((id, p.popup_view(window, shared)?)))
+        {
+            return view.map(move |m| Message::Panel(owner, m));
         }
-        widget::Space::new().into()
+        dialog::grab_view()
+    }
+
+    /// The output surface `window` is on, as far as we know.
+    pub(crate) fn window_output(&self, window: Id) -> Option<OutputId> {
+        if let Some(panel) = self
+            .panels
+            .get(&window)
+            .or_else(|| self.panels.values().find(|p| p.has_popup(window)))
+        {
+            return Some(panel.output);
+        }
+        let dialogs = self
+            .launcher
+            .iter()
+            .map(|(d, _)| d)
+            .chain(self.exiter.iter().map(|(d, _)| d));
+        for dialog in dialogs {
+            if dialog.is_window(window) {
+                return Some(dialog.output);
+            }
+            if let Some(&(_, output)) = dialog.grabs.iter().find(|(id, _)| *id == window) {
+                return Some(output);
+            }
+        }
+        self.toasts
+            .output_of(window)
+            .or_else(|| self.osd.output_of(window))
+            .or_else(|| self.wallpapers.output_of(window))
+            .or_else(|| self.locker.as_ref()?.output_of(window))
+            .or_else(|| {
+                let picker = self.picker.as_ref()?;
+                picker
+                    .windows()
+                    .find(|(id, _)| *id == window)
+                    .map(|(_, o)| o)
+            })
+            .or_else(|| {
+                let showcase = self.showcase.as_ref()?;
+                (showcase.window == window).then_some(showcase.output)
+            })
     }
 
     pub(crate) fn subscription(&self) -> Subscription<Message> {
@@ -191,20 +230,13 @@ impl AriaShell {
     }
 }
 
-/// A dialog's surface content: `content` in the box of root `root`
-/// filling it, inset by its shadow's room. The box takes every press
-/// (`nothing`): one in the shadow's room is outside the dialog.
+/// A dialog's surface content: its box `content`, of root `root`, with
+/// its shadow's room around. The box takes every press (`nothing`): one
+/// in the shadow's room is outside the dialog.
 pub(crate) fn dialog_surface<'a, M: Clone + 'a>(
-    theme: &Theme,
-    root: &'static str,
+    root: Node<'a>,
     content: Element<'a, M>,
     nothing: M,
 ) -> Element<'a, M> {
-    let node = Node::root(root);
-    let root = theme
-        .container(&node, content)
-        .width(Length::Fill)
-        .height(Length::Fill);
-    let content = dialog::content(root, nothing);
-    theme.surface(&node, content).into()
+    icssed::surface(root, dialog::content(content, nothing)).into()
 }

@@ -13,9 +13,12 @@
 //! configures the popup; reading the processes and signalling one go
 //! back as `Action::SysMon`. Every instance opens the same popup.
 
-use iced::widget::{Space, column, container, mouse_area, row, scrollable};
-use iced::{Alignment, Element, Length, Subscription};
+use std::collections::VecDeque;
+
+use iced::Subscription;
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node, Tab};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
@@ -25,9 +28,6 @@ use crate::services::sysmon::{
     Column, Command, MonitorConfig, Process, Sample, Signal, SysMon, Value, format,
 };
 use crate::time::aligned_ticks;
-use crate::ui::graph;
-use crate::ui::tabs::{self, Tab};
-use crate::ui::theme::{self, Node, Theme};
 
 /// `[SystemMonitor:<id>]`: a gadget's keys (the sampler's and the
 /// popup's are `sysmon::MonitorConfig`, from the base `[SystemMonitor]`;
@@ -176,39 +176,14 @@ impl SectionKind {
     }
 }
 
-/// Numbers sit at the right of their column.
-fn column_alignment(column: Column) -> Alignment {
-    match column {
-        Column::Cpu | Column::Mem => Alignment::End,
-        _ => Alignment::Start,
-    }
-}
-
-/// Width of a table column when the theme doesn't set one on the
-/// header's node (the name takes the rest).
-fn default_width(column: Column) -> Option<f32> {
-    match column {
-        Column::Name => None,
-        Column::Pid => Some(64.0),
-        Column::User => Some(84.0),
-        Column::Cpu => Some(60.0),
-        Column::Mem => Some(80.0),
-    }
-}
-
 /// Percents from which a value is `.warning` / `.critical` (the
 /// popup's meters, and the bar's percentages by default).
 const WARNING: f32 = 70.0;
 const CRITICAL: f32 = 90.0;
-/// Icon size when the theme doesn't set `height` on `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-/// Popup size when the theme doesn't size `monitor`.
-const DEFAULT_WIDTH: f32 = 560.0;
-const DEFAULT_HEIGHT: f32 = 460.0;
-/// Per-core meters per row.
-const CORES_PER_ROW: usize = 8;
 /// The terminal monitors tried for the default `command`.
 const MONITORS: [&str; 3] = ["btop", "htop", "top"];
+/// Per-core meters per row.
+const CORES_PER_ROW: usize = 8;
 
 pub struct SystemMonitor {
     config: InstanceConfig,
@@ -300,7 +275,6 @@ impl Gadget for SystemMonitor {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let sample = ctx.sysmon.sample();
         let value = self.config.show;
         let (series, auto_max) = ctx.sysmon.history().series(value);
@@ -313,48 +287,36 @@ impl Gadget for SystemMonitor {
             .class_if("critical", level == Some("critical"));
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         if !self.config.icon.is_empty() {
-            let icon_node = button.child("icon");
-            let style = theme.resolve(&icon_node);
-            let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
-            parts.push(match ctx.icons.get_name(&self.config.icon, None) {
-                Some(icon) => icon.view(size, style.color),
-                None => Space::new().width(size).height(size).into(),
-            });
+            parts.push(ctx.icon(button.child("icon"), self.config.icon.as_str()));
         }
         let text = format::expand(ctx.locale, &self.config.format, sample);
         let max = self.config.max.or(auto_max);
         parts.push(match self.config.mode {
-            Mode::Text => {
-                let text_node = button.child("text");
-                theme
-                    .container(&text_node, theme.text(&text_node, text))
-                    .into()
+            Mode::Text => icssed::text(button.child("label"), text).into(),
+            Mode::Sparkline => {
+                let mut graph = icssed::graph(button.child("graph"), ctx.sysmon.config().history)
+                    .series(series.iter().copied())
+                    .label(text);
+                if let Some(max) = max {
+                    graph = graph.max(max);
+                }
+                graph.into()
             }
-            Mode::Sparkline => graph::sparkline(
-                theme,
-                &button.child("graph"),
-                series,
-                max,
-                ctx.sysmon.config().history,
-                Some(&text),
-            ),
             Mode::Gauge => {
                 let last = series.back().copied().unwrap_or(0.0);
                 let top = max
                     .unwrap_or_else(|| series.iter().copied().fold(1.0, f32::max))
                     .max(f32::EPSILON);
-                graph::gauge(theme, &button.child("gauge"), last / top, Some(&text))
+                icssed::meter(button.child("meter"), last / top)
+                    .label(text)
+                    .into()
             }
         });
-        let content = row(parts)
-            .spacing(theme.resolve(&button).gap)
-            .align_y(Alignment::Center);
-        let button = theme
-            .button(&button, content)
-            .on_press(Message::TogglePopup);
-        mouse_area(self.popup.anchor(button))
-            .on_right_press(Message::RunCommand)
-            .into()
+        let button = icssed::button(button, parts)
+            .on_press(Message::TogglePopup)
+            .id(self.popup.anchor());
+        let button = mouse_area(button).on_right_press(Message::RunCommand);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -366,7 +328,6 @@ impl Gadget for SystemMonitor {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let locale = ctx.locale;
         let monitor = ctx.node.child("monitor");
         let sysmon = ctx.sysmon;
@@ -382,67 +343,37 @@ impl Gadget for SystemMonitor {
         let tabs = SectionKind::ALL
             .iter()
             .filter(|k| **k != SectionKind::Gpu || has_gpu)
-            .map(|&k| Tab {
-                name: Some(k.name()),
-                label: locale.tr(k.title()),
-                active: k == tab,
-                on_press: Message::Tab(k),
+            .map(|&k| {
+                Tab::new(locale.tr(k.title()), Message::Tab(k))
+                    .active(k == tab)
+                    .class(k.name())
             });
-        let tabs = tabs::view(theme, &monitor.child("tabs"), tabs, Length::Fill);
-        let node = monitor.child("section").class(tab.name());
-        let body: Vec<Element<'a, Message>> = match (tab, sample) {
-            (SectionKind::Processes, _) => self.processes(theme, locale, &node, sysmon),
+        let tabs = icssed::tabs(monitor.child("tabs"), tabs);
+        let scroll = monitor.child("scroll");
+        let node = scroll.child("section").class(tab.name());
+        let mut body: Vec<Element<'a, Message>> = vec![header(
+            node,
+            locale.tr(tab.title()),
+            section_value(locale, tab, sample),
+        )];
+        body.extend(match (tab, sample) {
+            (SectionKind::Processes, _) => vec![self.processes(locale, node, sysmon)],
             (_, None) => Vec::new(),
-            (SectionKind::Cpu, Some(s)) => cpu_section(theme, locale, &node, s, sysmon),
-            (SectionKind::Mem, Some(s)) => mem_section(theme, locale, &node, s, sysmon),
-            (SectionKind::Disk, Some(s)) => disk_section(theme, locale, &node, s, sysmon),
-            (SectionKind::Net, Some(s)) => net_section(theme, locale, &node, s, sysmon),
-            (SectionKind::Gpu, Some(s)) => gpu_section(theme, locale, &node, s, sysmon),
-        };
-        let value = section_value(locale, tab, sample);
-        let header = header(theme, &node, locale.tr(tab.title()), &value);
-        let section: Element<'a, Message> = theme
-            .container(
-                &node,
-                theme
-                    .column(&node, std::iter::once(header).chain(body))
-                    .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .into();
+            (SectionKind::Cpu, Some(s)) => cpu_section(locale, node, s, sysmon),
+            (SectionKind::Mem, Some(s)) => mem_section(locale, node, s, sysmon),
+            (SectionKind::Disk, Some(s)) => disk_section(locale, node, s, sysmon),
+            (SectionKind::Net, Some(s)) => net_section(locale, node, s, sysmon),
+            (SectionKind::Gpu, Some(s)) => gpu_section(locale, node, s, sysmon),
+        });
+        let mut parts: Vec<Element<'a, Message>> = vec![
+            tabs,
+            icssed::scroll(scroll, icssed::column(node, body)).into(),
+        ];
         // The action bar stays under the scrolling table.
-        let footer =
-            (tab == SectionKind::Processes).then(|| self.actions(theme, locale, &node, sysmon));
-        // The process list always overflows: its scrollbar is embedded
-        // (taking its own column) so it doesn't cover the last column;
-        // the other tabs' floats, shown only when needed.
-        let mut scroll = scrollable(section).width(Length::Fill).height(Length::Fill);
         if tab == SectionKind::Processes {
-            scroll = scroll.direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new()
-                    .width(6)
-                    .scroller_width(6)
-                    .spacing(6),
-            ));
+            parts.push(self.actions(locale, monitor, sysmon));
         }
-        let scroll: Element<'a, Message> = scroll.into();
-        let content = theme
-            .column(&monitor, [tabs, scroll].into_iter().chain(footer))
-            .width(Length::Fill)
-            .height(Length::Fill);
-        theme
-            .container(&monitor, content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let s = ctx.theme.resolve(&ctx.node.child("monitor"));
-        (
-            px(s.width).unwrap_or(DEFAULT_WIDTH).max(1.0) as u32,
-            px(s.height).unwrap_or(DEFAULT_HEIGHT).max(1.0) as u32,
-        )
+        icssed::column(monitor, parts).into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -491,6 +422,110 @@ impl SystemMonitor {
         }
     }
 
+    /// The process table: sortable header, the top rows.
+    fn processes<'a>(
+        &'a self,
+        locale: &Locale,
+        node: Node<'a>,
+        sysmon: &'a SysMon,
+    ) -> Element<'a, Message> {
+        let table = node.child("table");
+        let header = table.child("header");
+        let (sort_by, desc) = self.sort;
+        let columns = Column::ALL.iter().map(|&c| {
+            let n = header
+                .child("column")
+                .class(c.name())
+                .class_if("sorted", c == sort_by)
+                .class_if("reverse", c == sort_by && desc != c.descending_by_default());
+            icssed::button(
+                n,
+                [icssed::text(n.child("label"), locale.tr(c.label())).into()],
+            )
+            .on_press(Message::Sort(c))
+            .into()
+        });
+        let mut procs: Vec<&Process> = sysmon.processes().iter().collect();
+        procs.sort_by(|a, b| {
+            let ord = match sort_by {
+                Column::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                Column::Pid => a.pid.cmp(&b.pid),
+                Column::User => a.user.cmp(&b.user),
+                Column::Cpu => a.cpu.total_cmp(&b.cpu),
+                Column::Mem => a.rss.cmp(&b.rss),
+            };
+            if desc { ord.reverse() } else { ord }
+        });
+        let rows = procs.into_iter().take(sysmon.config().processes).map(|p| {
+            let r = table
+                .child("row")
+                .attr("pid", &p.pid.to_string())
+                .attr("name", &p.name)
+                .attr("state", &p.state.to_string())
+                .class_if("selected", self.selected == Some(p.pid));
+            let cells = Column::ALL.iter().map(|&c| {
+                let text = match c {
+                    Column::Name => p.name.clone(),
+                    Column::Pid => p.pid.to_string(),
+                    Column::User => p.user.clone(),
+                    Column::Cpu => locale.decimal(p.cpu.into(), 1),
+                    Column::Mem => format::bytes(locale, p.rss),
+                };
+                icssed::text(r.child(c.name()), text).into()
+            });
+            icssed::row(r, cells)
+                .on_press(Message::Select(p.pid))
+                .into()
+        });
+        icssed::column(
+            table,
+            std::iter::once(icssed::row(header, columns).into()).chain(rows),
+        )
+        .into()
+    }
+
+    /// The bar under the (scrolling) process table: the selected
+    /// process (while it's still there) and its signals, or the help
+    /// and the buttons disabled.
+    fn actions<'a>(
+        &'a self,
+        locale: &'a Locale,
+        monitor: Node<'a>,
+        sysmon: &'a SysMon,
+    ) -> Element<'a, Message> {
+        let p = self
+            .selected
+            .and_then(|pid| sysmon.processes().iter().find(|p| p.pid == pid));
+        let actions = monitor.child("actions").class_if("none", p.is_none());
+        let label = match p {
+            Some(p) => format!("{} ({})", p.name, p.pid),
+            None => locale.tr("sysmon.select_help").to_owned(),
+        };
+        let button = |class: &str, label: &'a str, signal: Signal| {
+            let b = actions
+                .child("button")
+                .class(class)
+                .class_if("danger", class == "kill")
+                .disabled_if(p.is_none());
+            icssed::button(b, [icssed::text(b.child("label"), label).into()])
+                .on_press(Message::Signal(signal))
+                .into()
+        };
+        icssed::row(
+            actions,
+            [
+                icssed::text(actions.child("label"), label).into(),
+                button(
+                    "terminate",
+                    locale.tr("sysmon.terminate"),
+                    Signal::Terminate,
+                ),
+                button("kill", locale.tr("sysmon.kill"), Signal::Kill),
+            ],
+        )
+        .into()
+    }
+
     fn run_command(&self) {
         if !self.config.command.is_empty() {
             process::run(&self.config.command);
@@ -507,154 +542,349 @@ impl SystemMonitor {
             None => log::warn!("system monitor: none of {MONITORS:?} on the PATH"),
         }
     }
+}
 
-    /// The process table: sortable header, the top rows.
-    fn processes<'a>(
-        &'a self,
-        theme: &'a Theme,
-        locale: &Locale,
-        node: &Node,
-        sysmon: &'a SysMon,
-    ) -> Vec<Element<'a, Message>> {
-        let table = node.child("table");
-        let header_node = table.child("header");
-        let (sort_by, desc) = self.sort;
-        let columns = Column::ALL.iter().map(|&c| {
-            let n = header_node
-                .child("column")
-                .class(c.name())
-                .class_if("sorted", c == sort_by)
-                .class_if("reverse", c == sort_by && desc != c.descending_by_default());
-            let label = container(theme.text(&n.child("text"), locale.tr(c.label())))
-                .width(Length::Fill)
-                .align_x(column_alignment(c));
-            let mut b = theme.button(&n, label).on_press(Message::Sort(c));
-            b = match cell_width(theme, &n, c) {
-                Some(w) => b.width(Length::Fixed(w)),
-                None => b.width(Length::Fill),
-            };
-            b.into()
-        });
-        let header: Element<'a, Message> = theme
-            .row(&header_node, columns)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
-            .into();
-        let mut procs: Vec<&Process> = sysmon.processes().iter().collect();
-        procs.sort_by(|a, b| {
-            let ord = match sort_by {
-                Column::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                Column::Pid => a.pid.cmp(&b.pid),
-                Column::User => a.user.cmp(&b.user),
-                Column::Cpu => a.cpu.total_cmp(&b.cpu),
-                Column::Mem => a.rss.cmp(&b.rss),
-            };
-            if desc { ord.reverse() } else { ord }
-        });
-        let rows = procs.into_iter().take(sysmon.config().processes).map(|p| {
-            let r = table
-                .child("row")
-                .attr("pid", p.pid.to_string())
-                .attr("name", p.name.clone())
-                .attr("state", p.state.to_string())
-                .class_if("selected", self.selected == Some(p.pid));
-            let cells = Column::ALL.iter().map(|&c| {
-                let n = r.child(c.name());
-                let text = match c {
-                    Column::Name => p.name.clone(),
-                    Column::Pid => p.pid.to_string(),
-                    Column::User => p.user.clone(),
-                    Column::Cpu => locale.decimal(p.cpu.into(), 1),
-                    Column::Mem => format::bytes(locale, p.rss),
-                };
-                let cell = theme
-                    .container(&n, theme.text(&n, text))
-                    .align_x(column_alignment(c));
-                match cell_width(theme, &header_node.child("column").class(c.name()), c) {
-                    Some(w) => cell.width(Length::Fixed(w)).into(),
-                    None => cell.width(Length::Fill).into(),
-                }
-            });
-            let content = theme
-                .row(&r, cells)
-                .align_y(Alignment::Center)
-                .width(Length::Fill);
-            mouse_area(theme.container(&r, content).width(Length::Fill))
-                .on_press(Message::Select(p.pid))
-                .into()
-        });
-        vec![
-            theme
-                .column(&table, std::iter::once(header).chain(rows))
-                .width(Length::Fill)
-                .into(),
-        ]
+/// A section's title and the number it shows.
+fn header<'a>(node: Node<'a>, title: &'a str, value: String) -> Element<'a, Message> {
+    let h = node.child("header");
+    icssed::row(
+        h,
+        [
+            icssed::text(h.child("title"), title).into(),
+            icssed::text(h.child("value"), value).into(),
+        ],
+    )
+    .into()
+}
+
+/// The top of a graph: its given maximum, else the largest value of
+/// its series (at least 1, so a flat zero line stays at the bottom).
+fn scale(series: &[&VecDeque<f32>], max: Option<f32>) -> f32 {
+    max.unwrap_or_else(|| {
+        series
+            .iter()
+            .flat_map(|s| s.iter().copied())
+            .fold(1.0, f32::max)
+    })
+}
+
+/// A section's graph: up to two series (the second `series.second`),
+/// scaled to `max` (else the largest value), its top written as `label`.
+fn graph<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    sysmon: &'a SysMon,
+    series: [Option<&'a VecDeque<f32>>; 2],
+    max: Option<f32>,
+    rate: bool,
+) -> Element<'a, Message> {
+    let present: Vec<&VecDeque<f32>> = series.iter().flatten().copied().collect();
+    let top = scale(&present, max);
+    let label = if rate {
+        format::rate(locale, top)
+    } else {
+        format!("{top:.0}%")
+    };
+    let mut graph = icssed::graph(node.child("graph"), sysmon.config().history).max(top);
+    if let Some(first) = series[0] {
+        graph = graph.series(first.iter().copied());
     }
+    if let Some(second) = series[1] {
+        graph = graph.series_class("second", second.iter().copied());
+    }
+    graph.label(label).into()
+}
 
-    /// The bar under the (scrolling) process table: the selected
-    /// process (while it's still there) and its signals, or the help
-    /// and the buttons disabled.
-    fn actions<'a>(
-        &'a self,
-        theme: &'a Theme,
-        locale: &Locale,
-        node: &Node,
-        sysmon: &'a SysMon,
-    ) -> Element<'a, Message> {
-        let p = self
-            .selected
-            .and_then(|pid| sysmon.processes().iter().find(|p| p.pid == pid));
-        let actions = node.child("actions").class_if("none", p.is_none());
-        let text = actions.child("text");
-        let label = match p {
-            Some(p) => format!("{} ({})", p.name, p.pid),
-            None => locale.tr("sysmon.select_help").to_owned(),
-        };
-        let button = |class: &'static str, label: &'static str, signal: Signal| {
-            let b = actions
-                .child("button")
-                .class(class)
-                .class_if("danger", class == "kill");
-            let mut button = theme.button(&b, theme.text(&b.child("text"), label));
-            if p.is_some() {
-                button = button.on_press(Message::Signal(signal));
-            }
-            button
-        };
-        let bar = theme
-            .row(
-                &actions,
+/// A fraction's meter, `.warning` / `.critical` from its percent.
+fn level_meter<'a>(node: Node<'a>, percent: f32) -> Element<'a, Message> {
+    let node = node
+        .class_if("warning", (WARNING..CRITICAL).contains(&percent))
+        .class_if("critical", percent >= CRITICAL);
+    icssed::meter(node, percent / 100.0).into()
+}
+
+fn cpu_section<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    s: &Sample,
+    sysmon: &'a SysMon,
+) -> Vec<Element<'a, Message>> {
+    let h = sysmon.history();
+    let mut out = vec![graph(
+        locale,
+        node,
+        sysmon,
+        [Some(&h.cpu), None],
+        Some(100.0),
+        false,
+    )];
+    let cores = node.child("cores");
+    let count = s.cpu.cores.len();
+    let groups = s
+        .cpu
+        .cores
+        .chunks(CORES_PER_ROW)
+        .enumerate()
+        .map(|(r, chunk)| {
+            let group = cores.child("group");
+            let cells = chunk.iter().enumerate().map(|(i, v)| {
+                let c = group
+                    .child_at("core", r * CORES_PER_ROW + i, count)
+                    .class_if("warning", (WARNING..CRITICAL).contains(v))
+                    .class_if("critical", *v >= CRITICAL);
+                icssed::column(
+                    c,
+                    [
+                        icssed::meter(c.child("meter"), v / 100.0).into(),
+                        icssed::text(c.child("label"), format!("{v:.0}%")).into(),
+                    ],
+                )
+                .into()
+            });
+            icssed::row(group, cells).into()
+        });
+    out.push(icssed::column(cores, groups).into());
+    let details = node.child("details");
+    let mut lines = vec![locale.fmt(
+        "sysmon.cpu.load",
+        &[
+            ("load1", &locale.decimal(s.load.0.into(), 2)),
+            ("load5", &locale.decimal(s.load.1.into(), 2)),
+            ("load15", &locale.decimal(s.load.2.into(), 2)),
+            ("uptime", &format::duration(s.uptime)),
+        ],
+    )];
+    let mut hw = Vec::new();
+    if let Some(f) = s.cpu.freq_mhz {
+        hw.push(locale.fmt(
+            "sysmon.cpu.frequency",
+            &[("freq", &format::freq(locale, f))],
+        ));
+    }
+    if let Some(t) = s.cpu.temp_c {
+        hw.push(locale.fmt(
+            "sysmon.cpu.temperature",
+            &[("temp", &format_args!("{t:.0}"))],
+        ));
+    }
+    if !hw.is_empty() {
+        lines.push(hw.join("   "));
+    }
+    let lines = lines
+        .into_iter()
+        .map(|l| icssed::text(details.child("line"), l).into());
+    out.push(icssed::column(details, lines).into());
+    out
+}
+
+fn mem_section<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    s: &Sample,
+    sysmon: &'a SysMon,
+) -> Vec<Element<'a, Message>> {
+    let h = sysmon.history();
+    let used = pct(s.mem.used, s.mem.total);
+    let mut out = vec![
+        icssed::text(
+            node.child("line"),
+            locale.fmt(
+                "sysmon.mem.used",
+                &[
+                    ("used", &format::bytes(locale, s.mem.used)),
+                    ("total", &format::bytes(locale, s.mem.total)),
+                    ("cached", &format::bytes(locale, s.mem.cached)),
+                    ("available", &format::bytes(locale, s.mem.available)),
+                ],
+            ),
+        )
+        .into(),
+        level_meter(node.child("meter").class("used"), used),
+    ];
+    if s.mem.swap_total > 0 {
+        let swap = pct(s.mem.swap_used, s.mem.swap_total);
+        out.push(
+            icssed::text(
+                node.child("line"),
+                locale.fmt(
+                    "sysmon.mem.swap",
+                    &[
+                        ("used", &format::bytes(locale, s.mem.swap_used)),
+                        ("total", &format::bytes(locale, s.mem.swap_total)),
+                    ],
+                ),
+            )
+            .into(),
+        );
+        out.push(level_meter(node.child("meter").class("swap"), swap));
+    }
+    out.push(graph(
+        locale,
+        node,
+        sysmon,
+        [Some(&h.mem), Some(&h.swap)],
+        Some(100.0),
+        false,
+    ));
+    out
+}
+
+fn disk_section<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    s: &Sample,
+    sysmon: &'a SysMon,
+) -> Vec<Element<'a, Message>> {
+    let h = sysmon.history();
+    let count = s.disks.len();
+    let mut out: Vec<Element<'a, Message>> = s
+        .disks
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let r = node.child_at("disk", i, count).attr("mount", &d.mount);
+            let top = r.child("top");
+            icssed::column(
+                r,
                 [
-                    theme
-                        .container(&text, theme.text(&text, label))
-                        .width(Length::Fill)
-                        .into(),
-                    button(
-                        "terminate",
-                        locale.tr("sysmon.terminate"),
-                        Signal::Terminate,
+                    icssed::row(
+                        top,
+                        [
+                            icssed::text(
+                                top.child("name"),
+                                format!("{}  ({}, {})", d.mount, d.name, d.fs),
+                            )
+                            .into(),
+                            icssed::text(
+                                top.child("line"),
+                                format!(
+                                    "{} / {}   ↓ {}  ↑ {}",
+                                    format::bytes(locale, d.used),
+                                    format::bytes(locale, d.total),
+                                    format::rate(locale, d.read_bps),
+                                    format::rate(locale, d.write_bps)
+                                ),
+                            )
+                            .into(),
+                        ],
                     )
                     .into(),
-                    button("kill", locale.tr("sysmon.kill"), Signal::Kill).into(),
+                    level_meter(r.child("meter"), pct(d.used, d.total)),
                 ],
             )
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
-        theme.container(&actions, bar).width(Length::Fill).into()
-    }
+            .into()
+        })
+        .collect();
+    out.push(graph(
+        locale,
+        node,
+        sysmon,
+        [Some(&h.disk_read), Some(&h.disk_write)],
+        None,
+        true,
+    ));
+    out
 }
 
-/// Width of a table column: the theme's on the header column node,
-/// else the default; `None` fills.
-fn cell_width(theme: &Theme, node: &Node, column: Column) -> Option<f32> {
-    px(theme.resolve(node).width).or(default_width(column))
+fn net_section<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    s: &Sample,
+    sysmon: &'a SysMon,
+) -> Vec<Element<'a, Message>> {
+    let h = sysmon.history();
+    let count = s.net.len();
+    let mut out: Vec<Element<'a, Message>> = s
+        .net
+        .iter()
+        .enumerate()
+        .map(|(i, iface)| {
+            let r = node.child_at("iface", i, count).attr("name", &iface.name);
+            icssed::row(
+                r,
+                [
+                    icssed::text(r.child("name"), iface.name.clone()).into(),
+                    icssed::text(
+                        r.child("line"),
+                        format!(
+                            "↓ {}  ↑ {}   ({} / {} total)",
+                            format::rate(locale, iface.rx_bps),
+                            format::rate(locale, iface.tx_bps),
+                            format::bytes(locale, iface.rx_total),
+                            format::bytes(locale, iface.tx_total)
+                        ),
+                    )
+                    .into(),
+                ],
+            )
+            .into()
+        })
+        .collect();
+    out.push(graph(
+        locale,
+        node,
+        sysmon,
+        [Some(&h.net_rx), Some(&h.net_tx)],
+        None,
+        true,
+    ));
+    out
 }
 
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
-    }
+fn gpu_section<'a>(
+    locale: &Locale,
+    node: Node<'a>,
+    s: &Sample,
+    sysmon: &'a SysMon,
+) -> Vec<Element<'a, Message>> {
+    let h = sysmon.history();
+    let count = s.gpus.len();
+    let mut out: Vec<Element<'a, Message>> = s
+        .gpus
+        .iter()
+        .enumerate()
+        .map(|(i, g)| {
+            let r = node.child_at("gpu", i, count);
+            let mut info = Vec::new();
+            if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
+                info.push(locale.fmt(
+                    "sysmon.gpu.vram",
+                    &[
+                        ("used", &format::bytes(locale, u)),
+                        ("total", &format::bytes(locale, t)),
+                    ],
+                ));
+            }
+            if let Some(t) = g.temp_c {
+                info.push(format!("{t:.0}°C"));
+            }
+            let top = r.child("top");
+            icssed::column(
+                r,
+                [
+                    icssed::row(
+                        top,
+                        [
+                            icssed::text(top.child("name"), g.name.clone()).into(),
+                            icssed::text(top.child("line"), info.join("   ")).into(),
+                        ],
+                    )
+                    .into(),
+                    level_meter(r.child("meter"), g.busy.unwrap_or(0.0)),
+                ],
+            )
+            .into()
+        })
+        .collect();
+    out.push(graph(
+        locale,
+        node,
+        sysmon,
+        [Some(&h.gpu), None],
+        Some(100.0),
+        false,
+    ));
+    out
 }
 
 fn pct(used: u64, total: u64) -> f32 {
@@ -691,392 +921,6 @@ fn section_value(locale: &Locale, kind: SectionKind, sample: Option<&Sample>) ->
             .unwrap_or_default(),
         SectionKind::Processes => String::new(),
     }
-}
-
-fn header<'a, M: 'a>(theme: &Theme, node: &Node, title: &str, value: &str) -> Element<'a, M> {
-    let h = node.child("header");
-    theme
-        .row(
-            &h,
-            [
-                theme
-                    .text(&h.child("title"), title.to_owned())
-                    .width(Length::Fill)
-                    .into(),
-                theme.text(&h.child("value"), value.to_owned()).into(),
-            ],
-        )
-        .align_y(Alignment::Center)
-        .width(Length::Fill)
-        .into()
-}
-
-fn text_line<'a, M: 'a>(theme: &Theme, node: &Node, text: String) -> Element<'a, M> {
-    theme.text(node, text).into()
-}
-
-fn cpu_section<'a, M: 'a>(
-    theme: &Theme,
-    locale: &'a Locale,
-    node: &Node,
-    s: &Sample,
-    sysmon: &'a SysMon,
-) -> Vec<Element<'a, M>> {
-    let cap = sysmon.config().history;
-    let h = sysmon.history();
-    let mut out = vec![graph::graph(
-        theme,
-        locale,
-        &node.child("graph"),
-        &[&h.cpu],
-        Some(100.0),
-        cap,
-        graph::Unit::Percent,
-    )];
-    let cores_node = node.child("cores");
-    let gap = theme.resolve(&cores_node).gap;
-    let core_rows = s.cores_chunks().map(|chunk| {
-        let mut cores: Vec<Element<'a, M>> = chunk
-            .iter()
-            .map(|(i, v)| {
-                let c = cores_node
-                    .child("core")
-                    .class_if("warning", (WARNING..CRITICAL).contains(v))
-                    .class_if("critical", *v >= CRITICAL)
-                    .nth(*i, s.cpu.cores.len());
-                let meter = graph::meter(theme, &c.child("meter"), v / 100.0);
-                let label = theme.text(&c.child("text"), format!("{v:.0}%"));
-                theme
-                    .container(
-                        &c,
-                        column![meter, label].spacing(2).align_x(Alignment::Center),
-                    )
-                    .width(Length::Fill)
-                    .into()
-            })
-            .collect();
-        // A short last row keeps the cells' width.
-        while cores.len() < CORES_PER_ROW {
-            cores.push(Space::new().width(Length::Fill).into());
-        }
-        row(cores).spacing(gap).width(Length::Fill).into()
-    });
-    out.push(
-        theme
-            .column(&cores_node, core_rows)
-            .width(Length::Fill)
-            .into(),
-    );
-    let d = node.child("details");
-    let t = d.child("text");
-    let mut lines = vec![locale.fmt(
-        "sysmon.cpu.load",
-        &[
-            ("load1", &locale.decimal(s.load.0.into(), 2)),
-            ("load5", &locale.decimal(s.load.1.into(), 2)),
-            ("load15", &locale.decimal(s.load.2.into(), 2)),
-            ("uptime", &format::duration(s.uptime)),
-        ],
-    )];
-    let mut hw = Vec::new();
-    if let Some(f) = s.cpu.freq_mhz {
-        hw.push(locale.fmt(
-            "sysmon.cpu.frequency",
-            &[("freq", &format::freq(locale, f))],
-        ));
-    }
-    if let Some(t) = s.cpu.temp_c {
-        hw.push(locale.fmt(
-            "sysmon.cpu.temperature",
-            &[("temp", &format_args!("{t:.0}"))],
-        ));
-    }
-    if !hw.is_empty() {
-        lines.push(hw.join("   "));
-    }
-    out.push(
-        theme
-            .column(&d, lines.into_iter().map(|l| text_line(theme, &t, l)))
-            .width(Length::Fill)
-            .into(),
-    );
-    out
-}
-
-impl Sample {
-    /// The cores as rows of [`CORES_PER_ROW`], indexed.
-    fn cores_chunks(&self) -> impl Iterator<Item = Vec<(usize, f32)>> + '_ {
-        let indexed: Vec<(usize, f32)> = self.cpu.cores.iter().copied().enumerate().collect();
-        (0..indexed.len().div_ceil(CORES_PER_ROW)).map(move |r| {
-            indexed
-                .iter()
-                .skip(r * CORES_PER_ROW)
-                .take(CORES_PER_ROW)
-                .copied()
-                .collect()
-        })
-    }
-}
-
-fn mem_section<'a, M: 'a>(
-    theme: &Theme,
-    locale: &'a Locale,
-    node: &Node,
-    s: &Sample,
-    sysmon: &'a SysMon,
-) -> Vec<Element<'a, M>> {
-    let cap = sysmon.config().history;
-    let h = sysmon.history();
-    let used = pct(s.mem.used, s.mem.total);
-    let mut out = vec![
-        text_line(
-            theme,
-            &node.child("text"),
-            locale.fmt(
-                "sysmon.mem.used",
-                &[
-                    ("used", &format::bytes(locale, s.mem.used)),
-                    ("total", &format::bytes(locale, s.mem.total)),
-                    ("cached", &format::bytes(locale, s.mem.cached)),
-                    ("available", &format::bytes(locale, s.mem.available)),
-                ],
-            ),
-        ),
-        graph::meter(
-            theme,
-            &node
-                .child("meter")
-                .class("used")
-                .class_if("warning", (WARNING..CRITICAL).contains(&used))
-                .class_if("critical", used >= CRITICAL),
-            used / 100.0,
-        ),
-    ];
-    if s.mem.swap_total > 0 {
-        let swap = pct(s.mem.swap_used, s.mem.swap_total);
-        out.push(text_line(
-            theme,
-            &node.child("text"),
-            locale.fmt(
-                "sysmon.mem.swap",
-                &[
-                    ("used", &format::bytes(locale, s.mem.swap_used)),
-                    ("total", &format::bytes(locale, s.mem.swap_total)),
-                ],
-            ),
-        ));
-        out.push(graph::meter(
-            theme,
-            &node
-                .child("meter")
-                .class("swap")
-                .class_if("warning", (WARNING..CRITICAL).contains(&swap))
-                .class_if("critical", swap >= CRITICAL),
-            swap / 100.0,
-        ));
-    }
-    out.push(graph::graph(
-        theme,
-        locale,
-        &node.child("graph"),
-        &[&h.mem, &h.swap],
-        Some(100.0),
-        cap,
-        graph::Unit::Percent,
-    ));
-    out
-}
-
-fn disk_section<'a, M: 'a>(
-    theme: &Theme,
-    locale: &'a Locale,
-    node: &Node,
-    s: &Sample,
-    sysmon: &'a SysMon,
-) -> Vec<Element<'a, M>> {
-    let cap = sysmon.config().history;
-    let h = sysmon.history();
-    let count = s.disks.len();
-    let mut out: Vec<Element<'a, M>> = s
-        .disks
-        .iter()
-        .enumerate()
-        .map(|(i, d)| {
-            let used = pct(d.used, d.total);
-            let r = node
-                .child("disk")
-                .attr("mount", d.mount.clone())
-                .nth(i, count);
-            let top = row![
-                theme
-                    .text(
-                        &r.child("name"),
-                        format!("{}  ({}, {})", d.mount, d.name, d.fs)
-                    )
-                    .width(Length::Fill),
-                theme.text(
-                    &r.child("text"),
-                    format!(
-                        "{} / {}   ↓ {}  ↑ {}",
-                        format::bytes(locale, d.used),
-                        format::bytes(locale, d.total),
-                        format::rate(locale, d.read_bps),
-                        format::rate(locale, d.write_bps)
-                    )
-                ),
-            ]
-            .width(Length::Fill);
-            theme
-                .container(
-                    &r,
-                    column![
-                        top,
-                        graph::meter(
-                            theme,
-                            &r.child("meter")
-                                .class_if("warning", (WARNING..CRITICAL).contains(&used))
-                                .class_if("critical", used >= CRITICAL),
-                            used / 100.0
-                        )
-                    ]
-                    .spacing(2),
-                )
-                .width(Length::Fill)
-                .into()
-        })
-        .collect();
-    out.push(graph::graph(
-        theme,
-        locale,
-        &node.child("graph"),
-        &[&h.disk_read, &h.disk_write],
-        None,
-        cap,
-        graph::Unit::Rate,
-    ));
-    out
-}
-
-fn net_section<'a, M: 'a>(
-    theme: &Theme,
-    locale: &'a Locale,
-    node: &Node,
-    s: &Sample,
-    sysmon: &'a SysMon,
-) -> Vec<Element<'a, M>> {
-    let cap = sysmon.config().history;
-    let h = sysmon.history();
-    let count = s.net.len();
-    let mut out: Vec<Element<'a, M>> = s
-        .net
-        .iter()
-        .enumerate()
-        .map(|(i, iface)| {
-            let r = node
-                .child("iface")
-                .attr("name", iface.name.clone())
-                .nth(i, count);
-            theme
-                .container(
-                    &r,
-                    row![
-                        theme
-                            .text(&r.child("name"), iface.name.clone())
-                            .width(Length::Fill),
-                        theme.text(
-                            &r.child("text"),
-                            format!(
-                                "↓ {}  ↑ {}   ({} / {} total)",
-                                format::rate(locale, iface.rx_bps),
-                                format::rate(locale, iface.tx_bps),
-                                format::bytes(locale, iface.rx_total),
-                                format::bytes(locale, iface.tx_total)
-                            )
-                        ),
-                    ]
-                    .width(Length::Fill),
-                )
-                .width(Length::Fill)
-                .into()
-        })
-        .collect();
-    out.push(graph::graph(
-        theme,
-        locale,
-        &node.child("graph"),
-        &[&h.net_rx, &h.net_tx],
-        None,
-        cap,
-        graph::Unit::Rate,
-    ));
-    out
-}
-
-fn gpu_section<'a, M: 'a>(
-    theme: &Theme,
-    locale: &'a Locale,
-    node: &Node,
-    s: &Sample,
-    sysmon: &'a SysMon,
-) -> Vec<Element<'a, M>> {
-    let cap = sysmon.config().history;
-    let h = sysmon.history();
-    let count = s.gpus.len();
-    let mut out: Vec<Element<'a, M>> = s
-        .gpus
-        .iter()
-        .enumerate()
-        .map(|(i, g)| {
-            let r = node.child("gpu").nth(i, count);
-            let busy = g.busy.unwrap_or(0.0);
-            let mut info = Vec::new();
-            if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
-                info.push(locale.fmt(
-                    "sysmon.gpu.vram",
-                    &[
-                        ("used", &format::bytes(locale, u)),
-                        ("total", &format::bytes(locale, t)),
-                    ],
-                ));
-            }
-            if let Some(t) = g.temp_c {
-                info.push(format!("{t:.0}°C"));
-            }
-            theme
-                .container(
-                    &r,
-                    column![
-                        row![
-                            theme
-                                .text(&r.child("name"), g.name.clone())
-                                .width(Length::Fill),
-                            theme.text(&r.child("text"), info.join("   ")),
-                        ]
-                        .width(Length::Fill),
-                        graph::meter(
-                            theme,
-                            &r.child("meter")
-                                .class_if("warning", (WARNING..CRITICAL).contains(&busy))
-                                .class_if("critical", busy >= CRITICAL),
-                            busy / 100.0
-                        ),
-                    ]
-                    .spacing(2),
-                )
-                .width(Length::Fill)
-                .into()
-        })
-        .collect();
-    out.push(graph::graph(
-        theme,
-        locale,
-        &node.child("graph"),
-        &[&h.gpu],
-        Some(100.0),
-        cap,
-        graph::Unit::Percent,
-    ));
-    out
 }
 
 #[cfg(test)]

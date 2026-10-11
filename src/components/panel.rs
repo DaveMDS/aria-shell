@@ -1,25 +1,26 @@
 //! A panel: one layer-shell bar on one output, holding gadgets in three
 //! slots (start / center / end), and their popups: xdg popup surfaces
 //! child of the bar's ([`crate::ui::popup`]), one at a time, which the
-//! panel opens, sizes and places ([`Surfaces`]) as its gadgets ask.
+//! panel opens, sizes and places ([`Surfaces`]) as its gadgets ask. The
+//! bar's thickness and the popups' sizes are their content's, measured
+//! at the output's scale.
 
 use std::collections::BTreeMap;
 
-use iced::widget::{Space, container, row};
-use iced::{Element, Length, Rectangle, Subscription, window};
+use iced::{Rectangle, Size, Subscription, window};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
-
-use crate::ui::Surfaces;
+use icssed::{Element, Node};
 
 use crate::config::{Config, RawSection, Section};
 use crate::gadgets::{self, AnyGadget, Context};
 use crate::services::scripts;
 use crate::shared::Shared;
 use crate::ui::popup::{self, Side};
-use crate::ui::theme::{self, Node, Theme};
+use crate::ui::theme::Theme;
+use crate::ui::{self, Measuring, Surfaces};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation; `size`, `align`,
@@ -123,13 +124,17 @@ pub struct Panel {
     /// Config section this panel was built from, e.g. `panel:2`.
     pub section: String,
     pub output: OutputId,
+    /// The output's connector: `panel[output=..]`, `popup[output=..]`.
+    output_name: String,
+    /// The output's logical size: what the bar spans, the room its
+    /// popups have.
+    room: Size,
     config: PanelConfig,
-    /// `panel[.top|.bottom][#instance][output=..]`, the root of every
-    /// node on this bar.
-    node: Node,
-    /// Bar thickness the surface was created (or last resized) with.
-    /// Layer-shell needs it up front, so it comes from the theme's
-    /// `min-height` on `panel`, not from the content.
+    /// The scale its output's surfaces are drawn at, for the roots.
+    pub scale: f32,
+    /// Bar thickness the surface was created (or last resized) with:
+    /// its content's (`min-height` a minimum), measured, since
+    /// layer-shell needs it up front.
     height: u32,
     gadgets: Vec<Entry>,
     /// Open popups, by window id. The panel mints the ids so the daemon
@@ -153,10 +158,10 @@ struct Popup {
 struct Entry {
     slot: Slot,
     gadget: AnyGadget,
-    /// `panel > slot.<slot> > gadget.<kind>[#instance]:nth`.
-    node: Node,
-    /// `popup > gadget.<kind>[#instance]`.
-    popup_node: Node,
+    /// The `id` of its `[Name:id]` section: `gadget.<kind>#<id>`.
+    id: Option<String>,
+    /// Its place among its slot's gadgets, and their count.
+    at: (usize, usize),
 }
 
 #[derive(Clone, Debug)]
@@ -173,59 +178,75 @@ pub enum Message {
 pub type Action = gadgets::Action<Message>;
 
 impl Panel {
+    /// The bar of section `section` on `output`, at `scale`; its
+    /// thickness is measured afterwards ([`Panel::resize`]).
     pub fn new(
         section: String,
         config: PanelConfig,
         shell: &Config,
-        theme: &Theme,
         output: &OutputInfo,
+        scale: f32,
     ) -> Self {
-        let node = Node::root("panel")
-            .class(match config.position {
-                Position::Top => "top",
-                Position::Bottom => "bottom",
-            })
-            .id_opt(instance_id(&section))
-            .attr("output", output.name.clone().unwrap_or_default());
-        let popup_root =
-            Node::root("popup").attr("output", output.name.clone().unwrap_or_default());
         let mut gadgets = Vec::new();
         for (slot, names) in [
             (Slot::Start, &config.items_start),
             (Slot::Center, &config.items_center),
             (Slot::End, &config.items_end),
         ] {
-            let slot_node = node.child("slot").class(slot.name());
             let created: Vec<(&String, AnyGadget)> = names
                 .iter()
                 .filter_map(|name| Some((name, AnyGadget::create(name, shell, output)?)))
                 .collect();
             let count = created.len();
             for (i, (name, gadget)) in created.into_iter().enumerate() {
-                let id = instance_id(name);
                 gadgets.push(Entry {
-                    node: slot_node
-                        .child("gadget")
-                        .class(gadget.kind())
-                        .id_opt(id)
-                        .nth(i, count),
-                    popup_node: popup_root.child("gadget").class(gadget.kind()).id_opt(id),
                     slot,
                     gadget,
+                    id: instance_id(name).map(str::to_owned),
+                    at: (i, count),
                 });
             }
         }
-        let height = Self::themed_height(theme, &node);
         Self {
             section,
             output: OutputId::from(output),
+            output_name: output.name.clone().unwrap_or_default(),
+            room: ui::room_on(Some(output)),
             config,
-            node,
-            height,
+            scale,
+            height: 1,
             gadgets,
             popups: BTreeMap::new(),
             keyboard: false,
         }
+    }
+
+    /// `panel[.top|.bottom][#instance][output=..]`, the root of every
+    /// node on this bar.
+    fn root<'a>(&self, theme: &'a Theme) -> Node<'a> {
+        let position = match self.config.position {
+            Position::Top => "top",
+            Position::Bottom => "bottom",
+        };
+        let root = theme.root("panel", self.scale).class(position);
+        with_id(root, instance_id(&self.section)).attr("output", &self.output_name)
+    }
+
+    /// `panel > slot.<slot> > gadget.<kind>[#instance]`, at its place.
+    fn gadget_node<'a>(root: Node<'a>, e: &Entry) -> Node<'a> {
+        let node = root
+            .child("slot")
+            .class(e.slot.name())
+            .child_at("gadget", e.at.0, e.at.1)
+            .class(e.gadget.kind());
+        with_id(node, e.id.as_deref())
+    }
+
+    /// `popup[output=..]`, the root of a popup of this bar.
+    fn popup_root<'a>(&self, theme: &'a Theme) -> Node<'a> {
+        theme
+            .root("popup", self.scale)
+            .attr("output", &self.output_name)
     }
 
     /// Whether an open popup of this bar shows a text field.
@@ -235,14 +256,6 @@ impl Panel {
                 .get(p.gadget)
                 .is_some_and(|e| e.gadget.popup_keyboard())
         })
-    }
-
-    pub(crate) fn themed_height(theme: &Theme, node: &Node) -> u32 {
-        theme
-            .resolve(node)
-            .min_height
-            .unwrap_or(theme::DEFAULT_PANEL_HEIGHT)
-            .max(1.0) as u32
     }
 
     fn anchor(&self) -> Anchor {
@@ -267,10 +280,20 @@ impl Panel {
         }
     }
 
-    /// The theme changed: if the bar thickness did too, the new layout
-    /// (and exclusive zone) to send for this surface.
-    pub fn resize(&mut self, theme: &Theme) -> Option<(Anchor, LayerSize, i32)> {
-        let height = Self::themed_height(theme, &self.node);
+    /// Measure the bar again (it's new, the theme or the scale changed):
+    /// if its thickness changed, the new layout (and exclusive zone) to
+    /// send for its surface `bar`.
+    pub fn resize(
+        &mut self,
+        bar: window::Id,
+        m: Measuring<'_>,
+    ) -> Option<(Anchor, LayerSize, i32)> {
+        let (_, height) = ui::size(
+            &mut m.measure.borrow_mut(),
+            bar,
+            self.view(m.shared),
+            self.room,
+        );
         if height == self.height {
             return None;
         }
@@ -361,18 +384,17 @@ impl Panel {
         }
     }
 
-    /// Surface size for popup `id`: what its gadget wants for the
-    /// content now, plus the popup's chrome.
-    pub fn popup_size(&self, id: window::Id, shared: Shared<'_>) -> Option<(u32, u32)> {
-        let e = self
-            .popups
-            .get(&id)
-            .and_then(|p| self.gadgets.get(p.gadget))?;
-        let ctx = Context {
-            shared,
-            node: e.popup_node.clone(),
-        };
-        Some(popup::surface_size(shared.theme, e.gadget.popup_size(ctx)))
+    /// The room around a popup's box for its shadow.
+    fn popup_room(&self, theme: &Theme) -> iced::Padding {
+        popup::room(self.popup_root(theme))
+    }
+
+    /// Surface size for popup `id`: its content's, measured, within the
+    /// output's height left by the bar.
+    fn popup_size(&self, id: window::Id, m: Measuring<'_>) -> Option<(u32, u32)> {
+        let content = self.popup_view(id, m.shared)?;
+        let room = Size::new(self.room.width, self.room.height - self.height as f32);
+        Some(ui::size(&mut m.measure.borrow_mut(), id, content, room))
     }
 
     pub fn has_popup(&self, id: window::Id) -> bool {
@@ -397,9 +419,9 @@ impl Panel {
         bar: window::Id,
         id: window::Id,
         widget: Rectangle,
-        shared: Shared<'_>,
+        m: Measuring<'_>,
     ) -> Surfaces {
-        let Some(size) = self.popup_size(id, shared) else {
+        let Some(size) = self.popup_size(id, m) else {
             return Surfaces::default();
         };
         let anchor = Rectangle {
@@ -408,11 +430,12 @@ impl Panel {
             ..widget
         };
         let side = self.popup_side();
+        let room = self.popup_room(m.shared.theme);
         let Some(p) = self.popups.get_mut(&id) else {
             return Surfaces::default();
         };
         p.placed = Some((anchor, size));
-        let settings = popup::settings(bar, side, anchor, size, popup::room(shared.theme));
+        let settings = popup::settings(bar, side, anchor, size, room);
         Surfaces {
             popup: vec![(id, settings)],
             ..Surfaces::default()
@@ -422,9 +445,9 @@ impl Panel {
     /// After a change of the gadgets' or the shared state: the bar
     /// takes the keyboard while a popup with a text field is open, and
     /// gives it back after (the compositor sends keys to the popup,
-    /// which holds the grab); a popup whose gadget wants another size
+    /// which holds the grab); a popup whose content wants another size
     /// is placed again with it.
-    pub fn sync_popups(&mut self, bar: window::Id, shared: Shared<'_>) -> Surfaces {
+    pub fn sync_popups(&mut self, bar: window::Id, m: Measuring<'_>) -> Surfaces {
         let mut surfaces = Surfaces::default();
         let wanted = self.wants_keyboard();
         if wanted != self.keyboard {
@@ -437,10 +460,10 @@ impl Panel {
             surfaces.keyboard.push((bar, interactivity));
         }
         let side = self.popup_side();
-        let room = popup::room(shared.theme);
+        let room = self.popup_room(m.shared.theme);
         let ids: Vec<window::Id> = self.popups.keys().copied().collect();
         for id in ids {
-            let Some(size) = self.popup_size(id, shared) else {
+            let Some(size) = self.popup_size(id, m) else {
                 continue;
             };
             let Some(Popup {
@@ -494,7 +517,7 @@ impl Panel {
     /// surface: for `debug surfaces`.
     pub fn popup_rects(&self, theme: &Theme) -> impl Iterator<Item = (window::Id, Rectangle)> {
         let side = self.popup_side();
-        let room = popup::room(theme);
+        let room = self.popup_room(theme);
         self.popups.iter().filter_map(move |(&id, p)| {
             let (anchor, size) = p.placed?;
             Some((id, popup::estimate(side, anchor, size, room)))
@@ -502,71 +525,44 @@ impl Panel {
     }
 
     pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
-        let theme = shared.theme;
-        let section = |slot: Slot| {
-            let slot_node = self.node.child("slot").class(slot.name());
-            let children = self
+        let root = self.root(shared.theme);
+        let slot = |slot: Slot| -> Element<'a, Message> {
+            let gadgets = self
                 .gadgets
                 .iter()
                 .enumerate()
                 .filter(move |(_, e)| e.slot == slot)
                 .map(move |(i, e)| {
-                    let ctx = Context {
-                        shared,
-                        node: e.node.clone(),
-                    };
-                    theme
-                        .container(
-                            &e.node,
-                            e.gadget.view(ctx).map(move |m| Message::Gadget(i, m)),
-                        )
-                        .into()
+                    let node = Self::gadget_node(root, e);
+                    let ctx = Context { shared, node };
+                    e.gadget.view(ctx).map(move |m| Message::Gadget(i, m))
                 });
-            theme
-                .row(&slot_node, children)
-                .align_y(iced::Alignment::Center)
+            icssed::row(root.child("slot").class(slot.name()), gadgets).into()
         };
-        let bar = row![
-            container(section(Slot::Start))
-                .width(Length::Fill)
-                .align_left(Length::Fill),
-            container(section(Slot::Center))
-                .width(Length::Fill)
-                .center_x(Length::Fill),
-            container(section(Slot::End))
-                .width(Length::Fill)
-                .align_right(Length::Fill),
-        ]
-        .height(Length::Fill)
-        .align_y(iced::Alignment::Center);
-        theme
-            .container(&self.node, bar)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        icssed::row(
+            root,
+            [slot(Slot::Start), slot(Slot::Center), slot(Slot::End)],
+        )
+        .into()
     }
 
-    /// Content of the popup surface `id`: the gadget's popup view inside
-    /// a `popup` root filling the surface.
-    pub fn popup_view<'a>(&'a self, id: window::Id, shared: Shared<'a>) -> Element<'a, Message> {
-        let Some((i, e)) = self
+    /// Content of the popup surface `id`: the gadget's popup view in a
+    /// `popup` root's box, its shadow's room around; `None` when it
+    /// isn't one of this bar's.
+    pub fn popup_view<'a>(
+        &'a self,
+        id: window::Id,
+        shared: Shared<'a>,
+    ) -> Option<Element<'a, Message>> {
+        let (i, e) = self
             .popups
             .get(&id)
-            .and_then(|p| Some((p.gadget, self.gadgets.get(p.gadget)?)))
-        else {
-            return Space::new().into();
-        };
-        let ctx = Context {
-            shared,
-            node: e.popup_node.clone(),
-        };
+            .and_then(|p| Some((p.gadget, self.gadgets.get(p.gadget)?)))?;
+        let root = self.popup_root(shared.theme);
+        let node = with_id(root.child("gadget").class(e.gadget.kind()), e.id.as_deref());
+        let ctx = Context { shared, node };
         let content = e.gadget.popup_view(ctx).map(move |m| Message::Gadget(i, m));
-        let root = e
-            .popup_node
-            .parent()
-            .cloned()
-            .unwrap_or_else(|| Node::root("popup"));
-        popup::view(shared.theme, &root, content)
+        Some(popup::view(root, content))
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -576,6 +572,14 @@ impl Panel {
                 .with(i)
                 .map(|(i, m)| Message::Gadget(i, m))
         }))
+    }
+}
+
+/// `node#id`, when there is one.
+fn with_id<'a>(node: Node<'a>, id: Option<&str>) -> Node<'a> {
+    match id {
+        Some(id) => node.id(id),
+        None => node,
     }
 }
 

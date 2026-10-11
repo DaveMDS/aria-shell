@@ -129,7 +129,7 @@ impl Item {
 }
 
 fn handle(p: &Pixmap) -> Icon {
-    Icon::Raster(image::Handle::from_rgba(p.width, p.height, p.rgba.clone()))
+    Icon::Image(image::Handle::from_rgba(p.width, p.height, p.rgba.clone()))
 }
 
 #[derive(Debug, Clone)]

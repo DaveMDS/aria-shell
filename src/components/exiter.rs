@@ -14,15 +14,13 @@ use std::sync::Arc;
 
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Element, Event, Length, Subscription, Task, window};
+use iced::{Event, Subscription, Task, window};
+use icssed::{Element, Node};
 
-use crate::components::dialog;
 use crate::config::{RawSection, Section};
 use crate::locale::Locale;
 use crate::shared::Shared;
 use crate::time;
-use crate::ui::theme::{self, Node, Theme};
 
 /// `[exiter]` section.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,7 +194,6 @@ pub struct Exiter {
     config: ExiterConfig,
     selected: usize,
     confirm: Option<Confirm>,
-    node: Node,
 }
 
 /// A button waiting for its confirmation.
@@ -239,7 +236,6 @@ impl Exiter {
             config,
             selected: 0,
             confirm: None,
-            node: Node::root("exiter"),
         }
     }
 
@@ -347,42 +343,6 @@ impl Exiter {
         }
     }
 
-    /// The icon of a button at `size`: the first name the theme has,
-    /// else the first name (which resolves to the generic fallback).
-    fn icon<'a>(
-        &self,
-        shared: &Shared<'a>,
-        button: &Button,
-        node: &Node,
-        size: f32,
-    ) -> Element<'a, Message> {
-        let style = shared.theme.resolve(node);
-        shared
-            .icons
-            .first_of(&button.icons)
-            .map(|icon| icon.view(size, style.color))
-            .unwrap_or_else(|| Space::new().width(size).height(size).into())
-    }
-
-    /// The grid's cell: the icon's size and the widest label.
-    fn cell(&self, theme: &Theme, locale: &Locale) -> (f32, f32) {
-        let b = self.node.child("button").class("flat");
-        let bs = theme.resolve(&b);
-        let icon = px(theme.resolve(&b.child("icon")).height).unwrap_or(48.0);
-        let t = b.child("text");
-        let label_h = theme.line_height(&t);
-        let label_w = self
-            .config
-            .buttons
-            .iter()
-            .map(|button| theme.measure(&t, button.label.text(locale)).width)
-            .fold(0.0, f32::max);
-        (
-            icon.max(label_w) + bs.inset().x(),
-            icon + bs.gap + label_h + bs.inset().y(),
-        )
-    }
-
     /// The texts of the confirmation, and their node.
     fn confirm_texts(&self, locale: &Locale) -> Option<(String, Option<String>, &Button)> {
         let confirm = self.confirm.as_ref()?;
@@ -394,107 +354,52 @@ impl Exiter {
         Some((question, countdown, button))
     }
 
-    /// The surface size for the current content: the root's padding
-    /// and border included, and the room for its shadow.
-    pub fn size(&self, theme: &Theme, locale: &Locale) -> (u32, u32) {
-        dialog::grown(self.box_size(theme, locale), theme.shadow_room(&self.node))
-    }
-
-    /// The box's size for the current content, the root's padding and
-    /// border included.
-    fn box_size(&self, theme: &Theme, locale: &Locale) -> (u32, u32) {
-        let s = theme.resolve(&self.node);
-        let chrome_w = s.inset().x();
-        let chrome_h = s.inset().y();
-        let (w, h) = match self.confirm_texts(locale) {
-            Some((question, countdown, button)) => {
-                let c = self.node.child("confirm");
-                let cs = theme.resolve(&c);
-                let t = c.child("text");
-                let mut w = theme.measure(&t, &question).width;
-                let mut h = theme.line_height(&t);
-                if let Some(countdown) = &countdown {
-                    let cd = c.child("countdown");
-                    w = w.max(theme.measure(&cd, countdown).width);
-                    h += cs.gap + theme.line_height(&cd);
-                }
-                let b = c.child("button");
-                let bs = theme.resolve(&b);
-                let bt = b.child("text");
-                let button_w = |text: &str| theme.measure(&bt, text).width + bs.inset().x();
-                let buttons_w = button_w(locale.tr("exiter.cancel"))
-                    + cs.gap
-                    + button_w(button.label.text(locale));
-                w = w.max(buttons_w);
-                h += cs.gap + theme.line_height(&bt) + bs.inset().y();
-                (w + cs.inset().x(), h + cs.inset().y())
-            }
-            None => {
-                let n = self.config.buttons.len().max(1);
-                let cols = self.config.columns.min(n);
-                let rows = n.div_ceil(cols);
-                let (cw, ch) = self.cell(theme, locale);
-                (
-                    cols as f32 * cw + (cols - 1) as f32 * s.gap,
-                    rows as f32 * ch + (rows - 1) as f32 * s.gap,
-                )
-            }
-        };
-        (
-            (w + chrome_w).ceil().max(1.0) as u32,
-            (h + chrome_h).ceil().max(1.0) as u32,
-        )
-    }
-
-    /// The content: the daemon's `exiter` root container applies the
-    /// root's padding.
-    pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
-        let theme = shared.theme;
+    /// The keys, the keyboard leaving (as the launcher), and the
+    /// countdown's seconds. The daemon checks that `window` is ours.
+    /// Its dialog's box, `root`: the grid of buttons, or a button's
+    /// confirmation in its place.
+    pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
         let locale = shared.locale;
-        let s = theme.resolve(&self.node);
         if let Some((question, countdown, button)) = self.confirm_texts(locale) {
-            let c = self.node.child("confirm");
-            let cs = theme.resolve(&c);
-            let t = c.child("text");
+            let c = root.child("confirm");
             let mut items: Vec<Element<'a, Message>> =
-                vec![theme.container(&t, theme.text(&t, question)).into()];
+                vec![icssed::text(c.child("label"), question).into()];
             if let Some(countdown) = countdown {
-                let cd = c.child("countdown");
-                items.push(theme.container(&cd, theme.text(&cd, countdown)).into());
+                items.push(icssed::text(c.child("countdown"), countdown).into());
             }
-            let cancel = c.child("button").class("cancel");
-            let ok = c
+            let buttons = c.child("buttons");
+            let cancel = buttons.child("button").class("cancel");
+            let ok = buttons
                 .child("button")
                 .class("ok")
-                .class(button.name.clone())
+                .class(&button.name)
                 .class("danger");
             items.push(
-                row![
-                    theme
-                        .button(
-                            &cancel,
-                            theme.text(&cancel.child("text"), locale.tr("exiter.cancel"))
+                icssed::row(
+                    buttons,
+                    [
+                        icssed::button(
+                            cancel,
+                            [
+                                icssed::text(cancel.child("label"), locale.tr("exiter.cancel"))
+                                    .into(),
+                            ],
                         )
-                        .on_press(Message::Cancel),
-                    theme
-                        .button(
-                            &ok,
-                            theme.text(&ok.child("text"), button.label.text(locale))
+                        .on_press(Message::Cancel)
+                        .into(),
+                        icssed::button(
+                            ok,
+                            [icssed::text(ok.child("label"), button.label.text(locale)).into()],
                         )
-                        .on_press(Message::Ok),
-                ]
-                .spacing(cs.gap)
+                        .on_press(Message::Ok)
+                        .into(),
+                    ],
+                )
                 .into(),
             );
-            return theme
-                .container(&c, column(items).spacing(cs.gap).align_x(Alignment::Center))
-                .into();
+            return icssed::column(root, [icssed::column(c, items).into()]).into();
         }
-        let (cw, ch) = self.cell(theme, locale);
-        let icon_size = px(theme
-            .resolve(&self.node.child("button").class("flat").child("icon"))
-            .height)
-        .unwrap_or(48.0);
+        let icons: &'a dyn icssed::Icons = shared.icons;
         let cols = self.config.columns.max(1);
         let rows = self
             .config
@@ -502,41 +407,33 @@ impl Exiter {
             .chunks(cols)
             .enumerate()
             .map(|(r, chunk)| {
+                let row = root.child("row");
                 let cells = chunk.iter().enumerate().map(|(c, button)| {
                     let i = r * cols + c;
-                    let b = self
-                        .node
+                    let b = row
                         .child("button")
-                        .class(button.name.clone())
+                        .class(&button.name)
                         .class("flat")
                         .class_if("selected", i == self.selected);
-                    let bs = theme.resolve(&b);
-                    let icon = self.icon(&shared, button, &b.child("icon"), icon_size);
-                    let text = theme.text(&b.child("text"), button.label.text(locale));
-                    // The cell is the widest label's: centre the content in it.
-                    let content = container(
-                        column![icon, text]
-                            .spacing(bs.gap)
-                            .align_x(Alignment::Center),
+                    let icon = match shared.icons.first_of(&button.icons) {
+                        Some(icon) => icssed::icon(b.child("icon"), icon.clone()),
+                        None => icssed::icon(b.child("icon"), (icons, "")),
+                    };
+                    icssed::button(
+                        b,
+                        [
+                            icon.into(),
+                            icssed::text(b.child("label"), button.label.text(locale)).into(),
+                        ],
                     )
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(Alignment::Center)
-                    .align_y(Alignment::Center);
-                    theme
-                        .button(&b, content)
-                        .width(Length::Fixed(cw))
-                        .height(Length::Fixed(ch))
-                        .on_press(Message::Activate(i))
-                        .into()
+                    .on_press(Message::Activate(i))
+                    .into()
                 });
-                row(cells).spacing(s.gap).into()
+                icssed::row(row, cells).into()
             });
-        column(rows).spacing(s.gap).into()
+        icssed::column(root, rows).into()
     }
 
-    /// The keys, the keyboard leaving (as the launcher), and the
-    /// countdown's seconds. The daemon checks that `window` is ours.
     pub fn subscription(&self) -> Subscription<(Option<window::Id>, Message)> {
         let keys = iced::event::listen_with(|event, _status, window| {
             let message = match event {
@@ -564,13 +461,6 @@ impl Exiter {
         } else {
             keys
         }
-    }
-}
-
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
     }
 }
 

@@ -6,9 +6,11 @@
 use iced::Task;
 use iced::window::Id;
 use iced_exwlshell::reexport::NewLayerShellSettings;
+use iced_wayland_subscriber::OutputInfo;
 
 use crate::components::{dialog, exiter, launcher, locker, osd, panel};
-use crate::ui::Surfaces;
+use crate::daemon::view::dialog_surface;
+use crate::ui::{self, Surfaces};
 use crate::{AriaShell, Message};
 use dialog::Dialog;
 use exiter::Exiter;
@@ -16,20 +18,46 @@ use launcher::Launcher;
 use locker::Locker;
 use panel::Panel;
 
+/// The keys the dialogs are measured under (one of each at a time).
+const LAUNCHER: &str = "launcher";
+const EXITER: &str = "exiter";
+
 impl AriaShell {
     /// The popups' content may have changed with the shared state: the
     /// bars take or give back the keyboard, the popups whose gadget
     /// wants another size are placed again.
     pub(crate) fn sync_popups(&mut self) -> Task<Message> {
-        // `Shared` borrows the daemon but for the panels.
-        let mut panels = std::mem::take(&mut self.panels);
-        let surfaces = panels
+        let m = measuring!(self);
+        let surfaces = self
+            .panels
             .iter_mut()
             .fold(Surfaces::default(), |all, (&id, panel)| {
-                all.and(panel.sync_popups(id, self.shared()))
+                all.and(panel.sync_popups(id, m))
             });
-        self.panels = panels;
         surface_tasks(surfaces)
+    }
+
+    /// Every surface measured again (the theme or a scale changed): the
+    /// bars whose thickness changed are resized, the popups, the
+    /// toasts, the OSD and the dialogs too.
+    pub(crate) fn relayout(&mut self) -> Task<Message> {
+        let m = measuring!(self);
+        let mut tasks = Vec::new();
+        for (&id, panel) in &mut self.panels {
+            panel.scale = self.scales.of(panel.output);
+            if let Some((anchor, size, zone_size)) = panel.resize(id, m) {
+                tasks.push(Task::done(Message::LayoutChange { id, anchor, size }));
+                tasks.push(Task::done(Message::ExclusiveZoneChange { id, zone_size }));
+            }
+        }
+        tasks.push(self.sync_popups());
+        tasks.push(self.sync_toasts());
+        tasks.push(surface_tasks(
+            self.osd.relayout(&self.outputs, measuring!(self)),
+        ));
+        tasks.push(self.sync_launcher());
+        tasks.push(self.sync_exiter());
+        Task::batch(tasks)
     }
 
     /// New frames for the surfaces showing the shared state (`Shared`):
@@ -70,13 +98,10 @@ impl AriaShell {
     /// Make the toasts match the notifications.
     pub(crate) fn sync_toasts(&mut self) -> Task<Message> {
         let focused = self.focused_output().cloned();
-        surface_tasks(self.toasts.sync(
-            &self.notifications,
-            &self.outputs,
-            focused.as_ref(),
-            &self.theme,
-            &self.icons,
-        ))
+        surface_tasks(
+            self.toasts
+                .sync(&self.outputs, focused.as_ref(), measuring!(self)),
+        )
     }
 
     /// The screens' brightness changed: the OSD, the gadgets.
@@ -104,26 +129,27 @@ impl AriaShell {
     /// out.
     pub(crate) fn show_osd(&mut self, content: osd::Content) -> Task<Message> {
         log::debug!("osd: {content:?}");
-        let (surfaces, expiry) = self.osd.show(content, &self.outputs, &self.theme);
+        let (surfaces, expiry) = self.osd.show(content, &self.outputs, measuring!(self));
         self.resolve_icons();
         Task::batch([surface_tasks(surfaces), expiry.map(Message::OsdExpired)])
     }
 
     /// Show the launcher on the focused output (the first one if the
-    /// compositor didn't say), sized by the theme's `launcher` rule, on
-    /// a dialog surface.
+    /// compositor didn't say), sized by its content, on a dialog
+    /// surface.
     pub(crate) fn open_launcher(&mut self) -> Task<Message> {
         let Some(output) = self.focused_output().cloned() else {
             log::warn!("no output to show the launcher on");
             return Task::none();
         };
-        let size = Launcher::size(&self.theme);
         let launcher = Launcher::new(
             self.config.section(None),
             self.config.section(None),
             self.general.terminal.clone(),
             self.icons.index(),
         );
+        self.resolve_icons();
+        let size = self.launcher_size(&launcher, &output);
         let (dialog, surfaces) = Dialog::open(
             "aria-launcher",
             &output,
@@ -131,13 +157,47 @@ impl AriaShell {
             self.outputs.values().cloned(),
         );
         self.launcher = Some((dialog, launcher));
-        self.resolve_icons();
         Task::batch([self.close_exiter(), surface_tasks(surfaces)])
+    }
+
+    /// The launcher's surface size on `output`: its content's.
+    fn launcher_size(&self, launcher: &Launcher, output: &OutputInfo) -> (u32, u32) {
+        let root = self.theme.root("launcher", self.scales.of(output.into()));
+        let content = dialog_surface(
+            root,
+            launcher.view(self.shared(), root),
+            launcher::Message::Nothing,
+        );
+        ui::size(
+            &mut self.measure.borrow_mut(),
+            LAUNCHER,
+            content,
+            ui::room_on(Some(output)),
+        )
+    }
+
+    /// The launcher's content changed: resize its surface when it
+    /// wants another size.
+    pub(crate) fn sync_launcher(&mut self) -> Task<Message> {
+        let Some((dialog, launcher)) = &self.launcher else {
+            return Task::none();
+        };
+        let Some(output) = self.outputs.get(&dialog.output) else {
+            return Task::none();
+        };
+        let size = self.launcher_size(launcher, output);
+        let Some((dialog, _)) = &mut self.launcher else {
+            return Task::none();
+        };
+        surface_tasks(dialog.resize(size))
     }
 
     pub(crate) fn close_launcher(&mut self) -> Task<Message> {
         match self.launcher.take() {
-            Some((dialog, _)) => surface_tasks(dialog.close()),
+            Some((dialog, _)) => {
+                self.measure.borrow_mut().forget(LAUNCHER);
+                surface_tasks(dialog.close())
+            }
             None => Task::none(),
         }
     }
@@ -149,7 +209,7 @@ impl AriaShell {
             log::warn!("no output to show the exiter on");
             return Task::none();
         };
-        let size = exiter.size(&self.theme, &self.locale);
+        let size = self.exiter_size(&exiter, &output);
         let (dialog, surfaces) =
             Dialog::open("aria-exiter", &output, size, self.outputs.values().cloned());
         self.exiter = Some((dialog, exiter));
@@ -157,9 +217,28 @@ impl AriaShell {
         Task::batch([self.close_launcher(), surface_tasks(surfaces)])
     }
 
+    /// The exit menu's surface size on `output`: its content's.
+    fn exiter_size(&self, exiter: &Exiter, output: &OutputInfo) -> (u32, u32) {
+        let root = self.theme.root("exiter", self.scales.of(output.into()));
+        let content = dialog_surface(
+            root,
+            exiter.view(self.shared(), root),
+            exiter::Message::Nothing,
+        );
+        ui::size(
+            &mut self.measure.borrow_mut(),
+            EXITER,
+            content,
+            ui::room_on(Some(output)),
+        )
+    }
+
     pub(crate) fn close_exiter(&mut self) -> Task<Message> {
         match self.exiter.take() {
-            Some((dialog, _)) => surface_tasks(dialog.close()),
+            Some((dialog, _)) => {
+                self.measure.borrow_mut().forget(EXITER);
+                surface_tasks(dialog.close())
+            }
             None => Task::none(),
         }
     }
@@ -167,10 +246,17 @@ impl AriaShell {
     /// The exit menu's content changed (the grid, the confirmation, a
     /// countdown tick): resize its surface when it wants another size.
     pub(crate) fn sync_exiter(&mut self) -> Task<Message> {
-        let Some((dialog, exiter)) = &mut self.exiter else {
+        let Some((dialog, exiter)) = &self.exiter else {
             return Task::none();
         };
-        surface_tasks(dialog.resize(exiter.size(&self.theme, &self.locale)))
+        let Some(output) = self.outputs.get(&dialog.output) else {
+            return Task::none();
+        };
+        let size = self.exiter_size(exiter, output);
+        let Some((dialog, _)) = &mut self.exiter else {
+            return Task::none();
+        };
+        surface_tasks(dialog.resize(size))
     }
 
     /// Close every open popup but `except` (one opening), telling its

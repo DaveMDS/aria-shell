@@ -10,16 +10,15 @@
 //! place and the popup is resized (its size is a function of the state,
 //! see [`Gadget::popup_size`]).
 
-use iced::Element;
 use iced::mouse::ScrollDelta;
-use iced::widget::{Space, mouse_area};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
 use crate::services::tray::{Command, Orientation, Status};
 use crate::ui::menu::{self, Menu};
-use crate::ui::theme;
 
 /// `[Tray]` section: no keys yet (the Python one had none either).
 #[derive(Debug, Clone)]
@@ -33,8 +32,6 @@ impl Section for TrayConfig {
     }
 }
 
-/// Icon size when the theme doesn't set `height` on `item icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
 const LOADING: &str = "…";
 
 pub struct TrayGadget {
@@ -116,32 +113,25 @@ impl Gadget for TrayGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let count = ctx.tray.items.len();
+        let icons: &dyn icssed::Icons = ctx.icons;
         let items = ctx.tray.items.iter().enumerate().map(|(n, item)| {
             let node = ctx
                 .node
-                .child("button")
+                .child_at("button", n, count)
                 .class_if("passive", item.props.status == Status::Passive)
-                .class_if("attention", item.props.status == Status::NeedsAttention)
-                .nth(n, count);
-            let icon_node = node.child("icon");
-            let style = theme.resolve(&icon_node);
-            let size = style
-                .height
-                .or(style.width)
-                .and_then(|l| match l {
-                    theme::Length::Px(px) => Some(px),
-                    _ => None,
-                })
-                .unwrap_or(DEFAULT_ICON_SIZE);
-            let icon = item.pixmap_icon().or_else(|| {
+                .class_if("attention", item.props.status == Status::NeedsAttention);
+            let file = item.pixmap_icon().or_else(|| {
                 item.icon_name()
                     .and_then(|name| ctx.icons.get_name(name, item.icon_theme_path()))
             });
-            let icon: Element<'a, Message> = match icon {
-                Some(icon) => icon.view(size, style.color),
-                None => Space::new().width(size).height(size).into(),
+            // Its room is kept until the icon is known.
+            let icon = match file {
+                Some(file) => icssed::icon(node.child("icon"), file.clone()),
+                None => icssed::icon(
+                    node.child("icon"),
+                    (icons, item.icon_name().unwrap_or_default()),
+                ),
             };
             let key = item.key.clone();
             let has_menu = item.props.menu.is_some();
@@ -155,18 +145,17 @@ impl Gadget for TrayGadget {
             } else {
                 Message::ContextMenu(key.clone())
             };
-            let button = theme.button(&node, icon).on_press(left);
+            let button = icssed::button(node, [icon.into()])
+                .on_press(left)
+                .id(self.popup.anchor_nth(n));
             let scroll_key = key.clone();
-            mouse_area(self.popup.anchor_nth(n, button))
+            mouse_area(button)
                 .on_right_press(right)
                 .on_middle_press(Message::SecondaryActivate(key))
                 .on_scroll(move |delta| Message::Scroll(scroll_key.clone(), delta))
                 .into()
         });
-        theme
-            .row(&ctx.node, items)
-            .align_y(iced::Alignment::Center)
-            .into()
+        icssed::row(ctx.node, items).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -179,38 +168,15 @@ impl Gadget for TrayGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let node = ctx.node.child("menu");
-        let menu = self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key));
-        match menu {
+        match self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key)) {
             Some(menu) => self
                 .menu
-                .view(theme, &node, menu.items().to_vec())
+                .view(node, menu.items().to_vec())
                 .map(Message::Menu),
-            None => theme
-                .container(&node, theme.text(&node.child("text"), LOADING))
-                .into(),
-        }
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let theme = ctx.theme;
-        let node = ctx.node.child("menu");
-        let menu = self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key));
-        let size = match menu {
-            Some(menu) => self.menu.size(theme, &node, menu.items()),
             None => {
-                let text = theme.measure(&node.child("text"), LOADING);
-                let pad = theme.resolve(&node).inset();
-                iced::Size::new(
-                    text.width + pad.left + pad.right,
-                    text.height + pad.top + pad.bottom,
-                )
+                icssed::column(node, [icssed::text(node.child("label"), LOADING).into()]).into()
             }
-        };
-        (
-            size.width.ceil().max(1.0) as u32,
-            size.height.ceil().max(1.0) as u32,
-        )
+        }
     }
 }

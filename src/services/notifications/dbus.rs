@@ -166,7 +166,7 @@ fn image_data(value: &OwnedValue) -> Option<Icon> {
             rgba.push(if channels == 4 { px[3] } else { 255 });
         }
     }
-    Some(Icon::Raster(image::Handle::from_rgba(
+    Some(Icon::Image(image::Handle::from_rgba(
         width as u32,
         height as u32,
         rgba,
@@ -355,7 +355,7 @@ mod tests {
         let rgb = vec![1u8, 2, 3, 4, 5, 6, 0, 0];
         let v =
             OwnedValue::try_from(Value::from((2i32, 1i32, 8i32, false, 8i32, 3i32, rgb))).unwrap();
-        assert!(matches!(image_data(&v), Some(Icon::Raster(_))));
+        assert!(matches!(image_data(&v), Some(Icon::Image(_))));
         let rgba = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
         let v =
             OwnedValue::try_from(Value::from((2i32, 1i32, 8i32, true, 8i32, 4i32, rgba))).unwrap();

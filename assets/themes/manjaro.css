@@ -3,67 +3,51 @@
  * A flat monospace bar; the clock, the first gadget on the left and the
  * last on the right in reversed colours.
  *
- * Ported from the GTK-era theme. See assets/base.css for the element
- * tree and the supported properties.
+ * See assets/base.css for the element trees, icssed/assets/base.css for
+ * the properties.
  */
 
 /* The bar alone in monospace: `panel:root`, as a plain `panel` loses to
    base.css's `:root` font. */
 panel:root {
-  /* font-family: "JetBrainsMono NF", "Roboto Mono", monospace; */
   font-family: "JetBrains Mono NL", "Roboto Mono", monospace;
 }
 
-/* panel {
-  min-height: 28px;
-} */
-
-/* Gadgets sit flush against each other and fill the bar height, so a
+/* Gadgets sit flush against each other, as high as the bar, so a
    background covers the whole cell. */
-panel slot {
+panel > slot {
   padding: 0;
   gap: 0;
 }
-gadget {
+panel gadget {
   padding: 0 8px;
-  height: fill;
 }
 
-/* Bold clock */
-gadget.clock text {
-  font-weight: bold;
-}
-
-/* First gadget, last gadget and the clock use reversed colours */
+/* The first gadget, the last one and the clock in reversed colours... */
 gadget.clock,
 slot.start > gadget:first-child,
 slot.end > gadget:last-child {
-  color: var(--aria-bg);
-  background: var(--aria-accent);
+  color: var(--bg);
+  background: var(--accent);
 }
-/* ...except the workspaces, whose buttons are accent-coloured. */
+/* ...but the workspaces, whose buttons are accent-coloured. */
 slot.start > gadget.workspaces:first-child {
-  color: var(--aria-fg);
+  color: var(--fg);
   background: transparent;
 }
 
-/* Workspaces gadget */
-gadget.workspaces button.workspace {
-  color: var(--aria-accent);
+gadget.workspaces > button.workspace {
+  padding: 0 6px;
   border: none;
   border-radius: 0;
-  padding: 0 6px;
-  height: fill;
+  background: transparent;
+  color: var(--accent);
 }
-gadget.workspaces button.workspace.active {
-  color: var(--aria-bg);
-  background: var(--aria-accent);
+gadget.workspaces > button.workspace.active {
+  background: var(--accent);
+  color: var(--bg);
 }
-gadget.workspaces button.workspace.urgent {
-  color: var(--aria-on-accent);
-  background: var(--aria-urgent);
-}
-
-popup {
-  border-radius: 0;
+gadget.workspaces > button.workspace.urgent {
+  background: var(--danger);
+  color: var(--on-accent);
 }

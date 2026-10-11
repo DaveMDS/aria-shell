@@ -1,17 +1,17 @@
 //! `aria-shell debug ...`: the daemon describing itself to a test
 //! driver or a curious user, one line per reply. Where our surfaces are
-//! (estimated from what we asked the compositor for), the widgets the
-//! theme tagged and the pointer; the services describe themselves.
+//! (estimated from what we asked the compositor for), the widgets (the
+//! toolkit's query) and the pointer; the services describe themselves.
 
-use iced::advanced::widget::operation::{Operation, Outcome};
 use iced::window::Id;
-use iced::{Point, Rectangle, Size, Task, widget};
+use iced::{Point, Rectangle, Size, Task};
 use iced_wayland_subscriber::OutputId;
+use icssed::query::{Found, Report};
 
 use crate::commands::{DebugCommand, Reply};
 use crate::components::locker::Locker;
 use crate::components::panel;
-use crate::ui::{theme, toast};
+use crate::ui::toast;
 use crate::{AriaShell, Message};
 
 impl AriaShell {
@@ -78,8 +78,8 @@ impl AriaShell {
                 ));
                 Task::none()
             }
-            DebugCommand::Widgets(filter) => widget_rects()
-                .map(move |rects| Message::Widgets(reply.clone(), filter.clone(), rects)),
+            DebugCommand::Widgets(filter) => iced::advanced::widget::operate(Report::default())
+                .map(move |found| Message::Widgets(reply.clone(), filter.clone(), found)),
         }
     }
 
@@ -147,7 +147,9 @@ impl AriaShell {
                     self.bar_height(output, panel::Position::Top),
                     self.bar_height(output, panel::Position::Bottom),
                 );
-                list.push((id, "osd", output, self.osd.rect(&self.theme, out, bars)));
+                if let Some(rect) = self.osd.rect(output, out, bars) {
+                    list.push((id, "osd", output, rect));
+                }
             }
         }
         if let Some(showcase) = &self.showcase
@@ -199,21 +201,20 @@ impl AriaShell {
     }
 
     /// `debug widgets [selector]`: `<element path> <x>,<y> <w>x<h>` per
-    /// themed widget matching the selector (theme syntax, plus
-    /// `:nth-child(n)`; all of them without one), global coordinates
-    /// (as estimated by [`AriaShell::surfaces`]), `;`-separated. The
-    /// surface is found from the path's root: `panel[output=..]`,
-    /// `launcher`, `popup[output=..]`; the showcase's, for a root with no
-    /// surface of its kind.
-    pub(crate) fn describe_widgets(
-        &self,
-        filter: &Option<String>,
-        rects: Vec<(String, Rectangle)>,
-    ) -> String {
-        let selector = match filter.as_deref().map(theme::Selector::parse) {
-            None => None,
-            Some(Ok(s)) => Some(s),
-            Some(Err(e)) => return format!("bad selector: {e}"),
+    /// widget the selector matches (the theme's syntax, positions
+    /// included; all of them without one), global coordinates (as
+    /// estimated by [`AriaShell::surfaces`]), `;`-separated. The surface
+    /// is found from the path's root: `panel[output=..]`, `launcher`,
+    /// `popup[output=..]`; the showcase's, for a root with no surface of
+    /// its kind.
+    pub(crate) fn describe_widgets(&self, filter: &Option<String>, found: Vec<Found>) -> String {
+        let sheet = self.theme.sheet();
+        let picked = match filter.as_deref() {
+            None => (0..found.len()).collect(),
+            Some(selector) => match sheet.matching(selector, &found) {
+                Ok(picked) => picked,
+                Err(e) => return format!("bad selector: {e}"),
+            },
         };
         let surfaces = self.surfaces();
         let origin = |path: &str| -> Option<Point> {
@@ -226,8 +227,8 @@ impl AriaShell {
             // Several notifications may show on one output: their
             // root carries the notification id.
             let window = root
-                .split_once('#')
-                .and_then(|(_, rest)| rest.split(['.', '[', ':']).next()?.parse::<u32>().ok())
+                .split_once("[id=\"")
+                .and_then(|(_, rest)| rest.split('"').next()?.parse::<u32>().ok())
                 .and_then(|id| self.toasts.placed().find(|(_, n, ..)| *n == id))
                 .map(|(window, ..)| window);
             surfaces
@@ -242,14 +243,11 @@ impl AriaShell {
                 .or_else(|| surfaces.iter().find(|(_, k, ..)| *k == "showcase"))
                 .map(|(_, _, _, r)| r.position())
         };
-        rects
+        picked
             .into_iter()
-            .filter(|(path, _)| {
-                selector
-                    .as_ref()
-                    .is_none_or(|s| theme::node_from_path(path).is_ok_and(|node| s.matches(&node)))
-            })
-            .filter_map(|(path, r)| {
+            .filter_map(|i| {
+                let r = found[i].bounds;
+                let path = found[i].path(sheet)?;
                 let o = origin(&path)?;
                 Some(format!(
                     "{path} {},{} {}x{}",
@@ -296,32 +294,4 @@ impl AriaShell {
             .map(|p| p.height() as f32)
             .fold(0.0, f32::max)
     }
-}
-
-/// Element path and bounds of every widget the theme helpers tagged, in
-/// every window (the runtime runs the operation on all of them; the
-/// path's root tells the surface apart).
-fn widget_rects() -> Task<Vec<(String, Rectangle)>> {
-    struct Collect(Vec<(String, Rectangle)>);
-
-    impl Operation<Vec<(String, Rectangle)>> for Collect {
-        fn traverse(
-            &mut self,
-            operate: &mut dyn FnMut(&mut dyn Operation<Vec<(String, Rectangle)>>),
-        ) {
-            operate(self);
-        }
-
-        fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
-            if let Some(path) = id.and_then(theme::widget_path) {
-                self.0.push((path, bounds));
-            }
-        }
-
-        fn finish(&self) -> Outcome<Vec<(String, Rectangle)>> {
-            Outcome::Some(self.0.clone())
-        }
-    }
-
-    iced::advanced::widget::operate(Collect(Vec::new()))
 }

@@ -1,43 +1,40 @@
-//! One notification as drawn: the content of its layer surface on the
-//! desktop, and of its row in the history popup (the same code, with
-//! [`Extras`] for what only the popup shows), and its size, which a
-//! surface must be given before anything is laid out (measured the way
-//! the view lays it out).
+//! One notification as drawn: its layer surface on the desktop (a
+//! toast), and its row in the history popup (the same code, with
+//! [`Extras`] for what only the popup shows); the toasts' surfaces,
+//! sized by their content and stacked from a corner.
 //!
 //! ```text
-//! notification            the container the caller applies
-//! ├─ icon                 image-data, image-path or app_icon
-//! ├─ summary
-//! ├─ time                 how long ago (popup only)
-//! ├─ button.close         ✕ (popup only)
-//! ├─ body
+//! notification            the box
+//! ├─ head                 a row
+//! │  ├─ icon              image-data, image-path or app_icon
+//! │  ╰─ texts             a column
+//! │     ├─ line           a row
+//! │     │  ├─ summary
+//! │     │  ├─ time        how long ago (popup only)
+//! │     │  ╰─ button.close.flat > cross   ✕ (popup only)
+//! │     ╰─ body
 //! ╰─ actions              a row of buttons, one per action but `default`
-//!    ╰─ button
-//!       ╰─ text
+//!    ╰─ button > label
 //! ```
 
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
-use iced::widget::text::Wrapping;
-use iced::widget::{Space, column, mouse_area, row};
 use iced::window::Id;
-use iced::{Alignment, Element, Length, Padding, Point, Rectangle, Size};
+use iced::{Padding, Point, Rectangle, Size};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
+use icssed::{Element, Node};
+
+use iced::widget::mouse_area;
 
 use crate::locale::Locale;
 use crate::services::icons::{Icon, Icons};
 use crate::services::notifications::{IconSource, Notification, Notifications, Position};
-use crate::ui::Surfaces;
-use crate::ui::theme::{self, Node, Theme};
-
-/// Width when the theme doesn't set one on `notification`.
-const DEFAULT_WIDTH: f32 = 360.0;
-/// Icon size when the theme doesn't set `height` on `notification icon`.
-const DEFAULT_ICON: f32 = 32.0;
+use crate::ui::theme::Theme;
+use crate::ui::{Measuring, Surfaces, popup};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -49,35 +46,33 @@ pub enum Message {
     Invoke(u32, String),
 }
 
-/// The root node of notification `n`'s surface: its urgency as a
-/// class, its id, the app as an attribute.
-pub fn node(n: &Notification, output: &str) -> Node {
-    classify(Node::root("notification"), n).attr("output", output.to_owned())
+/// The root node of notification `n`'s surface, from `root` (a
+/// `notification` root, at its output's scale): its urgency as a
+/// class, its id, the app and the output as attributes (the id isn't
+/// an `#id`: a selector's can't start with a digit).
+pub fn node<'a>(root: Node<'a>, n: &Notification, output: &str) -> Node<'a> {
+    classify(root, n).attr("output", output)
 }
 
 /// The node of notification `n` shown under `parent` (a popup list).
-pub fn node_under(parent: &Node, n: &Notification) -> Node {
+pub fn node_under<'a>(parent: Node<'a>, n: &Notification) -> Node<'a> {
     classify(parent.child("notification"), n)
 }
 
-fn classify(node: Node, n: &Notification) -> Node {
+fn classify<'a>(node: Node<'a>, n: &Notification) -> Node<'a> {
     node.class(n.urgency.name())
-        .id(n.id.to_string())
-        .attr("app", n.app_name.clone())
+        .attr("id", &n.id.to_string())
+        .attr("app", &n.app_name)
 }
 
 /// What the popup shows on top of the notification itself.
 #[derive(Debug, Clone, Default)]
 pub struct Extras {
-    /// The width to lay out in, instead of the node's `width`.
-    pub width: Option<f32>,
     /// How long ago it came, next to the summary.
     pub age: Option<String>,
     /// A ✕ button that dismisses it.
     pub close: bool,
 }
-
-const CLOSE_GLYPH: &str = "✕";
 
 /// "now", "5 min", "2 h", "yesterday", or the date, for the popup.
 pub fn age(received: SystemTime, now: SystemTime, locale: &Locale) -> String {
@@ -91,50 +86,6 @@ pub fn age(received: SystemTime, now: SystemTime, locale: &Locale) -> String {
         3600..86400 => locale.fmt("notifications.age.hours", &[("n", &(elapsed / 3600))]),
         86400..172800 => locale.tr("notifications.age.yesterday").to_owned(),
         _ => locale.date(&chrono::DateTime::<chrono::Local>::from(received), "%d %b"),
-    }
-}
-
-/// The surface width the theme asks for, and the layout inside it.
-struct Layout {
-    width: f32,
-    /// The root's padding, around everything (iced draws borders over
-    /// the padding, they take no room).
-    frame: (f32, f32, f32, f32),
-    icon: Option<f32>,
-    /// Space between the icon and the texts, and between the texts row
-    /// and the actions.
-    gap: f32,
-    text_width: f32,
-}
-
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
-    }
-}
-
-fn layout(theme: &Theme, node: &Node, has_icon: bool, extras: &Extras) -> Layout {
-    let root = theme.resolve(node);
-    let width = extras
-        .width
-        .or(px(root.width))
-        .unwrap_or(DEFAULT_WIDTH)
-        .max(1.0);
-    let pad = root.inset();
-    let frame = (pad.top, pad.right, pad.bottom, pad.left);
-    let icon = has_icon.then(|| {
-        let s = theme.resolve(&node.child("icon"));
-        px(s.height).or(px(s.width)).unwrap_or(DEFAULT_ICON)
-    });
-    let gap = root.gap;
-    let text_width = width - frame.1 - frame.3 - icon.map_or(0.0, |i| i + gap);
-    Layout {
-        width,
-        frame,
-        icon,
-        gap,
-        text_width: text_width.max(1.0),
     }
 }
 
@@ -152,157 +103,53 @@ fn icon<'a>(
     })
 }
 
-/// The size of notification `n`'s surface: the theme's `width`, and
-/// the height its content takes at that width.
-pub fn size(
-    theme: &Theme,
-    node: &Node,
-    n: &Notification,
-    notifications: &Notifications,
-    icons: &Icons,
-    extras: &Extras,
-) -> (u32, u32) {
-    let l = layout(theme, node, icon(n, notifications, icons).is_some(), extras);
-    // The summary shares its line with the age and the ✕.
-    let (side_width, side_height) = side_size(theme, node, extras);
-    let text_height = |kind: &'static str, content: &str, taken: f32| {
-        let node = node.child(kind);
-        let s = theme.resolve(&node);
-        let pad = s.inset();
-        let inner = (l.text_width - taken - pad.left - pad.right).max(1.0);
-        theme
-            .measure_in(&node, content, inner)
-            .height
-            .max(theme.line_height(&node))
-            + pad.top
-            + pad.bottom
-    };
-    let mut texts = text_height("summary", &n.summary, side_width).max(side_height);
-    if !n.body.is_empty() {
-        texts += text_height("body", &n.body, 0.0);
-    }
-    let mut height = texts.max(l.icon.unwrap_or(0.0));
-    if n.buttons().next().is_some() {
-        let actions = node.child("actions");
-        let count = n.buttons().count();
-        let buttons = n
-            .buttons()
-            .enumerate()
-            .map(|(i, (_, label))| {
-                let b = actions.child("button").nth(i, count);
-                let s = theme.resolve(&b);
-                let text = theme.measure(&b.child("text"), label);
-                text.height.max(theme.line_height(&b.child("text"))) + s.inset().y()
-            })
-            .fold(0.0_f32, f32::max);
-        let s = theme.resolve(&actions);
-        height += l.gap + buttons + s.inset().y();
-    }
-    let size = Size::new(l.width, height + l.frame.0 + l.frame.2);
-    (size.width.ceil() as u32, size.height.ceil() as u32)
-}
-
-/// The room the age and the ✕ take on the summary's line: their
-/// width (with the gaps before them) and their height.
-fn side_size(theme: &Theme, node: &Node, extras: &Extras) -> (f32, f32) {
-    let gap = theme.resolve(node).gap;
-    let mut width = 0.0_f32;
-    let mut height = 0.0_f32;
-    if let Some(age) = &extras.age {
-        let t = node.child("time");
-        let s = theme.resolve(&t);
-        let m = theme.measure(&t, age);
-        width += gap + m.width + s.inset().x();
-        height = height.max(m.height.max(theme.line_height(&t)) + s.inset().y());
-    }
-    if extras.close {
-        let b = node.child("button").class("close").class("flat");
-        let s = theme.resolve(&b);
-        let m = theme.measure(&b.child("text"), CLOSE_GLYPH);
-        width += gap + m.width + s.inset().x();
-        height = height.max(m.height.max(theme.line_height(&b.child("text"))) + s.inset().y());
-    }
-    (width, height)
-}
-
-/// The content of `n`, inside the `notification` container the caller
-/// applies. A left click anywhere but on a button activates it, a
-/// right click dismisses it.
+/// `n` in its box, `node`. A left click anywhere but on a button
+/// activates it, a right click dismisses it.
 pub fn view<'a>(
-    theme: &'a Theme,
-    node: &Node,
+    node: Node<'a>,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
     extras: Extras,
 ) -> Element<'a, Message> {
-    let icon = icon(n, notifications, icons);
-    let l = layout(theme, node, icon.is_some(), &extras);
-    let summary: Element<'a, Message> = theme
-        .container(
-            &node.child("summary"),
-            theme
-                .text(&node.child("summary"), &n.summary)
-                .wrapping(Wrapping::Word),
-        )
-        .width(Length::Fill)
-        .into();
-    let mut first = row![summary].spacing(l.gap).align_y(Alignment::Start);
+    let head = node.child("head");
+    let texts = head.child("texts");
+    let line = texts.child("line");
+    let mut first: Vec<Element<'a, Message>> =
+        vec![icssed::text(line.child("summary"), n.summary.as_str()).into()];
     if let Some(age) = extras.age {
-        let t = node.child("time");
-        first = first.push(theme.container(&t, theme.text(&t, age)));
+        first.push(icssed::text(line.child("time"), age).into());
     }
     if extras.close {
-        let b = node.child("button").class("close").class("flat");
-        first = first.push(
-            theme
-                .button(&b, theme.text(&b.child("text"), CLOSE_GLYPH))
-                .on_press(Message::Dismiss(n.id)),
+        let close = line.child("button").class("close").class("flat");
+        first.push(
+            icssed::button(close, [icssed::mark(close.child("cross"))])
+                .on_press(Message::Dismiss(n.id))
+                .into(),
         );
     }
-    let mut texts = column![first.width(Length::Fill)];
+    let mut lines: Vec<Element<'a, Message>> = vec![icssed::row(line, first).into()];
     if !n.body.is_empty() {
-        texts = texts.push(
-            theme
-                .container(
-                    &node.child("body"),
-                    theme
-                        .text(&node.child("body"), &n.body)
-                        .wrapping(Wrapping::Word),
-                )
-                .width(Length::Fill),
-        );
+        lines.push(icssed::text(texts.child("body"), n.body.as_str()).into());
     }
-    let mut top = row![].spacing(l.gap).align_y(Alignment::Start);
-    if let (Some(icon), Some(size)) = (icon, l.icon) {
-        let icon_node = node.child("icon");
-        let color = theme.resolve(&icon_node).color;
-        top = top.push(theme.container(&icon_node, icon.view(size, color)));
+    let mut top: Vec<Element<'a, Message>> = Vec::new();
+    if let Some(icon) = icon(n, notifications, icons) {
+        top.push(icssed::icon(head.child("icon"), icon.clone()).into());
     }
-    top = top.push(texts.width(Length::Fill));
-    let mut content = column![top.width(Length::Fill)].spacing(l.gap);
+    top.push(icssed::column(texts, lines).into());
+    let mut content: Vec<Element<'a, Message>> = vec![icssed::row(head, top).into()];
     if n.buttons().next().is_some() {
         let actions = node.child("actions");
         let count = n.buttons().count();
         let buttons = n.buttons().enumerate().map(|(i, (key, label))| {
-            let b = actions.child("button").nth(i, count);
-            theme
-                .button(&b, theme.text(&b.child("text"), label))
+            let b = actions.child_at("button", i, count);
+            icssed::button(b, [icssed::text(b.child("label"), label.as_str()).into()])
                 .on_press(Message::Invoke(n.id, key.clone()))
                 .into()
         });
-        let gap = theme.resolve(&actions).gap;
-        content = content.push(
-            theme
-                .container(
-                    &actions,
-                    row(buttons).spacing(gap).align_y(Alignment::Center),
-                )
-                .width(Length::Fill)
-                .align_x(Alignment::End),
-        );
+        content.push(icssed::row(actions, buttons).into());
     }
-    mouse_area(content.width(Length::Fill))
+    mouse_area(icssed::column(node, content))
         .on_press(Message::Activate(n.id))
         .on_right_press(Message::Dismiss(n.id))
         .into()
@@ -332,16 +179,17 @@ struct Toast {
 
 impl Toasts {
     /// Make the toasts match the notifications: the surfaces of those
-    /// gone go, the new ones get one on output `focused`, sizes and
-    /// margins are updated in place.
+    /// gone go, the new ones get one on output `focused`, sizes (each
+    /// measured at its output's scale) and margins are updated in
+    /// place.
     pub fn sync(
         &mut self,
-        notifications: &Notifications,
         outputs: &BTreeMap<OutputId, OutputInfo>,
         focused: Option<&OutputInfo>,
-        theme: &Theme,
-        icons: &Icons,
+        m: Measuring<'_>,
     ) -> Surfaces {
+        let (notifications, theme, icons) =
+            (m.shared.notifications, m.shared.theme, m.shared.icons);
         let mut surfaces = Surfaces::default();
         // Notifications gone: their surfaces go.
         self.toasts.retain(|t| {
@@ -373,8 +221,6 @@ impl Toasts {
         }
         // Sizes and places, per output, in notification order.
         let position = notifications.config().position;
-        let stack = theme.resolve(&Node::root("notifications"));
-        let (edge, gap) = (stack.padding, stack.gap as i32);
         let mut offsets: BTreeMap<OutputId, i32> = BTreeMap::new();
         for n in &notifications.items {
             let Some(toast) = self.toasts.iter_mut().find(|t| t.id == n.id) else {
@@ -382,13 +228,24 @@ impl Toasts {
             };
             let info = outputs.get(&toast.output);
             let output_name = info.and_then(|o| o.name.as_deref()).unwrap_or("?");
-            let node = node(n, output_name);
-            let content = size(theme, &node, n, notifications, icons, &Extras::default());
-            let room = theme.shadow_room(&node);
+            let scale = m.scales.of(toast.output);
+            // The stack: its padding from the edges, its gap between
+            // the boxes.
+            let stack = theme.root("notifications", scale).base();
+            let edge = popup::padding(stack.padding);
+            let gap = stack.row_gap as i32;
+            let node = node(theme.root("notification", scale), n, output_name);
+            let room = popup::room(node);
+            let size = crate::ui::size(
+                &mut m.measure.borrow_mut(),
+                toast.window,
+                surface(node, n, notifications, icons),
+                crate::ui::room_on(info),
+            );
             let offset = offsets.entry(toast.output).or_insert(0);
             let along = *offset;
-            *offset += content.1 as i32 + gap;
-            let (size, margin) = placement(position, content, along, edge, room);
+            *offset += (size.1 as f32 - room.top - room.bottom) as i32 + gap;
+            let margin = placement(position, along, edge, room);
             if new.contains(&toast.window) {
                 toast.size = size;
                 toast.margin = margin;
@@ -477,7 +334,8 @@ impl Toasts {
             .map(|t| t.output)
     }
 
-    /// Surface `window`'s notification, on output `output` (its name).
+    /// Surface `window`'s notification, on output `output` (its name),
+    /// at `scale`.
     pub fn view<'a>(
         &self,
         window: Id,
@@ -485,51 +343,30 @@ impl Toasts {
         notifications: &'a Notifications,
         icons: &'a Icons,
         output: &str,
+        scale: f32,
     ) -> Element<'a, Message> {
+        let root = theme.root("notification", scale);
         let Some(n) = self
             .toasts
             .iter()
             .find(|t| t.window == window)
             .and_then(|t| notifications.get(t.id))
         else {
-            return Space::new().into();
+            return icssed::column(root, []).into();
         };
-        surface(theme, &node(n, output), n, notifications, icons)
+        surface(node(root, n, output), n, notifications, icons)
     }
 }
 
-/// The content of notification `n`'s own surface: its view in the
-/// `node` box (its [`node`]), inset by its shadow's room.
+/// The content of notification `n`'s own surface: its view in its box
+/// `node` (its [`node`]), with its shadow's room around.
 pub fn surface<'a>(
-    theme: &'a Theme,
-    node: &Node,
+    node: Node<'a>,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
 ) -> Element<'a, Message> {
-    let content = view(theme, node, n, notifications, icons, Extras::default());
-    let root = theme
-        .container(node, content)
-        .width(Length::Fill)
-        .height(Length::Fill);
-    theme.surface(node, root).into()
-}
-
-/// The size of notification `n`'s own surface: its [`size`] plus the
-/// room for its shadow.
-pub fn surface_size(
-    theme: &Theme,
-    node: &Node,
-    n: &Notification,
-    notifications: &Notifications,
-    icons: &Icons,
-) -> (u32, u32) {
-    let (w, h) = size(theme, node, n, notifications, icons, &Extras::default());
-    let room = theme.shadow_room(node);
-    (
-        w + (room.left + room.right) as u32,
-        h + (room.top + room.bottom) as u32,
-    )
+    icssed::surface(node, view(node, n, notifications, icons, Extras::default())).into()
 }
 
 /// The layer-shell anchor of the toasts in corner `position`.
@@ -545,30 +382,24 @@ pub fn anchor(position: Position) -> Anchor {
     }
 }
 
-/// A toast's surface size and margins (top, right, bottom, left) in
-/// the stack from corner `position`: `size` is its box's ([`size`]),
-/// `along` how far the boxes before it on its output reach from the
-/// edge, `edge` the `notifications` root's padding, `room` the box's
-/// shadow's. The surface is the box plus the room; the boxes are
-/// stacked, their shadows overlap the gaps.
+/// A toast's margins (top, right, bottom, left) in the stack from
+/// corner `position`: `along` is how far the boxes before it on its
+/// output reach from the edge, `edge` the `notifications` root's
+/// padding, `room` its box's shadow's, around the box in its surface.
+/// The boxes are stacked, their shadows overlap the gaps.
 pub fn placement(
     position: Position,
-    size: (u32, u32),
     along: i32,
     edge: Padding,
     room: Padding,
-) -> ((u32, u32), (i32, i32, i32, i32)) {
-    let surface = (
-        size.0 + (room.left + room.right) as u32,
-        size.1 + (room.top + room.bottom) as u32,
-    );
+) -> (i32, i32, i32, i32) {
     let (top, right, bottom, left) = (
         room.top as i32,
         room.right as i32,
         room.bottom as i32,
         room.left as i32,
     );
-    let margin = if position.is_top() {
+    if position.is_top() {
         (
             edge.top as i32 + along - top,
             edge.right as i32 - right,
@@ -582,8 +413,7 @@ pub fn placement(
             edge.bottom as i32 + along - bottom,
             edge.left as i32 - left,
         )
-    };
-    (surface, margin)
+    }
 }
 
 /// Where a toast's surface is, as asked: from corner `position` of an

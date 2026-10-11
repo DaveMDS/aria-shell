@@ -11,28 +11,23 @@
 //! the user does goes back as `Action::Network`. Its own state is the
 //! popup's: which row is unfolded, the password being typed.
 
-use iced::widget::{Space, column, mouse_area, operation, row, scrollable, text};
-use iced::{Alignment, Element, Length, Subscription, Task, keyboard, widget};
+use iced::widget::{mouse_area, operation};
+use iced::{Subscription, Task, keyboard, widget};
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
 use crate::process;
 use crate::services::network::{
-    AccessPoint, Command, Device, DeviceKind, DeviceState, FailKey, FailReason, ICON_OFFLINE,
-    ICON_WIFI_ACQUIRING, ICON_WIFI_EXCELLENT, ICON_WIFI_GOOD, ICON_WIFI_NO_ROUTE, ICON_WIFI_NONE,
-    ICON_WIFI_OFF, ICON_WIFI_OFFLINE, ICON_WIFI_OK, ICON_WIFI_WEAK, ICON_WIRED,
+    AccessPoint, ActiveState, Command, Device, DeviceKind, DeviceState, FailKey, FailReason,
+    ICON_OFFLINE, ICON_WIFI_ACQUIRING, ICON_WIFI_EXCELLENT, ICON_WIFI_GOOD, ICON_WIFI_NO_ROUTE,
+    ICON_WIFI_NONE, ICON_WIFI_OFF, ICON_WIFI_OFFLINE, ICON_WIFI_OK, ICON_WIFI_WEAK, ICON_WIRED,
     ICON_WIRED_ACQUIRING, ICON_WIRED_NO_ROUTE, ICON_WIRED_OFFLINE, IpConfig, Profile, Security,
     strength_icon,
 };
-use crate::ui::theme::{self, Node};
 
-/// Icon size when the theme doesn't set `height` on an `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-/// Popup width and height cap when the theme doesn't size `list`.
-const DEFAULT_LIST_WIDTH: f32 = 380.0;
-const DEFAULT_LIST_HEIGHT: f32 = 600.0;
 /// Seconds between scans while the popup is open.
 const SCAN_STEP: u32 = 10;
 
@@ -225,7 +220,6 @@ impl Gadget for NetworkGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let summary = ctx.network.summary();
         let running = ctx.network.running();
         let wireless = ctx.network.wireless_enabled();
@@ -248,30 +242,20 @@ impl Gadget for NetworkGadget {
             .class_if("limited", summary.limited)
             .class_if("vpn", summary.vpn && self.config.show_vpn)
             .class_if("off", running && !wireless);
-        let name = summary.icon_name(running, wireless);
-        let mut parts: Vec<Element<'a, Message>> =
-            vec![self.icon(&ctx, &button.child("icon"), name)];
+        let mut parts = vec![ctx.icon(button.child("icon"), summary.icon_name(running, wireless))];
         if summary.vpn && self.config.show_vpn {
-            parts.push(self.icon(&ctx, &button.child("icon").class("vpn"), ICON_VPN));
+            parts.push(ctx.icon(button.child("icon").class("vpn"), ICON_VPN));
         }
         if self.config.show_label && !summary.label.is_empty() {
-            let t = button.child("text");
-            parts.push(
-                theme
-                    .container(&t, theme.text(&t, summary.label.clone()))
-                    .into(),
-            );
+            parts.push(icssed::text(button.child("label"), summary.label.clone()).into());
         }
-        let content = row(parts)
-            .spacing(theme.resolve(&button).gap)
-            .align_y(Alignment::Center);
-        let button = theme
-            .button(&button, content)
-            .on_press(Message::TogglePopup);
-        mouse_area(self.popup.anchor(button))
+        let button = icssed::button(button, parts)
+            .on_press(Message::TogglePopup)
+            .id(self.popup.anchor());
+        let button = mouse_area(button)
             .on_middle_press(Message::FlipWireless)
-            .on_right_press(Message::RunSettings)
-            .into()
+            .on_right_press(Message::RunSettings);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -279,22 +263,9 @@ impl Gadget for NetworkGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
-        let (rows, capped) = self.rows(&ctx);
-        let rows: Vec<Element<'a, Message>> = rows.into_iter().map(|(e, _)| e).collect();
-        let content = theme.column(&list, rows).width(Length::Fill);
-        if capped {
-            scrollable(content).height(Length::Fill).into()
-        } else {
-            content.into()
-        }
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let width = self.list_width(&ctx);
-        let (height, _) = self.list_height(&ctx);
-        (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
+        let scroll = ctx.node.child("scroll");
+        let list = scroll.child("list");
+        icssed::scroll(scroll, icssed::column(list, self.rows(ctx, list))).into()
     }
 
     fn popup_closed(&mut self) {
@@ -373,16 +344,6 @@ fn speed(locale: &Locale, mbps: u32) -> String {
     }
 }
 
-/// A row's height: its content over the node's padding.
-fn padded(theme: &theme::Theme, node: &Node, content: f32) -> f32 {
-    let s = theme.resolve(node);
-    content + s.inset().y()
-}
-
-/// A themed row of the popup and its height, built together so the
-/// popup's size and its content can't disagree.
-type Block<'a> = (Element<'a, Message>, f32);
-
 impl NetworkGadget {
     fn collapse(&mut self) {
         self.expanded = None;
@@ -390,224 +351,76 @@ impl NetworkGadget {
         self.peek = false;
     }
 
-    /// A themed icon by name, at the node's `height` (its `width` if
-    /// there's no height), or a blank of that size.
-    fn icon<'a>(&'a self, ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> {
-        let style = ctx.theme.resolve(node);
-        let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
-        let icon = match ctx.icons.get_name(name, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        };
-        ctx.theme.container(node, icon).into()
-    }
-
-    fn icon_size(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        let style = ctx.theme.resolve(node);
-        px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE)
-    }
-
-    /// An icon's height, its padding included.
-    fn icon_height(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        padded(ctx.theme, node, self.icon_size(ctx, node))
-    }
-
-    /// A button with an icon: its height is the icon's plus paddings.
-    fn icon_button_height(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        padded(ctx.theme, node, self.icon_height(ctx, &node.child("icon")))
-    }
-
-    /// A button with a text label.
-    fn text_button_height(&self, ctx: &Context<'_>, node: &Node) -> f32 {
-        let t = node.child("text");
-        padded(
-            ctx.theme,
-            node,
-            padded(ctx.theme, &t, ctx.theme.line_height(&t)),
-        )
-    }
-
-    fn list_width(&self, ctx: &Context<'_>) -> f32 {
-        px(ctx.theme.resolve(&ctx.node.child("list")).width).unwrap_or(DEFAULT_LIST_WIDTH)
-    }
-
-    /// The popup height: the rows with the gaps, within the list's
-    /// padding, capped by its `height`; whether it was capped (then
-    /// the content scrolls).
-    fn list_height(&self, ctx: &Context<'_>) -> (f32, bool) {
-        let (rows, capped) = self.rows(ctx);
-        let list = ctx.node.child("list");
-        let s = ctx.theme.resolve(&list);
-        let height = rows.iter().map(|(_, h)| h).sum::<f32>()
-            + s.gap * rows.len().saturating_sub(1) as f32
-            + s.inset().y();
-        let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
-        (height.min(cap), capped)
-    }
-
-    /// Every row of the popup with its height; whether the whole is
-    /// taller than the list's cap.
-    fn rows<'a>(&'a self, ctx: &Context<'a>) -> (Vec<Block<'a>>, bool) {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
+    /// Every row of the popup.
+    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
         let net = ctx.network;
-        let mut rows: Vec<Block<'a>> = Vec::new();
+        let mut rows: Vec<Element<'a, Message>> = Vec::new();
+        let empty = |text: &'a str| super::note(list.child("empty"), text);
         if !net.running() {
-            rows.push(self.empty(ctx, &list, ctx.locale.tr("network.not_running")));
+            rows.push(empty(ctx.locale.tr("network.not_running")));
         } else {
             let wifi_devices: Vec<&Device> = net.devices_of(DeviceKind::Wifi).collect();
             if !wifi_devices.is_empty() {
-                rows.push(self.wifi_header(ctx, &list));
+                rows.push(wifi_header(ctx, list));
                 if !net.wireless_enabled() {
-                    rows.push(self.empty(ctx, &list, ctx.locale.tr("network.wifi_off")));
+                    rows.push(empty(ctx.locale.tr("network.wifi_off")));
                 } else if net.access_points().is_empty() {
-                    rows.push(self.empty(ctx, &list, ctx.locale.tr("network.no_networks")));
+                    rows.push(empty(ctx.locale.tr("network.no_networks")));
                 } else {
                     let count = net.access_points().len();
                     for (i, ap) in net.access_points().iter().enumerate() {
-                        rows.push(self.ap_row(ctx, &list, ap, (i, count)));
+                        rows.push(self.ap_row(ctx, list, ap, (i, count)));
                     }
                 }
             }
             let wired: Vec<&Device> = net.devices_of(DeviceKind::Wired).collect();
             if !wired.is_empty() {
-                rows.push(self.header(ctx, &list, "wired", ctx.locale.tr("network.wired")));
+                rows.push(header(list, "wired", ctx.locale.tr("network.wired")));
                 for d in wired {
-                    rows.push(self.device_row(ctx, &list, d));
+                    rows.push(self.device_row(ctx, list, d));
                 }
             }
             let vpns: Vec<&Profile> = net.vpns().collect();
             if !vpns.is_empty() {
-                rows.push(self.header(ctx, &list, "vpn", ctx.locale.tr("network.vpn")));
+                rows.push(header(list, "vpn", ctx.locale.tr("network.vpn")));
                 for p in vpns {
-                    rows.push(self.vpn_row(ctx, &list, p));
+                    rows.push(vpn_row(ctx, list, p));
                 }
             }
             if rows.is_empty() {
-                rows.push(self.empty(ctx, &list, ctx.locale.tr("network.no_devices")));
+                rows.push(empty(ctx.locale.tr("network.no_devices")));
             }
         }
         if !self.config.settings_command.is_empty() {
             let b = list.child("button").class("settings");
-            let label = iced::widget::container(
-                theme.text(&b.child("text"), ctx.locale.tr("network.settings")),
-            )
-            .width(Length::Fill)
-            .align_x(Alignment::Center);
-            rows.push((
-                theme
-                    .button(&b, label)
-                    .on_press(Message::RunSettings)
-                    .width(Length::Fill)
-                    .into(),
-                self.text_button_height(ctx, &b),
-            ));
-        }
-        let s = theme.resolve(&list);
-        let total = rows.iter().map(|(_, h)| h).sum::<f32>()
-            + s.gap * rows.len().saturating_sub(1) as f32
-            + s.inset().y();
-        let capped = total > px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
-        (rows, capped)
-    }
-
-    /// A centred line of text: "Wi‑Fi is off", "No networks", ...
-    fn empty<'a>(&'a self, ctx: &Context<'a>, list: &Node, text: &'a str) -> Block<'a> {
-        let theme = ctx.theme;
-        let empty = list.child("empty");
-        let height = padded(
-            theme,
-            &empty,
-            theme
-                .measure(&empty, text)
-                .height
-                .max(theme.line_height(&empty)),
-        );
-        (
-            theme
-                .container(&empty, theme.text(&empty, text))
-                .width(Length::Fill)
-                .align_x(Alignment::Center)
+            rows.push(
+                icssed::button(
+                    b,
+                    [icssed::text(b.child("label"), ctx.locale.tr("network.settings")).into()],
+                )
+                .on_press(Message::RunSettings)
                 .into(),
-            height,
-        )
-    }
-
-    /// A section title.
-    fn header<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
-        class: &'static str,
-        title: &'a str,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let header = list.child("header").class(class);
-        let t = header.child("title");
-        let content = theme
-            .container(&t, theme.text(&t, title))
-            .width(Length::Fill);
-        let height = padded(theme, &t, theme.line_height(&t));
-        (
-            theme.container(&header, content).width(Length::Fill).into(),
-            padded(theme, &header, height),
-        )
-    }
-
-    /// The Wi‑Fi title with the scan button and the on/off toggle.
-    fn wifi_header<'a>(&'a self, ctx: &Context<'a>, list: &Node) -> Block<'a> {
-        let theme = ctx.theme;
-        let on = ctx.network.wireless_enabled();
-        let header = list.child("header").class("wifi").class_if("off", !on);
-        let t = header.child("title");
-        let scan = header.child("button").class("scan");
-        let toggle = header.child("toggle");
-        let mut parts: Vec<Element<'a, Message>> = vec![
-            theme
-                .container(&t, theme.text(&t, ctx.locale.tr("network.wifi")))
-                .width(Length::Fill)
-                .into(),
-        ];
-        let mut height = padded(theme, &t, theme.line_height(&t));
-        if on {
-            parts.push(
-                theme
-                    .button(&scan, self.icon(ctx, &scan.child("icon"), ICON_SCAN))
-                    .on_press(Message::Scan)
-                    .into(),
             );
-            height = height.max(self.icon_button_height(ctx, &scan));
         }
-        parts.push(theme.toggler(&toggle, on, Message::SetWireless).into());
-        let ts = theme.resolve(&toggle);
-        height = height.max(px(ts.height).unwrap_or(16.0));
-        let content = row(parts)
-            .spacing(theme.resolve(&header).gap)
-            .align_y(Alignment::Center);
-        (
-            theme.container(&header, content).width(Length::Fill).into(),
-            padded(theme, &header, height),
-        )
+        rows
     }
 
     /// A Wi‑Fi network: the strength icon, the name, the lock, the
     /// status; unfolded, its details or the password field below.
     fn ap_row<'a>(
         &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
+        ctx: Context<'a>,
+        list: Node<'a>,
         ap: &'a AccessPoint,
         (i, count): (usize, usize),
-    ) -> Block<'a> {
-        let theme = ctx.theme;
+    ) -> Element<'a, Message> {
         let locale = ctx.locale;
         let key = FailKey::Ssid(ap.ssid.clone());
         let failure = ctx.network.failure(&key);
         let attempting = ctx.network.attempting(&key);
         let expanded = self.expanded == Some(Row::Ap(ap.ssid.clone()));
         let node = list
-            .child("ap")
-            .nth(i, count)
+            .child_at("ap", i, count)
             .class_if("active", ap.active)
             .class_if("connecting", ap.connecting || attempting)
             .class_if("known", ap.known.is_some())
@@ -615,8 +428,7 @@ impl NetworkGadget {
             .class_if("enterprise", ap.security == Security::Enterprise)
             .class_if("expanded", expanded)
             .class_if("failed", failure.is_some())
-            .attr("ssid", ap.ssid.clone());
-        let button = node.child("button").class("flat");
+            .attr("ssid", &ap.ssid);
         let status = if ap.active {
             Some(locale.tr("network.connected"))
         } else if ap.connecting || attempting {
@@ -641,19 +453,18 @@ impl NetworkGadget {
         } else {
             fold.clone()
         };
-        let (head, head_height) = self.row_button(
+        let mut parts: Vec<Element<'a, Message>> = vec![row_button(
             ctx,
-            &button,
-            strength_icon(ap.strength),
-            &ap.ssid,
-            ap.security.secured().then_some(ICON_SECURED),
-            status,
-            (expanded || ap.active || ap.known.is_some()).then_some((expanded, fold)),
+            node.child("button").class("flat"),
+            RowLine {
+                icon: strength_icon(ap.strength),
+                name: &ap.ssid,
+                badge: ap.security.secured().then_some(ICON_SECURED),
+                status,
+                chevron: (expanded || ap.active || ap.known.is_some()).then_some((expanded, fold)),
+            },
             on_press,
-        );
-        let mut parts: Vec<Element<'a, Message>> = vec![head];
-        let mut height = head_height;
-        let s = theme.resolve(&node);
+        )];
         if expanded {
             if ap.active {
                 let device = ctx.network.devices().iter().find(|d| d.path == ap.device);
@@ -669,9 +480,7 @@ impl NetworkGadget {
                     extra.push(d.iface.clone());
                 }
                 lines.push(extra.join(" · "));
-                let (details, h) = self.details(ctx, &node, lines);
-                parts.push(details);
-                height += s.gap + h;
+                parts.push(details(node, lines));
                 let mut actions: Vec<(&'static str, &'a str, Message)> = Vec::new();
                 if let Some(d) = device {
                     actions.push((
@@ -687,22 +496,19 @@ impl NetworkGadget {
                         Message::Forget(uuid.clone()),
                     ));
                 }
-                let (row, h) = self.actions(ctx, &node, actions);
-                parts.push(row);
-                height += s.gap + h;
+                parts.push(actions_row(node, actions));
             } else if ap.security == Security::Enterprise {
-                let (m, h) = self.message(ctx, &node, locale.tr("network.enterprise"));
-                parts.push(m);
-                height += s.gap + h;
+                parts.push(super::note(
+                    node.child("message"),
+                    locale.tr("network.enterprise"),
+                ));
             } else {
                 // A known one whose key was refused asks it again; the
                 // rest of the known ones offer to join or to be
                 // forgotten; an unknown one asks its key.
                 let mut actions: Vec<(&'static str, &'a str, Message)> = Vec::new();
                 if ap.known.is_none() || wrong_password {
-                    let (auth, h) = self.auth(ctx, &node, attempting);
-                    parts.push(auth);
-                    height += s.gap + h;
+                    parts.push(self.auth(ctx, node, attempting));
                 } else {
                     actions.push((
                         "connect",
@@ -718,9 +524,7 @@ impl NetworkGadget {
                     ));
                 }
                 if !actions.is_empty() {
-                    let (row, h) = self.actions(ctx, &node, actions);
-                    parts.push(row);
-                    height += s.gap + h;
+                    parts.push(actions_row(node, actions));
                 }
             }
         }
@@ -730,23 +534,19 @@ impl NetworkGadget {
                 FailReason::NoSecrets => locale.tr("network.needs_password"),
                 FailReason::Refused(_) | FailReason::Other => locale.tr("network.failed"),
             };
-            let (m, h) = self.message(ctx, &node, text);
-            parts.push(m);
-            height += s.gap + h;
+            parts.push(super::note(node.child("message"), text));
         }
-        (
-            theme
-                .container(&node, column(parts).spacing(s.gap).width(Length::Fill))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &node, height),
-        )
+        icssed::column(node, parts).into()
     }
 
     /// A wired device: plugged and connected (unfold: the details and
     /// Disconnect), unplugged, or down (a click brings it up).
-    fn device_row<'a>(&'a self, ctx: &Context<'a>, list: &Node, d: &'a Device) -> Block<'a> {
-        let theme = ctx.theme;
+    fn device_row<'a>(
+        &'a self,
+        ctx: Context<'a>,
+        list: Node<'a>,
+        d: &'a Device,
+    ) -> Element<'a, Message> {
         let locale = ctx.locale;
         let active = d.state == DeviceState::Activated;
         let expanded = self.expanded == Some(Row::Device(d.path.clone()));
@@ -757,8 +557,7 @@ impl NetworkGadget {
             .class_if("connecting", d.state.is_connecting())
             .class_if("unplugged", !d.carrier)
             .class_if("expanded", expanded)
-            .attr("name", d.iface.clone());
-        let button = node.child("button").class("flat");
+            .attr("name", &d.iface);
         let status = if !d.carrier {
             locale.tr("network.unplugged")
         } else if active {
@@ -768,10 +567,13 @@ impl NetworkGadget {
         } else {
             locale.tr("network.not_connected")
         };
-        let on_press = if expanded {
-            Some(Message::Collapse)
-        } else if active {
-            Some(Message::Expand(Row::Device(d.path.clone())))
+        let fold = if expanded {
+            Message::Collapse
+        } else {
+            Message::Expand(Row::Device(d.path.clone()))
+        };
+        let on_press = if expanded || active {
+            Some(fold.clone())
         } else if d.carrier && d.state == DeviceState::Disconnected {
             Some(Message::ConnectDevice(d.path.clone()))
         } else {
@@ -779,30 +581,24 @@ impl NetworkGadget {
         };
         let connection = ctx.network.active_of(d);
         let name = connection.map_or(d.iface.as_str(), |a| a.id.as_str());
-        let (head, head_height) = self.row_button(
-            ctx,
-            &button,
-            if active {
+        let line = RowLine {
+            icon: if active {
                 ICON_WIRED
             } else {
                 ICON_WIRED_OFFLINE
             },
             name,
-            None,
-            Some(status),
-            (expanded || active).then_some((
-                expanded,
-                if expanded {
-                    Message::Collapse
-                } else {
-                    Message::Expand(Row::Device(d.path.clone()))
-                },
-            )),
+            badge: None,
+            status: Some(status),
+            chevron: (expanded || active).then_some((expanded, fold)),
+        };
+        let button = node.child("button").class("flat");
+        let mut parts: Vec<Element<'a, Message>> = vec![row_button(
+            ctx,
+            button,
+            line,
             on_press.unwrap_or(Message::Collapse),
-        );
-        let mut parts: Vec<Element<'a, Message>> = vec![head];
-        let mut height = head_height;
-        let s = theme.resolve(&node);
+        )];
         if expanded && active {
             let mut lines = ip_lines(locale, d.ip4.as_ref(), d.ip6.as_ref());
             let mut extra = Vec::new();
@@ -814,319 +610,191 @@ impl NetworkGadget {
                 extra.push(d.hw_address.clone());
             }
             lines.push(extra.join(" · "));
-            let (details, h) = self.details(ctx, &node, lines);
-            parts.push(details);
-            height += s.gap + h;
-            let (row, h) = self.actions(
-                ctx,
-                &node,
+            parts.push(details(node, lines));
+            parts.push(actions_row(
+                node,
                 vec![(
                     "disconnect",
                     locale.tr("network.disconnect"),
                     Message::Disconnect(d.path.clone()),
                 )],
-            );
-            parts.push(row);
-            height += s.gap + h;
+            ));
         }
-        (
-            theme
-                .container(&node, column(parts).spacing(s.gap).width(Length::Fill))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &node, height),
-        )
-    }
-
-    /// A VPN profile with its toggle.
-    fn vpn_row<'a>(&'a self, ctx: &Context<'a>, list: &Node, p: &'a Profile) -> Block<'a> {
-        let theme = ctx.theme;
-        let locale = ctx.locale;
-        let key = FailKey::Uuid(p.uuid.clone());
-        let active = ctx.network.active_by_uuid(&p.uuid);
-        let on =
-            active.is_some_and(|a| a.state == crate::services::network::ActiveState::Activated);
-        let connecting = ctx.network.attempting(&key)
-            || active.is_some_and(|a| a.state == crate::services::network::ActiveState::Activating);
-        let failure = ctx.network.failure(&key);
-        let node = list
-            .child("vpn")
-            .class_if("active", on)
-            .class_if("connecting", connecting)
-            .class_if("failed", failure.is_some())
-            .attr("name", p.id.clone());
-        let name = node.child("name");
-        let toggle = node.child("toggle");
-        let uuid = p.uuid.clone();
-        let mut head: Vec<Element<'a, Message>> = vec![
-            self.icon(ctx, &node.child("icon"), ICON_VPN),
-            theme
-                .container(&name, theme.text(&name, &p.id))
-                .width(Length::Fill)
-                .into(),
-        ];
-        let mut height = self.icon_height(ctx, &node.child("icon")).max(padded(
-            theme,
-            &name,
-            theme.line_height(&name),
-        ));
-        if connecting {
-            let st = node.child("status");
-            head.push(
-                theme
-                    .container(&st, theme.text(&st, locale.tr("network.connecting")))
-                    .into(),
-            );
-        }
-        head.push(
-            theme
-                .toggler(&toggle, on || connecting, move |v| {
-                    Message::Vpn(uuid.clone(), v)
-                })
-                .into(),
-        );
-        height = height.max(px(theme.resolve(&toggle).height).unwrap_or(16.0));
-        let s = theme.resolve(&node);
-        let mut parts: Vec<Element<'a, Message>> = vec![
-            row(head)
-                .spacing(s.gap)
-                .align_y(Alignment::Center)
-                .width(Length::Fill)
-                .into(),
-        ];
-        if let Some(f) = failure {
-            let text = match &f.reason {
-                FailReason::NoSecrets => locale.tr("network.needs_password"),
-                FailReason::WrongPassword => locale.tr("network.wrong_password"),
-                _ => locale.tr("network.failed"),
-            };
-            let (m, h) = self.message(ctx, &node, text);
-            parts.push(m);
-            height += s.gap + h;
-        }
-        (
-            theme
-                .container(&node, column(parts).spacing(s.gap).width(Length::Fill))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &node, height),
-        )
-    }
-
-    /// The clickable line of a network or device row: icon, name, an
-    /// optional badge icon, a status text, a chevron on rows that
-    /// unfold (`Some((unfolded, what its click does))`: a button of
-    /// its own inside the row's, which then doesn't fire).
-    #[allow(clippy::too_many_arguments)]
-    fn row_button<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        button: &Node,
-        icon: &str,
-        name: &'a str,
-        badge: Option<&str>,
-        status: Option<&'a str>,
-        chevron: Option<(bool, Message)>,
-        on_press: Message,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let n = button.child("name");
-        let mut parts: Vec<Element<'a, Message>> = vec![
-            self.icon(ctx, &button.child("icon"), icon),
-            theme
-                .container(
-                    &n,
-                    theme
-                        .text(&n.child("text"), name)
-                        .wrapping(text::Wrapping::None),
-                )
-                .into(),
-        ];
-        let mut height = self.icon_height(ctx, &button.child("icon")).max(padded(
-            theme,
-            &n,
-            theme.line_height(&n.child("text")),
-        ));
-        if let Some(badge) = badge {
-            let b = button.child("icon").class("badge");
-            parts.push(self.icon(ctx, &b, badge));
-            height = height.max(self.icon_height(ctx, &b));
-        }
-        parts.push(Space::new().width(Length::Fill).into());
-        if let Some(status) = status {
-            let st = button.child("status");
-            parts.push(theme.container(&st, theme.text(&st, status)).into());
-            height = height.max(padded(theme, &st, theme.line_height(&st)));
-        }
-        if let Some((expanded, toggle)) = chevron {
-            let c = button
-                .child("button")
-                .class("chevron")
-                .class("plain")
-                .class_if("active", expanded);
-            let t = c.child("text");
-            let glyph = theme.text(&t, if expanded { "▴" } else { "▾" });
-            parts.push(theme.button(&c, glyph).on_press(toggle).into());
-            height = height.max(padded(theme, &c, theme.line_height(&t)));
-        }
-        let content = row(parts)
-            .spacing(theme.resolve(button).gap)
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
-        (
-            theme
-                .button(button, content)
-                .on_press(on_press)
-                .width(Length::Fill)
-                .into(),
-            padded(theme, button, height),
-        )
-    }
-
-    /// The facts about a connection, one line each.
-    fn details<'a>(&'a self, ctx: &Context<'a>, node: &Node, lines: Vec<String>) -> Block<'a> {
-        let theme = ctx.theme;
-        let details = node.child("details");
-        let line = details.child("line");
-        let s = theme.resolve(&details);
-        let each = padded(theme, &line, theme.line_height(&line));
-        let n = lines.len();
-        let rows: Vec<Element<'a, Message>> = lines
-            .into_iter()
-            .map(|l| {
-                theme
-                    .container(&line, theme.text(&line, l).wrapping(text::Wrapping::None))
-                    .width(Length::Fill)
-                    .into()
-            })
-            .collect();
-        (
-            theme
-                .container(&details, column(rows).spacing(s.gap).width(Length::Fill))
-                .width(Length::Fill)
-                .into(),
-            padded(
-                theme,
-                &details,
-                each * n as f32 + s.gap * n.saturating_sub(1) as f32,
-            ),
-        )
-    }
-
-    /// A row of text buttons (Disconnect, Forget).
-    fn actions<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        node: &Node,
-        actions: Vec<(&'static str, &'a str, Message)>,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let container = node.child("actions");
-        let s = theme.resolve(&container);
-        let mut height: f32 = 0.0;
-        let buttons: Vec<Element<'a, Message>> = actions
-            .into_iter()
-            .map(|(class, label, message)| {
-                let b = container.child("button").class(class);
-                height = height.max(self.text_button_height(ctx, &b));
-                theme
-                    .button(&b, theme.text(&b.child("text"), label))
-                    .on_press(message)
-                    .into()
-            })
-            .collect();
-        (
-            theme
-                .container(&container, row(buttons).spacing(s.gap))
-                .width(Length::Fill)
-                .align_x(Alignment::End)
-                .into(),
-            padded(theme, &container, height),
-        )
+        icssed::column(node, parts).into()
     }
 
     /// The password field with its eye and the Connect button.
-    fn auth<'a>(&'a self, ctx: &Context<'a>, node: &Node, busy: bool) -> Block<'a> {
-        let theme = ctx.theme;
+    fn auth<'a>(&'a self, ctx: Context<'a>, node: Node<'a>, busy: bool) -> Element<'a, Message> {
         let locale = ctx.locale;
         let auth = node.child("auth").class_if("busy", busy);
-        let input_node = auth.child("input");
-        let mut input = theme
-            .text_input(&input_node, locale.tr("network.password"), &self.password)
-            .id(self.input.clone())
-            .secure(!self.peek)
-            .on_submit(Message::Submit);
-        if !busy {
-            input = input.on_input(Message::Password);
-        }
-        let peek = auth
+        let input = auth.child("input").disabled_if(busy);
+        let peek = input
             .child("button")
             .class("peek")
             .class("plain")
             .class_if("active", self.peek);
-        let eye = theme
-            .button(
-                &peek,
-                self.icon(
-                    ctx,
-                    &peek.child("icon"),
-                    if self.peek { ICON_CONCEAL } else { ICON_PEEK },
-                ),
-            )
-            .on_press_maybe((!busy).then_some(Message::Peek));
+        let eye = icssed::button(
+            peek,
+            [ctx.icon(
+                peek.child("icon"),
+                if self.peek { ICON_CONCEAL } else { ICON_PEEK },
+            )],
+        )
+        .on_press(Message::Peek);
+        let field = icssed::input(input, locale.tr("network.password"), &self.password)
+            .id(self.input.clone())
+            .secure(!self.peek)
+            .on_input(Message::Password)
+            .on_submit(Message::Submit)
+            .trailing(eye);
         let ready = !busy && !self.password.is_empty();
         let connect = auth.child("button").class("connect").disabled_if(!ready);
-        let connect_button = theme
-            .button(
-                &connect,
-                theme.text(&connect.child("text"), locale.tr("network.connect")),
-            )
-            .on_press_maybe(ready.then_some(Message::Submit));
-        let s = theme.resolve(&auth);
-        let input_style = theme.resolve(&input_node);
-        let input_height = theme.line_height(&input_node)
-            + input_style.padding.top
-            + input_style.padding.bottom
-            + 2.0 * input_style.border().width;
-        let height = input_height
-            .max(self.icon_button_height(ctx, &peek))
-            .max(self.text_button_height(ctx, &connect));
-        (
-            theme
-                .container(
-                    &auth,
-                    row![
-                        theme.tag(&input_node, input.width(Length::Fill)),
-                        eye,
-                        connect_button
-                    ]
-                    .spacing(s.gap)
-                    .align_y(Alignment::Center)
-                    .width(Length::Fill),
-                )
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &auth, height),
+        let connect = icssed::button(
+            connect,
+            [icssed::text(connect.child("label"), locale.tr("network.connect")).into()],
         )
+        .on_press(Message::Submit);
+        icssed::row(auth, [field.into(), connect.into()]).into()
     }
+}
 
-    /// A line of text under a row: an error, a hint.
-    fn message<'a>(&'a self, ctx: &Context<'a>, node: &Node, text: &'a str) -> Block<'a> {
-        let theme = ctx.theme;
-        let m = node.child("message");
-        let width = self.list_width(ctx);
-        let height = theme
-            .measure_in(&m, text, width)
-            .height
-            .max(theme.line_height(&m));
-        (
-            theme
-                .container(&m, theme.text(&m, text))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &m, height),
-        )
+/// What a network's or a device's line shows: icon, name, an optional
+/// badge icon, a status text, a chevron on rows that unfold
+/// (`(unfolded, what its click does)`).
+struct RowLine<'a> {
+    icon: &'a str,
+    name: &'a str,
+    badge: Option<&'a str>,
+    status: Option<&'a str>,
+    chevron: Option<(bool, Message)>,
+}
+
+/// The clickable line of a network or device row, `button`: the name
+/// and its badge in a `title` taking the room left, so the status and
+/// the chevron sit at the end; the chevron is a button of its own
+/// inside it, which then doesn't fire.
+fn row_button<'a>(
+    ctx: Context<'a>,
+    button: Node<'a>,
+    line: RowLine<'a>,
+    on_press: Message,
+) -> Element<'a, Message> {
+    let title = button.child("title");
+    let mut name: Vec<Element<'a, Message>> =
+        vec![icssed::text(title.child("name"), line.name).into()];
+    if let Some(badge) = line.badge {
+        name.push(ctx.icon(title.child("icon").class("badge"), badge));
     }
+    let mut parts: Vec<Element<'a, Message>> = vec![
+        ctx.icon(button.child("icon"), line.icon),
+        icssed::row(title, name).into(),
+    ];
+    if let Some(status) = line.status {
+        parts.push(icssed::text(button.child("status"), status).into());
+    }
+    if let Some((expanded, toggle)) = line.chevron {
+        let c = button
+            .child("button")
+            .class("chevron")
+            .class("plain")
+            .class_if("active", expanded);
+        parts.push(
+            icssed::button(c, [icssed::mark(c.child("arrow"))])
+                .on_press(toggle)
+                .into(),
+        );
+    }
+    icssed::button(button, parts).on_press(on_press).into()
+}
+
+/// A section title.
+fn header<'a>(list: Node<'a>, class: &str, title: &'a str) -> Element<'a, Message> {
+    let header = list.child("header").class(class);
+    icssed::row(header, [icssed::text(header.child("title"), title).into()]).into()
+}
+
+/// The Wi‑Fi title with the scan button and the on/off toggle.
+fn wifi_header<'a>(ctx: Context<'a>, list: Node<'a>) -> Element<'a, Message> {
+    let on = ctx.network.wireless_enabled();
+    let header = list.child("header").class("wifi").class_if("off", !on);
+    let mut parts: Vec<Element<'a, Message>> =
+        vec![icssed::text(header.child("title"), ctx.locale.tr("network.wifi")).into()];
+    if on {
+        let scan = header.child("button").class("scan");
+        parts.push(
+            icssed::button(scan, [ctx.icon(scan.child("icon"), ICON_SCAN)])
+                .on_press(Message::Scan)
+                .into(),
+        );
+    }
+    parts.push(icssed::toggle(header.child("toggle"), on, Message::SetWireless).into());
+    icssed::row(header, parts).into()
+}
+
+/// A VPN profile with its toggle.
+fn vpn_row<'a>(ctx: Context<'a>, list: Node<'a>, p: &'a Profile) -> Element<'a, Message> {
+    let locale = ctx.locale;
+    let key = FailKey::Uuid(p.uuid.clone());
+    let active = ctx.network.active_by_uuid(&p.uuid);
+    let on = active.is_some_and(|a| a.state == ActiveState::Activated);
+    let connecting =
+        ctx.network.attempting(&key) || active.is_some_and(|a| a.state == ActiveState::Activating);
+    let failure = ctx.network.failure(&key);
+    let node = list
+        .child("vpn")
+        .class_if("active", on)
+        .class_if("connecting", connecting)
+        .class_if("failed", failure.is_some())
+        .attr("name", &p.id);
+    let line = node.child("line");
+    let uuid = p.uuid.clone();
+    let mut head: Vec<Element<'a, Message>> = vec![
+        ctx.icon(line.child("icon"), ICON_VPN),
+        icssed::text(line.child("name"), p.id.as_str()).into(),
+    ];
+    if connecting {
+        head.push(icssed::text(line.child("status"), locale.tr("network.connecting")).into());
+    }
+    head.push(
+        icssed::toggle(line.child("toggle"), on || connecting, move |v| {
+            Message::Vpn(uuid.clone(), v)
+        })
+        .into(),
+    );
+    let mut parts: Vec<Element<'a, Message>> = vec![icssed::row(line, head).into()];
+    if let Some(f) = failure {
+        let text = match &f.reason {
+            FailReason::NoSecrets => locale.tr("network.needs_password"),
+            FailReason::WrongPassword => locale.tr("network.wrong_password"),
+            _ => locale.tr("network.failed"),
+        };
+        parts.push(super::note(node.child("message"), text));
+    }
+    icssed::column(node, parts).into()
+}
+
+/// The facts about a connection, one line each.
+fn details<'a>(node: Node<'a>, lines: Vec<String>) -> Element<'a, Message> {
+    let details = node.child("details");
+    let lines = lines
+        .into_iter()
+        .map(|l| icssed::text(details.child("line"), l).into());
+    icssed::column(details, lines).into()
+}
+
+/// A row of text buttons (Disconnect, Forget).
+fn actions_row<'a>(
+    node: Node<'a>,
+    actions: Vec<(&'static str, &'a str, Message)>,
+) -> Element<'a, Message> {
+    let row = node.child("actions");
+    let buttons = actions.into_iter().map(|(class, label, message)| {
+        let b = row.child("button").class(class);
+        icssed::button(b, [icssed::text(b.child("label"), label).into()])
+            .on_press(message)
+            .into()
+    });
+    icssed::row(row, buttons).into()
 }
 
 /// The IP lines of the details: addresses, gateway, DNS.
@@ -1149,13 +817,6 @@ fn ip_lines(locale: &Locale, ip4: Option<&IpConfig>, ip6: Option<&IpConfig>) -> 
         lines.push(format!("IPv6 {}", ip.addresses.join(", ")));
     }
     lines
-}
-
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

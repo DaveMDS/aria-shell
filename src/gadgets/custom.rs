@@ -12,16 +12,15 @@
 //! [`scripts::Spec`] (run once for every panel showing it) and its last
 //! output read from `ctx.scripts`.
 
-use iced::Element;
 use iced::mouse::ScrollDelta;
-use iced::widget::{Space, mouse_area, row};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Axis, Context, Gadget, Wheel};
 use crate::process;
 use crate::services::scripts::{self, Output, ReturnType, Spec};
-use crate::ui::theme;
 
 /// `[Custom]` section.
 #[derive(Debug, Clone)]
@@ -79,9 +78,6 @@ impl Section for CustomConfig {
         }
     }
 }
-
-/// Icon size when the theme doesn't set `height` on `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
 
 pub struct Custom {
     config: CustomConfig,
@@ -141,57 +137,34 @@ impl Gadget for Custom {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let output = self.script.as_ref().and_then(|s| ctx.scripts.output(s));
+        let mut button = ctx.node.child("button");
         if self.script.is_some()
             && self.config.hide_empty
             && output.is_none_or(|o| o.text.is_empty())
         {
-            return Space::new().into();
+            return icssed::row(ctx.node, []).into();
         }
-        let mut button = ctx.node.child("button");
         for class in output.map(|o| o.classes.as_slice()).unwrap_or_default() {
-            button = button.class(class.clone());
+            button = button.class(class);
         }
-        let style = theme.resolve(&button);
-
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         let icon = output
             .and_then(|o| o.icon.as_deref())
             .unwrap_or(&self.config.icon);
         if !icon.is_empty() {
-            let icon_node = button.child("icon");
-            let icon_style = theme.resolve(&icon_node);
-            let size = icon_style
-                .height
-                .or(icon_style.width)
-                .and_then(|l| match l {
-                    theme::Length::Px(px) => Some(px),
-                    _ => None,
-                })
-                .unwrap_or(DEFAULT_ICON_SIZE);
-            let icon: Element<'a, Message> = match ctx.icons.get_name(icon, None) {
-                Some(icon) => icon.view(size, icon_style.color),
-                None => Space::new().width(size).height(size).into(),
-            };
-            // In containers tagged with their node, so `debug widgets`
-            // sees them and the theme can pad them.
-            parts.push(theme.container(&icon_node, icon).into());
+            let icons: &dyn icssed::Icons = ctx.icons;
+            parts.push(icssed::icon(button.child("icon"), (icons, icon)).into());
         }
         let text = self.text(output);
         if !text.is_empty() {
-            let text_node = button.child("text");
-            let text = theme.text(&text_node, text);
-            parts.push(theme.container(&text_node, text).into());
+            parts.push(icssed::text(button.child("label"), text).into());
         }
-        let content = row(parts)
-            .spacing(style.gap)
-            .align_y(iced::Alignment::Center);
-        mouse_area(theme.button(&button, content).on_press(Message::Left))
+        let button = mouse_area(icssed::button(button, parts).on_press(Message::Left))
             .on_right_press(Message::Right)
             .on_middle_press(Message::Middle)
-            .on_scroll(Message::Scroll)
-            .into()
+            .on_scroll(Message::Scroll);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 }
 

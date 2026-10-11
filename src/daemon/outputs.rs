@@ -14,11 +14,25 @@ use crate::locale::Locale;
 use crate::services::{icons, idle};
 use crate::ui::theme::Theme;
 use crate::{AriaShell, Message};
+
+/// Ask the compositor's scale of surface `window`.
+fn ask_scale(window: Id) -> Task<Message> {
+    iced::window::scale_factor(window).map(move |scale| Message::Scale(window, scale))
+}
 use icons::Icons;
 use panel::{Panel, PanelConfig};
 
 impl AriaShell {
     pub(crate) fn on_shell_event(&mut self, event: ShellEvent) -> Task<Message> {
+        // Every surface tells the scale it's drawn at once it exists.
+        let scale = match &event {
+            ShellEvent::NewShell(info) => ask_scale(info.window),
+            _ => Task::none(),
+        };
+        Task::batch([scale, self.on_shell_event_inner(event)])
+    }
+
+    fn on_shell_event_inner(&mut self, event: ShellEvent) -> Task<Message> {
         match event {
             ShellEvent::NewShell(info) if info.shell == ShellType::SessionLock => {
                 // The runtime made a lock surface for an output: ours to
@@ -88,6 +102,8 @@ impl AriaShell {
                     .insert(OutputId::from(&output), output.clone())
                     .is_none()
                 {
+                    self.scales
+                        .output_added(OutputId::from(&output), output.scale_factor);
                     self.brightness.outputs_changed();
                     tasks.push(self.picker_outputs_changed());
                 }
@@ -110,16 +126,28 @@ impl AriaShell {
                 };
                 let moved = place(known) != place(&output);
                 *known = output;
-                if moved {
-                    self.picker_outputs_changed()
-                } else {
-                    Task::none()
+                if !moved {
+                    return Task::none();
                 }
+                // Rescaled, maybe: its bars tell.
+                let id = OutputId::from(&*known);
+                let bars: Vec<Id> = self
+                    .panels
+                    .iter()
+                    .filter(|(_, p)| p.output == id)
+                    .map(|(&bar, _)| bar)
+                    .collect();
+                Task::batch(
+                    bars.into_iter()
+                        .map(ask_scale)
+                        .chain([self.picker_outputs_changed()]),
+                )
             }
             ShellEvent::OutputRemoved(output) => {
                 let gone = OutputId::from(&output);
                 let mut closing = Task::none();
                 if self.outputs.remove(&gone).is_some() {
+                    self.scales.output_removed(gone);
                     self.brightness.outputs_changed();
                     closing = self.picker_outputs_changed();
                 }
@@ -152,6 +180,7 @@ impl AriaShell {
                 Task::batch(tasks)
             }
             ShellEvent::Closed(id) => {
+                self.measure.borrow_mut().forget(id);
                 if let Some(picker) = &self.picker
                     && picker.has_window(id)
                 {
@@ -219,8 +248,10 @@ impl AriaShell {
                 continue;
             }
             log::info!("opening [{section}] on output {:?}", output.name);
-            let panel = Panel::new(section, cfg, &self.config, &self.theme, output);
+            let scale = self.scales.of(output_id);
+            let mut panel = Panel::new(section, cfg, &self.config, output, scale);
             let id = Id::unique();
+            panel.resize(id, measuring!(self));
             tasks.push(Task::done(Message::NewLayerShell {
                 settings: panel.layer_settings(),
                 id,
@@ -271,7 +302,11 @@ impl AriaShell {
         log::info!("config changed, rebuilding panels");
         self.config = Config::load();
         self.general = self.config.section(None);
-        self.theme = Theme::load(&self.config, self.style.as_deref(), self.scheme);
+        self.set_theme(Theme::load(
+            &self.config,
+            self.style.as_deref(),
+            self.scheme,
+        ));
         self.locale = Locale::new(&self.general.language);
         self.notifications.set_config(self.config.section(None));
         self.sysmon.set_config(self.config.section(None));
@@ -312,26 +347,24 @@ impl AriaShell {
     }
 
     /// Re-read the theme files; views pick the new rules up on their
-    /// next redraw, bars whose thickness changed get resized. A file
-    /// that doesn't parse (mid-edit, typically) keeps the current theme.
+    /// next redraw, every surface is measured again (a bar whose
+    /// thickness changed is resized). A file that doesn't parse
+    /// (mid-edit, typically) keeps the current theme.
     pub(crate) fn reload_theme(&mut self) -> Task<Message> {
         match Theme::try_load(&self.config, self.style.as_deref(), self.scheme) {
-            Ok(theme) => self.theme = theme,
+            Ok(theme) => self.set_theme(theme),
             Err(e) => {
                 log::error!("{}, keeping the current theme", e.message);
                 return Task::none();
             }
         }
-        let mut tasks = Vec::new();
-        for (&id, panel) in &mut self.panels {
-            if let Some((anchor, size, zone_size)) = panel.resize(&self.theme) {
-                tasks.push(Task::done(Message::LayoutChange { id, anchor, size }));
-                tasks.push(Task::done(Message::ExclusiveZoneChange { id, zone_size }));
-            }
-        }
-        tasks.push(self.sync_popups());
-        tasks.push(self.sync_toasts());
-        tasks.push(surface_tasks(self.osd.relayout(&self.theme)));
-        Task::batch(tasks)
+        self.relayout()
+    }
+
+    /// A new theme: the trees measured with the old one go with it (its
+    /// nodes are its own).
+    pub(crate) fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        *self.measure.borrow_mut() = icssed::Measure::new();
     }
 }

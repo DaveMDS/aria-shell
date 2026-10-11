@@ -6,14 +6,12 @@
 //! Holds no compositor state: it reads the daemon's [`Compositor`] from
 //! the view context and filters it for the output the panel is on.
 
-use iced::Element;
-use iced::widget::{row, text};
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget};
 use crate::services::compositor::{Command, Window, Workspace};
-use crate::ui::theme::{Length, Node};
 
 /// `[WorkSpaces]` section (spelled as in the Python implementation).
 #[derive(Debug, Clone)]
@@ -78,19 +76,23 @@ impl Gadget for Workspaces {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let shown = ctx.compositor.workspaces.iter().filter(|ws| {
-            self.config.all_monitors
-                || self
-                    .output
-                    .as_ref()
-                    .is_none_or(|output| ws.output == *output)
-        });
-        let shown: Vec<&Workspace> = shown.collect();
+        let shown: Vec<&Workspace> = ctx
+            .compositor
+            .workspaces
+            .iter()
+            .filter(|ws| {
+                self.config.all_monitors
+                    || self
+                        .output
+                        .as_ref()
+                        .is_none_or(|output| ws.output == *output)
+            })
+            .collect();
         let count = shown.len();
         let mut children: Vec<Element<'a, Message>> = shown
             .iter()
             .enumerate()
-            .map(|(i, ws)| self.workspace_view(ws, i, count, &ctx))
+            .map(|(i, ws)| self.workspace_view(ws, i, count, ctx))
             .collect();
         if self.config.show_title
             && let Some(win) = ctx
@@ -99,12 +101,9 @@ impl Gadget for Workspaces {
                 .iter()
                 .find(|w| w.active && shown.iter().any(|ws| ws.id == w.workspace_id))
         {
-            children.push(self.title_view(win, &ctx));
+            children.push(title_view(win, ctx));
         }
-        ctx.theme
-            .row(&ctx.node, children)
-            .align_y(iced::Alignment::Center)
-            .into()
+        icssed::row(ctx.node, children).into()
     }
 }
 
@@ -114,19 +113,18 @@ impl Workspaces {
         ws: &'a Workspace,
         index: usize,
         count: usize,
-        ctx: &Context<'a>,
+        ctx: Context<'a>,
     ) -> Element<'a, Message> {
         let node = ctx
             .node
-            .child("button")
+            .child_at("button", index, count)
             .class("workspace")
             .class_if("active", ws.active)
             .class_if("urgent", ws.urgent)
-            .attr("name", ws.name.clone())
-            .nth(index, count);
+            .attr("name", &ws.name);
         let mut children: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_name {
-            children.push(ctx.theme.text(&node.child("text"), &ws.name).into());
+            children.push(icssed::text(node.child("label"), ws.name.as_str()).into());
         }
         if self.config.show_windows {
             let windows: Vec<&Window> = ctx.compositor.windows_of(ws).collect();
@@ -135,81 +133,47 @@ impl Workspaces {
                 windows
                     .into_iter()
                     .enumerate()
-                    .map(|(i, w)| self.window_view(w, &node.child("window").nth(i, count), ctx)),
+                    .map(|(i, w)| self.window_view(w, node.child_at("window", i, count), ctx)),
             );
         }
-        // The button already has the node's padding: only its gap.
-        let content = row(children)
-            .spacing(ctx.theme.resolve(&node).gap)
-            .align_y(iced::Alignment::Center);
-        ctx.theme
-            .button(&node, content)
+        icssed::button(node, children)
             .on_press(Message::Activate(ws.id.clone()))
             .into()
     }
 
-    /// The active window's icon (at the `icon` node's `height`) and
-    /// title, as `title[class="<app id>"]`: one line, cut where the
-    /// slot ends.
-    fn title_view<'a>(&'a self, win: &'a Window, ctx: &Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let node = ctx.node.child("title").attr("class", win.class.clone());
-        let icon_node = node.child("icon");
-        let style = theme.resolve(&icon_node);
-        let size = style.height.or(style.width).and_then(|l| match l {
-            Length::Px(px) => Some(px),
-            _ => None,
-        });
-        let mut parts: Vec<Element<'a, Message>> = Vec::new();
-        if let (Some(icon), Some(size)) = (ctx.icons.get(&win.class), size) {
-            parts.push(icon.view(size, style.color));
-        }
-        parts.push(
-            theme
-                .text(&node.child("text"), &win.title)
-                .wrapping(text::Wrapping::None)
-                .into(),
-        );
-        theme
-            .container(
-                &node,
-                theme.row(&node, parts).align_y(iced::Alignment::Center),
-            )
-            .clip(true)
-            .into()
-    }
-
-    /// The window's app icon at the CSS `height` of the `window` node
-    /// (its `width` if there's no height), or a dot until it resolves.
+    /// The window's app icon, or a dot until it resolves; a button with
+    /// `focus_window_on_click`.
     fn window_view<'a>(
         &'a self,
         win: &'a Window,
-        node: &Node,
-        ctx: &Context<'a>,
+        node: Node<'a>,
+        ctx: Context<'a>,
     ) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let node = node
             .class_if("active", win.active)
             .class_if("urgent", win.urgent)
-            .attr("class", win.class.clone());
-        let style = theme.resolve(&node);
-        let size = style.height.or(style.width).and_then(|l| match l {
-            Length::Px(px) => Some(px),
-            _ => None,
-        });
-        let content: Element<'a, Message> = match (ctx.icons.get(&win.class), size) {
-            (Some(icon), Some(size)) => icon.view(size, style.color),
-            _ => theme
-                .text(&node.child("text"), if win.active { "◉" } else { "●" })
-                .into(),
+            .attr("class", &win.class);
+        let content: Element<'a, Message> = match ctx.icons.get(&win.class) {
+            Some(icon) => icssed::icon(node.child("icon"), icon.clone()).into(),
+            None => icssed::mark(node.child("dot")),
         };
+        let window = icssed::row(node, [content]);
         if self.config.focus_window_on_click {
-            theme
-                .button(&node, content)
-                .on_press(Message::Focus(win.id.clone()))
-                .into()
+            window.on_press(Message::Focus(win.id.clone())).into()
         } else {
-            theme.container(&node, content).into()
+            window.into()
         }
     }
+}
+
+/// The active window's icon and title, as `title[class="<app id>"]`:
+/// one line, cut where the slot ends.
+fn title_view<'a>(win: &'a Window, ctx: Context<'a>) -> Element<'a, Message> {
+    let node = ctx.node.child("title").attr("class", &win.class);
+    let mut parts: Vec<Element<'a, Message>> = Vec::new();
+    if let Some(icon) = ctx.icons.get(&win.class) {
+        parts.push(icssed::icon(node.child("icon"), icon.clone()).into());
+    }
+    parts.push(icssed::text(node.child("label"), win.title.as_str()).into());
+    icssed::row(node, parts).into()
 }

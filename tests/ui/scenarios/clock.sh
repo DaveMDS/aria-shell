@@ -13,8 +13,8 @@ for output in HEADLESS-1 HEADLESS-2; do
     click_widget "panel[output=\"$output\"] slot.center gadget.clock > button"
     assert_surface popup
     shot_surface "popup-$output" popup
-    assert_eq "$(count_widgets 'calendar > day.today')" 1 "today is shown"
-    assert_eq "$(count_widgets 'calendar > weekday')" 7 "seven weekday headers"
+    assert_eq "$(count_widgets 'calendar day.today')" 1 "today is shown"
+    assert_eq "$(count_widgets 'calendar > weekdays > weekday')" 7 "seven weekday headers"
 
     # The popup sits right below the bar (not the button), centred on
     # the clock.
@@ -30,9 +30,9 @@ for output in HEADLESS-1 HEADLESS-2; do
     assert_eq "$2" "$bar_bottom" "popup top at the bar's bottom"
 
     click_widget 'calendar > header > button.next'
-    assert_eq "$(count_widgets 'calendar > day.today')" 0 "next month has no today"
-    click_widget 'calendar > header > button.prev'
-    assert_eq "$(count_widgets 'calendar > day.today')" 1 "back to this month"
+    assert_eq "$(count_widgets 'calendar day.today')" 0 "next month has no today"
+    click_widget 'calendar > header > button.previous'
+    assert_eq "$(count_widgets 'calendar day.today')" 1 "back to this month"
 
     click 600 600
     assert_no_surface popup

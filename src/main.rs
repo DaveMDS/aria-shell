@@ -1,3 +1,39 @@
+/// The daemon's state as views read it ([`shared::Shared`]), borrowed
+/// field by field: unlike `AriaShell::shared`, it leaves the other
+/// fields free (a component measuring its surfaces while it changes).
+macro_rules! shared {
+    ($shell:expr) => {
+        $crate::shared::Shared {
+            compositor: &$shell.compositor,
+            theme: &$shell.theme,
+            locale: &$shell.locale,
+            icons: &$shell.icons,
+            tray: &$shell.tray,
+            notifications: &$shell.notifications,
+            sysmon: &$shell.sysmon,
+            audio: &$shell.audio,
+            network: &$shell.network,
+            idle: &$shell.idle,
+            power: &$shell.power,
+            brightness: &$shell.brightness,
+            places: &$shell.places,
+            scripts: &$shell.scripts,
+        }
+    };
+}
+
+/// What measuring a surface takes ([`ui::Measuring`]), borrowed field by
+/// field as [`shared!`] does.
+macro_rules! measuring {
+    ($shell:expr) => {
+        $crate::ui::Measuring {
+            shared: shared!($shell),
+            measure: &$shell.measure,
+            scales: &$shell.scales,
+        }
+    };
+}
+
 mod commands;
 mod components;
 mod config;
@@ -11,11 +47,12 @@ mod time;
 mod ui;
 mod watch;
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use iced::window::Id;
-use iced::{Color, Point, Rectangle, Task};
+use iced::{Point, Task};
 use iced_exwlshell::build_pattern::daemon;
 use iced_exwlshell::redraw::Scope;
 use iced_exwlshell::settings::{LayerShellSettings, Settings, StartMode};
@@ -52,9 +89,9 @@ use services::{
 use shared::Shared;
 use sysmon::SysMon;
 use tray::Tray;
-use ui::Surfaces;
 use ui::theme::{self, Theme};
 use ui::toast::{self, Toasts};
+use ui::{Scales, Surfaces};
 use wallpaper::Wallpapers;
 
 /// Top-level message. `#[to_exwlshell_message]` adds the variants the
@@ -130,15 +167,18 @@ enum Message {
     Cursor(Id, Point),
     /// The pointer entered or left one of our surfaces.
     PointerCrossed(Id),
-    /// The widget tree answered `debug widgets`: element paths and
-    /// surface-local rectangles.
-    Widgets(Reply, Option<String>, Vec<(String, Rectangle)>),
+    /// The widget tree answered `debug widgets`: every widget, with its
+    /// node and its surface-local rectangle.
+    Widgets(Reply, Option<String>, Vec<icssed::query::Found>),
     /// The anchor of a popup about to open was located in its panel.
     PopupAnchor {
         popup: Id,
         panel: Id,
-        anchor: Rectangle,
+        anchor: iced::Rectangle,
     },
+    /// The compositor draws surface `Id` at this scale (asked when it
+    /// appears, and when its output changes).
+    Scale(Id, f32),
     /// Nothing to update: a new frame of that surface (`None`: of all of
     /// them), for a change `Message::redraw_scope` couldn't tell from
     /// the message that made it.
@@ -180,6 +220,8 @@ impl Message {
             Message::Panel(id, _) | Message::PanelKey(id, _) | Message::Redraw(Some(id)) => {
                 Scope::Window(*id)
             }
+            // Every surface on an output: their roots are made anew.
+            Message::Scale(..) => Scope::All,
             _ => Scope::All,
         }
     }
@@ -232,6 +274,10 @@ struct AriaShell {
     osd: Osd,
     /// Every part of the UI on one surface, while shown.
     showcase: Option<daemon::showcase::Showcase>,
+    /// What lays the surfaces out to size them, a tree kept per surface.
+    measure: RefCell<icssed::Measure>,
+    /// Each output's scale, for its surfaces' roots.
+    scales: Scales,
 }
 
 impl AriaShell {
@@ -284,27 +330,14 @@ impl AriaShell {
             toasts: Toasts::default(),
             osd,
             showcase: None,
+            measure: RefCell::new(icssed::Measure::new()),
+            scales: Scales::default(),
         };
         (shell, load_icons)
     }
 
     fn shared(&self) -> Shared<'_> {
-        Shared {
-            compositor: &self.compositor,
-            theme: &self.theme,
-            locale: &self.locale,
-            icons: &self.icons,
-            tray: &self.tray,
-            notifications: &self.notifications,
-            sysmon: &self.sysmon,
-            audio: &self.audio,
-            network: &self.network,
-            idle: &self.idle,
-            power: &self.power,
-            brightness: &self.brightness,
-            places: &self.places,
-            scripts: &self.scripts,
-        }
+        shared!(self)
     }
 
     /// Keep an icon resolved for every window there is, and for what
@@ -683,7 +716,7 @@ impl AriaShell {
                 let Some((_, launcher)) = &mut self.launcher else {
                     return Task::none();
                 };
-                match launcher.update(m, &self.theme) {
+                match launcher.update(m) {
                     launcher::Action::Run(task) => {
                         self.resolve_icons();
                         task.map(Message::Launcher)
@@ -738,12 +771,22 @@ impl AriaShell {
                 panel,
                 anchor,
             } => {
-                let mut panels = std::mem::take(&mut self.panels);
-                let surfaces = panels
+                let m = measuring!(self);
+                let surfaces = self
+                    .panels
                     .get_mut(&panel)
-                    .map(|bar| bar.place_popup(panel, popup, anchor, self.shared()));
-                self.panels = panels;
+                    .map(|bar| bar.place_popup(panel, popup, anchor, m));
                 surfaces.map_or_else(Task::none, surface_tasks)
+            }
+            Message::Scale(window, scale) => {
+                let Some(output) = self.window_output(window) else {
+                    return Task::none();
+                };
+                if !self.scales.set(output, scale) {
+                    return Task::none();
+                }
+                log::info!("output {}: scale {scale}", self.output_name(output));
+                self.relayout()
             }
             _ => Task::none(), // runtime variants, handled by the runtime
         }
@@ -870,6 +913,26 @@ impl AriaShell {
     }
 }
 
+/// Where the runtime keeps the daemon: in a box, at an address that
+/// stays. `iced_exwlshell` moves its context, the state inside it, on
+/// every event, while the windows' widget trees keep borrowing the
+/// state (see ARCHITECTURE.md).
+struct Pinned(Box<AriaShell>);
+
+impl Pinned {
+    fn update(&mut self, message: Message) -> Task<Message> {
+        self.0.update(message)
+    }
+
+    fn view(&self, window: Id) -> icssed::Element<'_, Message> {
+        self.0.view(window)
+    }
+
+    fn subscription(&self) -> iced::Subscription<Message> {
+        self.0.subscription()
+    }
+}
+
 /// `[autostart]`: `name = command line` pairs, run in file order once
 /// when the shell starts (not on a config reload).
 fn autostart(config: &Config) {
@@ -915,24 +978,24 @@ fn main() -> iced_exwlshell::Result {
     };
 
     let (shell_broadcast, shell_events) = shell::channel();
+    theme::load_fonts();
 
+    // Every surface is cleared transparent (the toolkit's default
+    // `Theme`): what shows is the theme's `panel` / `popup` box, which
+    // may itself be translucent or rounded.
     daemon(
-        move || AriaShell::new(shell_events.clone()),
+        move || {
+            let (shell, task) = AriaShell::new(shell_events.clone());
+            (Pinned(Box::new(shell)), task)
+        },
         "aria-shell",
-        AriaShell::update,
-        AriaShell::view,
+        Pinned::update,
+        Pinned::view,
     )
-    .subscription(AriaShell::subscription)
+    .subscription(Pinned::subscription)
     .redraw_scope(Message::redraw_scope)
-    // Surfaces start transparent: what shows is the theme's `panel` /
-    // `popup` background, which may itself be translucent or rounded.
-    .style(|_, theme| iced::theme::Style {
-        background_color: Color::TRANSPARENT,
-        text_color: theme.palette().text,
-    })
     .settings(Settings {
         shell_broadcast,
-        fonts: theme::embedded_fonts(),
         layer_settings: LayerShellSettings {
             // No initial surface: panels are opened per output as the
             // compositor announces them.

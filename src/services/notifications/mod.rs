@@ -21,7 +21,7 @@ use iced::{Subscription, Task};
 use zbus::Connection;
 
 use crate::config::{RawSection, Section};
-use crate::services::icons::Icon;
+use crate::services::icons::{self, Icon};
 
 /// `[Notifications]` section: the daemon's settings and the bar
 /// gadget's, together (as `[Tray]` is the one place for the tray).
@@ -329,7 +329,7 @@ impl Notifications {
                     && !self.files.iter().any(|(p, _)| p == path)
                 {
                     self.files
-                        .push((path.clone(), Icon::from_path(path.clone())));
+                        .push((path.clone(), icons::from_path(path.clone())));
                 }
                 // Into the history, replacing in place or first.
                 if self.config.history > 0 {

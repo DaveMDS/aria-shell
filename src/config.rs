@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use configparser::ini::Ini;
 
 use crate::process;
-use crate::ui::theme::Scheme;
+use crate::ui::theme::{self, Scheme};
 
 /// The loaded configuration file. Plain data owned by the application
 /// state; pass it by reference to whoever needs a section.
@@ -230,7 +230,7 @@ impl Section for GeneralConfig {
     fn from_raw(raw: &RawSection) -> Self {
         let color_scheme = match raw.get("color_scheme") {
             None => Scheme::default(),
-            Some(v) => v.parse().unwrap_or_else(|()| {
+            Some(v) => theme::parse_scheme(v).unwrap_or_else(|| {
                 log::warn!(
                     "invalid color_scheme {v:?}, using {}",
                     Scheme::default().name()

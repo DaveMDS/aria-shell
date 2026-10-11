@@ -37,7 +37,7 @@ wait_osd() {
 }
 
 # --- found and read ------------------------------------------------------
-wait_for 'gadget.brightness > button > text' 2 "the percent on both bars"
+wait_for 'gadget.brightness > button > label' 2 "the percent on both bars"
 b=$(aria debug brightness)
 assert_contains "$b" 'ddc:3 output=HEADLESS-1 model="Fake Monitor" 70%'
 assert_contains "$b" 'ddc:4 output=HEADLESS-2 model="Fake Monitor" 30%'

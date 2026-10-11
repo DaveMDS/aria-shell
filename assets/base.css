@@ -1,349 +1,133 @@
 /*
  * Aria Shell base stylesheet
  * ==========================
- * Always loaded, before the user theme. Keep it neutral: these are the
- * defaults a theme overrides, not a look. Don't edit it to restyle the
- * shell, write a theme (`[general] style = <name>` in aria.conf, looked
- * up as `themes/<name>.css` under ~/.config/aria-shell/, the XDG data
- * dirs, then assets/; or a path). assets/themes/ has examples.
+ * Always loaded, over the toolkit's base stylesheet and before the user
+ * theme: one cascade. Keep it neutral: these are the defaults a theme
+ * overrides, not a look. Don't edit it to restyle the shell, write a
+ * theme (`[general] style = <name>` in aria.conf, looked up as
+ * `themes/<name>.css` under ~/.config/aria-shell/, the XDG data dirs,
+ * then assets/; or a path). assets/themes/ has examples.
  *
- * Syntax: a CSS subset.
- *   - comments, `selector, selector { property: value; }`
- *   - selectors: type, .class, #id, [attr="value"], *, descendant (space),
- *     child (>), :hover :active :focus :disabled :first-child :last-child :root
+ * The syntax, the properties and the toolkit's widgets (buttons,
+ * toggles, sliders, meters, inputs, scrolls, menus, tabs, calendars,
+ * graphs, tooltips) with their element trees are the toolkit's
+ * reference: icssed/assets/base.css. Its rules are under every rule of
+ * this file and of a theme, whatever their specificity. This file has
+ * the palette and the shell's own elements: every surface, every
+ * gadget, with its element tree in a comment above its rules.
+ *
  *   - `:root` matches every surface's root (panel, popup, launcher, ...):
  *     the place for inherited defaults, `:root { font-family: ... }`
- *   - `:root { --name: value }` variables, used as `var(--name[, fallback])`;
- *     `:root.light { }` / `:root.dark { }` hold the variables of one colour
- *     scheme, applied over the plain ones when that scheme is active
- *     (`[general] color_scheme`, or the Themes gadget). Root elements
- *     carry the scheme as a class: `panel.dark { }`, `popup.light { }`.
- *     A theme that only sets `:root` looks the same in both schemes.
- *   - units: px or none; colours: #rgb, #rrggbbaa, rgb(), rgba(), hsl(), names
- *   - cascade: specificity, then source order (this file first)
- *   - not supported: @rules, !important, margin, opacity, gradients,
- *     em/%, transitions/animations. `:hover`/`:active` only apply to
- *     buttons and `:hover`/`:focus` to inputs (iced containers have no
- *     hover state).
- *
- * Properties:
- *   color                       text colour (inherited)
- *   background                  colour | transparent | none
- *   border                      <width> solid <colour> | none; takes room as in CSS: the
- *                               content sits inside the border, then the padding
- *   border-top, border-right,   the same, for one side. Sides that differ take no
- *   border-bottom, border-left  border-radius (the box is square), and where two meet the
- *                               corner is the top's or the bottom's. Inputs, sliders and
- *                               toggles draw the top side all around
- *   border-width, border-color, border-radius (1 or 4 values)
- *   box-shadow                  <x> <y> [blur] <colour> | none; on a surface's root (popup,
- *                               notification, osd, launcher, exiter) the surface grows around
- *                               the box to show it, the box stays where it was.
- *                               `inset <x> <y> <colour>`: a band inside the border along the
- *                               sides the offset points away from (`inset 0 -3px`: 3 px at
- *                               the bottom), over the background, under the content and the
- *                               children; takes no room; unblurred, the box square
- *   padding                     1 to 4 values
- *   padding-top, padding-right, one side
- *   padding-bottom, padding-left
- *   gap                         space between the children of a row
- *   width, height               <px> | auto | fill (content is centred on a sized axis);
- *                               the whole box, border and padding included (CSS's
- *                               `box-sizing: border-box`); on `launcher`: the size of its
- *                               surface
- *   min-height                  on `panel`: the bar thickness
- *   font-family                 font names and/or serif/sans-serif/monospace, comma-separated:
- *                               the first installed one is used; glyphs it lacks fall back
- *                               per glyph (inherited)
- *   font-size                   px (inherited)
- *   font-weight                 normal | bold | 100..900 (inherited)
- *   line-height                 normal | <number> (times the font size) | <px> (inherited);
- *                               a whole px height in a box of the same parity keeps the
- *                               text on whole pixels (iced truncates a fractional one)
- *
- * Elements: every surface, gadget and shared piece (toggle, slider,
- * menu, calendar) has its element tree in a comment above its rules,
- * below: the element types, the classes and attributes they carry,
- * and what each part is.
+ *   - root elements carry the colour scheme as a class: `panel.dark { }`,
+ *     `popup.light { }` (`[general] color_scheme`, or the Themes gadget)
+ *   - a theme that only sets the palette's variables restyles all of
+ *     it, the toolkit's widgets included
  */
 
+/*
+ * The palette: the toolkit's variables, with the shell's colours, and
+ * `--warning`, the shell's own.
+ */
 :root.light {
-  --aria-bg: #eff1f5;
-  --aria-fg: #4c4f69;
-  --aria-muted: #9ca0b0;
-  --aria-accent: #1e66f5;
-  --aria-on-accent: #eff1f5;
-  --aria-urgent: #d20f39;
-  --aria-warning: #df8e1d;
-  --aria-border: #ccd0da;
-  --aria-separator: #ccd0da;
-  --aria-popup-bg: #eff1f5;
+  --bg: #eff1f5;
+  --fg: #4c4f69;
+  --muted: #9ca0b0;
+  --accent: #1e66f5;
+  --on-accent: #eff1f5;
+  --border: #ccd0da;
+  --danger: #d20f39;
+  --warning: #df8e1d;
+  --accent-soft: rgba(30, 102, 245, 0.25);
 }
 :root.dark {
-  --aria-bg: #1e1e2e;
-  --aria-fg: #cdd6f4;
-  --aria-muted: #6c7086;
-  --aria-accent: #89b4fa;
-  --aria-on-accent: #1e1e2e;
-  --aria-urgent: #f38ba8;
-  --aria-warning: #f9e2af;
-  --aria-border: #45475a;
-  --aria-separator: #45475a;
-  --aria-popup-bg: #1e1e2e;
+  --bg: #1e1e2e;
+  --fg: #cdd6f4;
+  --muted: #6c7086;
+  --accent: #89b4fa;
+  --on-accent: #1e1e2e;
+  --border: #45475a;
+  --danger: #f38ba8;
+  --warning: #f9e2af;
+  --accent-soft: rgba(137, 180, 250, 0.3);
 }
 
-/* Fonts */
-
+/* Fonts: a scale of sizes, the base one on every root. */
 :root {
-  --aria-font-xs: 10px;
-  --aria-font-sm: 13px;
-  --aria-font: 15px;
-  --aria-font-lg: 18px;
-  --aria-font-xl: 24px;
-  --aria-font-xxl: 64px;
+  --font-xs: 10px;
+  --font-sm: 13px;
+  --font: 15px;
+  --font-lg: 18px;
+  --font-xl: 24px;
+  --font-xxl: 64px;
   font-family: "Noto Sans Display";  /* embedded in the aria binary */
-  font-size: var(--aria-font);
+  font-size: var(--font);
 }
 
 /*
  * Buttons
  * =======
  *
- * Every `button` element, wherever it is: the base, and the variants the
- * code sets as classes. A context only changes what is its own: a size,
- * an icon's height; the bar's buttons are under Gadgets. A disabled
- * button's icon is muted too.
+ * The toolkit's (`button`, `.flat`, `.primary`, `.danger`), and the
+ * shell's variants, set as classes by the code:
  *
- * button[.flat|.primary|.danger|.active|.plain|.radio]
- * ├─ icon      drawn at `height` (symbolic: `color`)
- * ├─ text
- * ╰─ check, label   (.radio)
+ * button[.active|.plain|.radio]
+ * ├─ icon
+ * ├─ label
+ * ╰─ check     (.radio) its mark: ● / ○
  *
- * button            bordered: a dialog's, a notification's, a popup's actions
- * button.flat       no border, a background on hover: rows, icons, the exit menu's grid
- * button.primary    the action a dialog suggests: Unlock, Save
- * button.danger     an action not to take lightly: Reboot, Kill
- * button.active     a toggle that is on: do-not-disturb, mute, the power profile
- * button.plain      just its colour: muted, the text's when hovered or .active;
- *                   a password's peek (.active: shown), a row's chevron (.active: open)
- * button.radio      one of a group, .active the chosen one: `check` (● / ○,
- *                   accent on the chosen one) and its `label`
+ * button.active    a toggle that is on: do-not-disturb, mute, the power profile
+ * button.plain     just its colour: muted, the text's when hovered or .active;
+ *                  a password's peek (.active: shown), a row's chevron (.active: open)
+ * button.radio     one of a group, .active the chosen one: its `check`
+ *                  (● / ○, accent on the chosen one), then its `label`
  */
-button {
-  padding: 4px 8px;
-  gap: 8px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-button:hover {
-  border-color: var(--aria-accent);
-}
-button icon {
+button > icon {
   height: 16px;
 }
-button.flat {
-  border-color: transparent;
+button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
 }
-button.flat:hover {
-  background: var(--aria-border);
-  border-color: transparent;
-}
-/* hovered too: over a context's hover background (the bar's) */
-button.primary,
-button.primary:hover,
-button.active,
 button.active:hover {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
-  border-color: var(--aria-accent);
-}
-button.danger,
-button.danger:hover {
-  background: var(--aria-urgent);
-  color: var(--aria-on-accent);
-  border-color: var(--aria-urgent);
-}
-button.primary:hover,
-button.danger:hover,
-button.active:hover {
-  border-color: var(--aria-fg);
-}
-button:disabled {
-  color: var(--aria-muted);
-}
-button.primary:disabled,
-button.danger:disabled {
-  background: transparent;
-  border-color: var(--aria-border);
+  border-color: var(--fg);
 }
 button.plain {
   padding: 4px;
-  border: none;
-  color: var(--aria-muted);
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
 }
 button.plain:hover,
 button.plain.active {
+  border-color: transparent;
   background: transparent;
-  color: var(--aria-fg);
+  color: var(--fg);
 }
 button.radio {
-  padding: 0 4px;
+  padding: 2px 4px;
   gap: 6px;
-  border: none;
+  justify-content: start;
+  border-color: transparent;
+  background: transparent;
 }
 button.radio.active {
+  border-color: transparent;
   background: transparent;
-  color: var(--aria-fg);
+  color: var(--fg);
 }
 button.radio:hover,
 button.radio.active:hover {
-  background: var(--aria-border);
+  border-color: transparent;
+  background: var(--border);
 }
-button.radio check {
-  color: var(--aria-muted);
+button.radio > check {
+  color: var(--muted);
+  content: "○";
 }
-button.radio.active check {
-  color: var(--aria-accent);
-}
-
-/*
- * Tabs
- * ====
- *
- * One button per page, the open one .active. The line under them is the
- * row's (`box-shadow: inset`, as wide as the row), the active tab's mark
- * its own, drawn over that line.
- *
- * tabs                              a row (`gap`)
- * ╰─ button.tab[.<name>][.active]
- *    ╰─ text
- */
-tabs {
-  box-shadow: inset 0 -1px var(--aria-border);
-}
-button.tab {
-  padding: 6px 12px;
-  color: var(--aria-muted);
-  border: none;
-  border-radius: 0;
-}
-button.tab:hover {
-  color: var(--aria-fg);
-}
-button.tab.active,
-button.tab.active:hover {
-  background: transparent;
-  color: var(--aria-accent);
-  box-shadow: inset 0 -2px var(--aria-accent);
-}
-
-/*
- * Toggle
- * ======
- *
- * An on/off switch: the track is `height` tall (twice as wide),
- * `background` with the border; the knob's `background` (the track's
- * `color` when unset) and border.
- *
- * toggle[.on]
- * ╰─ handle   the knob
- */
-toggle {
-  height: 18px;
-  background: var(--aria-border);
-}
-toggle.on {
-  background: var(--aria-accent);
-}
-toggle handle {
-  background: var(--aria-popup-bg);
-}
-toggle:hover handle {
-  background: var(--aria-bg);
-}
-
-/*
- * Slider
- * ======
- *
- * The rail is `height` thick, `color` its filled part, `background` the
- * rest, with the border; the handle a circle of `width`, `background`,
- * border.
- *
- * slider
- * ╰─ handle
- */
-slider {
-  height: 4px;
-  color: var(--aria-accent);
-  background: var(--aria-border);
-  border-radius: 2px;
-}
-slider handle {
-  width: 12px;
-  background: var(--aria-accent);
-}
-
-/*
- * Menu
- * ====
- *
- * The tray items' and the themes' popups: a column, `gap` between rows.
- * An unfolded submenu has the same rows, nested; its padding is the
- * indent.
- *
- * menu
- * ├─ item[.checked][.submenu][.expanded]   a button (:disabled when the app says so)
- * │  ├─ check                              ✓ / ● / ○ (levels with toggles only)
- * │  ├─ label
- * │  ╰─ arrow                              ▸ / ▾ on a submenu
- * ├─ separator                             sized by `height`
- * ╰─ submenu                               an unfolded submenu
- */
-menu {
-  padding: 4px;
-  gap: 2px;
-}
-menu arrow,
-menu check {
-  color: var(--aria-muted);
-}
-menu item.checked check {
-  color: var(--aria-accent);
-}
-menu separator {
-  height: 1px;
-  background: var(--aria-separator);
-}
-menu submenu {
-  padding: 0 0 0 16px;
-  gap: 2px;
-}
-
-/*
- * Calendar
- * ========
- *
- * calendar                          the clock's month view
- * ├─ header
- * │  ├─ button.prev | button.next   previous / next month
- * │  ╰─ text                        month and year
- * ├─ weekday                        one per column
- * ╰─ day[.today]                    one per cell
- */
-calendar {
-  padding: 12px;
-}
-calendar header button {
-  padding: 0 8px;
-}
-calendar weekday {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
-}
-calendar day.today {
-  color: var(--aria-accent);
-  font-weight: bold;
+button.radio.active > check {
+  color: var(--accent);
+  content: "●";
 }
 
 /* Surfaces */
@@ -352,51 +136,52 @@ calendar day.today {
  * Launcher
  * ========
  *
- * `width`/`height` size the surface. An .action item is a desktop action
- * of the result above it, opened with Right or the chevron.
+ * `width` / `height` size its surface. An .action item is a desktop
+ * action of the result above it, opened with Right or the chevron.
  *
  * launcher
- * ├─ actions                       the exit menu's buttons ([launcher] actions)
- * │  ╰─ button.flat[.lock|.reboot|...]
- * │     ╰─ icon                    drawn at `height`
- * ├─ input                         the search field (:focus when typing)
- * ╰─ list                          the results (a column, `gap`)
- *    ╰─ item[.selected][.action]   one result, a button
- *       ├─ icon                    the app icon, drawn at `height`
- *       ├─ title                   the app name (the action's, on .action)
- *       ├─ subtitle                its description, when it has one
- *       ╰─ button.chevron.plain[.active] > text   › / ⌄ (.active: open)
+ * ├─ actions                           the exit menu's buttons ([launcher] actions)
+ * │  ╰─ button.flat.<name> > icon       .lock, .reboot, ...
+ * ├─ input                             the search field, the toolkit's (:focus while typing)
+ * ╰─ scroll                            the results, scrolling
+ *    ╰─ list
+ *       ╰─ item[.selected][.action]    one result, a button
+ *          ├─ icon                     the app's
+ *          ├─ texts
+ *          │  ├─ title                 the app's name (the action's, on .action)
+ *          │  ╰─ subtitle              its description, when it has one
+ *          ╰─ button.chevron.plain[.active] > arrow   › / ⌄ (.active: open)
  */
 launcher {
   width: 520px;
   height: 420px;
   padding: 12px;
   gap: 8px;
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
-launcher actions {
+launcher > actions {
   gap: 4px;
 }
-launcher actions button {
+launcher > actions > button {
   padding: 6px;
-  color: var(--aria-muted);
+  color: var(--muted);
 }
-launcher actions button:hover {
-  color: var(--aria-fg);
+launcher > actions > button:hover {
+  color: var(--fg);
 }
-launcher actions icon {
+launcher > actions > button > icon {
   height: 20px;
 }
-launcher input {
+launcher > input {
+  width: fill;
+  min-height: 36px;
   padding: 8px 10px;
-  background: var(--aria-bg);
-  border: 1px solid var(--aria-border);
   border-radius: 6px;
 }
-launcher input:focus {
-  border-color: var(--aria-accent);
+launcher > scroll {
+  height: fill;
 }
 launcher list {
   gap: 2px;
@@ -404,37 +189,55 @@ launcher list {
 launcher item {
   padding: 6px 10px;
   gap: 10px;
+  justify-content: start;
+  border: none;
   border-radius: 6px;
+  background: transparent;
 }
 launcher item:hover {
-  background: var(--aria-border);
+  background: var(--border);
 }
 launcher item.selected {
-  background: var(--aria-accent);
-  color: var(--aria-on-accent);
+  background: var(--accent);
+  color: var(--on-accent);
 }
-launcher icon {
+launcher item > icon {
   height: 32px;
 }
-launcher subtitle {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+launcher item > texts {
+  width: fill;
+  gap: 8px;
+}
+launcher item title,
+launcher item subtitle {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+launcher item subtitle {
+  font-size: var(--font-sm);
+  color: var(--muted);
 }
 launcher item.selected subtitle {
-  color: var(--aria-on-accent);
+  color: var(--on-accent);
 }
 launcher button.chevron {
   padding: 0 8px;
-  font-size: var(--aria-font-lg);
+  font-size: var(--font-lg);
+}
+launcher button.chevron > arrow {
+  content: "›";
+}
+launcher button.chevron.active > arrow {
+  content: "⌄";
 }
 launcher item.selected button.chevron {
-  color: var(--aria-on-accent);
+  color: var(--on-accent);
 }
 /* indented by the parent's icon and gap: under its text */
 launcher item.action {
   padding: 6px 10px 6px 52px;
 }
-launcher item.action icon {
+launcher item.action > icon {
   height: 20px;
 }
 
@@ -443,45 +246,63 @@ launcher item.action icon {
  * =========
  *
  * Sized from its content. <action>: lock, suspend, hibernate, logout,
- * reboot, shutdown, or a custom one's name. `confirm` takes the grid's
- * place while an action waits, with a countdown (confirm_timeout).
+ * reboot, shutdown, or a custom one's name; `columns` buttons a row,
+ * every button as wide (their `width`: a grid's columns line up).
+ * `confirm` takes the rows' place while an action waits, with a
+ * countdown (confirm_timeout).
  *
  * exiter
- * ├─ button.<action>.flat[.selected]
- * │  ├─ icon                          drawn at `height` (symbolic: `color`)
- * │  ╰─ text                          the label
- * ╰─ confirm                          while an action waits
- *    ├─ text                          "Reboot?"
- *    ├─ countdown                     "Automatically in 27 s"
- *    ├─ button.cancel > text
- *    ╰─ button.ok[.<action>].danger > text   the action's label
+ * ├─ row                                one per `columns` buttons
+ * │  ╰─ button.<action>.flat[.selected]
+ * │     ├─ icon
+ * │     ╰─ label
+ * ╰─ confirm                            while an action waits
+ *    ├─ label                           "Reboot?"
+ *    ├─ countdown                       "Automatically in 27 s"
+ *    ╰─ buttons
+ *       ├─ button.cancel > label
+ *       ╰─ button.ok.<action>.danger > label   the action's label
  */
 exiter {
   padding: 16px;
   gap: 8px;
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
-exiter > button {
-  padding: 12px 16px;
+exiter > row {
+  gap: 8px;
+}
+exiter > row > button {
+  width: 112px;
+  padding: 12px 8px;
+  gap: 8px;
+  flex-direction: column;
   border-radius: 8px;
 }
-exiter > button.selected {
-  background: var(--aria-border);
+exiter > row > button.selected {
+  background: var(--border);
 }
-exiter > button icon {
+exiter > row > button > icon {
   height: 40px;
+}
+exiter > row > button > label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 exiter confirm {
   gap: 12px;
-  font-size: var(--aria-font-lg);
+  align-items: center;
+  font-size: var(--font-lg);
 }
-exiter confirm countdown {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+exiter confirm > countdown {
+  font-size: var(--font-sm);
+  color: var(--muted);
 }
-exiter confirm button {
+exiter confirm > buttons {
+  gap: 12px;
+}
+exiter confirm > buttons > button {
   padding: 6px 16px;
 }
 
@@ -489,50 +310,62 @@ exiter confirm button {
  * Screenshot picker
  * =================
  *
- * One surface per output, over its frozen picture; `padding` keeps the
- * toolbar off the edges. `hover` is what a click would pick: the window
- * under the pointer, or the output. The toolbar sits at the bottom of
- * the selection's output (the focused one before there is a selection);
- * copy isn't there without a clipboard, edit without `[Screenshot]
- * editor`; all the buttons but all and cancel are :disabled without a
- * selection.
+ * One surface per output, over its frozen picture. `hover` is what a
+ * click would pick: the window under the pointer, or the output.
+ * `shade`, `hover`, `selection` and its `handle` are drawn over the
+ * picture, not boxes: the properties named below are what counts. The
+ * toolbar sits at the bottom of the selection's output (the focused one
+ * before there is a selection), in the `dock` over the picture, whose
+ * `padding` keeps it off the edges. Copy isn't there without a
+ * clipboard, edit without `[Screenshot] editor`; all the buttons but
+ * all and cancel are :disabled without a selection.
  *
  * screenshot[output="<connector>"]
- * ├─ shade       `background`: dims the picture outside the selection
- * ├─ hover       `background`, `border`
- * ├─ selection   `border`: the selected area's outline
- * │  ╰─ handle   `background`, `border`, `height`: the squares on it
- * ╰─ toolbar     a row
- *    ├─ text     the hint, or the selection's size
- *    ╰─ button.all|.cancel|.copy|.edit|.save.primary > text
+ * ├─ shade         `background`: dims the picture outside the selection
+ * ├─ hover         `background`, `border`
+ * ├─ selection     `border`: the selected area's outline
+ * │  ╰─ handle     `background`, `border`, `height`: the squares on it
+ * ╰─ dock          over the picture
+ *    ╰─ toolbar    a row
+ *       ├─ label   the hint, or the selection's size
+ *       ╰─ button.all|.cancel|.copy|.edit|.save.primary > label
  */
 screenshot {
-  padding: 32px;
+  width: fill;
+  height: fill;
 }
-screenshot shade {
+screenshot > shade {
   background: rgba(0, 0, 0, 0.45);
 }
-screenshot hover {
+screenshot > hover {
   background: rgba(255, 255, 255, 0.08);
-  border: 2px solid var(--aria-accent);
+  border: 2px solid var(--accent);
 }
-screenshot selection {
-  border: 2px solid var(--aria-accent);
+screenshot > selection {
+  border: 2px solid var(--accent);
 }
-screenshot selection handle {
+screenshot > selection > handle {
   height: 10px;
-  background: var(--aria-accent);
-  border: 1px solid var(--aria-on-accent);
+  background: var(--accent);
+  border: 1px solid var(--on-accent);
+}
+screenshot > dock {
+  width: fill;
+  height: fill;
+  padding: 32px;
+  justify-content: end;
+  align-items: center;
 }
 screenshot toolbar {
   padding: 8px 12px;
   gap: 6px;
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  align-items: center;
+  border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
 }
-screenshot toolbar button {
+screenshot toolbar > button {
   padding: 6px 12px;
 }
 
@@ -546,100 +379,102 @@ screenshot toolbar button {
  * wallpaper[output="<connector>"]
  */
 wallpaper {
-  background: var(--aria-bg);
+  width: fill;
+  height: fill;
+  background: var(--bg);
 }
 
 /*
  * Lock screen
  * ===========
  *
- * One surface per output, filling it. `border-radius` rounds the avatar.
- * auth is .error after a refused password, .busy while checking.
+ * One surface per output, filling it, its box centred. The avatar is
+ * the user's picture (clipped to `border-radius`), or the
+ * `avatar-default` icon without one. auth is .error after a refused
+ * password, .busy while checking.
  *
  * locker[output="<connector>"]
- * ╰─ box                      the centred column (`gap`)
- *    ├─ avatar                the user's picture, a `height` square
+ * ╰─ box                        the centred column
+ *    ├─ avatar                  an image, or an icon
  *    ├─ username
  *    ├─ time
  *    ├─ date
- *    ╰─ auth[.error][.busy]   the password block (`gap`)
- *       ├─ field              a row (`gap`)
- *       │  ├─ input           the password field (:focus)
- *       │  ╰─ button.peek.plain[.active]   the eye (.active: the password shows)
- *       │     ╰─ icon         drawn at `height`, `color`
- *       ├─ message            what PAM said, "Unlocking…"
- *       ╰─ button.primary > text   Unlock (:disabled while checking)
+ *    ╰─ auth[.error][.busy]     the password block
+ *       ├─ input                the toolkit's, the password (:focus)
+ *       │  ╰─ button.peek.plain[.active] > icon   the eye (.active: the password shows);
+ *       │                                 a `label`, show / hide, without one in the icon theme
+ *       ├─ message              what PAM said, "Unlocking…"
+ *       ╰─ button.primary > label   Unlock (:disabled while checking)
  */
 locker {
-  background: var(--aria-bg);
-  color: var(--aria-fg);
+  width: fill;
+  height: fill;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg);
+  color: var(--fg);
 }
-locker box {
-  gap: 16px;
+locker > box {
+  gap: 28px;
+  align-items: center;
 }
 locker avatar {
+  width: 128px;
   height: 128px;
   border-radius: 64px;
+  object-fit: cover;
 }
 locker username {
-  font-size: var(--aria-font-xl);
-  color: var(--aria-accent);
+  font-size: var(--font-xl);
+  color: var(--accent);
 }
 locker time {
-  font-size: var(--aria-font-xxl);
+  font-size: var(--font-xxl);
   font-weight: 500;
 }
 locker date {
-  font-size: var(--aria-font-xl);
+  font-size: var(--font-xl);
 }
 locker auth {
-  gap: 10px;
+  gap: 14px;
+  align-items: center;
 }
-locker auth field {
-  gap: 6px;
-}
-locker auth input {
+locker auth > input {
   width: 280px;
-  padding: 8px 10px;
-  background: var(--aria-popup-bg);
-  border: 1px solid var(--aria-border);
+  min-height: 36px;
+  padding: 2px 4px 2px 10px;
   border-radius: 6px;
 }
-locker auth input:focus {
-  border-color: var(--aria-accent);
+locker auth.error > input {
+  border-color: var(--danger);
 }
-locker auth.error input {
-  border-color: var(--aria-urgent);
+locker auth > input > button.peek {
+  padding: 4px;
 }
-locker auth button.peek {
-  padding: 6px;
+locker auth > input > button.peek > icon {
+  height: 18px;
 }
-locker auth button.peek icon {
-  height: 20px;
+locker auth > message {
+  color: var(--danger);
 }
-locker auth message {
-  color: var(--aria-urgent);
+locker auth.busy > message {
+  color: var(--muted);
 }
-locker auth.busy message {
-  color: var(--aria-muted);
-}
-locker auth button {
-  padding: 6px 20px;
+locker auth > button {
+  padding: 10px 24px;
 }
 
 /*
  * OSD
  * ===
  *
- * One surface per output while shown: `width`/`height` size it, [osd]
- * position places it; a row (`gap` between its parts). <kind>: volume,
- * microphone, brightness, recording, wifi, network, vpn, charger,
- * profile, idle, custom. The meter is styled as the system monitor's
- * (`height`, `background`, `border-radius`).
+ * One surface per output while shown, the pill's size; [osd] position
+ * places it. <kind>: volume, microphone, brightness, recording, wifi,
+ * network, vpn, charger, profile, idle, custom.
  *
- * osd.<kind>[.muted][output="<connector>"]
- * ├─ icon           drawn at `height` (symbolic: `color`)
- * ├─ meter > fill   the level, when there is one
+ * osd.<kind>[.muted][output="<connector>"]   a row
+ * ├─ icon
+ * ├─ meter > fill   the level, when there is one (the toolkit's)
  * ├─ label          the text: the network, a script's
  * ╰─ value          the percent, when there is a level
  */
@@ -648,27 +483,34 @@ osd {
   height: 56px;
   padding: 0 18px;
   gap: 14px;
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
-osd icon {
+osd > icon {
   height: 24px;
 }
-osd meter {
-  height: 6px;
-  background: var(--aria-border);
+osd > meter {
+  width: fill;
+  min-width: 0;
+  min-height: 6px;
   border-radius: 3px;
 }
-osd meter fill {
-  background: var(--aria-accent);
+osd > meter > fill {
   border-radius: 3px;
 }
-osd.muted meter fill {
-  background: var(--aria-muted);
+osd.muted > meter > fill {
+  background: var(--muted);
 }
-osd value {
+osd > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+osd > value {
   width: 44px;
+  text-align: end;
 }
 
 /*
@@ -683,15 +525,17 @@ osd value {
  * the same rules, is a row of the Notifications gadget's popup.
  *
  * notifications     the stack on an output
- * notification[.low|.normal|.critical][#<id>][app="<name>"]
- * ├─ icon           the app's image or icon, drawn at `height`
- * ├─ summary        the title
- * ├─ time           how long ago it came (popup rows only)
- * ├─ button.close.flat   ✕ (popup rows only)
- * ├─ body           the text, wrapped at the width
- * ╰─ actions        a row, right-aligned
- *    ╰─ button      one per action the app offers
- *       ╰─ text
+ * notification[.low|.normal|.critical][id="<id>"][app="<name>"]
+ * ├─ head                 a row
+ * │  ├─ icon              the app's image or icon
+ * │  ╰─ texts             a column
+ * │     ├─ line           a row
+ * │     │  ├─ summary     the title
+ * │     │  ├─ time        how long ago it came (popup rows only)
+ * │     │  ╰─ button.close.flat > cross   ✕ (popup rows only)
+ * │     ╰─ body           the text, wrapped at the width
+ * ╰─ actions              a row, at the end
+ *    ╰─ button > label    one per action the app offers
  */
 notifications {
   padding: 8px;
@@ -701,35 +545,87 @@ notification {
   width: 360px;
   padding: 10px 12px;
   gap: 10px;
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
 notification.critical {
-  border-color: var(--aria-urgent);
+  border-color: var(--danger);
 }
 notification.low {
-  color: var(--aria-muted);
+  color: var(--muted);
 }
-notification icon {
+notification head {
+  gap: 10px;
+  align-items: start;
+}
+notification head > icon {
   height: 32px;
 }
+notification texts {
+  width: fill;
+  gap: 8px;
+}
+notification line {
+  gap: 10px;
+  align-items: start;
+}
 notification summary {
+  width: fill;
   font-weight: bold;
 }
-notification body {
-  padding: 2px 0 0 0;
-}
-notification actions {
-  gap: 6px;
-}
 notification time {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+  font-size: var(--font-sm);
+  color: var(--muted);
+  white-space: nowrap;
 }
 notification button.close {
   padding: 0 4px;
-  color: var(--aria-muted);
+  color: var(--muted);
+}
+notification button.close > cross {
+  content: "✕";
+}
+notification actions {
+  gap: 6px;
+  justify-content: end;
+}
+
+/*
+ * Showcase
+ * ========
+ *
+ * `aria-shell showcase`: every part of the UI on one surface, each in
+ * its own root as on its own surface (launcher, popup, ...); these are
+ * the boxes around them, and the sample buttons' popup.
+ *
+ * showcase                    the surface, the parts centred in it
+ * ╰─ parts                    a row
+ *    ╰─ column                parts, one under the other
+ * popup#showcase > buttons    every kind of button, labelled by its selector
+ * ├─ row > button ...
+ * ╰─ tabs
+ */
+showcase {
+  width: fill;
+  height: fill;
+  padding: 24px;
+  justify-content: center;
+  align-items: center;
+}
+showcase > parts,
+showcase > parts > column {
+  gap: 24px;
+  align-items: start;
+}
+popup#showcase > buttons {
+  padding: 12px;
+  gap: 8px;
+  align-items: start;
+}
+popup#showcase > buttons > row {
+  gap: 8px;
+  align-items: center;
 }
 
 /*
@@ -738,106 +634,133 @@ notification button.close {
  *
  * A bar, one per output: #2 for [panel:2]. Each gadget is a box of its
  * kind (gadget.clock, gadget.workspaces, ...): #2 for [Clock:2], #search
- * for [Custom:search]. `min-height` is the bar thickness. Every box in
- * the bar (a gadget, its buttons) takes all the height inside the
- * panel's border and padding, as a CSS flex row stretches its items:
- * `height` sets another, `height: auto` keeps the content's.
+ * for [Custom:search]. The bar is as thick as its content, `min-height`
+ * at least. Every box in the bar (a slot, a gadget, its buttons) takes
+ * the bar's height inside its border and padding, as a CSS flex row
+ * stretches its items: `height` sets another, `align-self` doesn't
+ * exist (`align-items` on the parent does).
  *
  * panel[.top|.bottom][#<instance>][output="<connector>"]
- * ╰─ slot.start | slot.center | slot.end
- *    ╰─ gadget.<kind>[#<instance>]   one per gadget
+ * ╰─ slot.start | slot.center | slot.end   a third of the bar each
+ *    ╰─ gadget.<kind>[#<instance>]         one per gadget
  */
 panel {
+  width: fill;
   min-height: 28px;
-  line-height: 28px;
-  background: var(--aria-bg);
-  color: var(--aria-fg);
   padding: 0 3px;
+  background: var(--bg);
+  color: var(--fg);
 }
-
-panel slot {
+panel > slot {
+  width: fill;
   gap: 4px;
+}
+panel > slot.center {
+  justify-content: center;
+}
+panel > slot.end {
+  justify-content: end;
 }
 
 /*
  * Popups
  * ======
  *
- * A gadget's popup
+ * A gadget's popup, as tall as its content (a list grows up to its
+ * `max-height`, then scrolls), the room for its shadow around it.
  *
- * popup
- * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to
+ * popup[output="<connector>"]
+ * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to (no box)
  *    ╰─ ...                       the gadget's popup content
  */
 popup {
-  background: var(--aria-popup-bg);
-  color: var(--aria-fg);
-  border: 1px solid var(--aria-border);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
 
 /*
  * Gadgets
  * =======
  *
- * Shared rules for every gadget. A gadget's buttons in the bar
- * (`gadget > button`) are flat, as high as the bar.
+ * What every gadget shares. A gadget's buttons in the bar (`gadget >
+ * button`) are flat, as high as the bar. In the popups, the parts the
+ * gadgets share: a `list` (a column), its headers, its items (buttons),
+ * the line for an empty one, a message, details.
  *
+ * gadget.<kind> > button            on the bar
+ * popup > gadget.<kind>
+ * ╰─ list                           a column (`gap`)
+ *    ├─ header[.<section>] > title
+ *    ├─ item[.<kind>]               a button
+ *    │  ├─ icon
+ *    │  ╰─ label
+ *    ├─ empty > label               "No ..."
+ *    ├─ message > label
+ *    ╰─ details > line
  */
-/* gadget {
+gadget {
   gap: 2px;
-  border: 1px red;
-} */
-
+}
 gadget > button {
   padding: 0 6px;
   gap: 4px;
   border: none;
   border-radius: 0;
+  background: transparent;
 }
 gadget > button:hover {
-  background: var(--aria-border);
+  background: var(--border);
 }
-
 popup list {
   width: 360px;
-  height: 600px;
   padding: 8px;
   gap: 4px;
 }
 popup list > header {
   padding: 8px 4px 4px 4px;
   gap: 8px;
+  align-items: center;
 }
-popup header title {
+/* not a calendar's: its header is the toolkit's */
+popup list > header > title,
+popup section > header > title {
+  width: fill;
   font-weight: bold;
-  color: var(--aria-muted);
+  color: var(--muted);
 }
 popup item {
-  padding: 4px 8px;
+  padding: 6px 8px;
   gap: 8px;
+  justify-content: start;
+  border: none;
   border-radius: 4px;
+  background: transparent;
 }
 popup item:hover {
-  background: var(--aria-border);
+  background: var(--border);
 }
-popup item:disabled {
-  color: var(--aria-muted);
-}
-popup item icon {
-  height: 16px;
+popup item > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 popup empty {
   padding: 12px;
-  color: var(--aria-muted);
+  align-items: center;
+  color: var(--muted);
 }
 popup message {
   padding: 0 4px 4px 4px;
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+  font-size: var(--font-sm);
+  color: var(--muted);
 }
-popup details line {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+popup details > line {
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+popup calendar {
+  padding: 12px;
 }
 
 /*
@@ -846,11 +769,11 @@ popup details line {
  *
  * gadget.clock
  * ╰─ button     the time; click opens the calendar
- *    ╰─ text
+ *    ╰─ label
  * popup > gadget.clock
- * ╰─ calendar   (see `calendar`)
+ * ╰─ calendar   the toolkit's
  */
-gadget.clock text {
+gadget.clock > button > label {
   font-weight: bold;
 }
 
@@ -858,53 +781,66 @@ gadget.clock text {
  * Workspaces gadget
  * =================
  *
- * A window is its app's icon, drawn at `height` (a dot until the icon is
- * known; symbolic icons take `color`), a button when
- * focus_window_on_click is on. The title (show_title): `gap` between its
- * icon, drawn at `height`, and its text.
+ * A window is its app's icon (a dot until the icon is known; symbolic
+ * icons take `color`), a button with focus_window_on_click. The title
+ * (show_title) is cut where the slot ends.
  *
  * gadget.workspaces
- * ├─ button.workspace[.active][.urgent][name="<name>"]  one per workspace
- * │  ├─ text                   the workspace name
- * │  ╰─ window[.active][.urgent][class="<app id>"]  one per window
- * │     ╰─ text
- * ╰─ title[class="<app id>"]   the active window
+ * ├─ button.workspace[.active][.urgent][name="<name>"]   one per workspace
+ * │  ├─ label                                            its name
+ * │  ╰─ window[.active][.urgent][class="<app id>"]        one per window
+ * │     ├─ icon                                          its app's
+ * │     ╰─ dot                                           until the icon is known: ● (◉ .active)
+ * ╰─ title[class="<app id>"]                             the active window
  *    ├─ icon
- *    ╰─ text
+ *    ╰─ label
  */
 gadget.workspaces > button.urgent {
-  background: var(--aria-urgent);
-  color: var(--aria-on-accent);
+  background: var(--danger);
+  color: var(--on-accent);
 }
 gadget.workspaces window {
-  padding: 0;
+  align-items: center;
+}
+gadget.workspaces window > icon {
   height: 16px;
-  font-size: var(--aria-font-xs);
+}
+gadget.workspaces window > dot {
+  font-size: var(--font-xs);
+  content: "●";
+}
+gadget.workspaces window.active > dot {
+  content: "◉";
 }
 gadget.workspaces window.urgent {
-  color: var(--aria-urgent);
+  color: var(--danger);
 }
 gadget.workspaces title {
   padding: 0 6px;
   gap: 6px;
+  align-items: center;
 }
-gadget.workspaces title icon {
+gadget.workspaces title > icon {
   height: 16px;
+}
+gadget.workspaces title > label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /*
  * Tray gadget
  * ===========
  *
- * gadget.tray                       a row (`gap`)
+ * gadget.tray
  * ╰─ button[.passive][.attention]   one per status notifier item
- *    ╰─ icon                        drawn at `height` (symbolic: `color`)
+ *    ╰─ icon                        (symbolic: `color`)
  * popup > gadget.tray
- * ╰─ menu                           the item's menu (see `menu`)
- *    ╰─ text                        "…" until the menu is loaded
+ * ╰─ menu                           the item's menu (the toolkit's)
+ *    ╰─ label                       "…" until it's loaded
  */
-gadget.tray > button.attention icon {
-  color: var(--aria-urgent);
+gadget.tray > button.attention > icon {
+  color: var(--danger);
 }
 
 /*
@@ -913,7 +849,7 @@ gadget.tray > button.attention icon {
  *
  * gadget.themes
  * ╰─ button    left: light/dark, right: the menu
- *    ╰─ icon   the scheme's, drawn at `height`
+ *    ╰─ icon   the scheme's
  * popup > gadget.themes
  * ╰─ menu      Light / Dark, then Base and every theme found
  */
@@ -924,20 +860,36 @@ gadget.tray > button.attention icon {
  *
  * gadget.screenshot
  * ╰─ button    left: the picker, right: the menu
- *    ╰─ icon   `[Screenshot] icon`, drawn at `height`
+ *    ╰─ icon   `[Screenshot] icon`
  * popup > gadget.screenshot
  * ╰─ menu      the active window, this screen, all screens
  */
 
 /*
+ * Custom gadget
+ * =============
+ *
+ * The button's classes come from the exec's JSON output; nothing at all
+ * while `hide_empty` hides it.
+ *
+ * gadget.custom
+ * ╰─ button[.<class>...]
+ *    ├─ icon   (symbolic: `color`)
+ *    ╰─ label
+ */
+/* Classes a script may set: `{"text": "3", "class": "warning"}` */
+gadget.custom > button.warning {
+  color: var(--danger);
+}
+
+/*
  * Places gadget
  * =============
  *
- * Left click opens the popup; the list's `width` sizes it, else the
- * widest row does. Headers in `[Places] show` order: .places, .devices,
- * .network, .bookmarks. A place (.home, .desktop, .documents, .download,
- * .music, .pictures, .videos, .trash[.full], .folder, .remote) is a
- * button: a click opens it in `[general] file_manager`.
+ * Left click opens the popup. Headers in `[Places] show` order: .places,
+ * .devices, .network, .bookmarks. A place (.home, .desktop, .documents,
+ * .download, .music, .pictures, .videos, .trash[.full], .folder,
+ * .remote) is a button: a click opens it in `[general] file_manager`.
  *
  * A device is a UDisks2 volume (.harddisk, .usb, .thumb, .flash,
  * .optical, .removable), then the local mounts it doesn't know
@@ -951,147 +903,171 @@ gadget.tray > button.attention icon {
  *
  * gadget.places
  * ╰─ button
- *    ├─ icon                               `[Places] icon`, drawn at `height`
+ *    ├─ icon                               `[Places] icon`
  *    ╰─ label                              `[Places] label`, when set
  * popup > gadget.places
- * ╰─ list                                  a column (`gap`)
- *    ├─ header.<section>
- *    │  ╰─ title
- *    ├─ item.<place>                       a place
+ * ╰─ list
+ *    ├─ header.<section> > title
+ *    ├─ item.<place>[.full]                a place (a button)
  *    │  ├─ icon
  *    │  ╰─ label
- *    ├─ device.<kind>[.mounted][.locked][.busy]  a row (`gap`)
+ *    ├─ device.<kind>[.mounted][.locked][.busy]  a row
  *    │  ├─ button.open.flat                opens it
  *    │  │  ├─ icon
- *    │  │  ╰─ info                         a column (`gap`)
+ *    │  │  ╰─ info                         a column
  *    │  │     ├─ label                     its label, else its size
  *    │  │     ╰─ meter[.critical] > fill   how full, while mounted
  *    │  ╰─ button.eject.flat > icon        ⏏, while mounted
  *    ├─ share.<kind>[.mounted][.busy]      as a device
- *    ╰─ empty                              "No places"
+ *    ╰─ empty > label                      "No places"
  */
 gadget.places device,
 gadget.places share {
   gap: 2px;
 }
-gadget.places device info {
+gadget.places device > button.open,
+gadget.places share > button.open {
+  width: fill;
+  padding: 4px 8px;
+  gap: 8px;
+  justify-content: start;
+}
+gadget.places device > button.eject,
+gadget.places share > button.eject {
+  padding: 4px;
+}
+gadget.places info {
+  width: fill;
   gap: 3px;
 }
-gadget.places device meter {
-  height: 3px;
-  background: var(--aria-border);
+gadget.places info > label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+gadget.places info > meter {
+  min-width: 0;
+  min-height: 3px;
   border-radius: 2px;
 }
-gadget.places device meter fill {
-  background: var(--aria-accent);
+gadget.places info > meter > fill {
   border-radius: 2px;
 }
-gadget.places device meter.critical fill {
-  background: var(--aria-urgent);
+gadget.places info > meter.critical > fill {
+  background: var(--danger);
 }
 
 /*
  * Power gadget
  * ============
  *
- * A row (`gap` between the buttons); middle click holds idle / lets it
- * go, right click runs `settings_command`. The status button (absent
- * without a battery and a profiles daemon) carries the battery's <state>
- * (.charging, .discharging, .full, .not-charging, .empty), its warning
- * (.low, .critical) and the active <profile> (.power-saver, .balanced,
+ * A row; middle click holds idle / lets it go, right click runs
+ * `settings_command`. The status button (absent without a battery and a
+ * profiles daemon) carries the battery's <state> (.charging,
+ * .discharging, .full, .not-charging, .empty), its warning (.low,
+ * .critical) and the active <profile> (.power-saver, .balanced,
  * .performance). The idle eye is .inhibited when held by the user,
  * .playing by a player. In the popup, `message` says why performance is
  * limited, or that a player holds idle.
  *
  * gadget.power
  * ├─ button.status[.<state>][.low|.critical][.<profile>]  left: the popup
- * │  ├─ icon.battery                     UPower's icon, drawn at `height`
- * │  ├─ text                             the percent (show_percent)
+ * │  ├─ icon.battery                     UPower's icon
+ * │  ├─ label                            the percent (show_percent)
  * │  ╰─ icon.profile                     the active profile's icon
  * ╰─ button.idle[.inhibited][.playing]   left: holds idle / lets it go
  *    ╰─ icon                             the eye
  * popup > gadget.power
- * ╰─ list                                `width` sizes the popup (a column, `gap`)
+ * ╰─ list
  *    ├─ battery[.<state>][.low|.critical]
  *    │  ├─ icon
  *    │  ├─ percent
  *    │  ╰─ status                        "2 h 10 min left"
- *    ├─ details
- *    │  ╰─ line                          power draw, battery health
- *    ├─ header.devices | header.profile
- *    │  ╰─ title
+ *    ├─ details > line                   power draw, battery health
+ *    ├─ header.devices | header.profile > title
  *    ├─ device                           a peripheral with a battery
  *    │  ├─ icon
  *    │  ├─ name
  *    │  ╰─ percent
- *    ├─ profiles                         a row (`gap`)
- *    │  ╰─ button.<profile>[.active]       .active: the one in use
+ *    ├─ profiles                         a row
+ *    │  ╰─ button.<profile>[.active]     .active: the one in use
  *    │     ├─ icon
- *    │     ╰─ text
+ *    │     ╰─ label
  *    ├─ idle[.inhibited][.playing]       "Keep awake"
  *    │  ├─ icon
  *    │  ├─ title
- *    │  ╰─ toggle                        (see `toggle`)
- *    ├─ message
- *    ╰─ button.settings > text           runs `settings_command`
+ *    │  ╰─ toggle                        the toolkit's
+ *    ├─ message > label
+ *    ╰─ button.settings > label          runs `settings_command`
  */
-gadget.power > button.low icon.battery,
-gadget.power > button.low text {
-  color: var(--aria-warning);
+gadget.power > button.low > icon.battery,
+gadget.power > button.low > label {
+  color: var(--warning);
 }
-gadget.power > button.critical icon.battery,
-gadget.power > button.critical text {
-  color: var(--aria-urgent);
+gadget.power > button.critical > icon.battery,
+gadget.power > button.critical > label {
+  color: var(--danger);
 }
-gadget.power > button.idle.inhibited icon {
-  color: var(--aria-accent);
+gadget.power > button.idle.inhibited > icon {
+  color: var(--accent);
 }
 gadget.power battery {
   padding: 4px;
   gap: 8px;
+  align-items: center;
 }
-gadget.power battery icon {
+gadget.power battery > icon {
   height: 32px;
 }
-gadget.power battery percent {
-  font-size: var(--aria-font-lg);
+gadget.power battery > percent {
+  font-size: var(--font-lg);
   font-weight: bold;
 }
-gadget.power battery.low percent {
-  color: var(--aria-warning);
+gadget.power battery.low > percent {
+  color: var(--warning);
 }
-gadget.power battery.critical percent {
-  color: var(--aria-urgent);
+gadget.power battery.critical > percent {
+  color: var(--danger);
 }
-gadget.power battery status {
-  color: var(--aria-muted);
+gadget.power battery > status {
+  width: fill;
+  text-align: end;
+  color: var(--muted);
 }
 gadget.power details {
   padding: 0 4px 4px 44px;
-  gap: 2px;
+  gap: 10px;
 }
 gadget.power device {
   padding: 4px;
   gap: 8px;
+  align-items: center;
 }
-gadget.power device icon {
-  height: 16px;
+gadget.power device > name {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-gadget.power device percent {
-  color: var(--aria-muted);
+gadget.power device > percent {
+  color: var(--muted);
 }
 gadget.power profiles {
+  gap: 4px;
+}
+gadget.power profiles > button {
+  width: fill;
+  flex-direction: column;
   gap: 4px;
 }
 gadget.power idle {
   padding: 8px 4px;
   gap: 8px;
+  align-items: center;
 }
-gadget.power idle icon {
-  height: 16px;
+gadget.power idle > title {
+  width: fill;
 }
-gadget.power idle.inhibited icon {
-  color: var(--aria-accent);
+gadget.power idle.inhibited > icon {
+  color: var(--accent);
 }
 
 /*
@@ -1104,33 +1080,50 @@ gadget.power idle.inhibited icon {
  *
  * gadget.brightness
  * ╰─ button[.none]
- *    ├─ icon                     drawn at `height`
- *    ╰─ text                     the bar's screen's percent (show_percent)
+ *    ├─ icon
+ *    ╰─ label                    the bar's screen's percent (show_percent)
  * popup > gadget.brightness
- * ╰─ list                        `width` sizes the popup (a column, `gap`)
+ * ╰─ list
  *    ├─ screen.backlight|.ddc[.unknown][output="<connector>"]
  *    │  ├─ icon                  the laptop's panel / a monitor
- *    │  ├─ name                  "Built-in display", the monitor's model
- *    │  ├─ output                its connector
- *    │  ├─ value                 the percent
- *    │  ╰─ slider                (see `slider`)
- *    ├─ empty                    "No screen to adjust"
- *    ╰─ button.settings > text   runs `settings_command`
+ *    │  ╰─ info                  a column
+ *    │     ├─ head               a row
+ *    │     │  ├─ name            "Built-in display", the monitor's model
+ *    │     │  ├─ output          its connector
+ *    │     │  ╰─ value           the percent
+ *    │     ╰─ slider             the toolkit's
+ *    ├─ empty > label            "No screen to adjust"
+ *    ╰─ button.settings > label  runs `settings_command`
  */
-gadget.brightness > button.none icon {
-  color: var(--aria-muted);
+gadget.brightness > button.none > icon {
+  color: var(--muted);
 }
 gadget.brightness screen {
   padding: 2px 0;
   gap: 8px;
+  align-items: center;
 }
-gadget.brightness screen icon {
+gadget.brightness screen > icon {
   height: 20px;
 }
-gadget.brightness screen output,
-gadget.brightness screen value,
-gadget.brightness screen.unknown icon {
-  color: var(--aria-muted);
+gadget.brightness screen > info {
+  width: fill;
+  gap: 8px;
+}
+gadget.brightness screen head {
+  gap: 8px;
+}
+gadget.brightness screen head > value {
+  width: fill;
+  text-align: end;
+}
+gadget.brightness screen head > output,
+gadget.brightness screen head > value,
+gadget.brightness screen.unknown > icon {
+  color: var(--muted);
+}
+gadget.brightness screen slider {
+  width: fill;
 }
 
 /*
@@ -1143,30 +1136,37 @@ gadget.brightness screen.unknown icon {
  *
  * gadget.notifications
  * ╰─ button[.dnd][.new]
- *    ├─ icon                    drawn at `height`
- *    ╰─ text                    the count not looked at (when > 0)
+ *    ├─ icon
+ *    ╰─ label                   the count not looked at (when > 0)
  * popup > gadget.notifications
- * ╰─ list                       `width` sizes it, `height` caps it (scrolls)
- *    ├─ header
- *    │  ├─ title
- *    │  ├─ button.dnd[.active]  toggles do-not-disturb
- *    │  ╰─ button.clear         empties the history
- *    ├─ empty                   "No notifications"
- *    ╰─ notification[.unseen]   one per notification kept
+ * ╰─ scroll                     `max-height` caps it (then it scrolls)
+ *    ╰─ list                    `width` sizes it
+ *       ├─ header
+ *       │  ├─ title
+ *       │  ├─ button.dnd[.active]  toggles do-not-disturb
+ *       │  ╰─ button.clear         empties the history
+ *       ├─ empty > label        "No notifications"
+ *       ╰─ notification[.unseen]   one per notification kept
  */
-gadget.notifications > button.new text {
-  color: var(--aria-accent);
+gadget.notifications > button.new > label {
+  color: var(--accent);
   font-weight: bold;
 }
-gadget.notifications > button.dnd icon {
-  color: var(--aria-muted);
+gadget.notifications > button.dnd > icon {
+  color: var(--muted);
+}
+gadget.notifications > scroll {
+  max-height: 480px;
+}
+gadget.notifications list {
+  width: 380px;
 }
 /* The rows: the desktop `notification` rules, as wide as the list. */
-gadget.notifications list notification {
+gadget.notifications list > notification {
   width: fill;
 }
-gadget.notifications list notification.unseen summary {
-  color: var(--aria-accent);
+gadget.notifications list > notification.unseen summary {
+  color: var(--accent);
 }
 
 /*
@@ -1176,290 +1176,377 @@ gadget.notifications list notification.unseen summary {
  * A button per value shown (`show =`), <value>: .cpu, .mem, .swap,
  * .disk, .net, .gpu, .temp, .load; .warning / .critical from the
  * instance's `warning` / `critical`. Left click: the popup, right click:
- * `command`. The icon is drawn at `height`. One of text / graph / gauge
- * (`mode =`), the `format` text as the label of the last two: `width`
- * (wider if the label needs it) x `height`; the graph's `color` is the
- * series, the gauge's `background`/`border`/`border-radius` the bar and
- * `fill { background }` the filled part; `label { color; font-size;
- * padding }`.
+ * `command`. One of label / graph / meter (`mode =`): the `format` text,
+ * alone or over the toolkit's graph (a sparkline: its `series`) or
+ * meter (a gauge: its `fill`).
  *
- * In the popup the tabs are buttons (gpu only with one); the active
- * tab's section is a column (`gap`) that scrolls. A graph: `height`,
- * `color` the first series, `background`, `border-color` the grid;
- * `second { color }` the second series; `scale` its top value, written
- * top left. Cores turn .warning / .critical at 70% / 90%. The table's
- * columns are buttons: a click sorts, `width` sizes the column (the name
- * takes the rest); a click on a row selects its process. Under the
- * table, `actions` has the selected process's name and pid and the
- * signals, or (.none) the help and the buttons :disabled.
+ * In the popup the tabs are the toolkit's (gpu only with one); the
+ * active tab's section scrolls. A graph's first series is `series`,
+ * the second `series.second`; its `label` is the scale's top. Cores turn
+ * .warning / .critical at 70% / 90%. The table's columns are buttons:
+ * a click sorts; a column's `width` is its cells' too (the name takes
+ * the rest); a click on a row selects its process. Under the table,
+ * `actions` has the selected process's name and pid and the signals,
+ * or (.none) the help and the buttons :disabled.
  *
  * gadget.system-monitor[#<instance>]
  * ╰─ button.<value>[.warning|.critical]
  *    ├─ icon
- *    ├─ text
- *    ├─ graph
- *    │  ╰─ label
- *    ╰─ gauge
- *       ├─ fill
- *       ╰─ label
+ *    ├─ label                   (text)
+ *    ├─ graph > series, label   (sparkline)
+ *    ╰─ meter > fill, label     (gauge)
  * popup > gadget.system-monitor
  * ╰─ monitor                    `width` / `height` size the popup
- *    ├─ tabs                    (see `tabs`)
- *    │  ╰─ button.tab.cpu|.mem|.disk|.net|.gpu|.processes[.active]
- *    │     ╰─ text
- *    ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes  the active tab
- *       ├─ header
- *       │  ├─ title
- *       │  ╰─ value
- *       ├─ graph
- *       │  ├─ second
- *       │  ╰─ scale
- *       ├─ cores                rows of per-core meters (`gap`)
- *       │  ╰─ core[.warning|.critical]
- *       │     ├─ meter
- *       │     ╰─ text
- *       ├─ meter[.used|.swap][.warning|.critical]
- *       │  ╰─ fill              the filled part: `background`
- *       ├─ details
- *       │  ╰─ text              load, uptime, frequency, temperature
- *       ├─ text                 memory figures
- *       ├─ disk[mount="/"]      one per mount
- *       │  ├─ name
- *       │  ├─ text
- *       │  ╰─ meter
- *       ├─ iface[name="eth0"]   one per interface
- *       │  ├─ name
- *       │  ╰─ text
- *       ├─ gpu                  one per GPU
- *       │  ├─ name
- *       │  ├─ text
- *       │  ╰─ meter
- *       ├─ table
- *       │  ├─ header
- *       │  │  ╰─ column.name|.pid|.user|.cpu|.mem[.sorted][.reverse]
- *       │  │     ╰─ text
- *       │  ╰─ row[pid="1234"][name="comm"][state="S"][.selected]
- *       │     ╰─ name | pid | user | cpu | mem
- *       ╰─ actions[.none]       (processes) under the table
- *          ├─ text
- *          ╰─ button.terminate | button.kill.danger > text
+ *    ├─ tabs                    the toolkit's
+ *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active] > label
+ *    ├─ scroll                  the active tab's section, scrolling
+ *    │  ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes
+ *    │     ├─ header > title, value
+ *    │     ├─ graph > series[.second], grid, label
+ *    │     ├─ cores > group     rows of per-core meters
+ *    │     │  ╰─ core[.warning|.critical] > meter, label
+ *    │     ├─ meter.used|.swap[.warning|.critical] > fill
+ *    │     ├─ details > line    load, uptime, frequency, temperature
+ *    │     ├─ line              memory figures
+ *    │     ├─ disk[mount="/"]   one per mount
+ *    │     │  ├─ top > name, line
+ *    │     │  ╰─ meter
+ *    │     ├─ iface[name="eth0"] > name, line   one per interface
+ *    │     ├─ gpu               one per GPU: top > name, line; meter
+ *    │     ╰─ table
+ *    │        ├─ header > column.name|.pid|.user|.cpu|.mem[.sorted][.reverse] > label
+ *    │        ╰─ row[pid="1234"][name="comm"][state="S"][.selected]
+ *    │           ╰─ name | pid | user | cpu | mem
+ *    ╰─ actions[.none]          (processes) under the table
+ *       ├─ label
+ *       ╰─ button.terminate | button.kill.danger > label
  */
-/* The sparkline and the gauge share the frame. */
-gadget.system-monitor > button graph,
-gadget.system-monitor > button gauge {
-  width: 40px;
+gadget.system-monitor > button > graph,
+gadget.system-monitor > button > meter {
+  width: auto;
+  min-width: 40px;
   height: 14px;
-  color: var(--aria-accent);
-  border: 1px solid var(--aria-border);
-  border-radius: 3px;
-}
-gadget.system-monitor > button gauge fill {
-  background: var(--aria-accent);
-}
-gadget.system-monitor > button graph label,
-gadget.system-monitor > button gauge label {
-  font-size: var(--aria-font-xs);
-  color: var(--aria-fg);
   padding: 0 4px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
 }
-gadget.system-monitor > button.warning graph {
-  color: var(--aria-warning);
+gadget.system-monitor > button > graph > label,
+gadget.system-monitor > button > meter > label {
+  font-size: var(--font-xs);
+  color: var(--fg);
 }
-gadget.system-monitor > button.warning gauge fill {
-  background: var(--aria-warning);
+gadget.system-monitor > button > meter > fill {
+  border-radius: 2px;
+  background: var(--accent-soft);
 }
-gadget.system-monitor > button.critical graph {
-  color: var(--aria-urgent);
+gadget.system-monitor > button.warning > graph > series {
+  stroke: var(--warning);
 }
-gadget.system-monitor > button.critical gauge fill {
-  background: var(--aria-urgent);
+gadget.system-monitor > button.warning > meter > fill {
+  background: var(--warning);
 }
-gadget.system-monitor > button.warning text {
-  color: var(--aria-warning);
+gadget.system-monitor > button.critical > graph > series {
+  stroke: var(--danger);
 }
-gadget.system-monitor > button.critical text {
-  color: var(--aria-urgent);
+gadget.system-monitor > button.critical > meter > fill {
+  background: var(--danger);
+}
+gadget.system-monitor > button.warning > label {
+  color: var(--warning);
+}
+gadget.system-monitor > button.critical > label {
+  color: var(--danger);
 }
 gadget.system-monitor monitor {
   width: 560px;
   height: 460px;
-  padding: 12px;
+  padding: 24px;
   gap: 16px;
 }
+gadget.system-monitor monitor > scroll {
+  height: fill;
+}
 gadget.system-monitor section {
-  gap: 6px;
+  gap: 12px;
 }
-gadget.system-monitor header value {
-  color: var(--aria-muted);
+gadget.system-monitor section > header > title {
+  width: fill;
 }
-gadget.system-monitor graph {
+gadget.system-monitor section > header > value {
+  color: var(--muted);
+}
+gadget.system-monitor section > graph {
+  width: fill;
   height: 160px;
-  background: var(--aria-bg);
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-  color: var(--aria-accent);
+  background: var(--bg);
 }
-gadget.system-monitor graph second {
-  color: var(--aria-urgent);
-}
-gadget.system-monitor graph scale {
-  font-size: var(--aria-font-xs);
-  color: var(--aria-muted);
+gadget.system-monitor section > graph > series.second {
+  stroke: var(--danger);
+  fill: transparent;
 }
 gadget.system-monitor cores {
+  gap: 10px;
+}
+gadget.system-monitor cores > group {
   gap: 4px;
 }
-gadget.system-monitor core text {
-  font-size: var(--aria-font-xs);
-  color: var(--aria-muted);
+gadget.system-monitor core {
+  width: 60px;
+  gap: 5px;
+  align-items: center;
 }
-gadget.system-monitor meter {
-  height: 8px;
-  background: var(--aria-border);
-  border-radius: 4px;
+gadget.system-monitor core > meter {
+  min-width: 0;
+  width: fill;
 }
-gadget.system-monitor meter fill {
-  background: var(--aria-accent);
-  border-radius: 4px;
+gadget.system-monitor core > label {
+  font-size: var(--font-xs);
+  color: var(--muted);
 }
-gadget.system-monitor meter.warning fill {
-  background: var(--aria-warning);
+gadget.system-monitor section meter.warning > fill {
+  background: var(--warning);
 }
-gadget.system-monitor meter.critical fill {
-  background: var(--aria-urgent);
+gadget.system-monitor section meter.critical > fill {
+  background: var(--danger);
 }
-gadget.system-monitor meter.swap fill {
-  background: var(--aria-muted);
+gadget.system-monitor section meter.swap > fill {
+  background: var(--muted);
 }
-gadget.system-monitor details text,
-gadget.system-monitor section > text,
-gadget.system-monitor disk text,
-gadget.system-monitor iface text,
-gadget.system-monitor gpu text {
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+gadget.system-monitor details {
+  gap: 4px;
 }
-gadget.system-monitor table header column {
-  padding: 2px 4px;
-  font-size: var(--aria-font-sm);
-  color: var(--aria-muted);
+gadget.system-monitor details > line,
+gadget.system-monitor section > line,
+gadget.system-monitor disk line,
+gadget.system-monitor iface > line,
+gadget.system-monitor gpu line {
+  font-size: var(--font-sm);
+  color: var(--muted);
 }
-gadget.system-monitor table header column:hover {
-  color: var(--aria-fg);
+gadget.system-monitor disk,
+gadget.system-monitor gpu {
+  gap: 2px;
 }
-gadget.system-monitor table header column.sorted {
-  color: var(--aria-accent);
+gadget.system-monitor top > name,
+gadget.system-monitor iface > name {
+  width: fill;
 }
-gadget.system-monitor table row {
-  padding: 1px 4px;
-  font-size: var(--aria-font-sm);
+gadget.system-monitor table {
+  padding: 0 10px 0 0;
+}
+gadget.system-monitor table > header > column {
+  padding: 6px 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+gadget.system-monitor table > header > column:hover {
+  color: var(--fg);
+}
+gadget.system-monitor table > header > column.sorted {
+  color: var(--accent);
+}
+gadget.system-monitor table > row {
+  padding: 6px 4px;
   border-radius: 3px;
+  font-size: var(--font-sm);
 }
-gadget.system-monitor table row.selected {
-  background: var(--aria-border);
+gadget.system-monitor table > row:hover {
+  background: var(--accent-soft);
 }
-gadget.system-monitor table row pid,
-gadget.system-monitor table row cpu,
-gadget.system-monitor table row mem {
-  color: var(--aria-muted);
+gadget.system-monitor table > row.selected {
+  background: var(--border);
 }
-gadget.system-monitor section.processes > actions {
-  padding: 6px 12px 0 12px;
+/* The columns: the name takes what the others leave; the numbers at
+   the end of their cells. */
+gadget.system-monitor table column.name,
+gadget.system-monitor table row > name {
+  width: fill;
+  justify-content: start;
+}
+gadget.system-monitor table row > name {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+gadget.system-monitor table column.pid,
+gadget.system-monitor table row > pid {
+  width: 64px;
+}
+gadget.system-monitor table column.user,
+gadget.system-monitor table row > user {
+  width: 84px;
+}
+gadget.system-monitor table column.cpu,
+gadget.system-monitor table row > cpu {
+  width: 60px;
+}
+gadget.system-monitor table column.mem,
+gadget.system-monitor table row > mem {
+  width: 80px;
+}
+gadget.system-monitor table column.pid,
+gadget.system-monitor table column.user {
+  justify-content: start;
+}
+gadget.system-monitor table column.cpu,
+gadget.system-monitor table column.mem {
+  justify-content: end;
+}
+gadget.system-monitor table row > cpu,
+gadget.system-monitor table row > mem {
+  text-align: end;
+}
+gadget.system-monitor table row > pid,
+gadget.system-monitor table row > cpu,
+gadget.system-monitor table row > mem {
+  color: var(--muted);
+}
+gadget.system-monitor monitor > actions {
   gap: 6px;
+  align-items: center;
 }
-gadget.system-monitor section.processes > actions.none > text {
-  color: var(--aria-muted);
+gadget.system-monitor monitor > actions > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+gadget.system-monitor monitor > actions.none > label {
+  color: var(--muted);
 }
 
 /*
  * Audio gadget
  * ============
  *
- * `gap` between the buttons. button.output: the default output's level
- * (.none: no output); left: the popup, wheel: volume, middle: mute,
- * right: `mixer_command`; `gap` before the percent (show_percent).
- * button.input: the default input, the same way (show_microphone). In
- * the popup a device's radio marks the default one, a click on another
- * makes it the default; a player's :disabled controls are what it
- * can't do.
+ * button.output: the default output's level (.none: no output); left:
+ * the popup, wheel: volume, middle: mute, right: `mixer_command`; the
+ * percent with show_percent. button.input: the default input, the same
+ * way (show_microphone). In the popup a device's radio marks the
+ * default one, a click on another makes it the default; a player's
+ * :disabled controls are what it can't do.
  *
  * gadget.audio
  * ├─ button.output[.muted][.none]
- * │  ├─ icon                  drawn at `height`
- * │  ╰─ text                  the percent
+ * │  ├─ icon
+ * │  ╰─ label                    the percent
  * ╰─ button.input[.muted][.none]
  * popup > gadget.audio
- * ╰─ list                     `width` sizes it, `height` caps it (scrolls)
- *    ├─ section.output|.input|.stream
- *    │  ╰─ title              "Output" / "Input" / "Playing"
- *    ├─ channel.output|.input|.stream[.muted][.default][name="..."]
- *    │  ├─ button.mute[.active]   toggles mute
- *    │  │  ╰─ icon            the device's / app's icon
- *    │  ├─ button.radio[.active]   a device's name (see `button.radio`): .active the
- *    │  │  ├─ check               default, a click on another makes it the default
- *    │  │  ╰─ label
- *    │  ├─ name > text         a stream's name
- *    │  ├─ value              the percent
- *    │  ╰─ slider             (see `slider`)
- *    ├─ player.playing|.paused|.stopped[name="..."]
- *    │  ├─ cover              the cover art (else the app's icon): `height`
- *    │  ├─ title | artist | album
- *    │  ╰─ controls
- *    │     ╰─ button.previous|.play|.next.flat
- *    │        ╰─ icon
- *    ├─ empty                 "No audio devices"
- *    ╰─ button.mixer > text   runs `mixer_command`
+ * ╰─ scroll                      `max-height` caps it (then it scrolls)
+ *    ╰─ list
+ *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
+ *       ├─ channel.output|.input|.stream[.muted][.default][name="..."]
+ *       │  ├─ button.mute[.active] > icon   toggles mute: the device's / app's icon
+ *       │  ╰─ info                         a column
+ *       │     ├─ head                      a row
+ *       │     │  ├─ button.radio[.active]  a device's name (see `button.radio`): .active
+ *       │     │  │  ├─ check               the default, a click on another makes it so
+ *       │     │  │  ╰─ label
+ *       │     │  ├─ name                   a stream's name
+ *       │     │  ╰─ value                  the percent
+ *       │     ╰─ slider                    the toolkit's
+ *       ├─ player.playing|.paused|.stopped[name="..."]
+ *       │  ├─ info                         a row
+ *       │  │  ├─ cover                     the cover art (else the app's icon)
+ *       │  │  ╰─ texts > title | artist | album
+ *       │  ╰─ controls
+ *       │     ╰─ button.previous|.play|.next.flat > icon
+ *       ├─ empty > label                   "No audio devices"
+ *       ╰─ button.mixer > label            runs `mixer_command`
  */
-gadget.audio > button.muted icon,
-gadget.audio > button.muted text {
-  color: var(--aria-muted);
+gadget.audio > button.muted > icon,
+gadget.audio > button.muted > label {
+  color: var(--muted);
+}
+gadget.audio > scroll {
+  max-height: 600px;
 }
 gadget.audio section {
   padding: 6px 0 0 0;
 }
-gadget.audio section title {
+gadget.audio section > title {
   font-weight: bold;
-  color: var(--aria-muted);
+  color: var(--muted);
 }
 gadget.audio channel {
   padding: 2px 0;
   gap: 8px;
+  align-items: center;
 }
-gadget.audio channel button.mute {
+gadget.audio channel > button.mute {
   padding: 4px;
 }
-gadget.audio channel button.mute icon {
+gadget.audio channel > button.mute > icon {
   height: 20px;
 }
-gadget.audio channel.default label {
+gadget.audio channel > info {
+  width: fill;
+  gap: 6px;
+}
+gadget.audio channel head {
+  gap: 8px;
+  align-items: center;
+}
+gadget.audio channel head > button.radio > label,
+gadget.audio channel head > name {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+gadget.audio channel head > name {
+  width: fill;
+}
+gadget.audio channel head > button.radio {
+  width: fill;
+}
+gadget.audio channel.default head > button.radio > label {
   font-weight: bold;
 }
-gadget.audio channel value {
-  color: var(--aria-muted);
+gadget.audio channel head > value {
+  color: var(--muted);
 }
-gadget.audio channel.muted slider {
-  color: var(--aria-muted);
+gadget.audio channel slider {
+  width: fill;
+}
+gadget.audio channel.muted slider > track > fill {
+  background: var(--muted);
 }
 gadget.audio player {
   padding: 8px;
   gap: 6px;
-  border: 1px solid var(--aria-border);
+  border: 1px solid var(--border);
   border-radius: 4px;
+}
+gadget.audio player > info {
+  gap: 8px;
+  align-items: center;
 }
 gadget.audio player cover {
   height: 64px;
+}
+gadget.audio player texts {
+  width: fill;
+  gap: 8px;
+}
+gadget.audio player texts > * {
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 gadget.audio player title {
   font-weight: bold;
 }
 gadget.audio player artist,
 gadget.audio player album {
-  color: var(--aria-muted);
+  color: var(--muted);
 }
-gadget.audio player controls {
+gadget.audio player > controls {
   gap: 12px;
+  justify-content: center;
 }
-gadget.audio player controls button icon {
+gadget.audio player > controls > button > icon {
   height: 20px;
 }
 
@@ -1471,63 +1558,67 @@ gadget.audio player controls button icon {
  * NetworkManager), and its <state>: .connected, .connecting,
  * .disconnected, .limited (no internet), .vpn (one is up), .off (Wi‑Fi
  * disabled). Left: the popup, middle: Wi‑Fi on/off, right:
- * `settings_command`; `gap` between icon and text.
+ * `settings_command`.
  *
  * In the popup the networks around come strongest first, after the
- * active and the known ones (:nth-child among them); a click joins one,
- * or unfolds it. Unfolded, the active one shows its details and
- * Disconnect, a known idle one Connect, a secured one the password. A
- * wired device's click unfolds the active one, or brings a plugged one
- * up. A VPN's toggle activates / deactivates it.
+ * active and the known ones; a click joins one, or unfolds it.
+ * Unfolded, the active one shows its details and Disconnect, a known
+ * idle one Connect, a secured one the password. A wired device's click
+ * unfolds the active one, or brings a plugged one up. A VPN's toggle
+ * activates / deactivates it.
  *
  * gadget.network
  * ╰─ button.wifi|.wired|.none[.<state>]
- *    ├─ icon                                     its state, drawn at `height`
+ *    ├─ icon                                     its state
  *    ├─ icon.vpn                                 the VPN badge (show_vpn)
- *    ╰─ text                                     the connection's name (show_label)
+ *    ╰─ label                                    the connection's name (show_label)
  * popup > gadget.network
- * ╰─ list                                        `width` sizes it, `height` caps it (scrolls)
- *    ├─ header.wifi[.off] | header.wired | header.vpn
- *    │  ├─ title                                 "Wi‑Fi networks", "Ethernet network", ...
- *    │  ├─ button.scan > icon                    (wifi) asks for a scan
- *    │  ╰─ toggle                                (wifi) on/off (see `toggle`)
- *    ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
- *    │  ├─ button.flat                           the row
- *    │  │  ├─ icon                               the strength
- *    │  │  ├─ name > text
- *    │  │  ├─ icon.badge                         the lock (.secured)
- *    │  │  ├─ status                             "Connected" / "Connecting…"
- *    │  │  ╰─ button.chevron.plain[.active] > text   ▾ / ▴ (.active: open)
- *    │  ├─ details
- *    │  │  ╰─ line                               addresses, gateway, DNS, band...
- *    │  ├─ actions
- *    │  │  ╰─ button.disconnect|.connect|.forget > text
- *    │  ├─ auth[.busy]                           the password
- *    │  │  ├─ input                              the field (:focus)
- *    │  │  ├─ button.peek.plain[.active] > icon   the eye (.active: shown)
- *    │  │  ╰─ button.connect > text              :disabled: nothing typed yet
- *    │  ╰─ message                               "Wrong password", the enterprise hint
- *    ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
- *    │  ├─ button.flat                           as an ap's: icon, name, status, chevron
- *    │  ├─ details
- *    │  │  ╰─ line
- *    │  ╰─ actions
- *    │     ╰─ button.disconnect > text
- *    ├─ vpn[.active][.connecting][.failed][name="..."]  one per VPN profile
- *    │  ├─ icon
- *    │  ├─ name
- *    │  ├─ status
- *    │  ├─ toggle
- *    │  ╰─ message                               "Needs a password: open the settings"
- *    ├─ empty                                    "Wi‑Fi is off", "No networks found", ...
- *    ╰─ button.settings > text                   runs `settings_command`
+ * ╰─ scroll                                      `max-height` caps it (then it scrolls)
+ *    ╰─ list
+ *       ├─ header.wifi[.off] | header.wired | header.vpn
+ *       │  ├─ title                              "Wi‑Fi networks", "Ethernet network", ...
+ *       │  ├─ button.scan > icon                 (wifi) asks for a scan
+ *       │  ╰─ toggle                             (wifi) on/off, the toolkit's
+ *       ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
+ *       │  ├─ button.flat                        the row
+ *       │  │  ├─ icon                            the strength
+ *       │  │  ├─ title                           the room left
+ *       │  │  │  ├─ name
+ *       │  │  │  ╰─ icon.badge                   the lock (.secured)
+ *       │  │  ├─ status                          "Connected" / "Connecting…"
+ *       │  │  ╰─ button.chevron.plain[.active] > arrow   ▾ / ▴ (.active: open)
+ *       │  ├─ details > line                     addresses, gateway, DNS, band...
+ *       │  ├─ actions
+ *       │  │  ╰─ button.disconnect|.connect|.forget > label
+ *       │  ├─ auth[.busy]                        the password
+ *       │  │  ├─ input                           the toolkit's (:focus)
+ *       │  │  │  ├─ field
+ *       │  │  │  ╰─ button.peek.plain[.active] > icon   the eye (.active: shown)
+ *       │  │  ╰─ button.connect > label          :disabled: nothing typed yet
+ *       │  ╰─ message > label                    "Wrong password", the enterprise hint
+ *       ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
+ *       │  ├─ button.flat                        as an ap's: icon, title > name, status, chevron
+ *       │  ├─ details > line
+ *       │  ╰─ actions > button.disconnect > label
+ *       ├─ vpn[.active][.connecting][.failed][name="..."]   one per VPN profile
+ *       │  ├─ line                               a row
+ *       │  │  ├─ icon
+ *       │  │  ├─ name
+ *       │  │  ├─ status
+ *       │  │  ╰─ toggle
+ *       │  ╰─ message > label                    "Needs a password: open the settings"
+ *       ├─ empty > label                         "Wi‑Fi is off", "No networks found", ...
+ *       ╰─ button.settings > label               runs `settings_command`
  */
-gadget.network > button.disconnected icon,
-gadget.network > button.none icon {
-  color: var(--aria-muted);
+gadget.network > button.disconnected > icon,
+gadget.network > button.none > icon {
+  color: var(--muted);
 }
-gadget.network > button.limited icon {
-  color: var(--aria-warning);
+gadget.network > button.limited > icon {
+  color: var(--warning);
+}
+gadget.network > scroll {
+  max-height: 600px;
 }
 gadget.network ap,
 gadget.network device {
@@ -1536,93 +1627,100 @@ gadget.network device {
 gadget.network ap > button,
 gadget.network device > button {
   padding: 6px;
+  gap: 8px;
+  justify-content: start;
 }
-gadget.network ap > button icon,
-gadget.network device > button icon {
+gadget.network ap > button > icon,
+gadget.network device > button > icon {
   height: 20px;
 }
-gadget.network ap > button icon.badge {
+gadget.network ap > button > title,
+gadget.network device > button > title {
+  width: fill;
+  gap: 6px;
+  align-items: center;
+}
+gadget.network ap > button > title > icon.badge {
   height: 12px;
-  color: var(--aria-muted);
+  color: var(--muted);
 }
-gadget.network ap.active > button name text,
-gadget.network device.active > button name text {
+gadget.network ap > button > title > name,
+gadget.network device > button > title > name {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+gadget.network ap.active > button > title > name,
+gadget.network device.active > button > title > name {
   font-weight: bold;
-  color: var(--aria-accent);
+  color: var(--accent);
 }
-gadget.network ap.connecting > button icon,
-gadget.network device.connecting > button icon {
-  color: var(--aria-warning);
+gadget.network ap.connecting > button > icon,
+gadget.network device.connecting > button > icon {
+  color: var(--warning);
 }
-gadget.network device.unplugged > button icon,
-gadget.network device.unplugged > button name {
-  color: var(--aria-muted);
+gadget.network device.unplugged > button > icon,
+gadget.network device.unplugged > button > title > name {
+  color: var(--muted);
 }
 gadget.network status {
-  color: var(--aria-muted);
+  color: var(--muted);
+  white-space: nowrap;
 }
 gadget.network status,
 gadget.network button.chevron {
-  font-size: var(--aria-font-sm);
+  font-size: var(--font-sm);
 }
 gadget.network button.chevron {
   padding: 2px 6px;
 }
+gadget.network button.chevron > arrow {
+  content: "▾";
+}
+gadget.network button.chevron.active > arrow {
+  content: "▴";
+}
 gadget.network details {
   padding: 0 8px 4px 34px;
-  gap: 2px;
+  gap: 10px;
 }
 gadget.network actions {
   padding: 0 8px 6px 8px;
   gap: 8px;
+  justify-content: end;
 }
 gadget.network auth {
   padding: 0 8px 6px 34px;
   gap: 6px;
+  align-items: center;
 }
-gadget.network auth input {
-  padding: 4px 6px;
-  border: 1px solid var(--aria-border);
-  border-radius: 4px;
-}
-gadget.network auth input:focus {
-  border-color: var(--aria-accent);
+gadget.network auth > input {
+  width: fill;
 }
 gadget.network message {
   padding: 0 8px 6px 34px;
 }
-gadget.network ap.failed message,
-gadget.network vpn.failed message {
-  color: var(--aria-urgent);
+gadget.network ap.failed > message,
+gadget.network vpn.failed > message {
+  color: var(--danger);
 }
 gadget.network vpn {
   padding: 6px;
-  gap: 8px;
+  gap: 4px;
 }
-gadget.network vpn icon {
+gadget.network vpn > line {
+  gap: 8px;
+  align-items: center;
+}
+gadget.network vpn > line > icon {
   height: 20px;
 }
-gadget.network vpn.active name text {
+gadget.network vpn > line > name {
+  width: fill;
+}
+gadget.network vpn.active > line > name {
   font-weight: bold;
-  color: var(--aria-accent);
+  color: var(--accent);
 }
-gadget.network vpn message {
+gadget.network vpn > message {
   padding: 0 0 0 28px;
-}
-
-/*
- * Custom gadget
- * =============
- *
- * The button's classes come from the exec's JSON output; `gap` between
- * icon and text.
- *
- * gadget.custom
- * ╰─ button[.<class>...]
- *    ├─ icon   drawn at `height` (symbolic: `color`)
- *    ╰─ text
- */
-/* Classes a script may set: `{"text": "3", "class": "warning"}` */
-gadget.custom > button.warning {
-  color: var(--aria-urgent);
 }

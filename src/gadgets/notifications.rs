@@ -11,21 +11,15 @@
 
 use std::time::SystemTime;
 
-use iced::widget::{Space, mouse_area, row, scrollable};
-use iced::{Alignment, Element, Length, Subscription};
+use iced::Subscription;
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::services::notifications::{Command, NotificationsConfig};
 use crate::time::aligned_ticks;
-use crate::ui::theme::{self, Node};
 use crate::ui::toast;
-
-/// Icon size when the theme doesn't set `height` on `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-/// Popup width and height cap when the theme doesn't size `list`.
-const DEFAULT_LIST_WIDTH: f32 = 380.0;
-const DEFAULT_LIST_HEIGHT: f32 = 480.0;
 
 pub struct NotificationsGadget {
     /// The `[Notifications]` section, shared with the daemon: only the
@@ -96,20 +90,20 @@ impl Gadget for NotificationsGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let unseen = ctx.notifications.unseen();
         let button = ctx
             .node
             .child("button")
             .class_if("dnd", ctx.notifications.dnd())
             .class_if("new", unseen > 0);
-        let icon = self.icon(&ctx, &button);
-        let mut content = row![icon]
-            .spacing(theme.resolve(&button).gap)
-            .align_y(Alignment::Center);
+        let name = if ctx.notifications.dnd() {
+            &self.config.dnd_icon
+        } else {
+            &self.config.icon
+        };
+        let mut content = vec![ctx.icon(button.child("icon"), name.as_str())];
         if unseen > 0 {
-            let count = button.child("text");
-            content = content.push(theme.container(&count, theme.text(&count, unseen.to_string())));
+            content.push(icssed::text(button.child("label"), unseen.to_string()).into());
         }
         let unseen_ids = ctx
             .notifications
@@ -118,69 +112,71 @@ impl Gadget for NotificationsGadget {
             .filter(|e| !e.seen)
             .map(|e| e.notification.id)
             .collect();
-        let button = theme
-            .button(&button, content)
-            .on_press(Message::TogglePopup(unseen_ids));
-        mouse_area(self.popup.anchor(button))
+        let button = icssed::button(button, content)
+            .on_press(Message::TogglePopup(unseen_ids))
+            .id(self.popup.anchor());
+        let button = mouse_area(button)
             .on_right_press(Message::ToggleDnd)
-            .on_middle_press(Message::DismissAll)
-            .into()
+            .on_middle_press(Message::DismissAll);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
         Some(&mut self.popup)
     }
 
-    fn popup_closed(&mut self) {
-        self.unseen.clear();
-    }
-
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
-        let list_style = theme.resolve(&list);
-        let width = self.list_width(&ctx);
-        let (header, _) = self.header(&ctx, &list);
-        let mut rows: Vec<Element<'a, Message>> = vec![header];
+        let scroll = ctx.node.child("scroll");
+        let list = scroll.child("list");
+        let header = list.child("header");
+        let dnd = header
+            .child("button")
+            .class("dnd")
+            .class_if("active", ctx.notifications.dnd());
+        let clear = header.child("button").class("clear");
+        let header = icssed::row(
+            header,
+            [
+                icssed::text(header.child("title"), ctx.locale.tr("notifications.title")).into(),
+                icssed::button(
+                    dnd,
+                    [icssed::text(dnd.child("label"), ctx.locale.tr("notifications.dnd")).into()],
+                )
+                .on_press(Message::ToggleDnd)
+                .into(),
+                icssed::button(
+                    clear,
+                    [
+                        icssed::text(clear.child("label"), ctx.locale.tr("notifications.clear"))
+                            .into(),
+                    ],
+                )
+                .on_press(Message::Clear)
+                .into(),
+            ],
+        );
+        let mut rows: Vec<Element<'a, Message>> = vec![header.into()];
         let entries = ctx.notifications.history();
         if entries.is_empty() {
-            let empty = list.child("empty");
-            rows.push(
-                theme
-                    .container(
-                        &empty,
-                        theme.text(&empty, ctx.locale.tr("notifications.empty")),
-                    )
-                    .width(Length::Fill)
-                    .align_x(Alignment::Center)
-                    .into(),
-            );
+            let text = ctx.locale.tr("notifications.empty");
+            rows.push(super::note(list.child("empty"), text));
         }
         for entry in entries {
             let n = &entry.notification;
-            let node = toast::node_under(&list, n).class_if("unseen", self.unseen.contains(&n.id));
+            let node = toast::node_under(list, n).class_if("unseen", self.unseen.contains(&n.id));
             let extras = toast::Extras {
-                width: Some(width - list_style.inset().x()),
                 age: Some(toast::age(entry.received, self.now, ctx.locale)),
                 close: true,
             };
-            let content = toast::view(theme, &node, n, ctx.notifications, ctx.icons, extras)
-                .map(Message::Toast);
-            rows.push(theme.container(&node, content).width(Length::Fill).into());
+            rows.push(
+                toast::view(node, n, ctx.notifications, ctx.icons, extras).map(Message::Toast),
+            );
         }
-        let content = theme.column(&list, rows).width(Length::Fill);
-        let (_, capped) = self.list_height(&ctx);
-        if capped {
-            scrollable(content).height(Length::Fill).into()
-        } else {
-            content.into()
-        }
+        icssed::scroll(scroll, icssed::column(list, rows)).into()
     }
 
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let width = self.list_width(&ctx);
-        let (height, _) = self.list_height(&ctx);
-        (width.ceil().max(1.0) as u32, height.ceil().max(1.0) as u32)
+    fn popup_closed(&mut self) {
+        self.unseen.clear();
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -188,129 +184,6 @@ impl Gadget for NotificationsGadget {
             return Subscription::none();
         }
         Subscription::run_with(60u32, |step| aligned_ticks(*step)).map(|_| Message::Tick)
-    }
-}
-
-impl NotificationsGadget {
-    /// The bell, or the quiet icon.
-    fn icon<'a>(&'a self, ctx: &Context<'a>, button: &Node) -> Element<'a, Message> {
-        let icon_node = button.child("icon");
-        let style = ctx.theme.resolve(&icon_node);
-        let size = px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE);
-        let name = if ctx.notifications.dnd() {
-            &self.config.dnd_icon
-        } else {
-            &self.config.icon
-        };
-        match ctx.icons.get_name(name, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        }
-    }
-
-    fn list_width(&self, ctx: &Context<'_>) -> f32 {
-        px(ctx.theme.resolve(&ctx.node.child("list")).width).unwrap_or(DEFAULT_LIST_WIDTH)
-    }
-
-    /// The header row and its height.
-    fn header<'a>(&'a self, ctx: &Context<'a>, list: &Node) -> (Element<'a, Message>, f32) {
-        let theme = ctx.theme;
-        let header = list.child("header");
-        let title = header.child("title");
-        let dnd = header
-            .child("button")
-            .class("dnd")
-            .class_if("active", ctx.notifications.dnd());
-        let clear = header.child("button").class("clear");
-        let s = theme.resolve(&header);
-        let button_height = |b: &Node, label: &str| {
-            let bs = theme.resolve(b);
-            let t = b.child("text");
-            theme.measure(&t, label).height.max(theme.line_height(&t)) + bs.inset().y()
-        };
-        let height = theme
-            .measure(&title, ctx.locale.tr("notifications.title"))
-            .height
-            .max(theme.line_height(&title))
-            .max(button_height(&dnd, ctx.locale.tr("notifications.dnd")))
-            .max(button_height(&clear, ctx.locale.tr("notifications.clear")))
-            + s.inset().y();
-        let row = theme
-            .row(
-                &header,
-                [
-                    theme
-                        .text(&title, ctx.locale.tr("notifications.title"))
-                        .width(Length::Fill)
-                        .into(),
-                    theme
-                        .button(
-                            &dnd,
-                            theme.text(&dnd.child("text"), ctx.locale.tr("notifications.dnd")),
-                        )
-                        .on_press(Message::ToggleDnd)
-                        .into(),
-                    theme
-                        .button(
-                            &clear,
-                            theme.text(&clear.child("text"), ctx.locale.tr("notifications.clear")),
-                        )
-                        .on_press(Message::Clear)
-                        .into(),
-                ],
-            )
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
-        (row.into(), height)
-    }
-
-    /// The popup height: the header, the rows (or the empty text) and
-    /// the gaps, within the list's padding, capped by its `height`;
-    /// whether it was capped (then the content scrolls).
-    fn list_height(&self, ctx: &Context<'_>) -> (f32, bool) {
-        let theme = ctx.theme;
-        let list = ctx.node.child("list");
-        let s = theme.resolve(&list);
-        let width = self.list_width(ctx) - s.inset().x();
-        let (_, header) = self.header(ctx, &list);
-        let mut height = header;
-        let entries = ctx.notifications.history();
-        if entries.is_empty() {
-            let empty = list.child("empty");
-            let es = theme.resolve(&empty);
-            height += s.gap
-                + theme
-                    .measure(&empty, ctx.locale.tr("notifications.empty"))
-                    .height
-                    .max(theme.line_height(&empty))
-                + es.inset().y();
-        }
-        for entry in entries {
-            let n = &entry.notification;
-            let node = toast::node_under(&list, n).class_if("unseen", self.unseen.contains(&n.id));
-            let extras = toast::Extras {
-                width: Some(width),
-                age: Some(toast::age(entry.received, self.now, ctx.locale)),
-                close: true,
-            };
-            // `toast::size` includes the node's padding.
-            let (_, h) = toast::size(theme, &node, n, ctx.notifications, ctx.icons, &extras);
-            height += s.gap + h as f32;
-        }
-        height += s.inset().y();
-        let cap = px(s.height).unwrap_or(DEFAULT_LIST_HEIGHT);
-        if height > cap {
-            (cap, true)
-        } else {
-            (height, false)
-        }
-    }
-}
-
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
     }
 }
 

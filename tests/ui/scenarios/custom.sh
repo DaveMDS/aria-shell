@@ -6,14 +6,14 @@
 # One button per bar; the static one has an icon and a text.
 assert_eq "$(count_widgets 'gadget.custom#static > button')" 2 "one static button per bar"
 assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#static icon')" 1 "its icon"
-assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#static text')" 1 "its label"
+assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#static label')" 1 "its label"
 
 # exec's output, once it's in.
 i=0
-while [ "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#echo text')" != 1 ] && [ $i -lt 30 ]; do
+while [ "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#echo label')" != 1 ] && [ $i -lt 30 ]; do
     sleep 0.1; i=$((i + 1))
 done
-assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#echo text')" 1 "echo's output shown"
+assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#echo label')" 1 "echo's output shown"
 assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#json > button.warning')" 1 "the JSON class on the button"
 assert_eq "$(count_widgets 'panel[output="HEADLESS-1"] gadget.custom#json icon')" 1 "the JSON icon"
 assert_eq "$(count_widgets 'gadget.custom#silent > button')" 0 "an empty output hides the gadget"

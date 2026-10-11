@@ -25,18 +25,18 @@ pub mod themes;
 pub mod tray;
 pub mod workspaces;
 
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use iced::mouse::ScrollDelta;
-use iced::widget::{Space, container};
-use iced::{Element, Subscription, Task, widget, window};
+use iced::{Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::config::{Config, Section};
 use crate::services::compositor;
 use crate::shared::Shared;
-use crate::ui::theme::Node;
 use audio::AudioGadget;
 use brightness::BrightnessGadget;
 use clock::Clock;
@@ -55,10 +55,19 @@ use workspaces::Workspaces;
 /// the element tree, to derive the nodes of its widgets from
 /// (`ctx.node.child("workspace")`). Derefs to [`Shared`], so
 /// `ctx.compositor` and `ctx.theme` read as before.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Context<'a> {
     pub shared: Shared<'a>,
-    pub node: Node,
+    pub node: Node<'a>,
+}
+
+impl<'a> Context<'a> {
+    /// The icon theme's icon `name` as `node`: its room kept while it
+    /// isn't resolved.
+    pub fn icon<M: 'a>(&self, node: Node<'a>, name: impl Into<Cow<'a, str>>) -> Element<'a, M> {
+        let icons: &'a dyn icssed::Icons = self.shared.icons;
+        icssed::icon(node, (icons, name)).into()
+    }
 }
 
 impl<'a> std::ops::Deref for Context<'a> {
@@ -67,6 +76,13 @@ impl<'a> std::ops::Deref for Context<'a> {
     fn deref(&self) -> &Self::Target {
         &self.shared
     }
+}
+
+/// A popup's line of text in a box of its own, `node` (`empty`,
+/// `message`): the text is `node > label`, the room around it the
+/// box's (a text has no padding).
+pub fn note<'a, M: Clone + 'a>(node: Node<'a>, text: impl Into<Cow<'a, str>>) -> Element<'a, M> {
+    icssed::column(node, [icssed::text(node.child("label"), text).into()]).into()
 }
 
 /// What `update` asks the daemon to do. Like a `Task`, but it can also
@@ -89,9 +105,9 @@ pub enum Action<M> {
     /// be gone first.
     Screenshot(crate::services::screenshot::Command),
     Places(crate::services::places::Command),
-    /// Open popup surface `id` hanging off the widget tagged `anchor`,
-    /// sized by [`Gadget::popup_size`]. Gadgets don't build this by
-    /// hand, they call [`Popup::toggle`], which mints the id.
+    /// Open popup surface `id` hanging off the box with id `anchor`,
+    /// sized by its content. Gadgets don't build this by hand, they
+    /// call [`Popup::toggle`], which mints the id.
     OpenPopup {
         id: window::Id,
         anchor: widget::Id,
@@ -104,7 +120,8 @@ pub enum Action<M> {
 /// widget it hangs from and whether it's open. The gadget keeps one as a
 /// field and hands it out through [`Gadget::popup`]; the panel reports
 /// the surface coming and going through it, whoever closed it (the
-/// gadget, or the compositor on a click outside).
+/// gadget, or the compositor on a click outside). The widget it hangs
+/// from is the box given [`Popup::anchor`] as its id.
 ///
 /// A gadget with several widgets a popup may hang from (one per tray
 /// item) numbers them: [`Popup::anchor_nth`] / [`Popup::toggle_nth`].
@@ -128,21 +145,14 @@ impl Popup {
         self.id.is_some()
     }
 
-    fn anchor_id(&self, n: usize) -> widget::Id {
+    /// The id of the box the popup hangs from (`.id(popup.anchor())`).
+    pub fn anchor(&self) -> widget::Id {
+        self.anchor_nth(0)
+    }
+
+    /// The id of the `n`th box the popup may hang from.
+    pub fn anchor_nth(&self, n: usize) -> widget::Id {
         widget::Id::from(format!("popup-anchor-{}-{n}", self.serial))
-    }
-
-    /// Tag `content` as the widget the popup hangs from.
-    pub fn anchor<'a, M: 'a>(&self, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
-        self.anchor_nth(0, content)
-    }
-
-    pub fn anchor_nth<'a, M: 'a>(
-        &self,
-        n: usize,
-        content: impl Into<Element<'a, M>>,
-    ) -> Element<'a, M> {
-        container(content).id(self.anchor_id(n)).into()
     }
 
     /// Close the popup if open, else open one.
@@ -159,7 +169,7 @@ impl Popup {
                 self.id = Some(id);
                 Action::OpenPopup {
                     id,
-                    anchor: self.anchor_id(n),
+                    anchor: self.anchor_nth(n),
                 }
             }
         }
@@ -245,6 +255,8 @@ pub trait Gadget: Sized {
 
     fn update(&mut self, message: Self::Message) -> Action<Self::Message>;
 
+    /// The gadget on the bar: its box, `ctx.node` (`gadget.<kind>`), and
+    /// what's in it.
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Self::Message>;
 
     /// The gadget's [`Popup`], if it has one.
@@ -252,17 +264,11 @@ pub trait Gadget: Sized {
         None
     }
 
-    /// Content of the popup.
-    fn popup_view<'a>(&'a self, _ctx: Context<'a>) -> Element<'a, Self::Message> {
-        Space::new().into()
-    }
-
-    /// Size of the popup content, in pixels, from the gadget's state and
-    /// the shared one (a Wayland surface needs it up front, iced can't
-    /// size it from the content). Asked when the popup opens and again
-    /// after any state change: a different answer resizes the surface.
-    fn popup_size(&self, _ctx: Context<'_>) -> (u32, u32) {
-        (1, 1)
+    /// Content of the popup; the panel measures it for the surface's
+    /// size, when the popup opens and again after any state change (a
+    /// different size resizes the surface).
+    fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Self::Message> {
+        icssed::column(ctx.node, []).into()
     }
 
     /// The popup surface is gone, whoever closed it.
@@ -501,24 +507,6 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup_view(ctx).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_view(ctx).map(Message::Screenshot),
             Self::Places(g) => g.popup_view(ctx).map(Message::Places),
-        }
-    }
-
-    pub fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        match self {
-            Self::Clock(g) => g.popup_size(ctx),
-            Self::Custom(g) => g.popup_size(ctx),
-            Self::Workspaces(g) => g.popup_size(ctx),
-            Self::Tray(g) => g.popup_size(ctx),
-            Self::Themes(g) => g.popup_size(ctx),
-            Self::Notifications(g) => g.popup_size(ctx),
-            Self::SystemMonitor(g) => g.popup_size(ctx),
-            Self::Audio(g) => g.popup_size(ctx),
-            Self::Network(g) => g.popup_size(ctx),
-            Self::Power(g) => g.popup_size(ctx),
-            Self::Brightness(g) => g.popup_size(ctx),
-            Self::Screenshot(g) => g.popup_size(ctx),
-            Self::Places(g) => g.popup_size(ctx),
         }
     }
 

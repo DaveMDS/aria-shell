@@ -176,6 +176,7 @@ dependencies = [
  "iced",
  "iced_exwlshell",
  "iced_wayland_subscriber",
+ "icssed",
  "image",
  "libc",
  "libpulse-binding",

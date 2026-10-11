@@ -20,14 +20,14 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Local};
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::{Space, column, image, operation};
-use iced::{Alignment, ContentFit, Element, Event, Length, Subscription, Task, widget, window};
+use iced::widget::{image, operation};
+use iced::{Event, Subscription, Task, widget, window};
 use iced_wayland_subscriber::OutputId;
+use icssed::{Element, Node};
 
 use crate::config::{RawSection, Section};
 use crate::shared::Shared;
 use crate::time;
-use crate::ui::theme::{self, Node};
 
 /// `[locker]` section. Same keys and defaults as the Python
 /// implementation.
@@ -258,63 +258,33 @@ impl Locker {
         self.windows.get(&id).copied().flatten()
     }
 
-    /// A lock surface, on output `output` (its name): the box centred
-    /// in that output's `locker` root container.
-    pub fn view<'a>(&'a self, shared: Shared<'a>, output: &str) -> Element<'a, Message> {
-        let root = Node::root("locker").attr("output", output.to_owned());
-        shared
-            .theme
-            .container(&root, self.content(shared, &root))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::Center)
-            .align_y(Alignment::Center)
-            .into()
-    }
-
-    fn content<'a>(&'a self, shared: Shared<'a>, root: &Node) -> Element<'a, Message> {
-        let theme = shared.theme;
+    /// The clock tick, when a time or a date is shown: every minute, or
+    /// every second when a format shows them. Without a password field,
+    /// Enter anywhere is the button (the field's own `on_submit`
+    /// otherwise).
+    /// A lock surface: its root `root` (`locker[output=..]`), filling
+    /// it, the box centred in it.
+    pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
         let node = root.child("box");
-        let px = |l: Option<theme::Length>| match l {
-            Some(theme::Length::Px(px)) => Some(px),
-            _ => None,
-        };
+        let icons: &'a dyn icssed::Icons = shared.icons;
         let mut items: Vec<Element<'a, Message>> = Vec::new();
         if self.config.show_avatar {
             let n = node.child("avatar");
-            let s = theme.resolve(&n);
-            let size = px(s.height.or(s.width)).unwrap_or(128.0);
-            let picture: Element<'a, Message> = match &self.avatar {
-                Some(handle) => image(handle.clone())
-                    .width(size)
-                    .height(size)
-                    .content_fit(ContentFit::Cover)
-                    .border_radius(s.border_radius)
-                    .into(),
-                None => match shared.icons.get_name("avatar-default", None) {
-                    Some(icon) => icon.view(size, s.color),
-                    None => Space::new().width(size).height(size).into(),
-                },
-            };
-            items.push(theme.container(&n, picture).into());
+            items.push(match &self.avatar {
+                Some(handle) => icssed::image(n, handle.clone()).into(),
+                None => icssed::icon(n, (icons, "avatar-default")).into(),
+            });
         }
         if self.config.show_username {
-            let n = node.child("username");
-            items.push(
-                theme
-                    .container(&n, theme.text(&n, &self.display_name))
-                    .into(),
-            );
+            items.push(icssed::text(node.child("username"), self.display_name.as_str()).into());
         }
         if self.config.show_time {
-            let n = node.child("time");
             let text = shared.locale.date(&self.now, &self.config.time_format);
-            items.push(theme.container(&n, theme.text(&n, text)).into());
+            items.push(icssed::text(node.child("time"), text).into());
         }
         if self.config.show_date {
-            let n = node.child("date");
             let text = shared.locale.date(&self.now, &self.config.date_format);
-            items.push(theme.container(&n, theme.text(&n, text)).into());
+            items.push(icssed::text(node.child("date"), text).into());
         }
         let busy = self.state == State::Busy;
         let auth = node
@@ -323,54 +293,40 @@ impl Locker {
             .class_if("busy", busy);
         let mut fields: Vec<Element<'a, Message>> = Vec::new();
         if self.config.password_prompt {
-            let field = auth.child("field");
-            let n = field.child("input");
-            let mut input = theme
-                .text_input(
-                    &n,
-                    shared.locale.tr("locker.enter_password"),
-                    &self.password,
-                )
-                .id(self.input.clone())
-                .secure(!self.peek)
-                .on_submit(Message::Submit);
-            if !busy {
-                input = input.on_input(Message::Password);
-            }
+            let input = auth.child("input");
             // The eye: the password in clear while it's on.
-            let peek = field
+            let peek = input
                 .child("button")
                 .class("peek")
                 .class("plain")
-                .class_if("active", self.peek);
-            let icon_node = peek.child("icon");
-            let icon_style = theme.resolve(&icon_node);
+                .class_if("active", self.peek)
+                .disabled_if(busy);
             let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };
-            let eye: Element<'a, Message> =
-                match (shared.icons.get_name(name, None), px(icon_style.height)) {
-                    (Some(icon), Some(size)) => theme
-                        .container(&icon_node, icon.view(size, icon_style.color))
-                        .into(),
-                    _ => theme
-                        .text(
-                            &icon_node,
-                            shared.locale.tr(if self.peek {
-                                "locker.hide_password"
-                            } else {
-                                "locker.show_password"
-                            }),
-                        )
-                        .into(),
+            // Words, when the icon theme has no eye.
+            let mark: Element<'a, Message> = if shared.icons.get_name(name, None).is_some() {
+                icssed::icon(peek.child("icon"), (icons, name)).into()
+            } else {
+                let key = if self.peek {
+                    "locker.hide_password"
+                } else {
+                    "locker.show_password"
                 };
-            let eye = theme
-                .button(&peek, eye)
-                .on_press_maybe((!busy).then_some(Message::TogglePeek));
-            fields.push(
-                theme
-                    .row(&field, [theme.tag(&n, input).into(), eye.into()])
-                    .align_y(Alignment::Center)
-                    .into(),
-            );
+                icssed::text(peek.child("label"), shared.locale.tr(key)).into()
+            };
+            let eye = icssed::button(peek, [mark]).on_press(Message::TogglePeek);
+            let mut field = icssed::input(
+                input,
+                shared.locale.tr("locker.enter_password"),
+                &self.password,
+            )
+            .id(self.input.clone())
+            .secure(!self.peek)
+            .on_submit(Message::Submit)
+            .trailing(eye);
+            if !busy {
+                field = field.on_input(Message::Password);
+            }
+            fields.push(field.into());
         }
         let message = match &self.state {
             State::Failed(Some(text)) => Some(text.as_str()),
@@ -379,38 +335,21 @@ impl Locker {
             State::Idle => None,
         };
         if let Some(text) = message {
-            let n = auth.child("message");
-            fields.push(theme.container(&n, theme.text(&n, text)).into());
+            fields.push(icssed::text(auth.child("message"), text).into());
         }
-        let button = auth.child("button").class("primary");
+        let button = auth.child("button").class("primary").disabled_if(busy);
         fields.push(
-            theme
-                .button(
-                    &button,
-                    theme.text(&button.child("text"), shared.locale.tr("locker.unlock")),
-                )
-                .on_press_maybe((!busy).then_some(Message::Submit))
-                .into(),
+            icssed::button(
+                button,
+                [icssed::text(button.child("label"), shared.locale.tr("locker.unlock")).into()],
+            )
+            .on_press(Message::Submit)
+            .into(),
         );
-        let auth_gap = theme.resolve(&auth).gap;
-        items.push(
-            theme
-                .container(
-                    &auth,
-                    column(fields).spacing(auth_gap).align_x(Alignment::Center),
-                )
-                .into(),
-        );
-        let gap = theme.resolve(&node).gap;
-        theme
-            .container(&node, column(items).spacing(gap).align_x(Alignment::Center))
-            .into()
+        items.push(icssed::column(auth, fields).into());
+        icssed::column(root, [icssed::column(node, items).into()]).into()
     }
 
-    /// The clock tick, when a time or a date is shown: every minute, or
-    /// every second when a format shows them. Without a password field,
-    /// Enter anywhere is the button (the field's own `on_submit`
-    /// otherwise).
     pub fn subscription(&self) -> Subscription<Message> {
         let mut subs = Vec::new();
         if self.config.show_time || self.config.show_date {

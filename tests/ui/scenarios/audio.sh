@@ -10,7 +10,7 @@ button='panel[output="HEADLESS-1"] gadget.audio > button.output'
 player='popup player'
 assert_eq "$(count_widgets 'gadget.audio > button.output')" 2 "a volume button per bar"
 assert_eq "$(count_widgets 'gadget.audio > button.input')" 2 "a microphone button per bar (show_microphone)"
-assert_eq "$(count_widgets 'gadget.audio > button > text')" 4 "the percent after each icon (show_percent)"
+assert_eq "$(count_widgets 'gadget.audio > button > label')" 4 "the percent after each icon (show_percent)"
 
 click_widget "$button"
 assert_surface popup

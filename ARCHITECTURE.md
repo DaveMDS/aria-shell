@@ -78,9 +78,12 @@ layer is a struct with its own `Message`, `update`, `view` and
   full Elm component: panel, dialog, launcher, exiter, locker, osd,
   wallpaper, the screenshot picker.
 - `gadgets/`: the bar's gadgets, the contract in `gadgets/mod.rs`.
-- `ui/`: the building blocks of every surface: the theme, the reusable
-  widgets (menu, calendar, graphs), the shapes things are shown in (a
-  gadget's popup, a notification's toast) and `Surfaces`.
+- `ui/`: the building blocks of every surface, over the toolkit
+  (`icssed/`, its own crate: icssed/AGENTS.md, icssed/ARCHITECTURE.md):
+  the theme, the reusable pieces (menu, calendar: the state the
+  toolkit's controlled widgets leave to their host), the shapes things
+  are shown in (a gadget's popup, a notification's toast), `Surfaces`
+  and the measuring (`Measuring`, `Scales`, `size`).
 - the daemon: `main.rs` (`Message`, the struct, the router `update`,
   `perform`) and `daemon/`, more `impl AriaShell` blocks by subject:
   `outputs.rs` (monitors coming and going, config and theme reloads),
@@ -123,7 +126,7 @@ Panel      (panel.rs)       one layer surface on one output; PanelConfig; gadget
 AnyGadget  (gadgets/mod.rs) closed enum over every gadget type, plus `create(name, &Config, &OutputInfo)`
   Message::Clock(clock::Message) | Message::Workspaces(..) | ...
 
-Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / popup_size(ctx) / subscription
+Clock      (gadgets/clock.rs)  impl Gadget: new / update / view(ctx) / popup_view(ctx) / subscription
   Message::Calendar(calendar::Message)
 
 TrayGadget (gadgets/tray.rs)   impl Gadget: a row of items from `ctx.tray`, the clicked item's menu in the popup
@@ -137,14 +140,16 @@ Custom     (gadgets/custom.rs) impl Gadget: icon and/or label, a program per mou
   script() -> Option<scripts::Spec>                the `exec` for the daemon; its output read from `ctx.scripts`
 
 Menu       (menu.rs)        reusable component: Item tree (labels, toggles, separators, submenus unfolding in
-                            place) -> update(Message) -> Event, view(theme, node, items), size(..) for the popup
+                            place) -> update(Message) -> Event, view(node, items): the toolkit's `menu`, the
+                            submenus unfolded kept here (its widgets are controlled)
 
-Calendar   (calendar.rs)    reusable component, not a gadget: state + Message + update + view(today, theme, node)
+Calendar   (calendar.rs)    reusable component, not a gadget: the month shown + Message + update +
+                            view(today, locale, node): the toolkit's `calendar`, the words the locale's
 
 Popup      (popup.rs)       a gadget's popup's shape: `Side` (below a top bar's widget, above a bottom bar's),
-                            `surface_size` (content + the `popup` root's chrome + shadow room), `settings` /
-                            `estimate` (the xdg popup, its box on the widget), `presses_outside`; the panel
-                            keeps the popups of its gadgets
+                            `view` (the content in the `popup` root's box, an `icssed::surface` with its
+                            shadow's room), `settings` / `estimate` (the xdg popup, its box on the widget),
+                            `presses_outside`; the panel keeps the popups of its gadgets and measures them
 
 Surfaces   (ui/mod.rs)      what an owner of surfaces asks after a change: keyboard / open / popup / close /
                             resize / margin / reposition / redraw, turned into the runtime's messages by the
@@ -170,12 +175,12 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
-  ui/toast.rs               node(n, output) / node_under(parent, n) / view(.., Extras) / size(.., &Extras):
+  ui/toast.rs               node(root, n, output) / node_under(parent, n) / view(node, .., Extras) / surface(..):
                             the one view of a notification, on its own layer surface (`Toasts`: one per
                             notification, `sync(&Notifications, outputs, focused, ..) -> Surfaces` after every
-                            change, stacked from the configured corner with `placement` / `anchor`, `rect`
-                            for `debug surfaces`) and as a row of the gadget's popup (`Extras`: the width to
-                            lay out in, the age, a ✕)
+                            change, each measured, stacked from the configured corner with `placement` /
+                            `anchor`, `rect` for `debug surfaces`) and as a row of the gadget's popup
+                            (`Extras`: the age, a ✕)
   history / dnd / unseen()  what the gadget shows: the last `history` notifications (newest first, `seen`
                             flag), do-not-disturb (no toasts but critical ones), the count not looked at
 
@@ -201,9 +206,7 @@ SystemMonitor (gadgets/system_monitor.rs)  impl Gadget: instances only (`[System
                             is the sampler's), one value each (`show =`, required) as text, a sparkline or a gauge (`mode =`);
                             the popup: tabs cpu (graph, per-core meters, details), mem, disk, net, gpu,
                             processes (sortable columns; a click selects a row, a bar pinned under the
-                            scrolling table offers Terminate/Kill for it; the list's scrollbar is embedded,
-                            `scrollable::Scrollbar::spacing`, so it doesn't cover the last column), opened
-                            on the value's tab;
+                            scrolling table offers Terminate/Kill for it), opened on the value's tab;
                             right click on the bar: `command`, else btop/htop/top in `[general] terminal`
   Message::TogglePopup | RunCommand | Tab(kind) | Tick (processes re-read while open) | Sort(Column) | Select(pid) | Signal(..)
 
@@ -356,7 +359,7 @@ Picker     (picker.rs)      the screenshot picker, a component the daemon owns w
                             Option<Picker>`; `Picker::open(Frozen, outputs, focused) -> (Picker, Surfaces)`:
                             one `Layer::Overlay` surface per output
                             (`exclusive_zone -1`, all `OnDemand`), `stack![image(frozen), canvas(Overlay),
-                            toolbar]`. State in the global logical space (surface-local + the output's
+                            dock > toolbar]`. State in the global logical space (surface-local + the output's
                             origin): `Drag::New` (a click picks the topmost window under it or the output, a
                             drag draws; clamped to the output it started on) / `Move` / `Resize { edges }`
                             (`grip`: within 10 px of an edge, two at a corner). The overlay's canvas draws
@@ -413,15 +416,10 @@ PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the p
                             shares (`volume()`, one row for all): `button.open` (icon, label, the usage
                             meter when known) and, while mounted,
                             `button.eject` (disabled on `/`; nodes built disabled in `view`, so the icon takes
-                            `button:disabled`'s colour); sized from the widest row
+                            `button:disabled`'s colour); as wide as the widest row
   Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
            | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
            | MountDir(dir) -> Places(MountDir), closed | UnmountDir(dir) -> Places(UnmountDir)
-
-graph      (graph.rs)       canvas programs: `Sparkline` (one series, a `Label` over it), `Gauge` (a bar
-                            filled to a fraction, label over it), `Graph` (up to two series, grid lines);
-                            `sparkline()` / `gauge()` / `graph()` build them from a theme node; `meter()` is
-                            containers (`meter > fill` with `FillPortion`), so the theme styles it
 
 Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
                             return_type) -> last `Output` (text, icon, classes); one run per distinct spec
@@ -453,27 +451,24 @@ process    (process.rs)     split_words (shell-like quoting, no shell), command(
                             `systemctl --user restart aria-shell` (the unit kills its whole cgroup) spares
                             them. Moved after the spawn: a fork made before the move stays with us
 
-Theme      (theme/)         daemon-owned styling: base.css + the user's theme, parsed once for one Scheme
-  load / try_load(&Config, style, scheme)   css.rs (scanner) -> selector.rs + value.rs (typed rules)
+Theme      (theme.rs)       daemon-owned styling: the toolkit's base, base.css and the user's theme, compiled
+                            into one `icssed::Sheet` for one Scheme
+  load / try_load(&Config, style, scheme)   what can't be used logged with its file:line:col, a syntax
+                            error rejecting the user's file (a reload keeps the last good one)
+  root(kind, scale)         a surface's root node, what its view builds its nodes from
   scheme() / name()         what's loaded; `available()` lists the themes/*.css of every theme dir
   Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
                             keeps `style`/`scheme` at runtime and reloads (no persistence)
-  resolve(&Node) -> Style   cascade for one element path
-  build.rs                  container()/button()/text()/slider()/toggler()/row() ...: plain iced widgets styled
-                            for a Node and tagged with its path; measure()/line_height() for popup sizes
-  paint/                    `Painted`: a container's or button's box drawn under its content (shadow and
-                            background, border, content: CSS order), snapped to the pixel grid, the iced
-                            widget styled for its content only; a button's status worked out as iced's.
-                            The border takes room: the widget's padding is `Style::inset()` (border +
-                            padding), which sizes worked out before layout use too. border.rs: sides
-                            that differ as four rectangles that don't overlap (no radius then), an
-                            inset shadow's bands the same way inside the border. Background images
-                            go here
-  fonts.rs                  `font-family` down to the first generic or installed family
 
-Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (iced svg/image handle)
+Measuring  (ui/mod.rs)      what sizing a surface takes: `Shared`, the toolkit's `Measure` (one layout tree
+                            per surface key, run headlessly), `Scales` (each output's scale, what its
+                            surfaces' roots are made with); `size(measure, key, element, room)`
+
+Icons      (icons/)         daemon-owned app icons: window class -> `Icon` (the toolkit's `IconFile`)
   load() -> Task            builds `Index` (icons/theme.rs theme chain + icons/desktop.rs .desktop db) off-thread
-  apply(Event::Loaded)      installs it; resolve(class) fills the per-class cache; get(class) in `view`
+  apply(Event::Loaded)      installs it; resolve(class) fills the per-class cache; get(class) in `view`;
+                            `impl icssed::Icons`: `icssed::icon` looks a name up at draw, among those
+                            resolved (`Gadget::icon_names`), allocating nothing
   index() -> Arc<Index>     the desktop db is also what the launcher searches; desktop::launch runs an entry
 
 Dialog     (dialog.rs)      the modal surface the launcher and the exit menu share: one Overlay layer surface
@@ -487,8 +482,8 @@ Dialog     (dialog.rs)      the modal surface the launcher and the exit menu sha
                             so every press inside is captured); `pointer_events()` the subscription
 
 Launcher   (launcher.rs)    a component the daemon owns while open: `launcher: Option<(Dialog, Launcher)>`
-  Message / update -> Action { Run(Task) | Close | Exit(name) }, view(Shared), subscription() for Up/Down/Esc;
-                            `size(theme)`: the theme's `launcher` box plus its shadow's room
+  Message / update -> Action { Run(Task) | Close | Exit(name) }, view(Shared, root), subscription() for
+                            Up/Down/Esc; sized by its measure: the theme's `launcher` box, its shadow's room
   actions                   `[launcher] actions = all | none | names`: the exit menu's buttons as a row of icons
                             above the search field; a click goes through the exit menu's flow (Exit(name))
 
@@ -499,8 +494,8 @@ Exiter     (exiter.rs)      the exit menu, `aria-shell exiter toggle`: `exiter: 
                             fallbacks (Adwaita lacks suspend/hibernate) and labels from the catalogue
   Message / update -> Action { Run(Task) | Perform(Command) | Close }; the grid (`columns` per row, arrows
                             + Enter), or the confirmation in place (Cancel / the action, a countdown that
-                            runs it by itself); `size(theme, locale)` measured from the content, the daemon
-                            resizes the dialog after every update (`sync_exiter`); `confirming(config, name)`
+                            runs it by itself); measured from the content, the daemon resizes the dialog
+                            after every update (`sync_exiter`); `confirming(config, name)`
                             opens straight on a confirmation (the launcher's row)
 
 Locker     (locker/)        a component the daemon owns from `aria-shell lock` to the unlock: `locker: Option<Locker>`
@@ -529,7 +524,7 @@ Wallpapers (wallpaper/)     the desktop background: `WallpaperConfig::for_output
                             moved; a `run_with((section, interval, generation))` timer per rotating show
                             (`Event::Tick`; `next`, `aria-shell wallpaper next`, bumps the generation so the
                             interval starts over); `view` is `image(handle).content_fit(..)` in a `wallpaper`
-                            root container (the theme's background shows around a `contain`ed image)
+                            root box (the theme's background shows around a `contain`ed image)
 
 Osd        (osd/)           daemon-owned, display only: `[osd]` (`show` = what to watch, duration, position,
                             margin); `observe(&Audio, &Network, &Power, &Idle, &Brightness)` after every change of
@@ -545,7 +540,7 @@ Osd        (osd/)           daemon-owned, display only: `[osd]` (`show` = what t
                             `show(Content, outputs, theme) -> (Surfaces, Task<serial>)` from there or from
                             `Command::Osd` (`aria-shell osd show`): one `Layer::Overlay` surface per output (`Content::outputs`: only those, each with its own percent, the
                             others' surfaces closed: a brightness change shows on the screens that changed;
-                            `events_transparent`, sized by the theme's `osd`, anchored by
+                            `events_transparent`, sized by its measure, anchored by
                             `position`), redraws the open ones, and a timer per show sends `OsdExpired(serial)`:
                             only the last show's closes them, so a held volume key keeps the bar up
 
@@ -573,7 +568,7 @@ Two things flow between the daemon and the gadgets besides messages:
 
 - **`gadgets::Context`** goes *down*, into `view`. It holds
   `Shared` (`shared.rs`: `&Compositor`, `&Theme`, `&Icons`, `&Tray`,
-  `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `theme::Node`. A
+  `&Audio`, `&Network`, ...): daemon-owned, read-only, plus the gadget's own `Node` (the toolkit's). A
   gadget that shows shared state keeps no copy of it, it filters the
   context in `view`.
 - **`gadgets::Action`** comes *up*, out of `update`, in place of a bare
@@ -590,19 +585,16 @@ Two things flow between the daemon and the gadgets besides messages:
 
 - **Popups** are xdg popups parented to the panel's layer surface. A
   gadget with one keeps a `gadgets::Popup` field, exposes it through
-  `Gadget::popup()`, wraps the widget the popup hangs from in
-  `popup.anchor(..)` (a `container` tagged with a `widget::Id` unique to
-  the `Popup`; `anchor_nth(n, ..)` / `toggle_nth(n)` when several widgets
-  may host it, one per tray item) and returns `popup.toggle()` from
-  `update`; the content is `Gadget::popup_view`. **Its size is a
-  function of the state**: `Gadget::popup_size(ctx)` (a Wayland surface
-  needs it up front, iced can't size it from the content). The daemon
-  asks for it when the popup opens and again after every shared-state
-  or gadget update (`sync_popups`); a different answer is sent as
-  `PopUpReposition` with the same anchor, which is how a tray menu
-  grows when a submenu unfolds. `Theme::measure(node, text)` /
-  `line_height(node)` exist for that (cosmic-text through
-  `iced::advanced::graphics::text::Paragraph`). Under the hood `toggle`
+  `Gadget::popup()`, gives the box the popup hangs from the id
+  `popup.anchor()` (`.id(..)`, a `widget::Id` unique to the `Popup`;
+  `anchor_nth(n)` / `toggle_nth(n)` when several boxes may host it, one
+  per tray item) and returns `popup.toggle()` from `update`; the content
+  is `Gadget::popup_view`. **Its size is its content's**: a Wayland
+  surface needs it up front, so the panel lays the content out
+  headlessly (`icssed::Measure`, a tree per popup) when the popup opens
+  and again after every shared-state or gadget update (`sync_popups`);
+  a different size is sent as `PopUpReposition` with the same anchor,
+  which is how a tray menu grows when a submenu unfolds. Under the hood `toggle`
   mints the `window::Id`, records it in the gadget's `Popup` and yields
   `Action::OpenPopup { id, anchor }` / `ClosePopup(id)`; the panel keeps
   the popup (its gadget, then its anchor rect and size). The daemon asks
@@ -611,8 +603,8 @@ Two things flow between the daemon and the gadgets besides messages:
   the `NewPopUp` as `Surfaces`, placed by `ui::popup::settings` (centred
   on the anchor, its box meeting the bar's edge whatever the anchor's
   height: the anchor rect is stretched to the bar's whole thickness;
-  the surface sized by `ui::popup::surface_size`, the content plus the
-  `popup` root's chrome and shadow room). `view(popup_id)` routes to
+  the surface as measured, the `popup` root's box and its shadow's
+  room). `view(popup_id)` routes to
   `Panel::popup_view` -> `Gadget::popup_view`. Whoever closes it (the
   gadget, or the compositor on a click outside), it ends in
   `ShellEvent::Closed(id)` -> `Panel::popup_closed` -> the gadget's
@@ -631,7 +623,7 @@ Two things flow between the daemon and the gadgets besides messages:
   never sees them), and the daemon forwards every keyboard event
   arriving on such a bar to the gadget (`Message::PanelKey` ->
   `panel::Message::Key` -> `Gadget::popup_key`), which edits its own
-  field (the `text_input` is controlled state anyway): characters,
+  field (the toolkit's `input` is controlled state anyway): characters,
   Backspace, Enter submits, Escape folds. No cursor blinks in the
   field and there is no paste; a compositor that does focus the popup
   would let the widget handle the keys itself. `operation::focus` is
@@ -645,10 +637,12 @@ Two things flow between the daemon and the gadgets besides messages:
   (`base :root`, `base :root.<scheme>`, `user :root`, `user
   :root.<scheme>`: a user theme's plain variable still beats the base's
   scheme one); a theme that only sets `:root` looks the same in both.
-  `Theme::resolve` gives the root node of every path the scheme as a
-  class, so `panel.dark { }` rules work without touching the nodes
-  gadgets build. `base.css` carries both palettes (Catppuccin-like
-  Latte / Mocha). `debug theme` prints `style=<name|-> scheme=<..>`.
+  The sheet gives every root the scheme as a class, so `panel.dark { }`
+  rules work without touching the nodes gadgets build. `base.css`
+  carries both palettes (Catppuccin-like Latte / Mocha), as the
+  toolkit's variables (`--bg`, `--accent`, ...) plus the shell's own
+  (`--warning`), so a palette restyles the toolkit's widgets too.
+  `debug theme` prints `style=<name|-> scheme=<..>`.
 - **Programs, not shells**: every command line in the config
   (`[Custom] command*`, `command_wheel_*`, `exec`) is a program and its
   arguments, split with shell-like quoting (`process::split_words`) and
@@ -661,40 +655,34 @@ Two things flow between the daemon and the gadgets besides messages:
   monitors don't run `checkupdates` twice (it fails when they do), and
   the output is shared state read from `ctx.scripts`; a gadget asking
   for a fresh run after a click returns `Action::Script(Refresh)`.
-- **Styling is a CSS-like theme file**, resolved per widget in `view`.
-  `assets/base.css` (compiled in, always first) documents the element
-  tree and the supported properties for theme authors; `[general] style`
-  names a user theme loaded on top (`themes/<name>.css` in the config
-  dirs, the XDG data dirs, then `assets/`; or a path). Both are parsed
-  and type-checked at load (`ui/theme/css.rs` scanner, `selector.rs`,
-  `value.rs`); bad selectors/declarations are logged with `file:line:col`
-  and skipped, a syntax error rejects the file (and on hot reload keeps
-  the last good theme). `:root { --x: v }` variables are substituted
-  textually after all files are merged, so a user theme can override a
-  variable the base uses. Cascade is specificity then source order.
-  In `view`, every widget has a `theme::Node`: its element path
-  (`panel.top#2 > slot.start > gadget.workspaces > workspace.active`),
-  an immutable `Arc` list so style closures can own one. `Theme::resolve`
-  walks root→leaf applying matching rules and inheriting `color` and
-  `font-*`; it only tries, at each node, the rules whose rightmost
-  compound names that node's type plus those naming none (indexed at
-  load, merged back into cascade order): trying all ~280 on every node
-  and ancestor was 46% of the CPU while the pointer moved over a bar,
-  as every message rebuilds every surface (optimized build, perf);
-  `Theme::button/container/text/row` do that and return plain
-  iced widgets. A button's style closure re-resolves with
-  `node.status(status)`, which is how `:hover`/`:active` work. Text gets
-  an explicit colour only when a rule set it on the text node itself;
-  otherwise iced's own cascade (container/button `text_color`) carries
-  it, so `gadget > button:hover { color }` reaches the label. Class
-  names are the Rust roles (`panel`, `slot`, `gadget.clock`,
-  `button.workspace`, ...), not the Python/GTK ones. The bar thickness is the theme's `min-height`
-  on `panel` (layer-shell needs it before layout); a reload that changes
-  it sends `LayoutChange` + `ExclusiveZoneChange`. Surfaces are created
+- **Every view is the toolkit's** (`icssed/`, a crate of its own that
+  knows nothing of the shell: icssed/AGENTS.md says how to use it,
+  icssed/ARCHITECTURE.md how it's built): its widgets, styled by one
+  sheet, a CSS subset with its own layout (a flexbox subset, borders
+  that take room), states kept in the widget tree, animations and the
+  scale. It replaced stock iced widgets styled by closures (`git log --
+  src/ui/theme`), whose limits its ARCHITECTURE.md lists. The daemon
+  runs on `icssed::Theme` (`iced_exwlshell`'s daemon has one theme type
+  for every surface). `assets/base.css` (compiled in, over the
+  toolkit's base, under the user's) documents the shell's element trees
+  for theme authors, the toolkit's base its widgets' and the
+  properties; `[general] style` names a user theme loaded on top
+  (`themes/<name>.css` in the config dirs, the XDG data dirs, then
+  `assets/`; or a path). In `view` every widget has a `Node`, built from
+  its surface's root (`Theme::root(kind, scale)`: `panel`, `popup`,
+  `launcher`, ...) down (`panel.top#2 > slot.start > gadget.workspaces
+  > button.workspace.active`): a `Copy` handle on the sheet, its style
+  resolved where it's made. Class names are the Rust roles (`panel`,
+  `slot`, `gadget.clock`, `button.workspace`, ...), not the Python/GTK
+  ones. A surface's size is its content's, laid out headlessly
+  (`icssed::Measure`, one tree per surface; `ui::size`) with its root at
+  the output's scale: the bar's thickness too (`min-height` a minimum
+  like any other; a reload or a scale that changes it sends
+  `LayoutChange` + `ExclusiveZoneChange`). Surfaces are created
   transparent (`daemon(..).style`), the theme's `panel`/`popup`
   background is what shows, so `rgba` bars and rounded popups work.
-  Gadgets must not hard-code colours/paddings/spacing: derive nodes from
-  `ctx.node` and go through the theme helpers.
+  Gadgets must not hard-code colours, paddings, spacing or sizes:
+  derive nodes from `ctx.node` and build the toolkit's widgets on them.
 - **App icons** (`services/icons/`) are a daemon-owned source with the usual
   verbs. Resolution is `class` -> desktop entry (by id, `StartupWMClass`,
   `Exec` basename, reverse-DNS suffix) -> `Icon=` -> theme lookup, then
@@ -726,8 +714,8 @@ Two things flow between the daemon and the gadgets besides messages:
   (`$XDG_RUNTIME_DIR/aria-shell/cmd.sock`, the Python line protocol:
   `OK ...` / `ERR ...` per line; parsing is in the listener, the daemon
   only sees valid `Command`s). The surface is `Layer::Overlay`, no
-  anchors (the compositor centres it), sized by the theme's `launcher {
-  width; height }`, `KeyboardInteractivity::Exclusive` (`OnDemand`
+  anchors (the compositor centres it), sized by its measure (the theme's
+  `launcher { width; height }`), `KeyboardInteractivity::Exclusive` (`OnDemand`
   works on Hyprland but not on Sway, whose `arrange_layers`, run on
   any layer-surface commit on the output, our grab surfaces mapping
   included, unfocuses a non-exclusive focused layer: the launcher
@@ -776,9 +764,9 @@ Two things flow between the daemon and the gadgets besides messages:
   compositor IPC we already hold (`compositor::Command::Exit`) instead
   of a program; `grab_display` and `opacity` are gone (the grabs are
   always there, opacity is the theme's `exiter { background }`). The
-  surface is sized from the content (`Exiter::size`, the popups'
-  measuring) and resized on every change (`LayoutChange`), which is
-  what forced the click-outside rework below. The launcher shows the
+  surface is sized from the content (measured as the popups are) and
+  resized on every change (`LayoutChange`), which is what forced the
+  click-outside rework below. The launcher shows the
   same buttons as a row of icons (`[launcher] actions`) and hands a
   click to the same flow: run, or open the exit menu on that button's
   confirmation.
@@ -816,9 +804,9 @@ Two things flow between the daemon and the gadgets besides messages:
   keys, avatar (`~/.face`, `~/.face.icon`, AccountsService; decoded by
   content since `image::open` trusts only the extension and `.face` has
   none) → name (gecos, else login, `getpwuid_r`) → time → date →
-  password field (+ an eye button showing it in clear, `secure(!peek)`;
-  the click takes the keyboard from the field, so the toggle refocuses
-  it) + message + Unlock; `password_prompt = no` unlocks on Enter/click
+  password field (+ an eye button inside it showing the password in
+  clear, `secure(!peek)`; the click takes the keyboard from the field,
+  so the toggle refocuses it) + message + Unlock; `password_prompt = no` unlocks on Enter/click
   without PAM. PAM is `components/locker/pam.rs`: `pam_start` /
   `pam_authenticate` / `pam_acct_mgmt` / `pam_end` declared by hand
   (`#[link(name = "pam")]`, as `libc::kill` rather than a crate), a
@@ -844,8 +832,7 @@ Two things flow between the daemon and the gadgets besides messages:
   service with no file (`pam_service = aria-shell-ui-test`: `other`
   refuses at once, no tally) and the ignored unit test does the same.
   `faillock --user <name>` shows the tally, `--reset` clears it (root).
-  Not ported: the shake
-  (no animations in the theme), the spinner (a "Unlocking…" text), a
+  Not ported: the shake, the spinner (a "Unlocking…" text), a
   wallpaper behind (the theme's `locker { background }` for now).
 - **The tray** (`services/tray/`) is the first DBus source, the shape
   notifications and MPRIS will copy: one `zbus::Connection` (tokio
@@ -923,11 +910,11 @@ Two things flow between the daemon and the gadgets besides messages:
 - **Closed gadget set.** No plugins, no `dyn`. Adding a gadget: one file
   under `gadgets/`, one variant in `AnyGadget` and `gadgets::Message`, one
   arm in each `match` in `gadgets/mod.rs`.
-- **Reusable widgets live in `ui/`** (`Calendar`, `Menu`), as plain
+- **Reusable pieces live in `ui/`** (`Calendar`, `Menu`), as plain
   Elm components: a host embeds one as a field, calls `update` with the
-  widget's `Message` and `.map()`s its `view`. Nothing in iced or a
-  third-party crate fit (`iced_aw::date_picker` is a modal picker, and
-  would pin our iced version); COSMIC's calendar is inside `libcosmic`.
+  piece's `Message` and `.map()`s its `view`. The widgets are the
+  toolkit's, controlled: what they show (the month, the submenus
+  unfolded) is the host's state, kept here.
 - **Config sections** implement `config::Section` by hand
   (`const NAME` + `from_raw(&RawSection)`). `RawSection` has the typed
   accessors (`str_or`, `bool_or`, `list_or`; add `int_or` when a section
@@ -957,6 +944,27 @@ Two things flow between the daemon and the gadgets besides messages:
   over `BoxStream`s. `zvariant` converts an `OwnedValue` to a tuple /
   `Vec` / `String` with `try_from`; a `Structure` inside an `av` comes
   back as a tuple the same way.
+- `iced_exwlshell` (0.20.1, and 0.21.0-rc1) keeps the program's state
+  by value (`Instance { program, state }`) inside `UserInterfaces`,
+  inside its `Context`, which `handle_event(mut self)` moves on every
+  event; the windows' widget trees borrow the state, transmuted to
+  `'static`. A widget dereferencing what it borrowed outside the frame
+  it was built in reads where the state was: the toolkit's nodes
+  borrow the sheet, and `debug widgets` (an operation, run from the
+  channel of tasks) crashed in `Flex::operate` (SIGSEGV, `Node::scale`).
+  Stock widgets mostly kept owned data, which hid it. Hence `Pinned`
+  in `main.rs`: the daemon's state is a `Box`, at an address that
+  stays while the runtime moves the box.
+- A surface's scale: `iced::window::scale_factor(id)` is answered with
+  the surface's Wayland scale, fractional (`WindowAction::
+  GetScaleFactor`: `wp_fractional_scale_v1.preferred_scale`, 1 until
+  it comes); a change reaches the app as no event
+  (`ScaleFactorChanged` updates the viewport, `conversion::window_event`
+  drops it). Sway sends a layer surface's preferred scale before its
+  first frame: asked at `NewShell`, the answer is the output's (1.5 on
+  a 1.5 output, nested Sway 1.12). The daemon asks it then, and again
+  of the bars when their output changes (`OutputUpdated`); per output,
+  `ui::Scales`, the output's integer scale until a surface has told.
 - `Message::PopUpReposition { settings: IcedNewPopupSettings, id }`
   resizes and re-places a mapped popup (xdg_popup v3 `reposition`;
   Hyprland and Sway have it, older compositors log and ignore); the
@@ -969,11 +977,6 @@ Two things flow between the daemon and the gadgets besides messages:
   into clicks of 15 and drops a `Pixels` arriving within 100ms of a
   `Lines` (the same click); `-0.0.signum()` is `-1.0`, so a zero delta
   must be filtered before taking its sign.
-- A widget's on-screen bounds for `debug widgets` are the container's
-  outer bounds; `Theme::button` puts the node's padding on the button,
-  so the row inside must not get it again (`theme.row(&node, ..)`
-  would: the Workspaces gadget does that, doubling `workspace`
-  padding; left as is since the shipped themes are tuned to it).
 - Theme selectors are global: `gadget.tray button` would match a
   button anywhere under a tray gadget, its popup's too; base.css
   styles the bar's buttons with `gadget > button` (the child
@@ -988,25 +991,20 @@ Two things flow between the daemon and the gadgets besides messages:
 - A surface is only drawn inside its bounds: one the size of its box
   cut the box's `box-shadow` flat (iced draws it `blur` past the box
   moved by the offset, `quad/solid.wgsl`). So the boxed surfaces
-  (popups, toasts, the OSD, the dialogs) are their box plus
-  `Theme::shadow_room(root)`, the box drawn inside it
-  (`Theme::surface`), and placed so the box stays put: margins less the
-  room, a popup's anchor rectangle shortened on the bar's side
-  (xdg-shell has no offset; a moved rectangle could leave the bar). A
-  click on the shadow is the surface's: lost on a popup or a toast,
-  "outside" on a dialog (the room is outside its `mouse_area`).
-- iced's `container` and `button` lay their content out inside the
-  padding only: the border is drawn over it and takes no room, so a
-  surface measured for its content adds padding, not `border-width`.
-  Wrapped text is measured with `Paragraph::with_text` bounded on the
-  width (`Theme::measure_in`); it matches `text(..).wrapping(Word)` in
-  a container of that width to the pixel.
+  (popups, toasts, the OSD, the dialogs) are an `icssed::surface`: their
+  box plus the room its shadow needs (`Surface::room(root)`), and placed
+  so the box stays put: margins less the room, a popup's anchor
+  rectangle shortened on the bar's side (xdg-shell has no offset; a
+  moved rectangle could leave the bar). A click on the shadow is the
+  surface's: lost on a popup or a toast, "outside" on a dialog (the
+  room is outside its `mouse_area`).
 - `gdbus call` infers `[255, 0]` as `ai`: an `image-data` hint from
   the shell needs `@ay [..]` in the tuple.
-- `debug widgets` only reports what the theme helpers tag (containers
-  and buttons): a bare `Theme::text` or `canvas` isn't found, wrap it
-  in a `Theme::container` of its node when a scenario needs it. Its
-  rectangles are layout coordinates: inside a `scrollable`, what's
+- `debug widgets` reports every toolkit widget (`icssed::query`: an
+  operation collecting each one's node and border box) with its element
+  path, matched by the theme's selectors (`Sheet::matching`); a stock
+  iced widget (the picker's `canvas`, the wallpaper's image) isn't
+  found. Its rectangles are layout coordinates: inside a scroll, what's
   below the fold is reported where it would be unscrolled, so a
   scenario can only click what fits in the popup (one tab at a time
   does).
@@ -1015,8 +1013,9 @@ Two things flow between the daemon and the gadgets besides messages:
   `Frame::new(renderer, size)`, `Path::new(|b| ..)` with
   `move_to`/`line_to`/`close`, `frame.fill(&path, Color)` and
   `frame.stroke(&path, Stroke::default().with_color(..).with_width(..))`.
-  The canvas has no id of its own; a themed container around it gives
-  it background, border and a `debug widgets` entry.
+  The canvas has no id of its own and no node: what it draws in the
+  theme's colours it reads from nodes it isn't drawn in (the picker's
+  `Paint`).
 - `#[to_layer_message(multi)]` doesn't add `Lock`/`UnLock`;
   `#[to_exwlshell_message]` is the same set plus those two. In daemon
   mode `Message::Lock` is refused with a log line while a lock is
@@ -1032,13 +1031,11 @@ Two things flow between the daemon and the gadgets besides messages:
   `%a`/`%A`/`%b`/`%B` follow it, numbers don't. The calendar's weekday
   header is `%a` of a Monday..Sunday (three letters in most languages,
   the fixed cell still fits).
-- `text_input` takes no `widget::Id` for `debug widgets`:
-  `Theme::tag(node, input)` wraps it in a bare container with the path.
 - `libc::statvfs` for a filesystem's size and `libc::kill` for a
   signal, no `nix`/`sysinfo`; `/proc/mounts` on btrfs lists one entry
   per subvolume of the same device, so the default disk list keeps one
   mount per device (`/` first).
-  wider than the room left at the edge of the output is slid back by
+- A popup wider than the room left at the edge of the output is slid back by
   the compositor but not by the `debug surfaces` estimate, so the
   test config keeps gadgets with wide popups (Notifications: 380px)
   away from the ends of the bar.
@@ -1118,11 +1115,6 @@ Two things flow between the daemon and the gadgets besides messages:
   (`i2c-dev` loaded); without access, `detect` finds nothing. The DRM
   connector is the Wayland output's name, which is how a monitor is tied
   to its bar.
-- `iced::widget::toggler` styled through `toggler::Style` (track
-  background/border, `foreground` the knob, `border_radius: None` for
-  round); `Theme::toggler(node, on, f)` is a container-tagged one
-  with `.on` as a class the caller sets (its status only tells
-  hovered/disabled).
 - Hyprland 0.56 (Lua config) changed the IPC dispatch syntax: the command
   socket takes `dispatch hl.dsp.focus({ workspace = 3 })` /
   `dispatch hl.dsp.focus({ window = "address:0x..." })`; the old
@@ -1180,8 +1172,6 @@ Two things flow between the daemon and the gadgets besides messages:
   window and can't tell which answered, so tag widgets with
   `widget::Id::unique()` per instance, never a fixed name.
   `container::visible_bounds` from iced 0.13 is gone in 0.14.
-- `container.center(Length::Fill)` sets width *and* height, overriding a
-  fixed size set before it; use `align_x`/`align_y` for a fixed cell.
 - **Driving the app from the CLI**, without compositor-specific tools
   (Sway and others are next): input with `ydotool` (uinput, so it works
   under any compositor; keys, clicks, `mousemove -a` absolute moves
@@ -1224,13 +1214,11 @@ Two things flow between the daemon and the gadgets besides messages:
     surfaces`; `ydotool mousemove -a -x 900 -y 461; ydotool click 0xC0`
     on a row; the log says `launched "kitty"` and `debug surfaces` no
     longer lists the launcher. Kill what you launched.
-  - `aria-shell debug widgets [selector]` → `launcher > list >
-    item.selected:nth-child(1) 720,388 480x41; ...`: every themed widget
-    (the theme helpers tag containers, and buttons' content, with the
-    node path as `widget::Id`; the calendar cells go through the theme
-    for this) with its global rectangle, filtered by a theme selector
-    (`:nth-child(n)` was added for it). A driver says "the third row"
-    instead of measuring a screenshot.
+  - `aria-shell debug widgets [selector]` → `launcher > scroll > list >
+    item.selected 720,388 480x41; ...`: every toolkit widget with its
+    element path and its global rectangle, filtered by a theme selector
+    (`item:nth-child(3)`). A driver says "the third row" instead of
+    measuring a screenshot.
 - **UI scenarios** (`tests/ui/`, see AGENTS.md "Verifying"): `run.sh`
   starts a headless nested Sway (`WLR_BACKENDS=headless`,
   `WLR_RENDERER=gles2` when there's a render node, two 1920x1080
@@ -1296,27 +1284,15 @@ Two things flow between the daemon and the gadgets besides messages:
   compositor doesn't force the pointer onto exclusive layers), a dummy
   layer surface + their `overlap-notify` protocol to keep clear of the
   panel. Popups in the applets are xdg popups with the grab, as ours.
-- `button.style(impl Fn(&Theme, Status) -> Style + 'a)` /
-  `container.style(Fn(&Theme) -> Style + 'a)`: the closures can own data
-  with the view's lifetime, which is what lets them hold a `theme::Node`
-  and a `&'a Theme`. `button::Style::text_color` is a plain `Color`
-  (falls back to `theme.palette().text`); `container::Style::text_color`
-  and `text::Style::color` are `Option`s and `None` inherits at draw time.
-- `iced::font::Family::Name` wants a `&'static str`: theme font names are
-  leaked once each (`ui/theme/fonts.rs`, `intern`). Fonts come from the system via
-  cosmic-text's fontdb (`FontSystem::new_with_fonts` loads system fonts);
-  `Font::with_name("JetBrainsMono NF")` works for an installed font. A
-  `Font` is one family, so a CSS `font-family` list is resolved at theme
-  load to the first installed name, asking
-  `iced::advanced::graphics::text::font_system()` (`.raw().db().faces()`).
-  `text` defaults to `Shaping::Basic`, which does **no per-glyph font
-  fallback** (an icon font as the family shows boxes for digits);
-  `Theme::text` sets `Shaping::Advanced`.
+- Fonts come from the system via cosmic-text's fontdb, the one
+  `iced::advanced::graphics::text::font_system()` holds, and the
+  toolkit resolves a `font-family` list there. The embedded Noto Sans
+  Display goes into it first thing in `main` (`ui::theme::load_fonts`), not as
+  iced's `.font(..)`: the toolkit measures surfaces before the first
+  window, and iced loads its fonts with its compositor.
 - `daemon(..).style(|state, theme| iced::theme::Style)` is one background
   for every window (no window id); per-surface looks are done by the
   view's root container over a transparent background.
-- `Padding::horizontal(x)`/`vertical(y)` are *setters* in iced 0.14, not
-  the sums (`left + right`).
 - iced image caches (`iced_wgpu/src/image/{vector,raster}.rs`):
   `svg::Handle::from_path` id is the path hash (stable), the file is read
   and parsed with usvg on the render thread at first draw, rasters are
@@ -1367,15 +1343,16 @@ Two things flow between the daemon and the gadgets besides messages:
   `All` or be followed by `Redraw` of that surface: the scenarios read
   the widget tree, which is always fresh, so a stale frame only shows
   on screen (`tests/ui/scenarios/redraw.sh` compares screenshots).
-- iced 0.14's widgets keep their status (hovered, pressed, ...) in the
-  widget itself (`button.rs`: `status: Option<Status>`), so it's lost
-  with every rebuild and set again only on a `RedrawRequested`; while
-  it's `None` a hover change asks no frame. A surface rebuilt (every
-  message, above) but not drawn ignores the pointer until its next
-  frame, and entering a surface gives `CursorEntered` with no
+- iced 0.14's stock widgets keep their status (hovered, pressed, ...)
+  in the widget itself (`button.rs`: `status: Option<Status>`), so it's
+  lost with every rebuild and set again only on a `RedrawRequested`;
+  while it's `None` a hover change asks no frame. A surface rebuilt
+  (every message, above) but not drawn ignored the pointer until its
+  next frame, and entering a surface gives `CursorEntered` with no
   `CursorMoved`: the hover showed up to a second late. Hence the
   pointer's own events (`Cursor`, `PointerCrossed`) redraw the surface
-  they happen on. Over an empty desktop that surface was the wallpaper:
+  they happen on (the toolkit's widgets keep their states in the tree
+  and ask their own frames, but the redraw stays: cheap, one surface). Over an empty desktop that surface was the wallpaper:
   a frame of it, and a rebuild of everything, per pointer motion (64%
   CPU in a debug build on gles2, 460% on pixman). The wallpapers are
   `events_transparent` (an empty input region), so the pointer there
@@ -1407,11 +1384,11 @@ Two things flow between the daemon and the gadgets besides messages:
   RelativeOffset { y: i / (n-1) })` to keep item `i` of `n` in view:
   it needs no row height but scrolls on every arrow, from the very
   first. Now it keeps the row in view the way a list should: on
-  Up/Down it asks the widget tree (`ui::bounds`, the popups'
-  anchor operation) for the selected row and the list container
-  (`Theme::tag`), both in layout coordinates (unscrolled), so `row.y -
-  list.y` is the row's offset in the content; with the current offset
-  from `scrollable::on_scroll` it scrolls (`scroll_to`, absolute) only
+  Up/Down it asks the widget tree for the selected row's box
+  (`ui::bounds`, the popups' anchor operation) and the scroll's viewport
+  (`ui::scroll_bounds`), both in layout coordinates (unscrolled), so
+  `row.y - list.y` is the row's offset in the content; with the current
+  offset from the scroll's `on_scroll` it scrolls (`scroll_to`, absolute) only
   when the row is above or below the viewport, by the least amount;
   the row located is the one *past* the selection in the direction of
   travel, so the next candidate is already visible before it's picked.
@@ -1462,25 +1439,16 @@ What users don't see in the README's checklist but a change may run
 into: screenshots from the gadget's menu wait a fixed 150 ms for the
 menu to leave the screen (no frame callback to wait on); the picker
 holds every output twice (the RGBA shots, the image handles' copies);
-`:hover` only on buttons (iced containers have no hover state; needs a
-`mouse_area` wrapper: the system monitor's table rows, the
-notification popup rows), iced's default scrollbar (not themed), the
-panel height from the theme's `min-height` rather than from the
-content, `columns` of the exit menu from the config rather than the
-theme, the PAM conversation refusing visible prompts (no second prompt
+`columns` of the exit menu from the config rather than the theme, the PAM conversation refusing visible prompts (no second prompt
 such as a one-time code), the GPU readers (amdgpu, nvidia) never run
 on a machine that has one (this one is Intel).
 
-Text is centred on its line box (ascent + descent), as CSS and GTK do,
-not on its letters: with a font whose ascent leaves room for accents
-above the capitals and a short descent, the text sits low next to an
-icon centred in the same box. Noto Sans Display (ascent 1069, descent
-293, cap height 714, x-height 536 per 1000) at 15px in the 28px bar:
-the capitals about 1px under the icons' centre (0.46px, plus the
-baseline rounded from 19.8 to 20), the lowercase about 2px. CSS's
-answer is `text-box: trim-both cap alphabetic` (the line box cut to
-the capitals' top and the baseline): the font's metrics, from iced's
-font system, and a shift of the text by the difference. Not done.
+Text is centred on its letters, not on its line box (the toolkit's
+`text-box: trim-both cap alphabetic` on every element): a label's box
+runs from its capitals' top to its baseline, so it sits centred next
+to an icon. Lines of text stacked in a column touch unless a `gap`
+parts them: base.css's gaps between them are the old line boxes'
+leading.
 
 ## Verified where
 

@@ -1,17 +1,16 @@
 //! A popup: a gadget's content hanging off its widget on a bar, on an
 //! xdg popup surface child of the bar's. Centred on the widget, on the
-//! side away from the screen edge; the surface is the content plus the
-//! `popup` root's padding and border plus the room for its shadow, and
-//! the box, not the surface, meets the widget. The panel that owns the
-//! popups places them with these; a click on our surfaces outside them
-//! closes them ([`presses_outside`]).
+//! side away from the screen edge; the surface is the `popup` root's
+//! box plus the room for its shadow (`icssed::surface`), and the box,
+//! not the surface, meets the widget. The panel that owns the popups
+//! places them with these; a click on our surfaces outside them closes
+//! them ([`presses_outside`]).
 
 use iced::window;
-use iced::{Element, Length, Padding, Rectangle, Subscription};
+use iced::{Padding, Rectangle, Subscription};
 use iced_exwlshell::actions::IcedNewPopupSettings;
 use iced_exwlshell::reexport::{PixelSize, PopupAnchor, PopupGravity};
-
-use crate::ui::theme::{Node, Theme};
+use icssed::{Element, Node, Surface};
 
 /// The side of its widget a popup hangs on: below a top bar's, above a
 /// bottom bar's.
@@ -21,30 +20,25 @@ pub enum Side {
     Above,
 }
 
-/// The surface size for content of size `content`: plus the `popup`
-/// root's padding and border, plus the room for its shadow.
-pub fn surface_size(theme: &Theme, content: (u32, u32)) -> (u32, u32) {
-    let inset = theme.resolve(&Node::root("popup")).inset();
-    let room = room(theme);
-    (
-        content.0 + (inset.left + inset.right + room.left + room.right) as u32,
-        content.1 + (inset.top + inset.bottom + room.top + room.bottom) as u32,
-    )
+/// The room around a popup's box (root `root`) for its shadow.
+pub fn room(root: Node<'_>) -> Padding {
+    padding(Surface::<()>::room(root))
 }
 
-/// The room around a popup's box for its shadow.
-pub fn room(theme: &Theme) -> Padding {
-    theme.shadow_room(&Node::root("popup"))
+/// The toolkit's sides as iced's padding.
+pub fn padding(sides: icssed::style::Sides) -> Padding {
+    Padding {
+        top: sides.top,
+        right: sides.right,
+        bottom: sides.bottom,
+        left: sides.left,
+    }
 }
 
-/// A popup surface's content: a gadget's popup `content` inside the
-/// `root` box (`popup[output=..]`), inset by its shadow's room.
-pub fn view<'a, M: 'a>(theme: &Theme, root: &Node, content: Element<'a, M>) -> Element<'a, M> {
-    let content = theme
-        .container(root, content)
-        .width(Length::Fill)
-        .height(Length::Fill);
-    theme.surface(root, content).into()
+/// A popup surface's content: a gadget's popup `content` in the box of
+/// root `root` (`popup[output=..]`), with its shadow's room around.
+pub fn view<'a, M: Clone + 'a>(root: Node<'a>, content: Element<'a, M>) -> Element<'a, M> {
+    icssed::surface(root, icssed::column(root, [content])).into()
 }
 
 /// Placement of a popup of surface size `size` hanging off a widget

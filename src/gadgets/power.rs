@@ -10,9 +10,9 @@
 //! Holds no power state: it comes from `ctx.power` and `ctx.idle`;
 //! what the user does goes back as `Action::Power` / `Action::Idle`.
 
-use iced::widget::{Space, column, mouse_area, row, text};
-use iced::{Alignment, Element, Length};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::{Element, Node};
 
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
@@ -22,14 +22,6 @@ use crate::services::power::{
     Battery, Command, ICON_BATTERY, PowerConfig, State, Warning, duration, profile_icon,
     profile_label,
 };
-use crate::ui::theme::{self, Node};
-
-/// Icon size when the theme doesn't set `height` on an `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
-/// Popup width when the theme doesn't size `list`.
-const DEFAULT_LIST_WIDTH: f32 = 320.0;
-
-/// When UPower names no icon.
 
 pub struct PowerGadget {
     config: PowerConfig,
@@ -45,10 +37,6 @@ pub enum Message {
     SetProfile(String),
     RunSettings,
 }
-
-/// A themed part of the popup and its height, built together so the
-/// popup's size and its content can't disagree.
-type Block<'a> = (Element<'a, Message>, f32);
 
 impl Gadget for PowerGadget {
     type Config = PowerConfig;
@@ -87,7 +75,6 @@ impl Gadget for PowerGadget {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         let battery = ctx.power.battery().filter(|_| self.config.show_battery);
         let profile = ctx
@@ -111,36 +98,20 @@ impl Gadget for PowerGadget {
             }
             let mut content: Vec<Element<'a, Message>> = Vec::new();
             if let Some(b) = battery {
-                content.push(icon(
-                    &ctx,
-                    &button.child("icon").class("battery"),
-                    b.icon_name(),
-                ));
+                content.push(ctx.icon(button.child("icon").class("battery"), b.icon_name()));
                 if self.config.show_percent {
-                    let t = button.child("text");
-                    content.push(
-                        theme
-                            .container(&t, theme.text(&t, format!("{:.0}%", b.percentage)))
-                            .into(),
-                    );
+                    let percent = format!("{:.0}%", b.percentage);
+                    content.push(icssed::text(button.child("label"), percent).into());
                 }
             }
             if let Some(p) = profile {
-                content.push(icon(
-                    &ctx,
-                    &button.child("icon").class("profile"),
-                    &profile_icon(p),
-                ));
+                content.push(ctx.icon(button.child("icon").class("profile"), profile_icon(p)));
             }
-            let content = row(content)
-                .spacing(theme.resolve(&button).gap)
-                .align_y(Alignment::Center);
             parts.push(
-                self.popup.anchor(
-                    theme
-                        .button(&button, content)
-                        .on_press(Message::TogglePopup),
-                ),
+                icssed::button(button, content)
+                    .on_press(Message::TogglePopup)
+                    .id(self.popup.anchor())
+                    .into(),
             );
         }
         if self.config.show_idle {
@@ -157,14 +128,12 @@ impl Gadget for PowerGadget {
                 &self.config.idle_icon
             };
             parts.push(
-                theme
-                    .button(&button, icon(&ctx, &button.child("icon"), name))
+                icssed::button(button, [ctx.icon(button.child("icon"), name.as_str())])
                     .on_press(Message::ToggleIdle)
                     .into(),
             );
         }
-        let gap = theme.resolve(&ctx.node).gap;
-        mouse_area(row(parts).spacing(gap).align_y(Alignment::Center))
+        mouse_area(icssed::row(ctx.node, parts))
             .on_middle_press(Message::ToggleIdle)
             .on_right_press(Message::RunSettings)
             .into()
@@ -176,21 +145,7 @@ impl Gadget for PowerGadget {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let list = ctx.node.child("list");
-        let rows: Vec<Element<'a, Message>> = self.rows(&ctx).into_iter().map(|(e, _)| e).collect();
-        ctx.theme.column(&list, rows).width(Length::Fill).into()
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let list = ctx.node.child("list");
-        let s = ctx.theme.resolve(&list);
-        let rows = self.rows(&ctx);
-        let height = rows.iter().map(|(_, h)| h).sum::<f32>()
-            + s.gap * rows.len().saturating_sub(1) as f32
-            + s.inset().y();
-        (
-            list_width(&ctx).ceil().max(1.0) as u32,
-            height.ceil().max(1.0) as u32,
-        )
+        icssed::column(list, self.rows(ctx, list)).into()
     }
 }
 
@@ -226,51 +181,12 @@ fn battery_status(locale: &Locale, b: &Battery) -> String {
     }
 }
 
-fn px(l: Option<theme::Length>) -> Option<f32> {
-    match l {
-        Some(theme::Length::Px(px)) => Some(px),
-        _ => None,
-    }
-}
-
-fn padded(theme: &theme::Theme, node: &Node, content: f32) -> f32 {
-    let s = theme.resolve(node);
-    content + s.inset().y()
-}
-
-fn icon_size(ctx: &Context<'_>, node: &Node) -> f32 {
-    let style = ctx.theme.resolve(node);
-    px(style.height.or(style.width)).unwrap_or(DEFAULT_ICON_SIZE)
-}
-
-/// A themed icon by name, at the node's `height` (its `width` if
-/// there's no height), or a blank of that size.
-fn icon<'a>(ctx: &Context<'a>, node: &Node, name: &str) -> Element<'a, Message> {
-    let style = ctx.theme.resolve(node);
-    let size = icon_size(ctx, node);
-    let icon = match ctx.icons.get_name(name, None) {
-        Some(icon) => icon.view(size, style.color),
-        None => Space::new().width(size).height(size).into(),
-    };
-    ctx.theme.container(node, icon).into()
-}
-
-/// A text line's height in `node`, its padding included.
-fn line(ctx: &Context<'_>, node: &Node) -> f32 {
-    padded(ctx.theme, node, ctx.theme.line_height(node))
-}
-
-fn list_width(ctx: &Context<'_>) -> f32 {
-    px(ctx.theme.resolve(&ctx.node.child("list")).width).unwrap_or(DEFAULT_LIST_WIDTH)
-}
-
 impl PowerGadget {
-    /// Every part of the popup with its height.
-    fn rows<'a>(&'a self, ctx: &Context<'a>) -> Vec<Block<'a>> {
-        let list = ctx.node.child("list");
+    /// Every part of the popup.
+    fn rows<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Vec<Element<'a, Message>> {
         let mut rows = Vec::new();
         if let Some(b) = ctx.power.battery() {
-            rows.push(self.battery(ctx, &list, b));
+            rows.push(battery(ctx, list, b));
             let mut lines = Vec::new();
             if b.energy_rate > 0.0 && b.state != State::Full {
                 lines.push(ctx.locale.fmt(
@@ -282,11 +198,15 @@ impl PowerGadget {
                 lines.push(ctx.locale.fmt("power.health", &[("n", &format!("{c:.0}"))]));
             }
             if !lines.is_empty() {
-                rows.push(self.details(ctx, &list, lines));
+                let details = list.child("details");
+                let lines = lines
+                    .into_iter()
+                    .map(|l| icssed::text(details.child("line"), l).into());
+                rows.push(icssed::column(details, lines).into());
             }
         }
         if !ctx.power.devices().is_empty() {
-            rows.push(self.header(ctx, &list, "devices", ctx.locale.tr("power.devices")));
+            rows.push(header(list, "devices", ctx.locale.tr("power.devices")));
             for d in ctx.power.devices() {
                 let name = if d.model.is_empty() {
                     ctx.locale.tr("power.device").to_owned()
@@ -298,279 +218,131 @@ impl PowerGadget {
                 } else {
                     &d.icon
                 };
-                rows.push(self.device(ctx, &list, icon_name, name, d.percentage));
+                let node = list.child("device");
+                rows.push(
+                    icssed::row(
+                        node,
+                        [
+                            ctx.icon(node.child("icon"), icon_name),
+                            icssed::text(node.child("name"), name).into(),
+                            icssed::text(node.child("percent"), format!("{:.0}%", d.percentage))
+                                .into(),
+                        ],
+                    )
+                    .into(),
+                );
             }
         }
         if let Some(p) = ctx.power.profiles() {
-            rows.push(self.header(ctx, &list, "profile", ctx.locale.tr("power.profile")));
-            rows.push(self.profiles(ctx, &list, &p.available, &p.active));
+            rows.push(header(list, "profile", ctx.locale.tr("power.profile")));
+            rows.push(profiles(ctx, list, &p.available, &p.active));
             if !p.degraded.is_empty() {
                 let reason = match p.degraded.as_str() {
                     "lap-detected" => ctx.locale.tr("power.degraded.lap"),
                     "high-operating-temperature" => ctx.locale.tr("power.degraded.heat"),
                     other => other,
                 };
-                rows.push(self.message(
-                    ctx,
-                    &list,
-                    ctx.locale.fmt("power.degraded", &[("reason", &reason)]),
-                ));
+                let text = ctx.locale.fmt("power.degraded", &[("reason", &reason)]);
+                rows.push(super::note(list.child("message"), text));
             }
         }
-        rows.push(self.idle(ctx, &list));
+        rows.push(self.idle(ctx, list));
         if ctx.idle.held_by_player() && !ctx.idle.inhibited() {
-            rows.push(self.message(ctx, &list, ctx.locale.tr("power.held_by_player").to_owned()));
+            let text = ctx.locale.tr("power.held_by_player");
+            rows.push(super::note(list.child("message"), text));
         }
         if !self.config.settings_command.is_empty() {
             let b = list.child("button").class("settings");
-            let t = b.child("text");
-            let label =
-                iced::widget::container(ctx.theme.text(&t, ctx.locale.tr("power.settings")))
-                    .width(Length::Fill)
-                    .align_x(Alignment::Center);
-            rows.push((
-                ctx.theme
-                    .button(&b, label)
-                    .on_press(Message::RunSettings)
-                    .width(Length::Fill)
-                    .into(),
-                padded(ctx.theme, &b, line(ctx, &t)),
-            ));
+            rows.push(
+                icssed::button(
+                    b,
+                    [icssed::text(b.child("label"), ctx.locale.tr("power.settings")).into()],
+                )
+                .on_press(Message::RunSettings)
+                .into(),
+            );
         }
         rows
     }
 
-    /// The battery: its icon, the percent, what it's doing.
-    fn battery<'a>(&'a self, ctx: &Context<'a>, list: &Node, b: &'a Battery) -> Block<'a> {
-        let theme = ctx.theme;
-        let node = list
-            .child("battery")
-            .class(b.state.name())
-            .class_if("low", b.warning == Warning::Low)
-            .class_if("critical", b.warning == Warning::Critical);
-        let i = node.child("icon");
-        let pct = node.child("percent");
-        let st = node.child("status");
-        let height = padded(theme, &i, icon_size(ctx, &i))
-            .max(line(ctx, &pct))
-            .max(line(ctx, &st));
-        let content = row![
-            icon(ctx, &i, b.icon_name()),
-            theme.container(&pct, theme.text(&pct, format!("{:.0}%", b.percentage))),
-            Space::new().width(Length::Fill),
-            theme.container(&st, theme.text(&st, battery_status(ctx.locale, b))),
-        ]
-        .spacing(theme.resolve(&node).gap)
-        .align_y(Alignment::Center);
-        (
-            theme.container(&node, content).width(Length::Fill).into(),
-            padded(theme, &node, height),
-        )
-    }
-
-    /// Facts, one line each.
-    fn details<'a>(&'a self, ctx: &Context<'a>, list: &Node, lines: Vec<String>) -> Block<'a> {
-        let theme = ctx.theme;
-        let details = list.child("details");
-        let l = details.child("line");
-        let s = theme.resolve(&details);
-        let n = lines.len();
-        let rows: Vec<Element<'a, Message>> = lines
-            .into_iter()
-            .map(|t| {
-                theme
-                    .container(&l, theme.text(&l, t).wrapping(text::Wrapping::None))
-                    .width(Length::Fill)
-                    .into()
-            })
-            .collect();
-        (
-            theme
-                .container(&details, column(rows).spacing(s.gap).width(Length::Fill))
-                .width(Length::Fill)
-                .into(),
-            padded(
-                theme,
-                &details,
-                line(ctx, &l) * n as f32 + s.gap * n.saturating_sub(1) as f32,
-            ),
-        )
-    }
-
-    /// A section title.
-    fn header<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
-        class: &'static str,
-        title: &'a str,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let header = list.child("header").class(class);
-        let t = header.child("title");
-        (
-            theme
-                .container(
-                    &header,
-                    theme
-                        .container(&t, theme.text(&t, title))
-                        .width(Length::Fill),
-                )
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &header, line(ctx, &t)),
-        )
-    }
-
-    /// A peripheral: its icon, its name, its charge.
-    fn device<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
-        icon_name: &str,
-        name: String,
-        percentage: f64,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let node = list.child("device");
-        let i = node.child("icon");
-        let n = node.child("name");
-        let pct = node.child("percent");
-        let height = padded(theme, &i, icon_size(ctx, &i))
-            .max(line(ctx, &n))
-            .max(line(ctx, &pct));
-        let content = row![
-            icon(ctx, &i, icon_name),
-            theme.container(&n, theme.text(&n, name).wrapping(text::Wrapping::None)),
-            Space::new().width(Length::Fill),
-            theme.container(&pct, theme.text(&pct, format!("{percentage:.0}%"))),
-        ]
-        .spacing(theme.resolve(&node).gap)
-        .align_y(Alignment::Center);
-        (
-            theme.container(&node, content).width(Length::Fill).into(),
-            padded(theme, &node, height),
-        )
-    }
-
-    /// The profile picker: a button per profile, the active one marked.
-    fn profiles<'a>(
-        &'a self,
-        ctx: &Context<'a>,
-        list: &Node,
-        available: &[String],
-        active: &str,
-    ) -> Block<'a> {
-        let theme = ctx.theme;
-        let node = list.child("profiles");
-        let mut height: f32 = 0.0;
-        // Known ones in their order, then whatever else the daemon has.
-        let ordered: Vec<&String> = PROFILES
-            .iter()
-            .filter_map(|p| available.iter().find(|a| a == p))
-            .chain(available.iter().filter(|a| !PROFILES.contains(&a.as_str())))
-            .collect();
-        let buttons: Vec<Element<'a, Message>> = ordered
-            .into_iter()
-            .map(|p| {
-                let b = node
-                    .child("button")
-                    .class(profile_class(p))
-                    .class_if("active", p == active);
-                let i = b.child("icon");
-                let t = b.child("text");
-                let gap = theme.resolve(&b).gap;
-                height = height.max(padded(
-                    theme,
-                    &b,
-                    padded(theme, &i, icon_size(ctx, &i)) + gap + line(ctx, &t),
-                ));
-                // The icon over the label: three side by side fit the
-                // popup's width.
-                let content = column![
-                    icon(ctx, &i, &profile_icon(p)),
-                    theme.container(
-                        &t,
-                        theme
-                            .text(&t, profile_label(ctx.locale, p))
-                            .wrapping(text::Wrapping::None)
-                    ),
-                ]
-                .spacing(gap)
-                .align_x(Alignment::Center);
-                theme
-                    .button(
-                        &b,
-                        iced::widget::container(content)
-                            .width(Length::Fill)
-                            .align_x(Alignment::Center),
-                    )
-                    .on_press(Message::SetProfile(p.clone()))
-                    .width(Length::Fill)
-                    .into()
-            })
-            .collect();
-        (
-            theme
-                .container(&node, row(buttons).spacing(theme.resolve(&node).gap))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &node, height),
-        )
-    }
-
     /// "Keep awake" and its toggle.
-    fn idle<'a>(&'a self, ctx: &Context<'a>, list: &Node) -> Block<'a> {
-        let theme = ctx.theme;
+    fn idle<'a>(&'a self, ctx: Context<'a>, list: Node<'a>) -> Element<'a, Message> {
         let inhibited = ctx.idle.inhibited();
         let node = list
             .child("idle")
             .class_if("inhibited", inhibited)
             .class_if("playing", ctx.idle.held_by_player());
-        let i = node.child("icon");
-        let t = node.child("title");
-        let toggle = node.child("toggle");
         let name = if inhibited {
             &self.config.inhibit_icon
         } else {
             &self.config.idle_icon
         };
-        let height = padded(theme, &i, icon_size(ctx, &i))
-            .max(line(ctx, &t))
-            .max(px(theme.resolve(&toggle).height).unwrap_or(16.0));
-        let content = row![
-            icon(ctx, &i, name),
-            theme
-                .container(&t, theme.text(&t, ctx.locale.tr("power.keep_awake")))
-                .width(Length::Fill),
-            theme.toggler(&toggle, inhibited, Message::SetIdle),
-        ]
-        .spacing(theme.resolve(&node).gap)
-        .align_y(Alignment::Center);
-        (
-            theme.container(&node, content).width(Length::Fill).into(),
-            padded(theme, &node, height),
+        icssed::row(
+            node,
+            [
+                ctx.icon(node.child("icon"), name.as_str()),
+                icssed::text(node.child("title"), ctx.locale.tr("power.keep_awake")).into(),
+                icssed::toggle(node.child("toggle"), inhibited, Message::SetIdle).into(),
+            ],
         )
+        .into()
     }
+}
 
-    /// A line of text: a hint, a warning.
-    fn message<'a>(&'a self, ctx: &Context<'a>, list: &Node, text: String) -> Block<'a> {
-        let theme = ctx.theme;
-        let m = list.child("message");
-        let s = theme.resolve(&m);
-        let width = list_width(ctx) - s.inset().x();
-        let height = theme
-            .measure_in(&m, &text, width)
-            .height
-            .max(theme.line_height(&m));
-        (
-            theme
-                .container(&m, theme.text(&m, text))
-                .width(Length::Fill)
-                .into(),
-            padded(theme, &m, height),
+/// The battery: its icon, the percent, what it's doing.
+fn battery<'a>(ctx: Context<'a>, list: Node<'a>, b: &'a Battery) -> Element<'a, Message> {
+    let node = list
+        .child("battery")
+        .class(b.state.name())
+        .class_if("low", b.warning == Warning::Low)
+        .class_if("critical", b.warning == Warning::Critical);
+    icssed::row(
+        node,
+        [
+            ctx.icon(node.child("icon"), b.icon_name()),
+            icssed::text(node.child("percent"), format!("{:.0}%", b.percentage)).into(),
+            icssed::text(node.child("status"), battery_status(ctx.locale, b)).into(),
+        ],
+    )
+    .into()
+}
+
+/// A section's title.
+fn header<'a>(list: Node<'a>, class: &str, title: &'a str) -> Element<'a, Message> {
+    let header = list.child("header").class(class);
+    icssed::row(header, [icssed::text(header.child("title"), title).into()]).into()
+}
+
+/// The profile picker: a button per profile, the active one marked, its
+/// icon over its name.
+fn profiles<'a>(
+    ctx: Context<'a>,
+    list: Node<'a>,
+    available: &[String],
+    active: &str,
+) -> Element<'a, Message> {
+    let node = list.child("profiles");
+    // Known ones in their order, then whatever else the daemon has.
+    let ordered = PROFILES
+        .iter()
+        .filter_map(|p| available.iter().find(|a| a == p))
+        .chain(available.iter().filter(|a| !PROFILES.contains(&a.as_str())));
+    let buttons = ordered.map(|p| {
+        let b = node
+            .child("button")
+            .class(profile_class(p))
+            .class_if("active", p == active);
+        icssed::button(
+            b,
+            [
+                ctx.icon(b.child("icon"), profile_icon(p)),
+                icssed::text(b.child("label"), profile_label(ctx.locale, p)).into(),
+            ],
         )
-    }
+        .on_press(Message::SetProfile(p.clone()))
+        .into()
+    });
+    icssed::row(node, buttons).into()
 }
 
 #[cfg(test)]

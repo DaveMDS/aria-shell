@@ -17,21 +17,21 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::AbsoluteOffset;
-use iced::widget::{Space, column, operation, scrollable};
-use iced::{Element, Event, Length, Padding, Rectangle, Subscription, Task, widget, window};
+use iced::widget::{operation, scrollable};
+use iced::{Event, Rectangle, Subscription, Task, widget, window};
+use icssed::{Element, Node};
 
-use crate::components::dialog;
 use crate::components::exiter::{self, ExiterConfig};
 use crate::config::{self, RawSection, Section};
 use crate::services::icons::Index;
 use crate::services::icons::desktop::{self, DesktopAction, DesktopEntry};
 use crate::shared::Shared;
 use crate::ui;
-use crate::ui::theme::{self, Node, Theme};
 
 /// `[launcher]` section.
 #[derive(Debug, Clone)]
@@ -161,10 +161,12 @@ pub struct Launcher {
     /// Index into [`Launcher::rows`].
     selected: usize,
     input: widget::Id,
+    /// The list's scroll.
     list: widget::Id,
+    /// Makes the rows' ids unique (the runtime searches every window).
+    serial: u64,
     /// How far the list is scrolled, from its `on_scroll`.
     offset: f32,
-    node: Node,
 }
 
 /// A row of the list: a result, or one of the expanded result's
@@ -204,13 +206,10 @@ pub enum Message {
     Exit(String),
     /// The list was scrolled (by the wheel, or by us).
     Scrolled(scrollable::Viewport),
-    /// Where a row and the list are, to keep the row in view. The
-    /// row's id is on the button's content, so its bounds leave out
-    /// the button's `padding`, given here.
+    /// Where a row and the list's viewport are, to keep the row in view.
     Located {
         item: Option<Rectangle>,
         list: Option<Rectangle>,
-        padding: Padding,
     },
     /// A press the dialog's content took (see `dialog::content`).
     Nothing,
@@ -224,21 +223,6 @@ pub enum Action {
 }
 
 impl Launcher {
-    /// The surface size: the theme's `launcher { width; height }`, plus
-    /// the room for its shadow.
-    pub fn size(theme: &Theme) -> (u32, u32) {
-        let root = Node::root("launcher");
-        let style = theme.resolve(&root);
-        let px = |l: Option<theme::Length>, default: f32| match l {
-            Some(theme::Length::Px(px)) => px.max(1.0) as u32,
-            _ => default as u32,
-        };
-        dialog::grown(
-            (px(style.width, 500.0), px(style.height, 400.0)),
-            theme.shadow_room(&root),
-        )
-    }
-
     pub fn new(
         config: LauncherConfig,
         exiter: ExiterConfig,
@@ -257,8 +241,11 @@ impl Launcher {
             selected: 0,
             input: widget::Id::unique(),
             list: widget::Id::unique(),
+            serial: {
+                static NEXT: AtomicU64 = AtomicU64::new(1);
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            },
             offset: 0.0,
-            node: Node::root("launcher"),
         };
         launcher.search();
         launcher
@@ -321,53 +308,37 @@ impl Launcher {
         self.selected = 0;
     }
 
-    /// The node of row `i` as `view` builds it: its path is the widget
-    /// id the theme helpers tag it with.
-    fn item_node(&self, i: usize, row: Row, count: usize) -> Node {
-        self.node
-            .child("list")
-            .child("item")
-            .class_if("action", matches!(row, Row::Action(..)))
-            .class_if("selected", i == self.selected)
-            .nth(i, count)
+    /// The id of row `i`'s box.
+    fn row_id(&self, i: usize) -> widget::Id {
+        widget::Id::from(format!("launcher-{}-row-{i}", self.serial))
     }
 
-    /// Ask the widget tree where row `i` and the list are;
+    /// Ask the widget tree where row `i` and the list's viewport are;
     /// [`Message::Located`] then scrolls only if the row is out of view.
     /// Called with the row *past* the selection in the direction of
     /// travel, so the next one is already visible before it's selected.
-    fn locate(&self, i: usize, theme: &Theme) -> Task<Message> {
+    fn locate(&self, i: usize) -> Task<Message> {
         let rows = self.rows();
         if rows.is_empty() {
             return Task::none();
         }
-        let i = i.min(rows.len() - 1);
-        let node = self.item_node(i, rows[i], rows.len());
-        let padding = theme.resolve(&node).inset();
-        let item = theme::widget_id(&node);
-        let list = theme::widget_id(&self.node.child("list"));
+        let item = self.row_id(i.min(rows.len() - 1));
+        let list = self.list.clone();
         ui::bounds(item).and_then(move |item| {
-            ui::bounds(list.clone()).map(move |list| Message::Located {
+            ui::scroll_bounds(list.clone()).map(move |list| Message::Located {
                 item: Some(item),
                 list,
-                padding,
             })
         })
     }
 
-    /// Scroll the least that brings the row (its content plus the
-    /// button's `padding`) into the list's viewport: the bounds are
-    /// layout coordinates (the row where it would be unscrolled), so
-    /// the row's place in the content is its offset from the list's
-    /// top.
-    fn keep_in_view(
-        &mut self,
-        item: Rectangle,
-        list: Rectangle,
-        padding: Padding,
-    ) -> Task<Message> {
-        let top = item.y - list.y - padding.top;
-        let bottom = top + item.height + padding.top + padding.bottom;
+    /// Scroll the least that brings the row into the list's viewport:
+    /// the bounds are layout coordinates (the row where it would be
+    /// unscrolled), so the row's place in the content is its offset
+    /// from the list's top.
+    fn keep_in_view(&mut self, item: Rectangle, list: Rectangle) -> Task<Message> {
+        let top = item.y - list.y;
+        let bottom = top + item.height;
         let y = if top < self.offset {
             top
         } else if bottom > self.offset + list.height {
@@ -420,7 +391,7 @@ impl Launcher {
         }
     }
 
-    pub fn update(&mut self, message: Message, theme: &Theme) -> Action {
+    pub fn update(&mut self, message: Message) -> Action {
         match message {
             Message::Query(q) => {
                 self.query = q;
@@ -436,25 +407,25 @@ impl Launcher {
             }
             Message::Up => {
                 self.selected = self.selected.saturating_sub(1);
-                Action::Run(self.locate(self.selected.saturating_sub(1), theme))
+                Action::Run(self.locate(self.selected.saturating_sub(1)))
             }
             Message::Down => {
                 if self.selected + 1 < self.rows().len() {
                     self.selected += 1;
                 }
-                Action::Run(self.locate(self.selected + 1, theme))
+                Action::Run(self.locate(self.selected + 1))
             }
             Message::Right => match self.selected_row() {
                 Some(Row::App(i)) if self.expanded != Some(i) => {
                     self.toggle(i);
-                    Action::Run(self.locate(self.selected + 1, theme))
+                    Action::Run(self.locate(self.selected + 1))
                 }
                 _ => Action::Run(Task::none()),
             },
             Message::Left => match self.selected_row() {
                 Some(Row::Action(i, _)) => {
                     self.toggle(i);
-                    Action::Run(self.locate(self.selected, theme))
+                    Action::Run(self.locate(self.selected))
                 }
                 Some(Row::App(i)) if self.expanded == Some(i) => {
                     self.toggle(i);
@@ -464,7 +435,7 @@ impl Launcher {
             },
             Message::Toggle(i) => {
                 self.toggle(i);
-                Action::Run(self.locate(self.selected + 1, theme))
+                Action::Run(self.locate(self.selected + 1))
             }
             Message::Scrolled(viewport) => {
                 self.offset = viewport.absolute_offset().y;
@@ -473,8 +444,7 @@ impl Launcher {
             Message::Located {
                 item: Some(item),
                 list: Some(list),
-                padding,
-            } => Action::Run(self.keep_in_view(item, list, padding)),
+            } => Action::Run(self.keep_in_view(item, list)),
             Message::Located { .. } => Action::Run(Task::none()),
             Message::Submit => {
                 if let Some(row) = self.selected_row() {
@@ -506,131 +476,98 @@ impl Launcher {
             .flat_map(|b| b.icons.iter().map(String::as_str))
     }
 
-    pub fn view<'a>(&'a self, shared: Shared<'a>) -> Element<'a, Message> {
-        let theme = shared.theme;
-        let input = theme
-            .text_input(
-                &self.node.child("input"),
+    /// Its dialog's box, `root`: the exit menu's buttons, the search
+    /// field, the results.
+    pub fn view<'a>(&'a self, shared: Shared<'a>, root: Node<'a>) -> Element<'a, Message> {
+        let icons: &'a dyn icssed::Icons = shared.icons;
+        let mut parts: Vec<Element<'a, Message>> = Vec::new();
+        let buttons: Vec<&exiter::Button> = self.actions().collect();
+        if !buttons.is_empty() {
+            let actions = root.child("actions");
+            let buttons = buttons.into_iter().map(|button| {
+                let b = actions.child("button").class(&button.name).class("flat");
+                let icon = match shared.icons.first_of(&button.icons) {
+                    Some(icon) => icssed::icon(b.child("icon"), icon.clone()),
+                    None => icssed::icon(b.child("icon"), (icons, "")),
+                };
+                icssed::button(b, [icon.into()])
+                    .on_press(Message::Exit(button.name.clone()))
+                    .into()
+            });
+            parts.push(icssed::row(actions, buttons).into());
+        }
+        parts.push(
+            icssed::input(
+                root.child("input"),
                 shared.locale.tr("launcher.search"),
                 &self.query,
             )
             .id(self.input.clone())
             .on_input(Message::Query)
             .on_submit(Message::Submit)
-            .width(Length::Fill);
-        let list_node = self.node.child("list");
+            .into(),
+        );
+        let scroll = root.child("scroll");
+        let list = scroll.child("list");
         let rows = self.rows();
         let count = rows.len();
         let items = rows.iter().enumerate().filter_map(|(i, &row)| {
             let entry = self.entry(row.result())?;
-            let node = self.item_node(i, row, count);
-            let icon_node = node.child("icon");
-            let style = theme.resolve(&icon_node);
-            let size = style.height.or(style.width).and_then(|l| match l {
-                theme::Length::Px(px) => Some(px),
-                _ => None,
-            });
-            let icon: Element<'a, Message> = match (shared.icons.get(&entry.id), size) {
-                (Some(icon), Some(size)) => icon.view(size, style.color),
-                (_, Some(size)) => Space::new().width(size).height(size).into(),
-                _ => Space::new().into(),
+            let node = list
+                .child_at("item", i, count)
+                .class_if("action", matches!(row, Row::Action(..)))
+                .class_if("selected", i == self.selected);
+            let icon = match shared.icons.get(&entry.id) {
+                Some(icon) => icssed::icon(node.child("icon"), icon.clone()),
+                None => icssed::icon(node.child("icon"), (icons, "")),
             };
             // An action row: its name under the entry's icon. An entry
             // with actions: a chevron at the end, a button of its own
             // (it takes the press before the row does).
-            let mut text = column![];
+            let texts = node.child("texts");
+            let mut lines: Vec<Element<'a, Message>> = Vec::new();
             let mut chevron: Option<Element<'a, Message>> = None;
             match row {
                 Row::Action(_, a) => {
                     let action = entry.actions.get(a)?;
-                    text = text.push(theme.text(&node.child("title"), &action.name));
+                    lines.push(icssed::text(texts.child("title"), action.name.as_str()).into());
                 }
                 Row::App(r) => {
-                    text = text.push(theme.text(&node.child("title"), &entry.name));
+                    lines.push(icssed::text(texts.child("title"), entry.name.as_str()).into());
                     if let Some(comment) = &entry.comment {
-                        text = text.push(theme.text(&node.child("subtitle"), comment));
+                        lines.push(icssed::text(texts.child("subtitle"), comment.as_str()).into());
                     }
                     if !entry.actions.is_empty() {
-                        let open = self.expanded == Some(r);
                         let c = node
                             .child("button")
                             .class("chevron")
                             .class("plain")
-                            .class_if("active", open);
-                        let glyph = theme.text(&c.child("text"), if open { "⌄" } else { "›" });
-                        chevron = Some(theme.button(&c, glyph).on_press(Message::Toggle(r)).into());
+                            .class_if("active", self.expanded == Some(r));
+                        chevron = Some(
+                            icssed::button(c, [icssed::mark(c.child("arrow"))])
+                                .on_press(Message::Toggle(r))
+                                .into(),
+                        );
                     }
                 }
             }
-            let mut parts: Vec<Element<'a, Message>> = vec![icon, text.width(Length::Fill).into()];
+            let mut parts: Vec<Element<'a, Message>> =
+                vec![icon.into(), icssed::column(texts, lines).into()];
             parts.extend(chevron);
-            // The button already pads with the node's `padding`; the
-            // row inside only spaces its parts.
-            let content = widget::row(parts)
-                .spacing(theme.resolve(&node).gap)
-                .align_y(iced::Alignment::Center)
-                .width(Length::Fill);
             Some(
-                theme
-                    .button(&node, content)
-                    .width(Length::Fill)
+                icssed::button(node, parts)
                     .on_press(Message::Activate(row))
+                    .id(self.row_id(i))
                     .into(),
             )
         });
-        // The list is tagged so `locate_selected` finds its viewport.
-        let list = theme
-            .tag(
-                &list_node,
-                scrollable(theme.column(&list_node, items).width(Length::Fill))
-                    .id(self.list.clone())
-                    .on_scroll(Message::Scrolled)
-                    .height(Length::Fill),
-            )
-            .height(Length::Fill);
-        // The exit menu's buttons as a row of icons, when there are any.
-        let actions_node = self.node.child("actions");
-        let mut actions: Vec<Element<'a, Message>> = Vec::new();
-        for button in self.actions() {
-            let b = actions_node
-                .child("button")
-                .class(button.name.clone())
-                .class("flat");
-            let icon_node = b.child("icon");
-            let style = theme.resolve(&icon_node);
-            let size = style.height.or(style.width).and_then(|l| match l {
-                theme::Length::Px(px) => Some(px),
-                _ => None,
-            });
-            let icon: Element<'a, Message> = match (shared.icons.first_of(&button.icons), size) {
-                (Some(icon), Some(size)) => icon.view(size, style.color),
-                (_, Some(size)) => Space::new().width(size).height(size).into(),
-                _ => Space::new().into(),
-            };
-            actions.push(
-                theme
-                    .button(&b, icon)
-                    .on_press(Message::Exit(button.name.clone()))
-                    .into(),
-            );
-        }
-        let mut content = column![];
-        if !actions.is_empty() {
-            content = content.push(
-                theme
-                    .row(&actions_node, actions)
-                    .align_y(iced::Alignment::Center),
-            );
-        }
-        // The daemon's root container already applies the `launcher`
-        // padding; only its `gap` is ours.
-        content
-            .push(input)
-            .push(list)
-            .spacing(theme.resolve(&self.node).gap)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        parts.push(
+            icssed::scroll(scroll, icssed::column(list, items))
+                .id(self.list.clone())
+                .on_scroll(Message::Scrolled)
+                .into(),
+        );
+        icssed::column(root, parts).into()
     }
 
     /// The keys the search field doesn't handle itself (Esc is one it
@@ -838,38 +775,37 @@ mod tests {
     fn actions_open_and_close_as_child_rows() {
         use Row::{Action, App};
         let mut l = tree_launcher();
-        let theme = Theme::default();
         assert_eq!(l.rows(), [App(0), App(1)], "Ant, Zed");
         assert_eq!(l.selected_row(), Some(App(0)));
         // Right on an entry without actions: nothing.
-        l.update(Message::Right, &theme);
+        l.update(Message::Right);
         assert_eq!((l.rows(), l.selected), ([App(0), App(1)].to_vec(), 0));
         // Right on Zed opens its actions and selects the first.
-        l.update(Message::Down, &theme);
-        l.update(Message::Right, &theme);
+        l.update(Message::Down);
+        l.update(Message::Right);
         assert_eq!(l.rows(), [App(0), App(1), Action(1, 0), Action(1, 1)]);
         assert_eq!(l.selected_row(), Some(Action(1, 0)));
         assert_eq!(l.expanded, Some(1));
-        l.update(Message::Down, &theme);
+        l.update(Message::Down);
         assert_eq!(l.selected_row(), Some(Action(1, 1)));
-        l.update(Message::Down, &theme);
+        l.update(Message::Down);
         assert_eq!(l.selected_row(), Some(Action(1, 1)), "last row stays");
         // Left from an action: back on Zed, closed.
-        l.update(Message::Left, &theme);
+        l.update(Message::Left);
         assert_eq!(
             (l.rows(), l.selected_row()),
             ([App(0), App(1)].to_vec(), Some(App(1)))
         );
         // The chevron toggles; Left on the open entry closes it too.
-        l.update(Message::Toggle(1), &theme);
+        l.update(Message::Toggle(1));
         assert_eq!(l.selected_row(), Some(Action(1, 0)));
-        l.update(Message::Up, &theme);
+        l.update(Message::Up);
         assert_eq!(l.selected_row(), Some(App(1)));
-        l.update(Message::Left, &theme);
+        l.update(Message::Left);
         assert_eq!(l.rows().len(), 2);
         // Typing closes and selects the first row.
-        l.update(Message::Toggle(1), &theme);
-        l.update(Message::Query("z".into()), &theme);
+        l.update(Message::Toggle(1));
+        l.update(Message::Query("z".into()));
         assert_eq!((l.rows(), l.selected), ([App(0)].to_vec(), 0));
         assert_eq!(l.expanded, None);
     }

@@ -8,9 +8,9 @@
 //! Holds no theme state: the current scheme and theme name come from
 //! `ctx.theme`; the list is rescanned when the menu opens.
 
-use iced::Element;
-use iced::widget::{Space, mouse_area};
+use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
+use icssed::Element;
 
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
@@ -36,9 +36,6 @@ impl Section for ThemesConfig {
         }
     }
 }
-
-/// Icon size when the theme doesn't set `height` on `icon`.
-const DEFAULT_ICON_SIZE: f32 = 16.0;
 
 /// Row ids: the two schemes, the base, then the themes by index.
 const ID_LIGHT: i32 = -1;
@@ -107,30 +104,20 @@ impl Gadget for Themes {
     }
 
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let theme = ctx.theme;
         let button = ctx.node.child("button");
-        let icon_node = button.child("icon");
-        let style = theme.resolve(&icon_node);
-        let size = style
-            .height
-            .or(style.width)
-            .and_then(|l| match l {
-                theme::Length::Px(px) => Some(px),
-                _ => None,
-            })
-            .unwrap_or(DEFAULT_ICON_SIZE);
-        let name = match theme.scheme() {
+        let name = match ctx.theme.scheme() {
             Scheme::Light => &self.config.light_icon,
             Scheme::Dark => &self.config.dark_icon,
         };
-        let icon: Element<'a, Message> = match ctx.icons.get_name(name, None) {
-            Some(icon) => icon.view(size, style.color),
-            None => Space::new().width(size).height(size).into(),
-        };
-        let button = theme.button(&button, icon).on_press(Message::Toggle);
-        mouse_area(self.popup.anchor(button))
-            .on_right_press(Message::OpenMenu)
-            .into()
+        let icons: &dyn icssed::Icons = ctx.icons;
+        let icon = icssed::icon(button.child("icon"), (icons, name.as_str()));
+        let button = mouse_area(
+            icssed::button(button, [icon.into()])
+                .on_press(Message::Toggle)
+                .id(self.popup.anchor()),
+        )
+        .on_right_press(Message::OpenMenu);
+        icssed::row(ctx.node, [button.into()]).into()
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {
@@ -142,21 +129,9 @@ impl Gadget for Themes {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let node = ctx.node.child("menu");
         self.menu
-            .view(ctx.theme, &node, self.items(ctx.theme, ctx.locale))
+            .view(ctx.node.child("menu"), self.items(ctx.theme, ctx.locale))
             .map(Message::Menu)
-    }
-
-    fn popup_size(&self, ctx: Context<'_>) -> (u32, u32) {
-        let node = ctx.node.child("menu");
-        let size = self
-            .menu
-            .size(ctx.theme, &node, &self.items(ctx.theme, ctx.locale));
-        (
-            size.width.ceil().max(1.0) as u32,
-            size.height.ceil().max(1.0) as u32,
-        )
     }
 }
 

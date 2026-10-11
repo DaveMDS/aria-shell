@@ -24,11 +24,12 @@
 use iced::event::Status;
 use iced::widget::{Space, mouse_area};
 use iced::window::Id;
-use iced::{Element, Event, Padding, Point, Rectangle, Size, Subscription};
+use iced::{Event, Point, Rectangle, Size, Subscription};
 use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::{OutputId, OutputInfo};
+use icssed::Element;
 
 use crate::ui::Surfaces;
 
@@ -187,14 +188,6 @@ impl Dialog {
             Size::new(w, h),
         )
     }
-}
-
-/// A surface's size: its box's, plus the room for the box's shadow.
-pub fn grown(size: (u32, u32), room: Padding) -> (u32, u32) {
-    (
-        size.0 + (room.left + room.right) as u32,
-        size.1 + (room.top + room.bottom) as u32,
-    )
 }
 
 /// The content of a grab surface: transparent, nothing takes a click

@@ -273,12 +273,15 @@ stage has its own timeout from the last input, on AC and on battery.
 ---
 
 ### 🎨 Theming
-The look comes from a CSS-like stylesheet: `assets/base.css` documents the
-element tree and the supported properties, a user theme (`[general] style`)
-is loaded on top, with light and dark colour schemes. Themes are found in
+The look comes from a CSS stylesheet, drawn by the shell's own toolkit
+(`icssed/`): `assets/base.css` documents the shell's element trees,
+`icssed/assets/base.css` the toolkit's widgets and the supported
+properties; a user theme (`[general] style`) is loaded on top, with
+light and dark colour schemes. Themes are found in
 `~/.config/aria-shell/themes/`, the XDG data dirs and `assets/themes/`.
 
-- ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`, `:nth-child`), variables, cascade
+- ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
+  `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ Hot reload while editing (a broken file keeps the running theme)
 - ✅ A font built into the binary (Noto Sans Display, its Latin part,
@@ -286,10 +289,16 @@ is loaded on top, with light and dark colour schemes. Themes are found in
   tabular digits, numbers don't shift as they change
 - ✅ Every part at once to compare them and take the theme's picture
   (`aria-shell showcase`: popups, launcher, exit menu, OSD, notifications, buttons)
-- ✅ CSS box model: the border takes room, a border per side (`border-bottom`, ...),
+- ✅ CSS box model: `margin`, the border takes room, a border per side (`border-bottom`, ...),
   boxes sharp on the pixel grid, `box-shadow: inset` (unblurred)
-- 🔲 `margin`, `opacity`, gradients, `@import`, `!important`, `@font-face`, transitions
-- 🔲 `:hover` on more than buttons, a themed scrollbar
+- ✅ A flexbox layout (`gap`, `align-items`, `justify-content`, `fill`, min/max sizes):
+  every surface as big as its content, the bar as thick as its gadgets
+- ✅ `:hover` on any element, a themed scrollbar
+- ✅ `transition`s, `@keyframes` animations, `opacity`, `transform` (translate, scale)
+- ✅ Background images and `border-image` (9-patch)
+- ✅ Text centred on its letters (`text-box`), as next to an icon it should be
+- ✅ Fractional scaling: every surface laid out and drawn at its output's scale (tried on Sway)
+- 🔲 Gradients, `@import`, `!important`, `@font-face`, `%` and `em`
 - 🔲 Remember the theme picked at runtime, follow and set the desktop's colour scheme
 - 🔲 Shader backgrounds for widgets (`background: shader("x.wgsl")`)
 - ✅ Smooth transparency on the surfaces (shadows, rounded corners, `rgba`

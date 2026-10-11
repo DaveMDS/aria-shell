@@ -25,30 +25,30 @@
  */
 
 /*
- * The palette: the toolkit's variables, with the shell's colours, and
- * `--warning`, the shell's own.
+ * The palette: the toolkit's own, the same values, here to be read
+ * beside the rules that use them.
  */
 :root.light {
-  --bg: #eff1f5;
-  --fg: #4c4f69;
-  --muted: #9ca0b0;
-  --accent: #1e66f5;
-  --on-accent: #eff1f5;
-  --border: #ccd0da;
-  --danger: #d20f39;
-  --warning: #df8e1d;
-  --accent-soft: rgba(30, 102, 245, 0.25);
+  --bg: #f4f4f5;
+  --fg: #1f1f23;
+  --muted: #6e6e78;
+  --accent: #3466d6;
+  --on-accent: #ffffff;
+  --border: #c9c9d0;
+  --danger: #c62f2f;
+  --warning: #b9770e;
+  --accent-soft: rgba(52, 102, 214, 0.25);
 }
 :root.dark {
-  --bg: #1e1e2e;
-  --fg: #cdd6f4;
-  --muted: #6c7086;
-  --accent: #89b4fa;
-  --on-accent: #1e1e2e;
-  --border: #45475a;
-  --danger: #f38ba8;
-  --warning: #f9e2af;
-  --accent-soft: rgba(137, 180, 250, 0.3);
+  --bg: #1e1e22;
+  --fg: #e4e4e8;
+  --muted: #8d8d97;
+  --accent: #7aa2f7;
+  --on-accent: #12141a;
+  --border: #3d3d45;
+  --danger: #f06262;
+  --warning: #e5b85c;
+  --accent-soft: rgba(122, 162, 247, 0.3);
 }
 
 /* Fonts: a scale of sizes, the base one on every root. */

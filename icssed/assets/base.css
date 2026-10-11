@@ -172,6 +172,7 @@
   --on-accent: #ffffff;
   --border: #c9c9d0;
   --danger: #c62f2f;
+  --warning: #b9770e;
   --accent-soft: rgba(52, 102, 214, 0.25);
 }
 :root.dark {
@@ -182,6 +183,7 @@
   --on-accent: #12141a;
   --border: #3d3d45;
   --danger: #f06262;
+  --warning: #e5b85c;
   --accent-soft: rgba(122, 162, 247, 0.3);
 }
 

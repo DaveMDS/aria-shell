@@ -110,7 +110,7 @@ button.peek.active > icon {
   color: var(--accent);
 }
 meter.warning > fill {
-  background: #e0a030;
+  background: var(--warning);
 }
 meter.gauge {
   width: 120px;

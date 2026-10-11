@@ -639,9 +639,9 @@ Two things flow between the daemon and the gadgets besides messages:
   scheme one); a theme that only sets `:root` looks the same in both.
   The sheet gives every root the scheme as a class, so `panel.dark { }`
   rules work without touching the nodes gadgets build. `aria.css`
-  carries both palettes (Catppuccin-like Latte / Mocha), as the
-  toolkit's variables (`--bg`, `--accent`, ...) plus the shell's own
-  (`--warning`), so a palette restyles the toolkit's widgets too.
+  repeats both of the toolkit's palettes (`--bg`, `--accent`,
+  `--warning`, ...), the same values, so a theme's palette restyles
+  the toolkit's widgets too.
   `debug theme` prints `style=<name|-> scheme=<..>`.
 - **Programs, not shells**: every command line in the config
   (`[Custom] command*`, `command_wheel_*`, `exec`) is a program and its

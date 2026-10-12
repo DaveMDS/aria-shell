@@ -69,30 +69,35 @@ fn events(paths: Vec<PathBuf>) -> impl Stream<Item = Changed> {
             to_watch.len()
         );
 
+        // Whether the event touched a watched path: the rest (a file
+        // opened in an icon directory, a neighbour of the config) is
+        // neither reported nor part of a burst.
         let touched = |event: &notify::Event, changed: &mut Vec<PathBuf>| {
             if !matches!(
                 event.kind,
                 EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
             ) {
-                return;
+                return false;
             }
+            let mut any = false;
             for p in &event.paths {
                 let hit = if files.contains(p) {
                     Some(p)
                 } else {
                     p.parent().and_then(|d| dirs.iter().find(|w| *w == d))
                 };
-                if let Some(hit) = hit
-                    && !changed.contains(hit)
-                {
-                    changed.push(hit.clone());
+                if let Some(hit) = hit {
+                    any = true;
+                    if !changed.contains(hit) {
+                        changed.push(hit.clone());
+                    }
                 }
             }
+            any
         };
         while let Some(event) = rx.next().await {
             let mut changed = Vec::new();
-            touched(&event, &mut changed);
-            if changed.is_empty() {
+            if !touched(&event, &mut changed) {
                 continue;
             }
             // Wait for the burst to go quiet.
@@ -100,8 +105,7 @@ fn events(paths: Vec<PathBuf>) -> impl Stream<Item = Changed> {
                 tokio::time::sleep(SETTLE).await;
                 let mut more = false;
                 while let Ok(event) = rx.try_recv() {
-                    touched(&event, &mut changed);
-                    more = true;
+                    more |= touched(&event, &mut changed);
                 }
                 if !more {
                     break;

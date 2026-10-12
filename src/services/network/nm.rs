@@ -596,7 +596,7 @@ pub async fn activate(
     profile: &str,
     device: &str,
     specific: &str,
-) -> zbus::Result<()> {
+) -> zbus::Result<String> {
     manager(conn)
         .await?
         .activate_connection(
@@ -605,7 +605,7 @@ pub async fn activate(
             &ObjectPath::try_from(specific)?,
         )
         .await
-        .map(|_| ())
+        .map(|active| active.to_string())
 }
 
 /// A new profile for `ap`, activated at once; the profile's path.

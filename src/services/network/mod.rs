@@ -321,6 +321,9 @@ struct Attempt {
     /// The profile `AddAndActivateConnection` created, to delete on a
     /// failure (a wrong password leaves no broken profile behind).
     added: Option<String>,
+    /// The active connection `ActivateConnection` made for it (a VPN):
+    /// its failure is the attempt's even before a snapshot shows it.
+    active: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -345,6 +348,11 @@ pub enum Event {
     Added {
         key: FailKey,
         path: String,
+    },
+    /// Our `ActivateConnection` returned its active connection.
+    Activating {
+        key: FailKey,
+        active: String,
     },
     /// A command was refused by NetworkManager.
     Refused {
@@ -562,10 +570,9 @@ impl Network {
                     .iter()
                     .find(|a| a.path == active)
                     .map(|a| a.uuid.clone());
-                let ours = match (&attempt.key, uuid) {
-                    (FailKey::Uuid(u), Some(active)) => *u == active && attempt.device.is_none(),
-                    _ => false,
-                };
+                let ours = attempt.device.is_none()
+                    && (attempt.active.as_deref() == Some(active.as_str())
+                        || matches!((&attempt.key, uuid), (FailKey::Uuid(u), Some(a)) if *u == a));
                 if !ours {
                     self.attempt = Some(attempt);
                     return (false, Task::none());
@@ -587,6 +594,14 @@ impl Network {
                     && a.key == key
                 {
                     a.added = Some(path);
+                }
+                (false, Task::none())
+            }
+            Event::Activating { key, active } => {
+                if let Some(a) = &mut self.attempt
+                    && a.key == key
+                {
+                    a.active = Some(active);
                 }
                 (false, Task::none())
             }
@@ -995,7 +1010,7 @@ impl Network {
                 })
             }
             Command::ConnectDevice { device } => {
-                logged(async move { nm::activate(&conn, "/", &device, "/").await })
+                logged(async move { nm::activate(&conn, "/", &device, "/").await.map(|_| ()) })
             }
             Command::Disconnect { device } => {
                 logged(async move { nm::disconnect(&conn, &device).await })
@@ -1014,9 +1029,9 @@ impl Network {
                 };
                 let key = FailKey::Uuid(uuid);
                 self.start(key.clone(), None);
-                attempted(key, async move {
-                    nm::activate(&conn, &profile, "/", "/").await?;
-                    Ok(None)
+                attempted(key.clone(), async move {
+                    let active = nm::activate(&conn, &profile, "/", "/").await?;
+                    Ok(Some(Event::Activating { key, active }))
                 })
             }
             Command::Deactivate { uuid } => {
@@ -1036,6 +1051,7 @@ impl Network {
             key,
             device,
             added: None,
+            active: None,
         });
     }
 }
@@ -1415,6 +1431,44 @@ mod tests {
             Some(&FailReason::NoSecrets)
         );
         assert!(!n.summary().vpn);
+    }
+
+    #[test]
+    fn vpn_failing_before_a_snapshot_shows_it() {
+        let mut n = running();
+        apply(
+            &mut n,
+            Snapshot {
+                profiles: vec![profile("Office", ProfileKind::Vpn, None)],
+                ..Snapshot::default()
+            },
+        );
+        let key = FailKey::Uuid("uuid-Office".into());
+        n.start(key.clone(), None);
+        let _ = n.apply(Event::Activating {
+            key: key.clone(),
+            active: "/active/7".into(),
+        });
+        // Another active connection isn't ours.
+        assert!(
+            !n.apply(Event::ActiveFailed {
+                active: "/active/8".into(),
+                reason: 9
+            })
+            .0
+        );
+        assert!(
+            n.apply(Event::ActiveFailed {
+                active: "/active/7".into(),
+                reason: 9
+            })
+            .0
+        );
+        assert!(!n.attempting(&key));
+        assert_eq!(
+            n.failure(&key).map(|f| &f.reason),
+            Some(&FailReason::NoSecrets)
+        );
     }
 
     #[test]

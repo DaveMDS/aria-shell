@@ -167,6 +167,9 @@ enum Message {
     Cursor(Id, Point),
     /// The pointer entered or left one of our surfaces.
     PointerCrossed(Id),
+    /// The keyboard came to one of our surfaces (`true`) or left it
+    /// (for `debug surfaces`).
+    KeyboardFocus(Id, bool),
     /// The widget tree answered `debug widgets`: every widget, with its
     /// node and its surface-local rectangle.
     Widgets(Reply, Option<String>, Vec<icssed::query::Found>),
@@ -205,7 +208,8 @@ impl Message {
             // unknown with every message and known again only when
             // drawn; until then a hover change asks no frame.
             Message::Cursor(id, _) | Message::PointerCrossed(id) => Scope::Window(*id),
-            Message::Compositor(_)
+            Message::KeyboardFocus(..)
+            | Message::Compositor(_)
             | Message::Tray(_)
             | Message::Scripts(_)
             | Message::SysMon(_)
@@ -268,6 +272,8 @@ struct AriaShell {
     picker: Option<Picker>,
     /// Last pointer position reported by one of our surfaces.
     cursor: Option<(Id, Point)>,
+    /// The surface the keyboard is on, when one of ours.
+    keyboard: Option<Id>,
     /// One layer surface per notification shown.
     toasts: Toasts,
     /// The OSD, and its surfaces while shown.
@@ -327,6 +333,7 @@ impl AriaShell {
             locker: None,
             picker: None,
             cursor: None,
+            keyboard: None,
             toasts: Toasts::default(),
             osd,
             showcase: None,
@@ -764,6 +771,16 @@ impl AriaShell {
             }
             Message::Cursor(window, position) => {
                 self.cursor = Some((window, position));
+                Task::none()
+            }
+            Message::KeyboardFocus(window, true) => {
+                self.keyboard = Some(window);
+                Task::none()
+            }
+            Message::KeyboardFocus(window, false) => {
+                if self.keyboard == Some(window) {
+                    self.keyboard = None;
+                }
                 Task::none()
             }
             Message::PopupAnchor {

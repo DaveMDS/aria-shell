@@ -182,18 +182,24 @@ impl AriaShell {
     }
 
     /// `debug surfaces`: `<kind> <output> <x>,<y> <w>x<h>` per surface,
-    /// `;`-separated (the protocol is one line per reply).
+    /// then `keyboard` on the one the keyboard is on, `;`-separated (the
+    /// protocol is one line per reply).
     fn describe_surfaces(&self) -> String {
         self.surfaces()
             .into_iter()
-            .map(|(_, kind, output, r)| {
+            .map(|(window, kind, output, r)| {
                 format!(
-                    "{kind} {} {},{} {}x{}",
+                    "{kind} {} {},{} {}x{}{}",
                     self.output_name(output),
                     r.x as i32,
                     r.y as i32,
                     r.width as i32,
-                    r.height as i32
+                    r.height as i32,
+                    if self.keyboard == Some(window) {
+                        " keyboard"
+                    } else {
+                        ""
+                    }
                 )
             })
             .collect::<Vec<_>>()

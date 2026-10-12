@@ -207,6 +207,12 @@ impl AriaShell {
                         iced::mouse::Event::CursorEntered | iced::mouse::Event::CursorLeft,
                     ) => Some(Message::PointerCrossed(window)),
                     Event::Keyboard(k) => Some(Message::PanelKey(window, k)),
+                    Event::Window(iced::window::Event::Focused) => {
+                        Some(Message::KeyboardFocus(window, true))
+                    }
+                    Event::Window(iced::window::Event::Unfocused) => {
+                        Some(Message::KeyboardFocus(window, false))
+                    }
                     _ => None,
                 }),
             ]

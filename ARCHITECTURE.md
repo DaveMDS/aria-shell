@@ -1207,7 +1207,9 @@ Two things flow between the daemon and the gadgets besides messages:
     client where it really is: another client's exclusive zone shifts
     a bar (noctalia's bar reserves 35px here, so our top bar sits at
     y=35 while `debug surfaces` says 0). Exact in a harness where only
-    the shell runs.
+    the shell runs. The surface the keyboard is on ends with `keyboard`
+    (iced's window Focused / Unfocused): what a scenario waits for
+    before typing in what it just opened.
   - `aria-shell debug cursor` → `panel HDMI-A-1 local 960,15 global
     960,15`: where the pointer was last seen over one of our surfaces
     (the daemon tracks `CursorMoved`). The driver knows where it put the

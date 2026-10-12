@@ -55,7 +55,7 @@ aria-shell volume up                # the default output's volume (--input: the 
 aria-shell screenshot               # the picker; `window`, `output [connector]`, `all` at once (--clipboard, --edit)
 aria-shell open terminal            # [general] terminal; `open file-manager [dir]`: [general] file_manager
 aria-shell wallpaper next           # every wallpaper folder's next image
-aria-shell debug surfaces           # where our surfaces are (global rects)
+aria-shell debug surfaces           # where our surfaces are (global rects), which has the keyboard
 aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
 aria-shell debug audio              # the mixer channels and the media players as the daemon sees them

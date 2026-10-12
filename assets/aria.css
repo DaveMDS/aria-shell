@@ -20,8 +20,8 @@
  *     the place for inherited defaults, `:root { font-family: ... }`
  *   - root elements carry the colour scheme as a class: `panel.dark { }`,
  *     `popup.light { }` (`[general] color_scheme`, or the Themes gadget)
- *   - a theme that only sets the palette's variables restyles all of
- *     it, the toolkit's widgets included
+ *   - a theme that only sets the palette's and the fonts' variables
+ *     restyles all of it, the toolkit's widgets included
  */
 
 /*
@@ -51,16 +51,16 @@
   --accent-soft: rgba(122, 162, 247, 0.3);
 }
 
-/* Fonts: a scale of sizes, the base one on every root. */
+/* Fonts: the toolkit's scale of sizes, ours; the base one on every root. */
 :root {
   --font-xs: 10px;
   --font-sm: 13px;
-  --font: 15px;
+  --font-md: 15px;
   --font-lg: 18px;
   --font-xl: 24px;
-  --font-xxl: 64px;
+  --font-xxl: 64px;  /* ours alone: the lock screen's clock */
   font-family: "Noto Sans Display";  /* embedded in the aria binary */
-  font-size: var(--font);
+  font-size: var(--font-md);
 }
 
 /*

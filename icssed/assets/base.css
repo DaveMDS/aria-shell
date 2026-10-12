@@ -164,6 +164,24 @@
  * whose (`lanes > track`).
  */
 
+/*
+ * Variables
+ * =========
+ *
+ * What a theme sets to restyle every widget: the palette, for a light
+ * and a dark scheme, and the scale of font sizes, `--font-md` the
+ * root's.
+ *
+ * --bg, --fg, --muted        the background, the text, a quieter text
+ * --border                   lines and boxes; a hovered row's background
+ * --accent, --on-accent      what's chosen or on, and the text over it
+ * --accent-soft              a light wash of the accent: a selection
+ * --danger, --warning
+ * --font-xs, --font-sm       small texts: a gauge's or a graph's label;
+ *                            a weekday, a tip
+ * --font-md                  the root's: every text, unless said
+ * --font-lg, --font-xl       larger ones, for an app's titles
+ */
 :root.light {
   --bg: #f4f4f5;
   --fg: #1f1f23;
@@ -192,9 +210,14 @@
 }
 
 :root {
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 14px;
+  --font-lg: 18px;
+  --font-xl: 24px;
   color: var(--fg);
   font-family: sans-serif;
-  font-size: 14px;
+  font-size: var(--font-md);
 }
 
 /*
@@ -524,7 +547,7 @@ meter > fill {
   background: var(--accent);
 }
 meter > label {
-  font-size: 11px;
+  font-size: var(--font-xs);
   white-space: nowrap;
 }
 
@@ -804,7 +827,7 @@ calendar day {
 }
 calendar weekday {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 calendar day {
   border-radius: 16px;
@@ -868,7 +891,7 @@ graph > grid {
   stroke-width: 1px;
 }
 graph > label {
-  font-size: 11px;
+  font-size: var(--font-xs);
   color: var(--muted);
 }
 
@@ -898,7 +921,7 @@ tooltip {
   border-radius: 4px;
   background: var(--fg);
   color: var(--bg);
-  font-size: 12px;
+  font-size: var(--font-sm);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   animation: tooltip-in 120ms ease-out;
 }

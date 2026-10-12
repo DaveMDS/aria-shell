@@ -1,5 +1,10 @@
 /*
  * demo#overview
+ * ├─ palette > color        a swatch of each colour of the palette
+ * │  ├─ swatch.<variable>   its background the variable's
+ * │  ╰─ name                --<variable>
+ * ├─ texts > label.<size>   the font sizes: font-xs, font-sm, ... font-xl
+ * ├─ texts > label.<style>  bold, muted, accent, danger, warning
  * ├─ line                   one per family of widgets, then their
  * │                         disabled states
  * │  ╰─ button[.flat|.primary|.danger|.peek], toggle[.check|.radio|.switch],
@@ -11,6 +16,51 @@
 demo#overview {
   gap: 16px;
 }
+
+/* The palette: these only show the variables, set by the theme. */
+demo#overview > palette {
+  gap: 12px;
+}
+demo#overview color {
+  gap: 6px;
+  align-items: center;
+}
+demo#overview swatch {
+  width: 56px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+demo#overview color > name {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+demo#overview swatch.bg { background: var(--bg); }
+demo#overview swatch.fg { background: var(--fg); }
+demo#overview swatch.muted { background: var(--muted); }
+demo#overview swatch.border { background: var(--border); }
+demo#overview swatch.accent { background: var(--accent); }
+demo#overview swatch.on-accent { background: var(--on-accent); }
+demo#overview swatch.accent-soft { background: var(--accent-soft); }
+demo#overview swatch.danger { background: var(--danger); }
+demo#overview swatch.warning { background: var(--warning); }
+
+/* The texts: each size and style as its variable says, on one baseline
+   (a text ends on its baseline). */
+demo#overview > texts {
+  gap: 20px;
+  align-items: end;
+}
+demo#overview label.font-xs { font-size: var(--font-xs); }
+demo#overview label.font-sm { font-size: var(--font-sm); }
+demo#overview label.font-md { font-size: var(--font-md); }
+demo#overview label.font-lg { font-size: var(--font-lg); }
+demo#overview label.font-xl { font-size: var(--font-xl); }
+demo#overview label.bold { font-weight: bold; }
+demo#overview label.muted { color: var(--muted); }
+demo#overview label.accent { color: var(--accent); }
+demo#overview label.danger { color: var(--danger); }
+demo#overview label.warning { color: var(--warning); }
 demo#overview > line,
 demo#overview > panels {
   gap: 12px;

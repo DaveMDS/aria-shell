@@ -3,7 +3,14 @@
 //! coherent. Nothing here is laid out by hand beyond rows and gaps; each
 //! widget's own demo, in the sidebar, says how it works.
 //!
-//! Each line shows a family, then two lines their disabled states:
+//! First what every widget is made of, the variables a theme sets:
+//!
+//! - the palette's colours, a swatch each;
+//! - the scale of font sizes, then texts in bold and in the palette's
+//!   colours.
+//!
+//! Then each line shows a family of widgets, then two lines their
+//! disabled states:
 //!
 //! - buttons: the base's classes, `.flat`, `.primary`, `.danger`, and
 //!   one with an icon alone and a tip;
@@ -20,6 +27,23 @@ use crate::Assets;
 use crate::calendar::{MONTHS, today};
 
 pub const TITLE: &str = "Overview";
+
+/// The palette's variables, as classes of the swatches.
+const PALETTE: [&str; 9] = [
+    "bg",
+    "fg",
+    "muted",
+    "border",
+    "accent",
+    "on-accent",
+    "accent-soft",
+    "danger",
+    "warning",
+];
+/// The scale of font sizes, as classes of the texts.
+const SIZES: [&str; 5] = ["font-xs", "font-sm", "font-md", "font-lg", "font-xl"];
+/// The styles of a text, as classes.
+const STYLES: [&str; 5] = ["bold", "muted", "accent", "danger", "warning"];
 
 const SORTS: [&str; 2] = ["By name", "By date"];
 const TABS: [&str; 3] = ["Overview", "Details", "Settings"];
@@ -109,6 +133,16 @@ pub fn update(state: &mut State, message: Message) {
 
 pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let star = || icon(assets.star.clone());
+    let palette = row(PALETTE.map(|variable| {
+        column![
+            row![].kind("swatch").class(variable),
+            text(format!("--{variable}")).kind("name"),
+        ]
+        .kind("color")
+        .into()
+    }));
+    let sizes = row(SIZES.map(|size| text(format!("--{size}")).class(size).into()));
+    let styles = row(STYLES.map(|style| text(style).class(style).into()));
     let buttons = row![
         button![star(), text("Default")].on_press(Message::Nothing),
         button![text("Flat")].class("flat").on_press(Message::Nothing),
@@ -241,6 +275,9 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     });
     let graph = icssed::graph(60).series(load).max(100.0).label("100%");
     column![
+        palette.kind("palette"),
+        sizes.kind("texts"),
+        styles.kind("texts"),
         buttons.kind("line"),
         toggles.kind("line"),
         values.kind("line"),

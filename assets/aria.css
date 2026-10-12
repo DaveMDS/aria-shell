@@ -582,6 +582,9 @@ panel > slot.center {
 panel > slot.end {
   justify-content: end;
 }
+panel icon {
+  height: 16px;
+}
 
 /*
  * Popups
@@ -624,6 +627,7 @@ gadget {
   gap: 2px;
 }
 gadget > button {
+  min-width: 32px;
   padding: 0 6px;
   gap: 4px;
   border: none;
@@ -716,15 +720,13 @@ gadget.clock > button > label {
  *    ├─ icon
  *    ╰─ label
  */
+gadget.workspaces > button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 gadget.workspaces > button.urgent {
   background: var(--danger);
   color: var(--on-accent);
-}
-gadget.workspaces window {
-  align-items: center;
-}
-gadget.workspaces window > icon {
-  height: 16px;
 }
 gadget.workspaces window > dot {
   font-size: var(--font-xs);
@@ -740,9 +742,6 @@ gadget.workspaces title {
   padding: 0 6px;
   gap: 6px;
   align-items: center;
-}
-gadget.workspaces title > icon {
-  height: 16px;
 }
 gadget.workspaces title > label {
   white-space: nowrap;

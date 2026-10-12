@@ -317,6 +317,29 @@ fn a_symbolic_icon_fades_with_its_colour_and_opacity() {
 }
 
 #[test]
+fn a_new_widget_asks_for_its_entry_animations_frames() {
+    // Its animation is known at its first draw, after the frame's
+    // `update`: that frame still asks for the next, and the next goes on.
+    let sheet = sheet(
+        "@keyframes enter { from { opacity: 0; } } \
+         box { width: 20px; height: 20px; animation: enter 200ms; }",
+    );
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::<Message>::new(
+        crate::row([crate::row([]).kind("box").into()]).at(root),
+        Size::new(20.0, 20.0),
+        1.0,
+    );
+    let start = Instant::now();
+    assert_eq!(ui.frame(start), RedrawRequest::NextFrame);
+    assert_eq!(ui.frame(at(start, 16)), RedrawRequest::NextFrame);
+    // Over (a frame more tells its end), it asks for nothing more.
+    ui.frame(at(start, 500));
+    ui.frame(at(start, 516));
+    assert_eq!(ui.frame(at(start, 532)), RedrawRequest::Wait);
+}
+
+#[test]
 fn an_idle_ui_asks_for_nothing() {
     let sheet = sheet(CSS);
     let root = sheet.root("root", 1.0);

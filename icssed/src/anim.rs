@@ -518,13 +518,15 @@ pub(crate) struct Animated {
 }
 
 impl Animated {
-    /// A widget's, for its `node`.
+    /// A widget's, for its `node`. New, it asks a frame more too: what it
+    /// starts (an entry animation) is known at its first draw only, after
+    /// the `update` that could ask for the next frame.
     pub fn new(node: Node) -> Self {
         Self {
             motion: Motion::default(),
             node: Some(node.key()),
             since: None,
-            pending: false,
+            pending: true,
         }
     }
 

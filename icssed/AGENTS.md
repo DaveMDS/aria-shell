@@ -428,7 +428,10 @@ assert_eq!(ui.messages, [..]);
 ```
 
 Frames come at the times you give, so a transition is sampled where it
-should be, and a tooltip's delay is a `frame(start + 700ms)`. The
+should be, and a tooltip's delay is a `frame(start + 700ms)`. They come
+whether asked or not, which a window doesn't do: assert what `frame`
+returns where an animation must go on (a tooltip's entry animation once
+stopped at its first frame in a window, its tests all passing). The
 messages don't come back into the view: rebuild with the new values
 yourself.
 

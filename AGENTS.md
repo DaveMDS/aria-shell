@@ -172,7 +172,10 @@ scenario's PATH), network shares through `tests/ui/bin/mount` and
 `umount` (on the scenario's own fstab and mountinfo:
 `ARIA_SHELL_FSTAB`, `ARIA_SHELL_MOUNTINFO`), the clipboard through `wl-paste`, so nothing
 depends on the desktop's compositor or bus. Results land in `target/ui/<scenario>/`
-(status, logs, screenshots). Needs `sway`, `grim`, `dbus-run-session`,
+(status, logs, screenshots). The scenarios run side by side (one per
+CPU, `-j N` otherwise): one that changes a file under the shell works
+on its own copy in `$ARIA_UI_OUT`, never in `tests/ui/config` or
+`tests/ui/data`, which the others are reading. Needs `sway`, `grim`, `dbus-run-session`,
 `wl-clipboard` and `python3` installed; no root. Add a scenario for every new interactive
 piece; run them before reporting a UI change as done.
 

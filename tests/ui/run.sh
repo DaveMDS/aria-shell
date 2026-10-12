@@ -4,6 +4,7 @@
 #
 #   tests/ui/run.sh              every scenario in tests/ui/scenarios/
 #   tests/ui/run.sh launcher     one of them
+#   tests/ui/run.sh -j 4 ...     four at a time (default: one per CPU)
 #
 # Each scenario gets its own Sway (two 1920x1080 outputs, see
 # sway.conf) on its own session bus (so the shell's tray sees the
@@ -16,9 +17,33 @@
 # `aria-inject` (tests/ui/inject: a virtual keyboard and pointer);
 # positions come from the shell's `debug` commands; tray items through
 # `aria-sni` (tests/ui/sni). See lib.sh for the vocabulary.
+#
+# Nothing is shared between two scenarios (the shell's socket is named
+# after the nested Sway's display), so they run side by side, each line
+# printed as its scenario ends.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
+
+# One scenario (`run.sh --one <name>`): what the run below starts, a few
+# at a time, in the environment it set up.
+if [ "${1:-}" = --one ]; then
+    scenario=$2
+    out=$root/target/ui/$scenario
+    rm -rf "$out" && mkdir -p "$out"
+    export ARIA_UI_OUT=$out ARIA_UI_SCENARIO=$here/scenarios/$scenario.sh
+    export XDG_STATE_HOME=$out/state
+    timeout 120 dbus-run-session -- sway -c "$here/sway.conf" > "$out/sway.log" 2>&1
+    status=$(cat "$out/status" 2>/dev/null || echo "the scenario didn't finish (see $out/sway.log)")
+    echo "$scenario: $status"
+    exit
+fi
+
+jobs=$(nproc)
+if [ "${1:-}" = -j ]; then
+    jobs=$2
+    shift 2
+fi
 
 for tool in sway swaymsg grim dbus-run-session wl-paste wl-copy python3; do
     command -v "$tool" > /dev/null || { echo "missing: $tool" >&2; exit 2; }
@@ -50,15 +75,10 @@ export XDG_DATA_HOME=$here/data
 export XDG_DATA_DIRS=${XDG_DATA_DIRS:-/usr/local/share:/usr/share}
 export ARIA_UI_ROOT=$root
 
-failed=0
+printf '%s\n' $scenarios | xargs -n 1 -P "$jobs" "$here/run.sh" --one
+
+failed=
 for scenario in $scenarios; do
-    out=$root/target/ui/$scenario
-    rm -rf "$out" && mkdir -p "$out"
-    export ARIA_UI_OUT=$out ARIA_UI_SCENARIO=$here/scenarios/$scenario.sh
-    export XDG_STATE_HOME=$out/state
-    timeout 120 dbus-run-session -- sway -c "$here/sway.conf" > "$out/sway.log" 2>&1
-    status=$(cat "$out/status" 2>/dev/null || echo "the scenario didn't finish (see $out/sway.log)")
-    echo "$scenario: $status"
-    [ "$status" = ok ] || failed=1
+    [ "$(cat "$root/target/ui/$scenario/status" 2> /dev/null)" = ok ] || failed="$failed $scenario"
 done
-exit $failed
+[ -z "$failed" ] || { echo "failed:$failed"; exit 1; }

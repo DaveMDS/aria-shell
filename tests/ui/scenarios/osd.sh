@@ -36,13 +36,17 @@ assert_eq "$(count_widgets 'osd.custom value')" 2 "the percent"
 settle 0.3
 shot_surface osd-custom osd
 
-# Another one while it shows: the same surfaces, the new content.
+# Another one while it shows: the same surfaces, the new content. 0.7 s
+# after it, the first one's second is over (the shot came 0.3 s after
+# it), the second one's isn't: counted from it, the asserts in between
+# take what they take.
 aria osd show --value 75
+second=$(date +%s%N)
 settle 0.2
 assert_eq "$(count_osd)" 2 "still one per output"
 assert_eq "$(count_widgets 'osd.custom label')" 0 "no text this time"
 assert_eq "$(count_widgets 'osd.custom meter')" 2
-sleep 0.6
+while [ $(($(date +%s%N) - second)) -lt 700000000 ]; do sleep 0.05; done
 assert_eq "$(count_osd)" 2 "the timer started again with the second"
 wait_osd 0 "gone after its duration"
 

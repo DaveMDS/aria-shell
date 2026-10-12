@@ -1,7 +1,13 @@
 # The wallpaper: one background surface per output, [wallpaper] on
 # HEADLESS-1 and [wallpaper:HEADLESS-2] on the other, the bar above it;
 # the images are two 16x16 gradients stretched (`fit = fill`), told
-# apart on the screenshot by eye and by the pixels sampled below.
+# apart on the screenshot by eye and by the pixels sampled below. On a
+# copy of the config: the scenario changes an image under the shell,
+# and the other scenarios run on the shared one meanwhile.
+
+config=$ARIA_UI_OUT/config
+cp -r "$XDG_CONFIG_HOME" "$config"
+restart_shell "$config"
 
 assert_eq "$(surfaces | tr ';' '\n' | grep -c '^ *wallpaper ')" 2 "one wallpaper per output"
 assert_contains "$(surfaces)" "wallpaper HEADLESS-1 0,0 1920x1080"
@@ -33,11 +39,8 @@ key Return; settle 0.8
 assert_no_surface locker
 
 # The file changing reloads it: b becomes a copy of a, the vertical
-# gradient on HEADLESS-2 turns horizontal (b.png is in the tree: put
-# back whatever happens; the scenario runs in its own subshell).
-walls=$XDG_CONFIG_HOME/aria-shell/wallpapers
-orig=$(mktemp); cp "$walls/b.png" "$orig"
-trap 'cp "$orig" "$walls/b.png"; rm -f "$orig"' EXIT
+# gradient on HEADLESS-2 turns horizontal.
+walls=$config/aria-shell/wallpapers
 cp "$walls/a.png" "$walls/b.png"
 assert_logged "b.png changed, reloading"
 settle 1

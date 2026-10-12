@@ -35,7 +35,6 @@ const ICON_VPN: &str = "network-vpn-symbolic";
 const ICON_SECURED: &str = "channel-secure-symbolic";
 const ICON_SCAN: &str = "view-refresh-symbolic";
 const ICON_PEEK: &str = "view-reveal-symbolic";
-const ICON_CONCEAL: &str = "view-conceal-symbolic";
 
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
@@ -212,7 +211,6 @@ impl Gadget for NetworkGadget {
             ICON_SECURED,
             ICON_SCAN,
             ICON_PEEK,
-            ICON_CONCEAL,
         ]
         .iter()
         .map(|s| (*s).to_owned())
@@ -601,7 +599,7 @@ impl NetworkGadget {
         let locale = ctx.locale;
         let eye = icssed::toggle(self.peek, |_| Message::Peek)
             .class("peek")
-            .icon(ctx.named(if self.peek { ICON_CONCEAL } else { ICON_PEEK }));
+            .icon(ctx.named(ICON_PEEK));
         let field = icssed::input(locale.tr("network.password"), &self.password)
             .disabled_if(busy)
             .id(self.input.clone())

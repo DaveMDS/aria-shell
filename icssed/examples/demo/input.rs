@@ -11,7 +11,7 @@
 //! - `.on_submit(m)` is sent on Enter.
 //! - `.secure(true)` hides the text: a password.
 //! - `.leading(e)` and `.trailing(e)` put the app's children before and
-//!   after the text: an icon, a button to peek at a password.
+//!   after the text: an icon, a toggle to peek at a password.
 //! - `.id(id)` names it for iced's focus operations: an app focuses it
 //!   when its surface opens.
 //!
@@ -20,7 +20,7 @@
 //! The text itself is `input > field`, with its `placeholder` and its
 //! `selection`: iced draws them, so their colours don't transition.
 
-use icssed::{Element, button, column, icon, input, row, text};
+use icssed::{Element, column, icon, input, row, text, toggle};
 
 use crate::Assets;
 
@@ -78,10 +78,9 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
                 .on_input(Message::Password)
                 .secure(!state.peek)
                 .trailing(
-                    button![icon(assets.eye.clone())]
+                    toggle(state.peek, |_| Message::Peek)
                         .class("peek")
-                        .class_if("active", state.peek)
-                        .on_press(Message::Peek),
+                        .icon(assets.eye.clone()),
                 ),
             input("Disabled", "")
                 .disabled_if(true)

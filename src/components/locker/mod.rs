@@ -67,9 +67,8 @@ impl Section for LockerConfig {
     }
 }
 
-/// The eye button's icons: show the password, hide it again.
+/// The eye's icon, on or off: its colour says which.
 const PEEK_ICON: &str = "view-reveal-symbolic";
-const CONCEAL_ICON: &str = "view-conceal-symbolic";
 
 pub struct Locker {
     config: LockerConfig,
@@ -186,13 +185,7 @@ impl Locker {
         (self.config.show_avatar && self.avatar.is_none())
             .then_some("avatar-default")
             .into_iter()
-            .chain(
-                self.config
-                    .password_prompt
-                    .then_some([PEEK_ICON, CONCEAL_ICON])
-                    .into_iter()
-                    .flatten(),
-            )
+            .chain(self.config.password_prompt.then_some(PEEK_ICON))
     }
 
     pub fn update(&mut self, message: Message) -> Action {
@@ -294,14 +287,12 @@ impl Locker {
         let mut fields: Vec<Element<'a, Message>> = Vec::new();
         if self.config.password_prompt {
             // The eye: the password in clear while it's on.
-            let name = if self.peek { CONCEAL_ICON } else { PEEK_ICON };
             let eye = icssed::toggle(self.peek, |_| Message::TogglePeek)
                 .class("peek")
-                .class("plain")
                 .disabled_if(busy);
             // Words, when the icon theme has no eye.
-            let eye = if shared.icons.get_name(name, None).is_some() {
-                eye.icon((icons, name))
+            let eye = if shared.icons.get_name(PEEK_ICON, None).is_some() {
+                eye.icon((icons, PEEK_ICON))
             } else {
                 eye.label(shared.locale.tr(if self.peek {
                     "locker.hide_password"

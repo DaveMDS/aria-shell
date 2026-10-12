@@ -556,7 +556,7 @@ meter > label {
  * ======
  *
  * A line of text to edit (`icssed::input`): iced's text input in a box, with
- * the app's children before and after it (an icon, a button to peek at
+ * the app's children before and after it (an icon, a toggle to peek at
  * a password). The box is `:focus` while its field has the focus (CSS's
  * `:focus-within`); a press on it puts the focus in the field. The
  * field takes the free room, its text centred on its letters as a
@@ -567,7 +567,8 @@ meter > label {
  * ├─ field             the text: its colour, its font
  * │  ├─ placeholder    its colour: the text shown while it's empty
  * │  ╰─ selection      its background: the selected text's
- * ╰─ …                 the app's: a button (.peek)
+ * ╰─ …                 the app's: a button, a toggle (.peek; .checked,
+ *                      in the accent: the text shows)
  */
 input {
   width: 200px;
@@ -592,17 +593,26 @@ input:disabled {
 input > icon {
   color: var(--muted);
 }
-input > button {
+input > button,
+input > toggle {
   padding: 2px;
   border: none;
   background: transparent;
   color: var(--muted);
 }
-input > button > icon {
+input > button > icon,
+input > toggle > icon {
   height: 16px;
 }
-input > button:hover {
-  background: var(--border);
+/* Hovered or on, only its colour: no box around it. */
+input > button:hover,
+input > toggle:hover {
+  background: transparent;
+  color: var(--fg);
+}
+input > toggle.checked {
+  background: transparent;
+  color: var(--accent);
 }
 input > field > placeholder {
   color: var(--muted);

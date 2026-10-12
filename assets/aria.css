@@ -63,62 +63,6 @@
   font-size: var(--font-md);
 }
 
-/*
- * Buttons
- * =======
- *
- * The toolkit's (`button`, `.flat`, `.primary`, `.danger`), and the
- * shell's variants, set as classes by the code:
- *
- * button[.plain]
- * ├─ icon
- * ╰─ label
- *
- * button.plain     just its colour: muted, the text's when hovered or .active;
- *                  a row's chevron (.active: open)
- */
-button > icon {
-  height: 16px;
-}
-button.plain {
-  padding: 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-}
-button.plain:hover,
-button.plain.active {
-  border-color: transparent;
-  background: transparent;
-  color: var(--fg);
-}
-
-/*
- * Toggles
- * =======
- *
- * The toolkit's (`toggle`, `.check`, `.radio`, `.switch`, `.checked`
- * while it's on: do-not-disturb, mute; the one chosen among a few: the
- * power profile as a pressed button, the default device as a radio),
- * and the shell's variant, set as a class by the code:
- *
- * toggle.plain     just its colour: muted, the text's when hovered or
- *                  .checked; a password's peek (.checked: shown)
- */
-toggle > icon {
-  height: 16px;
-}
-toggle.plain {
-  padding: 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-}
-toggle.plain:hover,
-toggle.plain.checked {
-  color: var(--fg);
-}
-
 /* Surfaces */
 
 /*
@@ -139,7 +83,7 @@ toggle.plain.checked {
  *          ├─ texts
  *          │  ├─ title                 the app's name (the action's, on .action)
  *          │  ╰─ subtitle              its description, when it has one
- *          ╰─ button.chevron.plain[.active] > arrow   › / ⌄ (.active: open)
+ *          ╰─ button.chevron.flat[.active] > arrow   › / ⌄ (.active: open)
  */
 launcher {
   width: 520px;
@@ -390,7 +334,7 @@ wallpaper {
  *    ├─ date
  *    ╰─ auth[.error][.busy]     the password block
  *       ├─ input                the toolkit's, the password (:focus)
- *       │  ╰─ toggle.peek.plain[.checked] > icon   the eye (.checked: the password shows);
+ *       │  ╰─ toggle.peek[.checked] > icon   the eye (.checked: the password shows);
  *       │                                 a `label`, show / hide, without one in the icon theme
  *       ├─ message              what PAM said, "Unlocking…"
  *       ╰─ button.primary > label   Unlock (:disabled while checking)
@@ -586,14 +530,11 @@ notification actions {
  *
  * `aria-shell showcase`: every part of the UI on one surface, each in
  * its own root as on its own surface (launcher, popup, ...); these are
- * the boxes around them, and the sample buttons' popup.
+ * the boxes around them.
  *
  * showcase                    the surface, the parts centred in it
  * ╰─ parts                    a row
  *    ╰─ column                parts, one under the other
- * popup#showcase > buttons    every kind of button and toggle, labelled by its selector
- * ├─ row > button ..., toggle ...
- * ╰─ tabs
  */
 showcase {
   width: fill;
@@ -606,15 +547,6 @@ showcase > parts,
 showcase > parts > column {
   gap: 24px;
   align-items: start;
-}
-popup#showcase > buttons {
-  padding: 12px;
-  gap: 8px;
-  align-items: start;
-}
-popup#showcase > buttons > row {
-  gap: 8px;
-  align-items: center;
 }
 
 /*
@@ -1575,14 +1507,14 @@ gadget.audio player > controls > button > icon {
  *       │  │  │  ├─ name
  *       │  │  │  ╰─ icon.badge                   the lock (.secured)
  *       │  │  ├─ status                          "Connected" / "Connecting…"
- *       │  │  ╰─ button.chevron.plain[.active] > arrow   ▾ / ▴ (.active: open)
+ *       │  │  ╰─ button.chevron.flat[.active] > arrow   ▾ / ▴ (.active: open)
  *       │  ├─ details > line                     addresses, gateway, DNS, band...
  *       │  ├─ actions
  *       │  │  ╰─ button.disconnect|.connect|.forget > label
  *       │  ├─ auth[.busy]                        the password
  *       │  │  ├─ input                           the toolkit's (:focus)
  *       │  │  │  ├─ field
- *       │  │  │  ╰─ toggle.peek.plain[.checked] > icon   the eye (.checked: shown)
+ *       │  │  │  ╰─ toggle.peek[.checked] > icon   the eye (.checked: shown)
  *       │  │  ╰─ button.connect > label          :disabled: nothing typed yet
  *       │  ╰─ message > label                    "Wrong password", the enterprise hint
  *       ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]

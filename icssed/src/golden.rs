@@ -475,11 +475,7 @@ fn golden_inputs() {
                 crate::input("Password", "secret")
                     .on_input(|_| ())
                     .secure(true)
-                    .trailing(
-                        crate::button![crate::icon(star())]
-                            .class("peek")
-                            .on_press(())
-                    ),
+                    .trailing(crate::toggle(false, |_| ()).class("peek").icon(star())),
                 crate::input("Disabled", "")
                     .disabled_if(true)
                     .on_input(|_| ()),

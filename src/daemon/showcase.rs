@@ -8,8 +8,7 @@
 //! side by side on one transparent layer surface over the focused
 //! output, between its bars: what shows through is the desktop, as on
 //! the real ones. Inert: what the parts would do is dropped, their
-//! hover still shows; only the sample plain buttons, radios and tabs
-//! follow a click. Escape, a click beside the parts or the command
+//! hover still shows. Escape, a click beside the parts or the command
 //! again close it; a theme change redraws it like any surface. Its own
 //! layout, the room around the parts and between them, is aria.css's
 //! (`showcase`).
@@ -21,14 +20,8 @@
 //! ├─ exiter
 //! ├─ osd.volume
 //! ├─ notification.normal | notification.critical
-//! ├─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
-//! │  ╰─ button > icon | label
-//! ╰─ popup#showcase > buttons               every kind of button, labelled by its selector
-//!    ├─ row > button[.flat|.primary|.danger][:disabled] > icon | label
-//!    ├─ row > button.plain[.active] > icon | label
-//!    ├─ row > toggle.radio[.checked] > radio, label
-//!    ├─ row > toggle[.check|.switch|.plain][.checked] > check | switch | icon, label
-//!    ╰─ tabs > tab[.active] > label
+//! ╰─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
+//!    ╰─ button > icon | label
 //! ```
 
 use iced::widget::mouse_area;
@@ -38,7 +31,7 @@ use iced_exwlshell::reexport::{
     Anchor, KeyboardInteractivity, Layer, LayerSize, NewLayerShellSettings, OutputOption,
 };
 use iced_wayland_subscriber::OutputId;
-use icssed::{Element, Tab};
+use icssed::Element;
 
 use crate::components::exiter::Exiter;
 use crate::components::launcher::Launcher;
@@ -60,34 +53,6 @@ const BAR_BUTTONS: &[(bool, Option<&str>)] = &[
     (false, Some("gadget > button")),
 ];
 
-/// The other buttons, in rows of [`BUTTONS_ROW`]: a class, whether it's
-/// enabled, and whether it has an icon, a text (its selector) or both.
-const BUTTONS: &[(Option<&str>, bool, bool, bool)] = &[
-    (None, true, false, true),
-    (None, true, true, true),
-    (None, true, true, false),
-    (Some("flat"), true, false, true),
-    (Some("flat"), true, true, true),
-    (Some("flat"), true, true, false),
-    (Some("primary"), true, false, true),
-    (Some("danger"), true, false, true),
-    (None, false, false, true),
-    (Some("primary"), false, false, true),
-    (Some("danger"), false, false, true),
-];
-const BUTTONS_ROW: usize = 3;
-
-/// The sample plain buttons, a click turns one on and off: whether it
-/// has an icon, a text (its selector) or both.
-const PLAINS: [(bool, bool); 3] = [(false, true), (true, true), (true, false)];
-
-/// How many sample radios and tabs: a click chooses one.
-const RADIOS: usize = 2;
-/// The sample toggles: the toolkit's three looks, and the shell's plain
-/// one.
-const TOGGLES: [&str; 4] = ["", "check", "switch", "plain"];
-const TABS: usize = 3;
-
 /// The icon the sample buttons draw.
 const BUTTON_ICON: &str = "dialog-information-symbolic";
 
@@ -102,12 +67,6 @@ pub(crate) struct Showcase {
     osd: osd::Content,
     /// A press landed beside the parts: the release closes.
     pressed_outside: bool,
-    /// The sample plain buttons that are on, the chosen sample radio,
-    /// the sample toggles that are on, the open sample tab.
-    plains: [bool; PLAINS.len()],
-    radio: usize,
-    toggles: [bool; TOGGLES.len()],
-    tab: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -119,12 +78,6 @@ pub(crate) enum Message {
     Released,
     /// Escape, on window `Id`.
     Escape(Id),
-    /// A sample plain button turned on or off, a sample radio chosen,
-    /// a sample toggle flipped, a sample tab opened.
-    Plain(usize),
-    Radio(usize),
-    Toggle(usize),
-    Tab(usize),
 }
 
 impl Showcase {
@@ -252,10 +205,6 @@ impl AriaShell {
                 outputs: None,
             },
             pressed_outside: false,
-            plains: [false, true, false],
-            radio: 0,
-            toggles: [true, true, false, false],
-            tab: 0,
         });
         self.resolve_icons();
         let settings = NewLayerShellSettings {
@@ -296,22 +245,6 @@ impl AriaShell {
         };
         match message {
             Message::Nothing => Task::none(),
-            Message::Plain(i) => {
-                showcase.plains[i] = !showcase.plains[i];
-                Task::none()
-            }
-            Message::Radio(i) => {
-                showcase.radio = i;
-                Task::none()
-            }
-            Message::Toggle(i) => {
-                showcase.toggles[i] = !showcase.toggles[i];
-                Task::none()
-            }
-            Message::Tab(i) => {
-                showcase.tab = i;
-                Task::none()
-            }
             Message::PressedOutside => {
                 showcase.pressed_outside = true;
                 Task::none()
@@ -364,10 +297,7 @@ impl AriaShell {
             column(popups.collect()),
             column(vec![launcher]),
             column([exiter, osd].into_iter().chain(toasts).collect()),
-            column(vec![
-                inert(self.bar_buttons_view(scale)),
-                inert(self.buttons_view(showcase, scale)),
-            ]),
+            column(vec![inert(self.bar_buttons_view(scale))]),
         ]
         .kind("parts");
         mouse_area(icssed::column![parts].at(theme.root("showcase", scale)))
@@ -388,114 +318,6 @@ impl AriaShell {
         icssed::row![icssed::row![gadget].kind("slot").class("start")]
             .at(self.theme.root("panel", scale))
             .into()
-    }
-
-    /// The other kinds of buttons, in a popup's box, each labelled by
-    /// the selector that styles it.
-    fn buttons_view<'a>(&'a self, showcase: &Showcase, scale: f32) -> Element<'a, Shell> {
-        // The rows of buttons, the plain ones', the radios', the
-        // toggles', the tabs.
-        let mut children: Vec<Element<'a, Shell>> = Vec::new();
-        for (k, chunk) in BUTTONS.chunks(BUTTONS_ROW).enumerate() {
-            // The plain ones after the flat ones.
-            if k == 2 {
-                children.push(icssed::row(self.plains_view(showcase)).into());
-            }
-            let buttons = chunk.iter().map(|&(class, enabled, icon, text)| {
-                let mut label = "button".to_owned();
-                if let Some(class) = class {
-                    label = format!("{label}.{class}");
-                }
-                if !enabled {
-                    label.push_str(":disabled");
-                }
-                let button = icssed::button(self.button_content(icon, text.then_some(label)))
-                    .disabled_if(!enabled);
-                let button = match class {
-                    Some(class) => button.class(class),
-                    None => button,
-                };
-                match enabled {
-                    true => button.on_press(nothing(())),
-                    false => button,
-                }
-                .into()
-            });
-            children.push(icssed::row(buttons).into());
-        }
-        let radios = (0..RADIOS).map(|i| {
-            let on = i == showcase.radio;
-            let label = match on {
-                true => "toggle.radio.checked",
-                false => "toggle.radio",
-            };
-            icssed::toggle(on, move |_| Shell::Showcase(Message::Radio(i)))
-                .radio()
-                .label(label)
-                .into()
-        });
-        children.push(icssed::row(radios).into());
-        children.push(icssed::row(self.toggles_view(showcase)).into());
-        let tabs = (0..TABS).map(|i| {
-            let active = i == showcase.tab;
-            let label = match active {
-                true => "tab.active",
-                false => "tab",
-            };
-            Tab::new(label, Shell::Showcase(Message::Tab(i))).active(active)
-        });
-        children.push(icssed::tabs(tabs).into());
-        let popup = self.theme.root("popup", scale).id("showcase");
-        popup::view(popup, icssed::column(children).kind("buttons"))
-    }
-
-    /// The sample toggles, each labelled by its selector.
-    fn toggles_view<'a>(&'a self, showcase: &Showcase) -> Vec<Element<'a, Shell>> {
-        let icons: &'a dyn icssed::Icons = &self.icons;
-        TOGGLES
-            .iter()
-            .enumerate()
-            .map(|(i, &look)| {
-                let on = showcase.toggles[i];
-                let mut label = match look {
-                    "" => "toggle".to_owned(),
-                    look => format!("toggle.{look}"),
-                };
-                if on {
-                    label.push_str(".checked");
-                }
-                let toggle = icssed::toggle(on, move |_| Shell::Showcase(Message::Toggle(i)))
-                    .class_if("plain", look == "plain");
-                match look {
-                    "check" => toggle.check(),
-                    "switch" => toggle.switch(),
-                    "plain" => toggle.icon((icons, BUTTON_ICON)),
-                    _ => toggle,
-                }
-                .label(label)
-                .into()
-            })
-            .collect()
-    }
-
-    /// The sample plain buttons.
-    fn plains_view<'a>(&'a self, showcase: &Showcase) -> Vec<Element<'a, Shell>> {
-        PLAINS
-            .iter()
-            .enumerate()
-            .map(|(i, &(icon, text))| {
-                let on = showcase.plains[i];
-                let label = match on {
-                    true => "button.plain.active",
-                    false => "button.plain",
-                };
-                icssed::button(self.button_content(icon, text.then(|| label.to_owned())))
-                    .class("plain")
-                    .class_if("active", on)
-                    .on_press(Shell::Showcase(Message::Plain(i)))
-                    .into()
-            })
-            .collect()
     }
 
     /// A sample button's content: the icon, the label, or both.

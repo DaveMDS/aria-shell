@@ -1,5 +1,5 @@
 //! A line of text to edit: iced's text input in a box of the toolkit,
-//! the app's children before and after it (an icon, a button to peek at
+//! the app's children before and after it (an icon, a toggle to peek at
 //! a password). The box is `:focus` while its field has the focus (CSS's
 //! `:focus-within`), and a press on the box puts the focus in the field.
 //! The field takes the free room, its text centred on its letters as a
@@ -96,7 +96,7 @@ impl<'a, Message: Clone + 'a> Input<'a, Message> {
         self
     }
 
-    /// A child after the field: a button to peek at a password.
+    /// A child after the field: a toggle to peek at a password.
     pub fn trailing(mut self, child: impl Into<Element<'a, Message>>) -> Self {
         self.trailing.push(child.into());
         self

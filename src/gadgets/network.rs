@@ -601,7 +601,6 @@ impl NetworkGadget {
         let locale = ctx.locale;
         let eye = icssed::toggle(self.peek, |_| Message::Peek)
             .class("peek")
-            .class("plain")
             .icon(ctx.named(if self.peek { ICON_CONCEAL } else { ICON_PEEK }));
         let field = icssed::input(locale.tr("network.password"), &self.password)
             .disabled_if(busy)
@@ -653,7 +652,7 @@ fn row_button<'a>(ctx: Context<'a>, line: RowLine<'a>, on_press: Message) -> Ele
         parts.push(
             icssed::button![icssed::mark().kind("arrow")]
                 .class("chevron")
-                .class("plain")
+                .class("flat")
                 .class_if("active", expanded)
                 .on_press(toggle)
                 .into(),

@@ -529,7 +529,7 @@ impl Launcher {
                         chevron = Some(
                             icssed::button![icssed::mark().kind("arrow")]
                                 .class("chevron")
-                                .class("plain")
+                                .class("flat")
                                 .class_if("active", self.expanded == Some(r))
                                 .on_press(Message::Toggle(r))
                                 .into(),

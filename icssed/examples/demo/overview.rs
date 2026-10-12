@@ -192,10 +192,9 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             .on_input(Message::Password)
             .secure(!state.peek)
             .trailing(
-                button![icon(assets.eye.clone())]
+                toggle(state.peek, |_| Message::Peek)
                     .class("peek")
-                    .class_if("active", state.peek)
-                    .on_press(Message::Peek),
+                    .icon(assets.eye.clone()),
             ),
         icssed::select(["Light", "Dark", "Follow the system"], state.choice, Message::Choose)
             .placeholder("Select"),

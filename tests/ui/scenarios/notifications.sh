@@ -36,16 +36,16 @@ assert_eq "$((x + w))" $((1920 - 8)) "8px from the right edge"
 assert_eq "$y" "$top" "under the bar, 8px down"
 [ "$h" -gt 40 ] || { echo "toast too short: $h"; exit 1; }
 first_h=$h
-assert_eq "$(count_widgets 'notification[id="'"$id1"'"] icon')" 1 "icon drawn"
-assert_eq "$(count_widgets 'notification body')" 1
+wait_for 'notification[id="'"$id1"'"] icon' 1 "icon drawn"
+wait_for 'notification body' 1
 shot toast-1 "$x,$y ${w}x$h"
 
 # A second one stacks above the first (newest nearest the corner);
 # critical: stays, urgent border.
 id2=$(nsend -p -u critical "Second" "short")
 settle
-assert_eq "$(count_widgets 'notification')" 2
-assert_eq "$(count_widgets 'notification.critical')" 1
+wait_for 'notification' 2
+wait_for 'notification.critical' 1
 set -- $(toast_geo 1)
 y1=${3#*,}
 set -- $(toast_geo 2)
@@ -59,8 +59,8 @@ shot toasts-2 "0,0 1920x300"
 # Replacing keeps the id and the place, changes the text and size.
 nsend -r "$id1" -t 0 "First replaced" "tiny"
 settle
-assert_eq "$(count_widgets 'notification')" 2 "still two"
-assert_eq "$(count_widgets 'notification[id="'"$id1"'"]')" 1 "same id"
+wait_for 'notification' 2 "still two"
+wait_for 'notification[id="'"$id1"'"]' 1 "same id"
 set -- $(toast_geo 1)
 h=${4#*x}
 [ "$h" -lt "$first_h" ] || { echo "replacement didn't shrink: $first_h -> $h"; exit 1; }
@@ -68,24 +68,24 @@ h=${4#*x}
 # CloseNotification removes it; the other moves up.
 call org.freedesktop.Notifications.CloseNotification "$id1" > /dev/null
 settle
-assert_eq "$(count_widgets 'notification')" 1
+wait_for 'notification' 1
 set -- $(toast_geo)
 assert_eq "${3#*,}" "$top" "the survivor took the first place"
 
 # A right click dismisses.
 click_widget_with right 'notification[id="'"$id2"'"] summary'
-assert_eq "$(count_widgets 'notification')" 0 "dismissed"
+wait_for 'notification' 0 "dismissed"
 
 # Actions: buttons, the clicked key goes back to the client; the
 # default action on a click on the body.
 nsend -t 0 -A default=Open -A later=Later "With actions" "pick one" > "$ARIA_UI_OUT/action" &
 settle 0.5
-assert_eq "$(count_widgets 'notification actions button')" 1 "default has no button"
+wait_for 'notification actions button' 1 "default has no button"
 click_widget 'notification actions button'
 settle
 wait
 assert_eq "$(cat "$ARIA_UI_OUT/action")" later "the action key reached the client"
-assert_eq "$(count_widgets 'notification')" 0 "closed after the action"
+wait_for 'notification' 0 "closed after the action"
 nsend -t 0 -A default=Open "Click me" "" > "$ARIA_UI_OUT/action" &
 settle 0.5
 click_widget 'notification summary'
@@ -96,14 +96,14 @@ assert_eq "$(cat "$ARIA_UI_OUT/action")" default "a click invokes default"
 # Expiry: the app's timeout, then the configured 2s default.
 nsend -t 500 "Quick" "gone in half a second" > /dev/null
 settle
-assert_eq "$(count_widgets 'notification')" 1
+wait_for 'notification' 1
 settle 0.8
-assert_eq "$(count_widgets 'notification')" 0 "expired on the app's timeout"
+wait_for 'notification' 0 "expired on the app's timeout"
 nsend "Default timeout" "gone in 2s" > /dev/null
 settle 1
-assert_eq "$(count_widgets 'notification')" 1
+wait_for 'notification' 1
 settle 1.5
-assert_eq "$(count_widgets 'notification')" 0 "expired on the configured duration"
+wait_for 'notification' 0 "expired on the configured duration"
 
 # Markup is shown as text; an image file and image-data draw an icon.
 nsend -t 0 "Markup" "<b>bold</b> &amp; <i>plain</i>" > /dev/null
@@ -114,8 +114,8 @@ nsend -t 0 -i "$png" "File icon" "from a path" > /dev/null
 call org.freedesktop.Notifications.Notify "app" 0 "" "Pixels" "image-data" '[]' \
     "{'image-data': <(2, 2, 8, true, 8, 4, @ay [255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255])>}" 0 > /dev/null
 settle
-assert_eq "$(count_widgets 'notification')" 3
-assert_eq "$(count_widgets 'notification icon')" 2 "file and pixel icons"
+wait_for 'notification' 3
+wait_for 'notification icon' 2 "file and pixel icons"
 shot toasts-icons "0,0 1920x500"
 # Sanity on the text: the markup toast is as tall as a one-line body.
 set -- $(toast_geo 3)

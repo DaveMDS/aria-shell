@@ -29,10 +29,10 @@ b_top=$(sample 1930 100); b_bottom=$(sample 1930 1070); b_right=$(sample 3830 10
 [ "$b_top" = "$b_right" ] || { echo "b: horizontal change ($b_top vs $b_right)"; exit 1; }
 
 # The launcher and the lock screen sit above it.
-aria launcher show; settle 0.8
+aria launcher show; wait_keyboard launcher
 shot wallpaper-launcher "0,0 1920x1080"
 key Escape
-aria lock; settle 0.8
+aria lock; wait_keyboard locker
 assert_surface locker
 shot wallpaper-locker "0,0 1920x1080"
 key Return; settle 0.8

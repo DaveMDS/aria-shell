@@ -50,7 +50,7 @@ aria brightness up
 wait_monitor 3 75
 wait_monitor 4 35
 wait_osd 2 "an OSD on each screen"
-assert_eq "$(count_widgets 'osd.brightness meter')" 2 "with its level"
+wait_for 'osd.brightness meter' 2 "with its level"
 shot_surface osd-brightness osd
 wait_osd 0 "gone after its duration"
 
@@ -99,8 +99,8 @@ settle
 assert_contains "$(aria debug brightness)" "ddc:3 output=HEADLESS-1 model=\"Fake Monitor\" 80%"
 click_widget 'panel[output="HEADLESS-1"] gadget.brightness > button'
 assert_surface popup
-assert_eq "$(count_widgets 'popup gadget.brightness screen.ddc')" 2 "a row per monitor"
-assert_eq "$(count_widgets 'popup gadget.brightness screen slider')" 2 "a slider each"
+wait_for 'popup gadget.brightness screen.ddc' 2 "a row per monitor"
+wait_for 'popup gadget.brightness screen slider' 2 "a slider each"
 i=0
 while ! aria debug brightness | grep -q 'ddc:3 [^;]* 20%' && [ $i -lt 30 ]; do
     sleep 0.1; i=$((i + 1))

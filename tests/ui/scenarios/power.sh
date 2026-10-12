@@ -14,8 +14,8 @@ status='panel[output="HEADLESS-1"] gadget.power > button.status'
 # Nothing to show but the eye.
 assert_contains "$(aria debug power)" "battery=none"
 assert_contains "$(aria debug power)" "profile=none"
-assert_eq "$(count_widgets 'gadget.power > button.status')" 0 "no battery, no profile: no status"
-assert_eq "$(count_widgets 'gadget.power > button.idle')" 2 "the eye on both bars"
+wait_for 'gadget.power > button.status' 0 "no battery, no profile: no status"
+wait_for 'gadget.power > button.idle' 2 "the eye on both bars"
 
 # A battery, unplugged, and the profiles daemon.
 upower_send "battery 64 discharging 7800"
@@ -24,8 +24,8 @@ upower_send "profiles on"
 upower_send "device MX_Master 40"
 assert_contains "$(aria debug power)" "battery=64% discharging"
 assert_contains "$(aria debug power)" "profile=balanced available=power-saver,balanced,performance"
-assert_eq "$(count_widgets 'gadget.power > button.status.discharging.balanced')" 2 "battery and profile on both bars"
-assert_eq "$(count_widgets 'gadget.power > button.status > label')" 2 "the percent"
+wait_for 'gadget.power > button.status.discharging.balanced' 2 "battery and profile on both bars"
+wait_for 'gadget.power > button.status > label' 2 "the percent"
 assert_contains "$(aria debug idle)" "power=battery"
 assert_contains "$(aria debug idle)" "armed=lock=30m"
 
@@ -33,26 +33,26 @@ assert_contains "$(aria debug idle)" "armed=lock=30m"
 click_widget "$status"
 assert_surface popup
 shot_surface popup popup
-assert_eq "$(count_widgets 'popup gadget.power battery.discharging')" 1 "the battery"
-assert_eq "$(count_widgets 'popup gadget.power details line')" 2 "power draw and health"
-assert_eq "$(count_widgets 'popup gadget.power device')" 1 "the mouse"
-assert_eq "$(count_widgets 'popup gadget.power profiles toggle')" 3 "three profiles"
-assert_eq "$(count_widgets 'popup gadget.power profiles toggle.balanced.checked')" 1 "balanced is active"
+wait_for 'popup gadget.power battery.discharging' 1 "the battery"
+wait_for 'popup gadget.power details line' 2 "power draw and health"
+wait_for 'popup gadget.power device' 1 "the mouse"
+wait_for 'popup gadget.power profiles toggle' 3 "three profiles"
+wait_for 'popup gadget.power profiles toggle.balanced.checked' 1 "balanced is active"
 
 # A profile picked goes to the daemon; one it picks shows.
 click_widget 'popup gadget.power profiles toggle.performance'
 assert_eq "$(upower_event)" "set-profile performance"
 settle 0.5
-assert_eq "$(count_widgets 'popup gadget.power profiles toggle.performance.checked')" 1 "performance is active"
+wait_for 'popup gadget.power profiles toggle.performance.checked' 1 "performance is active"
 upower_send "profile power-saver"
-assert_eq "$(count_widgets 'gadget.power > button.status.power-saver')" 2 "the daemon's pick on the bars"
+wait_for 'gadget.power > button.status.power-saver' 2 "the daemon's pick on the bars"
 upower_send "degraded high-operating-temperature"
-assert_eq "$(count_widgets 'popup gadget.power message')" 1 "why performance is limited"
+wait_for 'popup gadget.power message' 1 "why performance is limited"
 
 # Keep awake, from the popup.
 click_widget 'popup gadget.power idle toggle'
 assert_contains "$(aria debug idle)" "inhibited=true"
-assert_eq "$(count_widgets 'gadget.power > button.idle.inhibited')" 2 "held, on both bars"
+wait_for 'gadget.power > button.idle.inhibited' 2 "held, on both bars"
 click_widget 'popup gadget.power idle toggle'
 assert_contains "$(aria debug idle)" "inhibited=false"
 
@@ -69,18 +69,18 @@ assert_contains "$(aria debug idle)" "armed=lock=1h"
 upower_send "ac off"
 upower_send "warning low"
 assert_logged '"Battery low"'
-assert_eq "$(count_widgets 'notification')" 1 "a notification"
+wait_for 'notification' 1 "a notification"
 upower_send "battery 4 discharging 600"
 upower_send "warning critical"
 assert_logged '"Battery critically low"'
-assert_eq "$(count_widgets 'notification.critical')" 1 "the same one, now critical"
+wait_for 'notification.critical' 1 "the same one, now critical"
 shot low-battery
 upower_send "battery 5 charging 3600"
 upower_send "warning none"
-assert_eq "$(count_widgets 'notification')" 0 "closed once charging"
+wait_for 'notification' 0 "closed once charging"
 
 # UPower leaving: back to the eye alone.
 upower_send "profiles off"
 upower_send "battery none"
-assert_eq "$(count_widgets 'gadget.power > button.status')" 0 "nothing but the eye"
+wait_for 'gadget.power > button.status' 0 "nothing but the eye"
 upower_stop

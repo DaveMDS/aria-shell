@@ -15,25 +15,25 @@ toasts() {
 }
 bell='panel[output="HEADLESS-1"] gadget.notifications > button'
 
-assert_eq "$(count_widgets 'gadget.notifications > button')" 2 "a bell per bar"
-assert_eq "$(count_widgets 'gadget.notifications > button label')" 0 "no count at rest"
+wait_for 'gadget.notifications > button' 2 "a bell per bar"
+wait_for 'gadget.notifications > button label' 0 "no count at rest"
 
 # Two notifications: the count on both bars, the button marked new.
 id1=$(nsend -p -t 0 -i dialog-information "First" "with a body")
 id2=$(nsend -p -t 0 "Second" "another one")
 settle
-assert_eq "$(count_widgets 'gadget.notifications > button.new label')" 2 "count on both bars"
+wait_for 'gadget.notifications > button.new label' 2 "count on both bars"
 assert_eq "$(toasts)" 2
 shot bell "$(($(widget "$bell" | cut -d' ' -f1) - 60)),0 140x32"
 
 # The popup: the rows, both unseen; the count is gone once looked at.
 click_widget "$bell"
 assert_surface popup
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 2 "two rows"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification.unseen')" 2
-assert_eq "$(count_widgets 'gadget.notifications > button label')" 0 "count cleared"
-assert_eq "$(count_widgets 'gadget.notifications > button.new')" 0
-assert_eq "$(count_widgets 'popup notification time')" 2 "ages shown"
+wait_for 'popup gadget.notifications list > notification' 2 "two rows"
+wait_for 'popup gadget.notifications list > notification.unseen' 2
+wait_for 'gadget.notifications > button label' 0 "count cleared"
+wait_for 'gadget.notifications > button.new' 0
+wait_for 'popup notification time' 2 "ages shown"
 shot_surface popup popup
 
 # The row and the desktop toast of one notification are the same view:
@@ -55,20 +55,20 @@ assert_eq "$3" 32 "the row draws the icon at the toast's size"
 
 # ✕ on the first row: the row and its toast go.
 click_widget 'popup notification[id="'"$id1"'"] button.close'
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 1
+wait_for 'popup gadget.notifications list > notification' 1
 assert_eq "$(toasts)" 1 "its toast closed too"
-assert_eq "$(count_widgets 'popup notification[id="'"$id2"'"]')" 1 "the other stays"
+wait_for 'popup notification[id="'"$id2"'"]' 1 "the other stays"
 
 # Do not disturb from the popup: a new notification is listed, not
 # shown; a critical one shows anyway.
 click_widget 'popup gadget.notifications header toggle.dnd'
-assert_eq "$(count_widgets 'popup gadget.notifications header toggle.dnd.checked')" 1
-assert_eq "$(count_widgets 'gadget.notifications > button.dnd')" 2 "quiet on both bars"
+wait_for 'popup gadget.notifications header toggle.dnd.checked' 1
+wait_for 'gadget.notifications > button.dnd' 2 "quiet on both bars"
 nsend -t 0 "Quiet" "not on screen" > /dev/null
 settle
 assert_eq "$(toasts)" 1 "no new toast"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 2 "but in the history"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification.unseen')" 1
+wait_for 'popup gadget.notifications list > notification' 2 "but in the history"
+wait_for 'popup gadget.notifications list > notification.unseen' 1
 nsend -t 0 -u critical "Loud" "on screen anyway" > /dev/null
 settle
 assert_eq "$(toasts)" 2 "critical shows"
@@ -77,21 +77,21 @@ shot_surface popup-dnd popup
 # A click outside closes the popup; the count shows the two new ones.
 click 600 600
 assert_no_surface popup
-assert_eq "$(count_widgets 'gadget.notifications > button.new')" 2
+wait_for 'gadget.notifications > button.new' 2
 
 # Right click: quiet off. Middle click: the toasts go, the history stays.
 click_widget_with right "$bell"
-assert_eq "$(count_widgets 'gadget.notifications > button.dnd')" 0
+wait_for 'gadget.notifications > button.dnd' 0
 click_widget_with middle "$bell"
 assert_eq "$(toasts)" 0 "all toasts dismissed"
 click_widget "$bell"
 assert_surface popup
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 3 "history intact"
+wait_for 'popup gadget.notifications list > notification' 3 "history intact"
 
 # Clear: empty.
 click_widget 'popup gadget.notifications header button.clear'
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 0
-assert_eq "$(count_widgets 'popup gadget.notifications empty')" 1 "the empty text"
+wait_for 'popup gadget.notifications list > notification' 0
+wait_for 'popup gadget.notifications empty' 1 "the empty text"
 shot_surface popup-empty popup
 click 600 600
 assert_no_surface popup
@@ -107,9 +107,9 @@ assert_eq "$(toasts)" 6
 click_widget_with middle "$bell"
 assert_eq "$(toasts)" 0
 click_widget "$bell"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 5 "capped"
-assert_eq "$(count_widgets 'popup notification[id="5"]')" 0 "the oldest (id 5) dropped"
-assert_eq "$(count_widgets 'popup notification[id="10"]')" 1 "the newest kept"
+wait_for 'popup gadget.notifications list > notification' 5 "capped"
+wait_for 'popup notification[id="5"]' 0 "the oldest (id 5) dropped"
+wait_for 'popup notification[id="10"]' 1 "the newest kept"
 click_widget 'popup gadget.notifications header button.clear'
 click 600 600
 assert_no_surface popup
@@ -120,10 +120,10 @@ nsend -t 0 -A default=Open "Act" "click the row" > "$ARIA_UI_OUT/action" &
 settle 0.5
 assert_eq "$(toasts)" 1
 click_widget "$bell"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 1
+wait_for 'popup gadget.notifications list > notification' 1
 click_widget 'popup gadget.notifications list > notification body'
 settle
 wait
 assert_eq "$(cat "$ARIA_UI_OUT/action")" default "default action from the row"
-assert_eq "$(count_widgets 'popup gadget.notifications list > notification')" 0 "the row is gone"
+wait_for 'popup gadget.notifications list > notification' 0 "the row is gone"
 assert_eq "$(toasts)" 0 "and its toast"

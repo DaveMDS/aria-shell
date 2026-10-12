@@ -25,9 +25,11 @@ wait_for_shell() {
     return 1
 }
 
-# Give the shell time to act on the last input and redraw.
+# Give the shell time to act on the last input. Short: what's asserted
+# next is waited for (`widget`, `wait_for`, `assert_surface`, ...); a
+# screenshot waits for the frame to be still.
 settle() {
-    sleep "${1:-0.3}"
+    sleep "${1:-0.05}"
 }
 
 # Start the shell over with another config directory (as XDG_CONFIG_HOME:
@@ -48,9 +50,13 @@ surfaces() {
 }
 
 # `x y w h` of the first widget the selector matches; fails when there
-# is none.
+# is none within 3 s.
 widget() {
-    line=$(aria debug widgets "$1" | tr ';' '\n' | head -n 1 | sed 's/^ *//')
+    i=0
+    while line=$(aria debug widgets "$1" | tr ';' '\n' | head -n 1 | sed 's/^ *//') &&
+        [ -z "$line" ] && [ $i -lt 60 ]; do
+        sleep 0.05; i=$((i + 1))
+    done
     [ -n "$line" ] || { echo "no widget matches '$1'"; return 1; }
     echo "$line" | sed 's/.* \([0-9-]*\),\([0-9-]*\) \([0-9]*\)x\([0-9]*\)$/\1 \2 \3 \4/'
 }
@@ -60,8 +66,11 @@ count_widgets() {
     aria debug widgets "$1" | tr ';' '\n' | grep -c .
 }
 
-# Screenshot of the whole layout, or of `x,y wxh`, into the output dir.
+# Screenshot of the whole layout, or of `x,y wxh`, into the output dir,
+# once what the last input started is over (the theme's transitions
+# take 120 ms).
 shot() {
+    settle 0.2
     if [ $# -gt 1 ]; then
         grim -g "$2" "$ARIA_UI_OUT/$1.png"
     else
@@ -71,9 +80,20 @@ shot() {
 
 # Screenshot of the surface of the given kind (first match).
 shot_surface() {
+    settle 0.2
     geo=$(surfaces | tr ';' '\n' | grep " $2 " | head -n 1 | awk '{print $3" "$4}')
     [ -n "$geo" ] || { echo "no $2 surface to screenshot"; return 1; }
     grim -g "$geo" "$ARIA_UI_OUT/$1.png"
+}
+
+# Until the keyboard is on a surface of the kind (3 s), else fails: after
+# a command opening one (`aria launcher show`), before typing in it.
+wait_keyboard() {
+    i=0
+    while ! surfaces | tr ';' '\n' | grep -q "^ *$1 .* keyboard$" && [ $i -lt 60 ]; do
+        sleep 0.05; i=$((i + 1))
+    done
+    surfaces | tr ';' '\n' | grep -q "^ *$1 .* keyboard$" || { echo "the keyboard isn't on $1"; return 1; }
 }
 
 # --- asserting -----------------------------------------------------------
@@ -95,11 +115,21 @@ assert_not_contains() {
     esac
 }
 
+# A surface of the kind is open (within 3 s).
 assert_surface() {
+    i=0
+    while ! surfaces | grep -q -- "$1 " && [ $i -lt 60 ]; do
+        sleep 0.05; i=$((i + 1))
+    done
     assert_contains "$(surfaces)" "$1 " "surface $1 open"
 }
 
+# No surface of the kind is open (within 3 s).
 assert_no_surface() {
+    i=0
+    while surfaces | grep -q -- "$1 " && [ $i -lt 60 ]; do
+        sleep 0.05; i=$((i + 1))
+    done
     assert_not_contains "$(surfaces)" "$1 " "surface $1 closed"
 }
 
@@ -117,11 +147,12 @@ assert_logged() {
 }
 
 # Until the selector matches `$2` widgets (3 s), else fails with `$3`:
-# for what comes asynchronously (a bus, a first reading).
+# every count a scenario asserts, the shell answering an input, a bus
+# or a first reading when it does.
 wait_for() {
     i=0
-    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 30 ]; do
-        sleep 0.1; i=$((i + 1))
+    while [ "$(count_widgets "$1")" != "$2" ] && [ $i -lt 60 ]; do
+        sleep 0.05; i=$((i + 1))
     done
     assert_eq "$(count_widgets "$1")" "$2" "$3"
 }

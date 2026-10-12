@@ -14,7 +14,7 @@ outputs_on() {
     swaymsg -t get_outputs | grep -c '"power": true'
 }
 assert_contains "$(aria debug idle)" "armed=lock=4s,screen_off=2s"
-assert_eq "$(count_widgets 'gadget.power > button.idle')" 2 "an idle button per bar"
+wait_for 'gadget.power > button.idle' 2 "an idle button per bar"
 
 # The screens go off, then the first input wakes them: no lock yet.
 sleep 2.5
@@ -40,7 +40,7 @@ assert_no_surface locker
 click_widget "$button"
 assert_contains "$(aria debug idle)" "inhibited=true"
 assert_contains "$(aria debug idle)" "armed=none"
-assert_eq "$(count_widgets 'gadget.power > button.idle.inhibited')" 2 "held, on both bars"
+wait_for 'gadget.power > button.idle.inhibited' 2 "held, on both bars"
 shot_surface held panel
 sleep 4.5
 assert_contains "$(aria debug idle)" "screens=on"
@@ -48,7 +48,7 @@ assert_no_surface locker
 click_widget "$button"
 assert_contains "$(aria debug idle)" "inhibited=false"
 assert_contains "$(aria debug idle)" "armed=lock=4s,screen_off=2s"
-assert_eq "$(count_widgets 'gadget.power > button.idle.inhibited')" 0 "let go"
+wait_for 'gadget.power > button.idle.inhibited' 0 "let go"
 
 # The same from the command line.
 aria idle inhibit on; settle
@@ -68,7 +68,7 @@ esac
 mpris_send "status Playing"
 assert_contains "$(aria debug idle)" "playing=true"
 assert_contains "$(aria debug idle)" "armed=none"
-assert_eq "$(count_widgets 'gadget.power > button.idle.playing')" 2 "held by the player"
+wait_for 'gadget.power > button.idle.playing' 2 "held by the player"
 mpris_send "status Paused"
 assert_contains "$(aria debug idle)" "armed=lock=4s,screen_off=2s"
 mpris_stop

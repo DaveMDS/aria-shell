@@ -48,7 +48,7 @@ assert_eq "$(count wallpaper)" 2 "still a wallpaper per output"
 # The launcher on the output that goes: it closes, and its grabs on the
 # other outputs with it, or they'd swallow every click there.
 swaymsg focus output HEADLESS-2 > /dev/null
-aria launcher show; settle 0.8
+aria launcher show; wait_keyboard launcher
 assert_contains "$(surfaces)" "launcher HEADLESS-2"
 swaymsg output HEADLESS-2 disable > /dev/null
 wait_count launcher "" 0 "the launcher closed with its output"

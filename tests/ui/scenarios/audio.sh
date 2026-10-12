@@ -8,16 +8,16 @@ mpris_start
 
 button='panel[output="HEADLESS-1"] gadget.audio > button.output'
 player='popup player'
-assert_eq "$(count_widgets 'gadget.audio > button.output')" 2 "a volume button per bar"
-assert_eq "$(count_widgets 'gadget.audio > button.input')" 2 "a microphone button per bar (show_microphone)"
-assert_eq "$(count_widgets 'gadget.audio > button > label')" 4 "the percent after each icon (show_percent)"
+wait_for 'gadget.audio > button.output' 2 "a volume button per bar"
+wait_for 'gadget.audio > button.input' 2 "a microphone button per bar (show_microphone)"
+wait_for 'gadget.audio > button > label' 4 "the percent after each icon (show_percent)"
 
 click_widget "$button"
 assert_surface popup
 wait_for "$player" 1 "the fake player in the popup"
-assert_eq "$(count_widgets 'popup player.paused[name="Aria test player"]')" 1 "paused, by its identity"
-assert_eq "$(count_widgets "$player > controls > button.previous:disabled")" 1 "previous disabled (CanGoPrevious false)"
-assert_eq "$(count_widgets "$player > controls > button.next:disabled")" 0 "next enabled"
+wait_for 'popup player.paused[name="Aria test player"]' 1 "paused, by its identity"
+wait_for "$player > controls > button.previous:disabled" 1 "previous disabled (CanGoPrevious false)"
+wait_for "$player > controls > button.next:disabled" 0 "next enabled"
 shot_surface popup popup
 
 # The controls reach the player.
@@ -31,7 +31,7 @@ mpris_send "status Playing"
 wait_for 'popup player.playing' 1 "now playing"
 mpris_send "title Second song"
 settle
-assert_eq "$(count_widgets 'popup player.playing')" 1 "still there after a title change"
+wait_for 'popup player.playing' 1 "still there after a title change"
 
 # The Mixer button runs mixer_command and closes the popup.
 click_widget 'popup gadget.audio button.mixer'

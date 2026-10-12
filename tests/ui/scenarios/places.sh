@@ -64,10 +64,10 @@ restart_shell "$config"
 click_widget 'panel[output="HEADLESS-1"] gadget.places button'
 assert_surface popup
 shot_surface places popup
-assert_eq "$(count_widgets 'header')" 2 "two sections"
-assert_eq "$(count_widgets 'item')" 7 "home, Scaricati, Musica, trash; My Projects, server.lan, Work & stuff"
-assert_eq "$(count_widgets 'item.trash.full')" 1 "the trash is full"
-assert_eq "$(count_widgets 'item.remote')" 1 "the sftp bookmark"
+wait_for 'header' 2 "two sections"
+wait_for 'item' 7 "home, Scaricati, Musica, trash; My Projects, server.lan, Work & stuff"
+wait_for 'item.trash.full' 1 "the trash is full"
+wait_for 'item.remote' 1 "the sftp bookmark"
 
 click_widget 'item.remote'
 assert_no_surface popup

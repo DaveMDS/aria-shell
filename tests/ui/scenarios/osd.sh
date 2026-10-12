@@ -12,6 +12,11 @@ count_osd() {
     surfaces | tr ';' '\n' | grep -c '^ *osd ' || true
 }
 
+# Until `$2` ms have gone since `$1` (`date +%s%N`).
+wait_since() {
+    while [ $((($(date +%s%N) - $1) / 1000000)) -lt "$2" ]; do sleep 0.05; done
+}
+
 # Until n OSD surfaces are open (3 s).
 wait_osd() {
     i=0
@@ -24,29 +29,30 @@ wait_osd() {
 # --- from a script -------------------------------------------------------------
 assert_eq "$(count_osd)" 0 "no OSD at rest"
 aria osd show --icon audio-volume-high-symbolic --value 40 Test
+first=$(date +%s%N)
 wait_osd 2 "one OSD per output"
 # 320x56 (aria.css), centred, 100 px above the bottom edge.
 assert_contains "$(surfaces)" "osd HEADLESS-1 800,924 320x56"
 assert_contains "$(surfaces)" "osd HEADLESS-2 2720,924 320x56"
 assert_eq "$(widget 'osd[output="HEADLESS-1"]')" "800 924 320 56" "the box fills it"
-assert_eq "$(count_widgets 'osd.custom icon')" 2 "the icon"
-assert_eq "$(count_widgets 'osd.custom meter')" 2 "the level"
-assert_eq "$(count_widgets 'osd.custom label')" 2 "the text"
-assert_eq "$(count_widgets 'osd.custom value')" 2 "the percent"
-settle 0.3
+wait_for 'osd.custom icon' 2 "the icon"
+wait_for 'osd.custom meter' 2 "the level"
+wait_for 'osd.custom label' 2 "the text"
+wait_for 'osd.custom value' 2 "the percent"
 shot_surface osd-custom osd
 
-# Another one while it shows: the same surfaces, the new content. 0.7 s
-# after it, the first one's second is over (the shot came 0.3 s after
-# it), the second one's isn't: counted from it, the asserts in between
-# take what they take.
+# Another one while it shows, half a second after the first: the same
+# surfaces, the new content. 0.7 s after it, the first one's second is
+# over, the second one's isn't: counted, the asserts in between take
+# what they take.
+wait_since "$first" 500
 aria osd show --value 75
 second=$(date +%s%N)
 settle 0.2
 assert_eq "$(count_osd)" 2 "still one per output"
-assert_eq "$(count_widgets 'osd.custom label')" 0 "no text this time"
-assert_eq "$(count_widgets 'osd.custom meter')" 2
-while [ $(($(date +%s%N) - second)) -lt 700000000 ]; do sleep 0.05; done
+wait_for 'osd.custom label' 0 "no text this time"
+wait_for 'osd.custom meter' 2
+wait_since "$second" 700
 assert_eq "$(count_osd)" 2 "the timer started again with the second"
 wait_osd 0 "gone after its duration"
 
@@ -64,8 +70,8 @@ assert_eq "$(count_osd)" 0 "its first reading shows nothing"
 nm_send "wired Office"
 nm_send "wired-up"
 wait_osd 2 "connected: the OSD"
-assert_eq "$(count_widgets 'osd.network label')" 2 "with the connection's name"
-assert_eq "$(count_widgets 'osd.network meter')" 0 "and no level"
+wait_for 'osd.network label' 2 "with the connection's name"
+wait_for 'osd.network meter' 0 "and no level"
 shot_surface osd-network osd
 wait_osd 0
 
@@ -77,7 +83,7 @@ wait_for 'popup gadget.network device.expanded actions button.disconnect' 1
 click_widget 'popup gadget.network device.expanded actions button.disconnect'
 assert_eq "$(nm_action)" "disconnect eth0"
 wait_osd 2 "disconnected: the OSD"
-assert_eq "$(count_widgets 'osd.network label')" 2
+wait_for 'osd.network label' 2
 shot_surface osd-disconnected osd
 click 600 600
 wait_osd 0

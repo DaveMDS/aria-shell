@@ -29,15 +29,15 @@ click 300 700
 
 # The launcher: the test entry's Name[it]/Comment[it] are what shows,
 # and what the search matches ("prova" is only in the Italian texts).
-aria launcher show; settle 0.8
+aria launcher show; wait_keyboard launcher
 type_text "prova"
-assert_eq "$(count_widgets 'launcher item')" 1 "the Italian name matches"
+wait_for 'launcher item' 1 "the Italian name matches"
 shot_surface locale-launcher launcher
 key Escape
 assert_no_surface launcher
 
 # The lock screen.
-aria lock; settle 0.8
+aria lock; wait_keyboard locker
 assert_surface locker
 shot locale-locker
 key Return; settle 0.8

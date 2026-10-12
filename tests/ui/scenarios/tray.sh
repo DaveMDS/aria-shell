@@ -4,10 +4,10 @@
 # place and resizing the popup); a row click sends the event and closes
 # the popup; its layout changes are followed; unregistering removes it.
 
-assert_eq "$(count_widgets 'gadget.tray > button')" 0 "no items before"
+wait_for 'gadget.tray > button' 0 "no items before"
 sni_start
 settle 1
-assert_eq "$(count_widgets 'gadget.tray > button')" 2 "one item per bar"
+wait_for 'gadget.tray > button' 2 "one item per bar"
 set -- $(widget 'panel[output="HEADLESS-1"] gadget.tray > button')
 shot bar-item "$(($1 - 40)),0 120x32"
 
@@ -32,10 +32,10 @@ click_widget_with right 'panel[output="HEADLESS-2"] gadget.tray > button'
 assert_eq "$(sni_event)" "about-to-show 0"
 settle
 assert_surface popup
-assert_eq "$(count_widgets 'menu > item')" 4 "Open, Options, Disabled, Quit (Hidden dropped)"
-assert_eq "$(count_widgets 'menu > separator')" 1
-assert_eq "$(count_widgets 'menu > item.submenu')" 1
-assert_eq "$(count_widgets 'menu > submenu > item')" 0 "submenu folded"
+wait_for 'menu > item' 4 "Open, Options, Disabled, Quit (Hidden dropped)"
+wait_for 'menu > separator' 1
+wait_for 'menu > item.submenu' 1
+wait_for 'menu > submenu > item' 0 "submenu folded"
 shot_surface menu popup
 set -- $(surfaces | tr ';' '\n' | grep ' popup ' | sed 's/.* \([0-9]*\)x\([0-9]*\)$/\1 \2/')
 folded_h=$2
@@ -44,8 +44,8 @@ folded_h=$2
 click_widget 'menu > item.submenu'
 assert_eq "$(sni_event)" "about-to-show 3"
 settle
-assert_eq "$(count_widgets 'menu > item.submenu.expanded')" 1
-assert_eq "$(count_widgets 'menu > submenu > item.checked')" 1 "Beep is checked"
+wait_for 'menu > item.submenu.expanded' 1
+wait_for 'menu > submenu > item.checked' 1 "Beep is checked"
 set -- $(surfaces | tr ';' '\n' | grep ' popup ' | sed 's/.* \([0-9]*\)x\([0-9]*\)$/\1 \2/')
 [ "$2" -gt "$folded_h" ] || { echo "popup didn't grow: $folded_h -> $2"; exit 1; }
 shot_surface menu-unfolded popup
@@ -75,9 +75,9 @@ assert_no_surface popup
 sni_send "icon 40 200 40"
 shot bar-item-green "$(($(widget 'panel[output="HEADLESS-1"] gadget.tray > button' | cut -d' ' -f1) - 40)),0 120x32"
 sni_send "status NeedsAttention"
-assert_eq "$(count_widgets 'gadget.tray > button.attention')" 2 "attention on both bars"
+wait_for 'gadget.tray > button.attention' 2 "attention on both bars"
 
 # Gone from the bus: gone from the bars.
 sni_stop
 settle 1
-assert_eq "$(count_widgets 'gadget.tray > button')" 0 "removed"
+wait_for 'gadget.tray > button' 0 "removed"

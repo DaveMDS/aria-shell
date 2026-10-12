@@ -26,14 +26,17 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 
 # One scenario (`run.sh --one <name>`): what the run below starts, a few
-# at a time, in the environment it set up.
+# at a time, in the environment it set up. How long it took goes in
+# `seconds`, for the next run's order.
 if [ "${1:-}" = --one ]; then
     scenario=$2
     out=$root/target/ui/$scenario
     rm -rf "$out" && mkdir -p "$out"
+    start=$(date +%s)
     export ARIA_UI_OUT=$out ARIA_UI_SCENARIO=$here/scenarios/$scenario.sh
     export XDG_STATE_HOME=$out/state
     timeout 120 dbus-run-session -- sway -c "$here/sway.conf" > "$out/sway.log" 2>&1
+    echo $(($(date +%s) - start)) > "$out/seconds"
     status=$(cat "$out/status" 2>/dev/null || echo "the scenario didn't finish (see $out/sway.log)")
     echo "$scenario: $status"
     exit
@@ -75,7 +78,11 @@ export XDG_DATA_HOME=$here/data
 export XDG_DATA_DIRS=${XDG_DATA_DIRS:-/usr/local/share:/usr/share}
 export ARIA_UI_ROOT=$root
 
-printf '%s\n' $scenarios | xargs -n 1 -P "$jobs" "$here/run.sh" --one
+# The longest first, as long as they took last time: the last to start
+# shouldn't be one that keeps the others waiting.
+for scenario in $scenarios; do
+    echo "$(cat "$root/target/ui/$scenario/seconds" 2> /dev/null || echo 0) $scenario"
+done | sort -rn | cut -d ' ' -f 2 | xargs -n 1 -P "$jobs" "$here/run.sh" --one
 
 failed=
 for scenario in $scenarios; do

@@ -15,11 +15,11 @@ row_pids() {
 }
 
 # The instances, and what the sampler read.
-assert_eq "$(count_widgets 'gadget.system-monitor > button')" 8 "four instances per bar"
-assert_eq "$(count_widgets 'gadget#cpu.system-monitor > button.cpu')" 2 "the instance id is the node's"
-assert_eq "$(count_widgets 'gadget#mem.system-monitor > button.mem')" 2 "show = mem"
-assert_eq "$(count_widgets 'gadget#net.system-monitor > button.net')" 2
-assert_eq "$(count_widgets 'gadget#disk.system-monitor > button.disk')" 2
+wait_for 'gadget.system-monitor > button' 8 "four instances per bar"
+wait_for 'gadget#cpu.system-monitor > button.cpu' 2 "the instance id is the node's"
+wait_for 'gadget#mem.system-monitor > button.mem' 2 "show = mem"
+wait_for 'gadget#net.system-monitor > button.net' 2
+wait_for 'gadget#disk.system-monitor > button.disk' 2
 settle 2.5
 info=$(aria debug sysmon)
 assert_contains "$info" "cores=$(nproc) " "every core read"
@@ -33,15 +33,15 @@ set -- $(widget 'gadget.system-monitor > button.cpu graph')
 assert_eq "$3 $4" "40 14" "the sparkline sized by the theme (the text 'cpu' fits)"
 set -- $(widget 'gadget#mem.system-monitor > button.mem meter')
 [ "$3" -ge 80 ] && [ "$4" = 14 ] || { echo "meter ${3}x$4: a long format widens it"; exit 1; }
-assert_eq "$(count_widgets 'gadget#net.system-monitor > button.net label')" 2 "mode text: a label"
-assert_eq "$(count_widgets 'gadget#net.system-monitor > button.net graph')" 0 "and no graph"
-assert_eq "$(count_widgets 'gadget#mem.system-monitor > button.mem > label')" 0 "the meter holds the text"
+wait_for 'gadget#net.system-monitor > button.net label' 2 "mode text: a label"
+wait_for 'gadget#net.system-monitor > button.net graph' 0 "and no graph"
+wait_for 'gadget#mem.system-monitor > button.mem > label' 0 "the meter holds the text"
 # Thresholds: the net instance is critical from 0, the disk one a
 # warning from 0, the cpu one only from the percentage defaults.
-assert_eq "$(count_widgets 'gadget#net.system-monitor > button.net.critical')" 2 "critical = 0"
-assert_eq "$(count_widgets 'gadget#disk.system-monitor > button.disk.warning')" 2 "warning = 0"
-assert_eq "$(count_widgets 'gadget#disk.system-monitor > button.disk.critical')" 0
-assert_eq "$(count_widgets 'gadget#cpu.system-monitor > button.cpu.critical')" 0 "an idle cpu"
+wait_for 'gadget#net.system-monitor > button.net.critical' 2 "critical = 0"
+wait_for 'gadget#disk.system-monitor > button.disk.warning' 2 "warning = 0"
+wait_for 'gadget#disk.system-monitor > button.disk.critical' 0
+wait_for 'gadget#cpu.system-monitor > button.cpu.critical' 0 "an idle cpu"
 shot bar "$(($(widget "$bell" | cut -d' ' -f1) - 20)),0 520x32"
 
 # The popup: the tabs, opened on the value's; one section at a time.
@@ -49,47 +49,47 @@ click_widget "$bell"
 assert_surface popup
 settle 1
 for tab in cpu mem disk net processes; do
-    assert_eq "$(count_widgets "monitor tabs tab.$tab")" 1 "tab $tab"
+    wait_for "monitor tabs tab.$tab" 1 "tab $tab"
 done
 case "$info" in
-    *"gpu=0 "*) assert_eq "$(count_widgets 'monitor tabs tab.gpu')" 0 "no gpu, no tab" ;;
-    *) assert_eq "$(count_widgets 'monitor tabs tab.gpu')" 1 "a gpu tab" ;;
+    *"gpu=0 "*) wait_for 'monitor tabs tab.gpu' 0 "no gpu, no tab" ;;
+    *) wait_for 'monitor tabs tab.gpu' 1 "a gpu tab" ;;
 esac
-assert_eq "$(count_widgets 'monitor tabs tab.cpu.active')" 1 "the cpu instance opens on the cpu tab"
-assert_eq "$(count_widgets 'monitor section')" 1 "one section shown"
-assert_eq "$(count_widgets 'section.cpu cores core')" "$(nproc)" "one meter per core"
-assert_eq "$(count_widgets 'section.cpu graph')" 1
+wait_for 'monitor tabs tab.cpu.active' 1 "the cpu instance opens on the cpu tab"
+wait_for 'monitor section' 1 "one section shown"
+wait_for 'section.cpu cores core' "$(nproc)" "one meter per core"
+wait_for 'section.cpu graph' 1
 shot_surface popup-cpu popup
 click_widget 'monitor tabs tab.mem'
-assert_eq "$(count_widgets 'monitor tabs tab.mem.active')" 1
-assert_eq "$(count_widgets 'section.mem meter.used')" 1
-assert_eq "$(count_widgets 'section.cpu')" 0 "the cpu section is gone"
+wait_for 'monitor tabs tab.mem.active' 1
+wait_for 'section.mem meter.used' 1
+wait_for 'section.cpu' 0 "the cpu section is gone"
 click_widget 'monitor tabs tab.disk'
 [ "$(count_widgets 'section.disk disk')" -ge 1 ] || { echo "no disk row"; exit 1; }
-assert_eq "$(count_widgets 'section.disk disk[mount="/"]')" 1 "the root mount"
+wait_for 'section.disk disk[mount="/"]' 1 "the root mount"
 click_widget 'monitor tabs tab.net'
 [ "$(count_widgets 'section.net iface')" -ge 1 ] || { echo "no interface row"; exit 1; }
 click_widget 'monitor tabs tab.processes'
 settle 1
-assert_eq "$(count_widgets 'table row')" 5 "processes = 5"
-assert_eq "$(count_widgets 'table header column.cpu.sorted')" 1 "sorted by cpu at first"
+wait_for 'table row' 5 "processes = 5"
+wait_for 'table header column.cpu.sorted' 1 "sorted by cpu at first"
 shot_surface popup-processes popup
 
 # Sort by memory: the first row is one of the two fattest processes
 # (the readings aren't simultaneous).
 click_widget 'table header column.mem'
-assert_eq "$(count_widgets 'table header column.mem.sorted')" 1
+wait_for 'table header column.mem.sorted' 1
 top2=$(ps -eo pid --sort=-rss | sed -n '2,3p' | tr -d ' ')
 assert_contains "$top2" "$(first_pid)" "the fattest process first"
 # By pid, descending by default; a second click flips it.
 click_widget 'table header column.pid'
-assert_eq "$(count_widgets 'table header column.pid.sorted')" 1
+wait_for 'table header column.pid.sorted' 1
 first=$(first_pid)
 for p in $(row_pids); do
     [ "$p" -le "$first" ] || { echo "not descending: $p > $first"; exit 1; }
 done
 click_widget 'table header column.pid'
-assert_eq "$(count_widgets 'table header column.pid.sorted.reverse')" 1 "flipped"
+wait_for 'table header column.pid.sorted.reverse' 1 "flipped"
 first=$(first_pid)
 for p in $(row_pids); do
     [ "$p" -ge "$first" ] || { echo "not ascending: $p < $first"; exit 1; }
@@ -110,18 +110,18 @@ chmod +x "$ARIA_UI_OUT/!victim"
 "$ARIA_UI_OUT/!victim" &
 victim=$!
 click_widget 'table header column.name'
-assert_eq "$(count_widgets 'table header column.name.sorted')" 1
+wait_for 'table header column.name.sorted' 1
 i=0
 while [ "$(first_pid)" != "$victim" ]; do
     i=$((i + 1))
     [ $i -le 5 ] || { echo "our victim ($victim) never showed first on the table"; exit 1; }
     settle 1
 done
-assert_eq "$(count_widgets 'table row[pid="'"$victim"'"][name="!victim"]')" 1 "named as the script"
+wait_for 'table row[pid="'"$victim"'"][name="!victim"]' 1 "named as the script"
 # The table is re-read every second and our own `aria` clients come
 # and go below it, so a click may still land on a shifted row: try
 # until the right row is the selected one.
-assert_eq "$(count_widgets 'monitor > actions.none')" 1 "the bar with the help, nothing selected"
+wait_for 'monitor > actions.none' 1 "the bar with the help, nothing selected"
 select_victim() {
     i=0
     while [ "$(count_widgets 'table row.selected[pid="'"$victim"'"]')" != 1 ]; do
@@ -132,9 +132,9 @@ select_victim() {
     done
 }
 select_victim
-assert_eq "$(count_widgets 'monitor > actions.none')" 0 "the bar for the selection"
-assert_eq "$(count_widgets 'monitor > actions > button.terminate')" 1
-assert_eq "$(count_widgets 'monitor > actions > button.kill')" 1
+wait_for 'monitor > actions.none' 0 "the bar for the selection"
+wait_for 'monitor > actions > button.terminate' 1
+wait_for 'monitor > actions > button.kill' 1
 shot_surface popup-actions popup
 # A click on the selected row deselects it; selected again for Terminate.
 # The rows under the victim shift as our own clients come and go, so a
@@ -162,16 +162,16 @@ done
 wait "$victim" 2> /dev/null || :
 assert_logged "sent Terminate to $victim"
 settle 1.2
-assert_eq "$(count_widgets 'monitor > actions.none')" 1 "back to the help once the process is gone"
+wait_for 'monitor > actions.none' 1 "back to the help once the process is gone"
 
 # A click outside closes the popup; the mem instance opens on its tab.
 click 300 900
 assert_no_surface popup
-assert_eq "$(count_widgets 'monitor')" 0
+wait_for 'monitor' 0
 click_widget 'panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
 assert_surface popup
-assert_eq "$(count_widgets 'monitor tabs tab.mem.active')" 1 "the mem instance opens on the mem tab"
-assert_eq "$(count_widgets 'section.mem')" 1
+wait_for 'monitor tabs tab.mem.active' 1 "the mem instance opens on the mem tab"
+wait_for 'section.mem' 1
 click 300 900
 assert_no_surface popup
 

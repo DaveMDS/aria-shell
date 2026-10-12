@@ -18,7 +18,7 @@ open_menu() {
 }
 
 assert_eq "$(aria debug theme)" "style=- scheme=light" "starts light, base only"
-assert_eq "$(count_widgets 'gadget.themes > button')" 2 "one per bar"
+wait_for 'gadget.themes > button' 2 "one per bar"
 set -- $(widget 'panel[output="HEADLESS-1"] gadget.themes > button')
 shot bar-light "$(($1 - 60)),0 160x32"
 
@@ -37,10 +37,10 @@ base_light=$(sample)
 
 # The menu: schemes, then the base and every theme in assets/themes.
 open_menu
-assert_eq "$(count_widgets 'menu > item')" 5 "Light, Dark, Base, manjaro, waybar"
-assert_eq "$(count_widgets 'menu > separator')" 1
-assert_eq "$(count_widgets 'menu > item.checked:nth-child(1)')" 1 "Light checked"
-assert_eq "$(count_widgets 'menu > item.checked:nth-child(4)')" 1 "Base checked"
+wait_for 'menu > item' 5 "Light, Dark, Base, manjaro, waybar"
+wait_for 'menu > separator' 1
+wait_for 'menu > item.checked:nth-child(1)' 1 "Light checked"
+wait_for 'menu > item.checked:nth-child(4)' 1 "Base checked"
 shot_surface menu popup
 
 click_widget 'menu > item:nth-child(5)'
@@ -49,7 +49,7 @@ assert_eq "$(aria debug theme)" "style=manjaro scheme=light" "manjaro picked"
 [ "$(sample)" != "$base_light" ] || { echo "manjaro's clock looks as the base's"; exit 1; }
 
 open_menu
-assert_eq "$(count_widgets 'menu > item.checked:nth-child(5)')" 1 "manjaro checked"
+wait_for 'menu > item.checked:nth-child(5)' 1 "manjaro checked"
 click_widget 'menu > item:nth-child(2)'
 assert_no_surface popup
 assert_eq "$(aria debug theme)" "style=manjaro scheme=dark" "Dark from the menu"

@@ -53,18 +53,18 @@ button='panel[output="HEADLESS-1"] gadget.places > button'
 
 click_widget "$button"
 shot_surface network popup
-assert_eq "$(count_widgets 'share')" 3 "Backup, My Docs, the sshfs"
-assert_eq "$(count_widgets 'share.nfs')" 1 "Backup"
-assert_eq "$(count_widgets 'share.smb')" 1 "My Docs"
-assert_eq "$(count_widgets 'share.ssh.mounted')" 1 "the sshfs mounted by hand"
-assert_eq "$(count_widgets 'share button.eject')" 1 "⏏ only on the mounted one"
-assert_eq "$(count_widgets 'share meter')" 0 "no usage: it would wait on the server"
+wait_for 'share' 3 "Backup, My Docs, the sshfs"
+wait_for 'share.nfs' 1 "Backup"
+wait_for 'share.smb' 1 "My Docs"
+wait_for 'share.ssh.mounted' 1 "the sshfs mounted by hand"
+wait_for 'share button.eject' 1 "⏏ only on the mounted one"
+wait_for 'share meter' 0 "no usage: it would wait on the server"
 assert_contains "$(aria debug places)" 'label="My Docs" type=cifs mounted=false fstab=true'
 assert_contains "$(aria debug places)" "share $HOME/remote box \"dave@box:/\" label=\"remote box\" type=fuse.sshfs mounted=true fstab=false"
 assert_not_contains "$(aria debug places)" "Hidden" "x-gvfs-hide"
 assert_not_contains "$(aria debug places)" "/srv" "where nobody looks"
-assert_eq "$(count_widgets 'device')" 1 "the encfs, with the devices (not the tmpfs)"
-assert_eq "$(count_widgets 'device.encrypted.mounted')" 1 "encrypted, mounted"
+wait_for 'device' 1 "the encfs, with the devices (not the tmpfs)"
+wait_for 'device.encrypted.mounted' 1 "encrypted, mounted"
 assert_contains "$(aria debug places)" 'mount /media/Vault "encfs" label="Vault" type=fuse.encfs mounted=true fstab=false'
 
 # Mounted, then opened.
@@ -77,8 +77,8 @@ done
 assert_eq "$(cat "$ARIA_UI_OUT/mount.log")" "mount /media/NAS/Backup"
 assert_eq "$(cat "$ARIA_UI_OUT/opened")" "/media/NAS/Backup" "opened"
 click_widget "$button"
-assert_eq "$(count_widgets 'share.nfs.mounted')" 1 "Backup, mounted"
-assert_eq "$(count_widgets 'share button.eject')" 2 "⏏ on it too"
+wait_for 'share.nfs.mounted' 1 "Backup, mounted"
+wait_for 'share button.eject' 2 "⏏ on it too"
 
 # A server that doesn't answer.
 touch "$ARIA_UI_OUT/unreachable/Docs"
@@ -93,22 +93,22 @@ click_widget 'share.nfs button.eject'
 assert_logged '"Can.t unmount Backup"'
 assert_logged 'target is busy'
 assert_surface popup
-assert_eq "$(count_widgets 'share.nfs.mounted')" 1 "still mounted"
+wait_for 'share.nfs.mounted' 1 "still mounted"
 
 # Unmounted; the one mounted by hand with fusermount3, and gone.
 rm "$ARIA_UI_OUT/busy/Backup"
 click_widget 'share.nfs button.eject'
 settle 0.5
-assert_eq "$(count_widgets 'share.nfs.mounted')" 0 "Backup unmounted"
-assert_eq "$(count_widgets 'share.nfs')" 1 "still listed: fstab has it"
+wait_for 'share.nfs.mounted' 0 "Backup unmounted"
+wait_for 'share.nfs' 1 "still listed: fstab has it"
 click_widget 'share.ssh button.eject'
 settle 0.5
 assert_logged 'remote box unmounted'
 assert_contains "$(cat "$ARIA_UI_OUT/mount.log")" "fusermount3 -u $HOME/remote box"
-assert_eq "$(count_widgets 'share.ssh')" 0 "gone: nothing to mount it again with"
+wait_for 'share.ssh' 0 "gone: nothing to mount it again with"
 
 # The encfs: unmounted with fusermount3, and gone.
 click_widget 'device.encrypted button.eject'
 settle 0.5
 assert_contains "$(cat "$ARIA_UI_OUT/mount.log")" "fusermount3 -u /media/Vault"
-assert_eq "$(count_widgets 'device')" 0 "gone: nothing to mount it again with"
+wait_for 'device' 0 "gone: nothing to mount it again with"

@@ -229,13 +229,10 @@ impl Gadget for NetworkGadget {
         if self.config.show_label && !summary.label.is_empty() {
             parts.push(icssed::text(summary.label.clone()).into());
         }
+        let kind = summary.kind.filter(|_| running);
         let button = icssed::button(parts)
-            .class(match summary.kind {
-                _ if !running => "none",
-                Some(DeviceKind::Wifi) => "wifi",
-                Some(DeviceKind::Wired) => "wired",
-                None => "none",
-            })
+            .class_if("wifi", kind == Some(DeviceKind::Wifi))
+            .class_if("wired", kind == Some(DeviceKind::Wired))
             .class(if summary.connected {
                 "connected"
             } else if summary.connecting {
@@ -243,9 +240,8 @@ impl Gadget for NetworkGadget {
             } else {
                 "disconnected"
             })
-            .class_if("limited", summary.limited)
-            .class_if("vpn", summary.vpn && self.config.show_vpn)
-            .class_if("off", running && !wireless)
+            .class_if("warning", summary.connected && summary.limited)
+            .class_if("muted", !summary.connected && !summary.connecting)
             .on_press(Message::TogglePopup)
             .id(self.popup.anchor());
         let button = mouse_area(button)

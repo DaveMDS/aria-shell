@@ -15,7 +15,7 @@ nm_idle() {
 }
 
 # --- no NetworkManager yet ---------------------------------------------------
-wait_for 'gadget.network > button.none' 2 "offline on both bars, nobody on the bus"
+wait_for 'gadget.network > button.disconnected.muted' 2 "offline on both bars, nobody on the bus"
 click_widget "$bar"
 assert_surface popup
 wait_for "$list empty" 1 "the popup says NetworkManager isn't running"
@@ -25,7 +25,7 @@ assert_no_surface popup
 
 # --- it comes up: nothing connected ------------------------------------------
 nm_start
-wait_for 'gadget.network > button.wifi.disconnected' 2 "a Wi‑Fi device, disconnected, on both bars"
+wait_for 'gadget.network > button.wifi.disconnected.muted' 2 "a Wi‑Fi device, disconnected, on both bars"
 
 # --- the networks around -----------------------------------------------------
 nm_send "ap Darma6 80 psk"
@@ -143,13 +143,11 @@ assert_eq "$(nm_action)" "wireless false" "Wi‑Fi turned off"
 wait_for "$list header.wifi.off" 1 "the header says off"
 wait_for "$list ap" 0 "no networks listed"
 wait_for "$list empty" 1 "'Wi‑Fi is off'"
-wait_for 'gadget.network > button.off' 2 "the bars too"
 shot_surface network-off popup
 click 600 600
 assert_no_surface popup
 click_widget_with middle "$bar"
 assert_eq "$(nm_action)" "wireless true" "a middle click turns it back on"
-wait_for 'gadget.network > button.off' 0
 
 # --- the wired device --------------------------------------------------------------
 nm_send "wired eth0-profile"
@@ -181,7 +179,7 @@ assert_eq "$(nm_action)" "activate Office"
 nm_send finish
 wait_for "$list vpn.active" 1 "the VPN up"
 wait_for "$list vpn.failed" 0 "the failure gone"
-wait_for 'gadget.network > button.vpn > icon.vpn' 2 "the VPN badge on the bars"
+wait_for 'gadget.network > button > icon.vpn' 2 "the VPN badge on the bars"
 click_widget "$list vpn[name=\"Office\"] toggle"
 assert_eq "$(nm_action)" "deactivate Office"
 wait_for "$list vpn.active" 0 "the VPN down"
@@ -199,4 +197,5 @@ assert_no_surface popup
 i=0; while ! [ -f "$ARIA_UI_OUT/clicks" ] && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
 assert_eq "$(cat "$ARIA_UI_OUT/clicks")" settings "settings_command ran"
 nm_stop
-wait_for 'gadget.network > button.none' 2 "offline again once NetworkManager is gone"
+wait_for 'gadget.network > button.disconnected.muted' 2 "offline again once NetworkManager is gone"
+wait_for 'gadget.network > button.wifi' 0 "no device"

@@ -16,8 +16,9 @@
 //! ```text
 //! showcase > parts                           its own boxes; in them, the parts' roots
 //! ├─ panel#showcase > slot                   a bar over the columns, of samples:
-//! │  ├─ gadget#showcase > button             of no kind, only what every gadget gets
-//! │  ╰─ gadget.<kind> > button.<state>       a gadget's states (.active, .low, .muted, ...),
+//! │  ├─ gadget#showcase > button[.<state>]   of no kind, only what every gadget gets:
+//! │  │                                       the states, .active .warning .danger .muted
+//! │  ╰─ gadget.<kind> > button.<state>       a gadget's states, as it shows them
 //! │     ╰─ icon | label                      their selector in a tooltip
 //! ╰─ columns > column
 //!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
@@ -49,14 +50,12 @@ use crate::{AriaShell, Message as Shell};
 /// The gadgets whose popups show, by their config section.
 const GADGETS: &[&str] = &["Clock", "Themes"];
 
-/// A sample button on the bar: its classes, its icon (with a class of
-/// its own), its label. Not a gadget's view: only what the theme's rules
-/// meet, `gadget.<kind> > button.<state> > icon | label`.
-#[derive(Clone, Copy)]
+/// A sample button on the bar: its classes, its icon, its label. Not a
+/// gadget's view: only what the theme's rules meet, `gadget.<kind> >
+/// button.<state> > icon | label`.
 struct Sample {
     classes: &'static [&'static str],
     icon: Option<&'static str>,
-    icon_class: Option<&'static str>,
     label: Option<&'static str>,
 }
 
@@ -68,7 +67,6 @@ const fn sample(
     Sample {
         classes,
         icon,
-        icon_class: None,
         label,
     }
 }
@@ -84,59 +82,58 @@ const BAR: &[(&str, &[SampleGadget])] = &[
         (Some("workspaces"), &[
             sample(&["workspace", "active"], None, Some("1")),
             sample(&["workspace"], None, Some("2")),
-            sample(&["workspace", "urgent"], None, Some("3")),
+            sample(&["workspace", "danger"], None, Some("3")),
         ]),
         (None, &[
             sample(&[], Some("dialog-information-symbolic"), None),
-            sample(&[], Some("dialog-information-symbolic"), Some("gadget > button")),
-            sample(&[], None, Some("gadget > button")),
+            sample(&["active"], Some("dialog-information-symbolic"), Some("active")),
+            sample(&["warning"], Some("dialog-warning-symbolic"), Some("warning")),
+            sample(&["danger"], Some("dialog-error-symbolic"), Some("danger")),
+            sample(&["muted"], Some("dialog-information-symbolic"), Some("muted")),
         ]),
     ]),
     ("center", &[
         (Some("system-monitor"), &[
             sample(&["mem", "warning"], Some("computer-symbolic"), Some("78%")),
-            sample(&["temp", "critical"], Some("computer-symbolic"), Some("92°C")),
+            sample(&["temp", "danger"], Some("computer-symbolic"), Some("92°C")),
         ]),
         (Some("clock"), &[sample(&[], None, Some("10:42"))]),
         (Some("custom"), &[sample(&["warning"], Some("dialog-warning-symbolic"), Some("!"))]),
-        (Some("tray"), &[sample(&["attention"], Some("mail-unread-symbolic"), None)]),
+        (Some("tray"), &[sample(&["warning"], Some("mail-unread-symbolic"), None)]),
     ]),
     ("end", &[
         (Some("notifications"), &[
-            sample(&["new"], Some("preferences-system-notifications-symbolic"), Some("3")),
-            sample(&["dnd"], Some("notifications-disabled-symbolic"), None),
+            sample(&["active"], Some("preferences-system-notifications-symbolic"), Some("3")),
+            sample(&["muted"], Some("notifications-disabled-symbolic"), None),
         ]),
         (Some("network"), &[
-            sample(&["limited"], Some("network-wireless-no-route-symbolic"), None),
-            sample(&["disconnected"], Some("network-offline-symbolic"), None),
+            sample(&["warning"], Some("network-wireless-no-route-symbolic"), None),
+            sample(&["muted"], Some("network-offline-symbolic"), None),
         ]),
         (Some("audio"), &[
             sample(&["muted"], Some("audio-volume-muted-symbolic"), Some("40%")),
         ]),
         (Some("brightness"), &[
-            sample(&["none"], Some("display-brightness-symbolic"), None),
+            sample(&["muted"], Some("display-brightness-symbolic"), None),
         ]),
         (Some("power"), &[
-            Sample { icon_class: Some("battery"), ..sample(&["status", "discharging", "low"], Some("battery-level-20-symbolic"), Some("15%")) },
-            Sample { icon_class: Some("battery"), ..sample(&["status", "discharging", "critical"], Some("battery-caution-symbolic"), Some("4%")) },
-            sample(&["idle", "inhibited"], Some("view-reveal-symbolic"), None),
+            sample(&["battery"], Some("battery-level-100-symbolic"), None),
+            sample(&["battery"], Some("battery-level-80-charging-symbolic"), None),
+            sample(&["battery", "warning"], Some("battery-level-20-symbolic"), None),
+            sample(&["battery", "danger"], Some("battery-caution-symbolic"), None),
+            sample(&["idle", "active"], Some("view-reveal-symbolic"), None),
         ]),
     ]),
 ];
 
-/// A sample button's selector, `gadget.<kind> > button.<class>...`,
-/// down to its icon when the icon has a class.
+/// A sample button's selector, `gadget.<kind> > button.<class>...`.
 fn selector(kind: Option<&str>, sample: &Sample) -> String {
     let gadget = match kind {
         Some(kind) => format!("gadget.{kind}"),
         None => "gadget#showcase".to_owned(),
     };
     let classes: String = sample.classes.iter().map(|c| format!(".{c}")).collect();
-    let mut selector = format!("{gadget} > button{classes}");
-    if let Some(class) = sample.icon_class {
-        selector.push_str(&format!(" > icon.{class}"));
-    }
-    selector
+    format!("{gadget} > button{classes}")
 }
 
 /// The samples' icons.
@@ -422,11 +419,7 @@ impl AriaShell {
         let icons: &dyn icssed::Icons = &self.icons;
         let mut content: Vec<Element<'_, Shell>> = Vec::new();
         if let Some(name) = sample.icon {
-            let icon = icssed::icon((icons, name));
-            content.push(match sample.icon_class {
-                Some(class) => icon.class(class).into(),
-                None => icon.into(),
-            });
+            content.push(icssed::icon((icons, name)).into());
         }
         if let Some(label) = sample.label {
             content.push(icssed::text(label).into());

@@ -75,7 +75,7 @@ assert_no_surface popup
 sni_send "icon 40 200 40"
 shot bar-item-green "$(($(widget 'surface.panel[output="HEADLESS-1"] gadget.tray > button' | cut -d' ' -f1) - 40)),0 120x32"
 sni_send "status NeedsAttention"
-wait_for 'gadget.tray > button.attention' 2 "attention on both bars"
+wait_for 'gadget.tray > button.warning' 2 "attention on both bars"
 
 # Gone from the bus: gone from the bars.
 sni_stop

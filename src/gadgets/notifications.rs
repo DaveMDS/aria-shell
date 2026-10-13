@@ -108,8 +108,9 @@ impl Gadget for NotificationsGadget {
             .map(|e| e.notification.id)
             .collect();
         let button = icssed::button(content)
-            .class_if("dnd", ctx.notifications.dnd())
-            .class_if("new", unseen > 0)
+            // Quiet over new: the count still shows.
+            .class_if("muted", ctx.notifications.dnd())
+            .class_if("active", unseen > 0 && !ctx.notifications.dnd())
             .on_press(Message::TogglePopup(unseen_ids))
             .id(self.popup.anchor());
         let button = mouse_area(button)

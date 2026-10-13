@@ -551,6 +551,12 @@ impl Panel {
             .gadget
             .popup_view(Context { shared })
             .map(move |m| Message::Gadget(i, m));
+        // On trial, Power's alone: its kind a class of the root,
+        // `popup.power[#instance]`, no box of its own.
+        if e.gadget.kind() == "power" {
+            let root = self.popup_root(shared.theme).class(e.gadget.kind());
+            return Some(popup::view(with_id(root, e.id.as_deref()), content));
+        }
         // In a box of its own, `gadget.<kind>[#instance]`.
         let gadget = icssed::column![content]
             .kind("gadget")

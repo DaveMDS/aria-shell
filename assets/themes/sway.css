@@ -74,7 +74,7 @@ gadget.workspaces > button.workspace.active {
   background: #64727d;
   box-shadow: inset 0 -3px #ffffff;
 }
-gadget.workspaces > button.workspace.urgent {
+gadget.workspaces > button.workspace.danger {
   background: var(--danger);
 }
 

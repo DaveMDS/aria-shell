@@ -38,10 +38,10 @@ wait_for 'gadget#net.system-monitor > button.net graph' 0 "and no graph"
 wait_for 'gadget#mem.system-monitor > button.mem > label' 0 "the meter holds the text"
 # Thresholds: the net instance is critical from 0, the disk one a
 # warning from 0, the cpu one only from the percentage defaults.
-wait_for 'gadget#net.system-monitor > button.net.critical' 2 "critical = 0"
+wait_for 'gadget#net.system-monitor > button.net.danger' 2 "critical = 0"
 wait_for 'gadget#disk.system-monitor > button.disk.warning' 2 "warning = 0"
-wait_for 'gadget#disk.system-monitor > button.disk.critical' 0
-wait_for 'gadget#cpu.system-monitor > button.cpu.critical' 0 "an idle cpu"
+wait_for 'gadget#disk.system-monitor > button.disk.danger' 0
+wait_for 'gadget#cpu.system-monitor > button.cpu.danger' 0 "an idle cpu"
 shot bar "$(($(widget "$bell" | cut -d' ' -f1) - 20)),0 520x32"
 
 # The popup: the tabs, opened on the value's; one section at a time.

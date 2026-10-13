@@ -136,8 +136,8 @@ impl Gadget for TrayGadget {
                 Message::ContextMenu(key.clone())
             };
             let button = icssed::button![icon]
-                .class_if("passive", item.props.status == Status::Passive)
-                .class_if("attention", item.props.status == Status::NeedsAttention)
+                .class_if("muted", item.props.status == Status::Passive)
+                .class_if("warning", item.props.status == Status::NeedsAttention)
                 .on_press(left)
                 .id(self.popup.anchor_nth(n));
             let scroll_key = key.clone();

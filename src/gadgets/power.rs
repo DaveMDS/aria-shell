@@ -30,7 +30,8 @@ pub struct PowerGadget {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    TogglePopup,
+    /// From the battery (anchor 0) or the profile (1).
+    TogglePopup(usize),
     /// Hold idle or let it go.
     ToggleIdle,
     SetIdle(bool),
@@ -51,7 +52,7 @@ impl Gadget for PowerGadget {
 
     fn update(&mut self, message: Message) -> Action<Message> {
         match message {
-            Message::TogglePopup => self.popup.toggle(),
+            Message::TogglePopup(n) => self.popup.toggle_nth(n),
             Message::ToggleIdle => Action::Idle(idle::Command::ToggleInhibit),
             Message::SetIdle(on) => Action::Idle(idle::Command::SetInhibit(on)),
             Message::SetProfile(profile) => Action::Power(Command::SetProfile(profile)),
@@ -82,35 +83,27 @@ impl Gadget for PowerGadget {
             .profiles()
             .filter(|_| self.config.show_profile)
             .map(|p| p.active.as_str());
-        if battery.is_some() || profile.is_some() {
-            let mut content: Vec<Element<'a, Message>> = Vec::new();
-            if let Some(b) = battery {
-                content.push(ctx.icon(b.icon_name()).class("battery").into());
-                if self.config.show_percent {
-                    let percent = format!("{:.0}%", b.percentage);
-                    content.push(icssed::text(percent).into());
-                }
-            }
-            if let Some(p) = profile {
-                content.push(ctx.icon(profile_icon(p)).class("profile").into());
-            }
-            let mut button = icssed::button(content).class("status");
-            if let Some(b) = battery {
-                button = button.class(b.state.name()).class_if(
-                    match b.warning {
-                        Warning::Critical => "critical",
-                        _ => "low",
-                    },
-                    b.warning != Warning::None,
-                );
-            }
-            if let Some(p) = profile {
-                button = button.class(profile_class(p));
+        if let Some(b) = battery {
+            let mut content: Vec<Element<'a, Message>> = vec![ctx.icon(b.icon_name()).into()];
+            if self.config.show_percent {
+                content.push(icssed::text(format!("{:.0}%", b.percentage)).into());
             }
             parts.push(
-                button
-                    .on_press(Message::TogglePopup)
-                    .id(self.popup.anchor())
+                icssed::button(content)
+                    .class("battery")
+                    .class_if("warning", b.warning == Warning::Low)
+                    .class_if("danger", b.warning == Warning::Critical)
+                    .on_press(Message::TogglePopup(0))
+                    .id(self.popup.anchor_nth(0))
+                    .into(),
+            );
+        }
+        if let Some(p) = profile {
+            parts.push(
+                icssed::button![ctx.icon(profile_icon(p))]
+                    .class("profile")
+                    .on_press(Message::TogglePopup(1))
+                    .id(self.popup.anchor_nth(1))
                     .into(),
             );
         }
@@ -124,8 +117,7 @@ impl Gadget for PowerGadget {
             parts.push(
                 icssed::button![ctx.icon(name.as_str())]
                     .class("idle")
-                    .class_if("inhibited", inhibited)
-                    .class_if("playing", ctx.idle.held_by_player())
+                    .class_if("active", inhibited)
                     .on_press(Message::ToggleIdle)
                     .into(),
             );
@@ -267,8 +259,7 @@ impl PowerGadget {
             icssed::toggle(inhibited, Message::SetIdle).switch(),
         ]
         .kind("idle")
-        .class_if("inhibited", inhibited)
-        .class_if("playing", ctx.idle.held_by_player())
+        .class_if("active", inhibited)
         .into()
     }
 }
@@ -281,9 +272,8 @@ fn battery<'a>(ctx: Context<'a>, b: &'a Battery) -> Element<'a, Message> {
         icssed::text(battery_status(ctx.locale, b)).kind("status"),
     ]
     .kind("battery")
-    .class(b.state.name())
-    .class_if("low", b.warning == Warning::Low)
-    .class_if("critical", b.warning == Warning::Critical)
+    .class_if("warning", b.warning == Warning::Low)
+    .class_if("danger", b.warning == Warning::Critical)
     .into()
 }
 

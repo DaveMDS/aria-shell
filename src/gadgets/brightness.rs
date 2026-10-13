@@ -105,7 +105,7 @@ impl Gadget for BrightnessGadget {
             content.push(icssed::text(format!("{percent}%")).into());
         }
         let button = icssed::button(content)
-            .class_if("none", ctx.brightness.displays().is_empty())
+            .class_if("muted", ctx.brightness.displays().is_empty())
             .on_press(Message::TogglePopup)
             .id(self.popup.anchor());
         let button = mouse_area(button)

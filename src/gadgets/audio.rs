@@ -224,7 +224,6 @@ impl AudioGadget {
         let button = icssed::button(content)
             .class(kind_class(kind))
             .class_if("muted", muted)
-            .class_if("none", device.is_none())
             .on_press(Message::TogglePopup(kind))
             .id(self.popup.anchor_nth(anchor(kind)));
         mouse_area(button)

@@ -41,7 +41,7 @@ pub struct InstanceConfig {
     /// The top of the sparkline / the full gauge; `None`: 100 for a
     /// percentage, the history's maximum otherwise.
     pub max: Option<f32>,
-    /// From these values on the button is `.warning` / `.critical`
+    /// From these values on the button is `.warning` / `.danger`
     /// (the value's own unit); `None`: 70 / 90 for a percentage, no
     /// threshold otherwise.
     pub warning: Option<f32>,
@@ -176,7 +176,7 @@ impl SectionKind {
     }
 }
 
-/// Percents from which a value is `.warning` / `.critical` (the
+/// Percents from which a value is `.warning` / `.danger` (the
 /// popup's meters, and the bar's percentages by default).
 const WARNING: f32 = 70.0;
 const CRITICAL: f32 = 90.0;
@@ -307,7 +307,7 @@ impl Gadget for SystemMonitor {
         let button = icssed::button(parts)
             .class(value.name())
             .class_if("warning", level == Some("warning"))
-            .class_if("critical", level == Some("critical"))
+            .class_if("danger", level == Some("danger"))
             .on_press(Message::TogglePopup)
             .id(self.popup.anchor());
         let button = mouse_area(button).on_right_press(Message::RunCommand);
@@ -396,7 +396,7 @@ impl SystemMonitor {
         self.interval = monitor.interval.max(1);
     }
 
-    /// `"critical"` / `"warning"` when the current value reaches the
+    /// `"danger"` / `"warning"` when the current value reaches the
     /// instance's thresholds (the defaults for a percentage).
     fn level(&self, current: Option<f32>, percent: bool) -> Option<&'static str> {
         let v = current?;
@@ -404,7 +404,7 @@ impl SystemMonitor {
         let critical = self.config.critical.or_else(|| default(CRITICAL));
         let warning = self.config.warning.or_else(|| default(WARNING));
         if critical.is_some_and(|t| v >= t) {
-            Some("critical")
+            Some("danger")
         } else if warning.is_some_and(|t| v >= t) {
             Some("warning")
         } else {
@@ -557,11 +557,11 @@ fn graph<'a>(
     graph.label(label).into()
 }
 
-/// A fraction's meter, `.warning` / `.critical` from its percent.
+/// A fraction's meter, `.warning` / `.danger` from its percent.
 fn level_meter<'a>(percent: f32) -> icssed::Meter<'a, Message> {
     icssed::meter(percent / 100.0)
         .class_if("warning", (WARNING..CRITICAL).contains(&percent))
-        .class_if("critical", percent >= CRITICAL)
+        .class_if("danger", percent >= CRITICAL)
 }
 
 fn cpu_section<'a>(locale: &Locale, s: &Sample, sysmon: &'a SysMon) -> Vec<Element<'a, Message>> {
@@ -578,7 +578,7 @@ fn cpu_section<'a>(locale: &Locale, s: &Sample, sysmon: &'a SysMon) -> Vec<Eleme
             icssed::column![icssed::meter(v / 100.0), icssed::text(format!("{v:.0}%"))]
                 .kind("core")
                 .class_if("warning", (WARNING..CRITICAL).contains(v))
-                .class_if("critical", *v >= CRITICAL)
+                .class_if("danger", *v >= CRITICAL)
                 .into()
         });
         icssed::row(cells).kind("group").into()
@@ -837,13 +837,13 @@ mod tests {
         // A percentage: the defaults.
         assert_eq!(g.level(Some(69.0), true), None);
         assert_eq!(g.level(Some(70.0), true), Some("warning"));
-        assert_eq!(g.level(Some(90.0), true), Some("critical"));
+        assert_eq!(g.level(Some(90.0), true), Some("danger"));
         // A rate: nothing unless configured.
         assert_eq!(g.level(Some(1e9), false), None);
         g.config.warning = Some(1000.0);
         assert_eq!(g.level(Some(1e9), false), Some("warning"));
         g.config.critical = Some(1e6);
-        assert_eq!(g.level(Some(1e9), false), Some("critical"));
+        assert_eq!(g.level(Some(1e9), false), Some("danger"));
         assert_eq!(g.level(None, true), None);
     }
 

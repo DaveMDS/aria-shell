@@ -69,8 +69,8 @@ wait_for "$p2 $ws" 1 "the other bar unchanged"
 
 # The window left behind, made urgent, marks its workspace.
 swaymsg '[app_id=aria-two] urgent enable' > /dev/null
-wait_for "$p1 button.workspace.urgent[name=\"1\"]" 1 "workspace 1 urgent"
-wait_for "$p1 window.urgent[class=\"aria-two\"]" 1 "the window urgent"
+wait_for "$p1 button.workspace.danger[name=\"1\"]" 1 "workspace 1 urgent"
+wait_for "$p1 window.danger[class=\"aria-two\"]" 1 "the window urgent"
 shot_gadget bar-urgent
 
 # A click on the urgent workspace goes there: focus returns to the
@@ -78,7 +78,7 @@ shot_gadget bar-urgent
 click_widget "$p1 button.workspace[name=\"1\"]"
 wait_for "$p1 $ws" 1 "the empty workspace is gone"
 wait_for "$p1 button.workspace.active[name=\"1\"]" 1 "back on workspace 1"
-wait_for "$p1 button.workspace.urgent" 0 "no urgency left"
+wait_for "$p1 button.workspace.danger" 0 "no urgency left"
 wait_for "$p1 window.active[class=\"aria-two\"]" 1 "its window focused again"
 wait_for "$p1 gadget.workspaces > title[class=\"aria-two\"]" 1 "and titled"
 

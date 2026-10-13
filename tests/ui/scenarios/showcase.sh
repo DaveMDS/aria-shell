@@ -15,15 +15,15 @@ wait_for 'surface.exiter > row > button' 6 "the exit menu"
 wait_for 'surface.osd.volume' 1 "the OSD"
 wait_for 'notification.normal' 1 "a notification"
 wait_for 'notification.critical' 1 "a critical one"
-wait_for 'gadget#showcase > button' 3 "the bar's buttons"
-wait_for 'gadget.workspaces > button.urgent' 1 "a gadget's state"
-wait_for 'gadget.power > button.critical > icon.battery' 1 "an icon's class"
+wait_for 'gadget#showcase > button' 5 "the bar's buttons"
+wait_for 'gadget.workspaces > button.danger' 1 "a gadget's state"
+wait_for 'gadget.power > button.battery.danger' 1 "another"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase
 
 # A sample's selector, in its tooltip.
-set -- $(widget 'gadget.power > button.critical')
+set -- $(widget 'gadget.power > button.battery.danger')
 pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
 wait_for 'surface.panel#showcase gadget.power > tooltip' 1 "the tooltip"
 shot_surface showcase-tooltip showcase

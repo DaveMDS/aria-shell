@@ -9,12 +9,13 @@
 
 upower_start
 restart_shell "$ARIA_UI_ROOT/tests/ui/config-power"
-status='surface.panel[output="HEADLESS-1"] gadget.power > button.status'
+battery='surface.panel[output="HEADLESS-1"] gadget.power > button.battery'
 
 # Nothing to show but the eye.
 assert_contains "$(aria debug power)" "battery=none"
 assert_contains "$(aria debug power)" "profile=none"
-wait_for 'gadget.power > button.status' 0 "no battery, no profile: no status"
+wait_for 'gadget.power > button.battery' 0 "no battery"
+wait_for 'gadget.power > button.profile' 0 "no profile"
 wait_for 'gadget.power > button.idle' 2 "the eye on both bars"
 
 # A battery, unplugged, and the profiles daemon.
@@ -24,40 +25,42 @@ upower_send "profiles on"
 upower_send "device MX_Master 40"
 assert_contains "$(aria debug power)" "battery=64% discharging"
 assert_contains "$(aria debug power)" "profile=balanced available=power-saver,balanced,performance"
-wait_for 'gadget.power > button.status.discharging.balanced' 2 "battery and profile on both bars"
-wait_for 'gadget.power > button.status > label' 2 "the percent"
+wait_for 'gadget.power > button.battery' 2 "the battery on both bars"
+wait_for 'gadget.power > button.profile' 2 "the profile on both bars"
+wait_for 'gadget.power > button.battery > label' 2 "the percent"
 assert_contains "$(aria debug idle)" "power=battery"
 assert_contains "$(aria debug idle)" "armed=lock=30m"
 
 # The popup.
-click_widget "$status"
+click_widget "$battery"
 assert_surface popup
 shot_surface popup popup
-wait_for 'surface.popup gadget.power battery.discharging' 1 "the battery"
-wait_for 'surface.popup gadget.power details line' 2 "power draw and health"
-wait_for 'surface.popup gadget.power device' 1 "the mouse"
-wait_for 'surface.popup gadget.power profiles toggle' 3 "three profiles"
-wait_for 'surface.popup gadget.power profiles toggle.balanced.checked' 1 "balanced is active"
+wait_for 'surface.popup.power battery' 1 "the battery"
+wait_for 'surface.popup.power details line' 2 "power draw and health"
+wait_for 'surface.popup.power device' 1 "the mouse"
+wait_for 'surface.popup.power profiles toggle' 3 "three profiles"
+wait_for 'surface.popup.power profiles toggle.balanced.checked' 1 "balanced is active"
 
 # A profile picked goes to the daemon; one it picks shows.
-click_widget 'surface.popup gadget.power profiles toggle.performance'
+click_widget 'surface.popup.power profiles toggle.performance'
 assert_eq "$(upower_event)" "set-profile performance"
 settle 0.5
-wait_for 'surface.popup gadget.power profiles toggle.performance.checked' 1 "performance is active"
+wait_for 'surface.popup.power profiles toggle.performance.checked' 1 "performance is active"
 upower_send "profile power-saver"
-wait_for 'gadget.power > button.status.power-saver' 2 "the daemon's pick on the bars"
+wait_for 'surface.popup.power profiles toggle.power-saver.checked' 1 "the daemon's pick"
 upower_send "degraded high-operating-temperature"
-wait_for 'surface.popup gadget.power message' 1 "why performance is limited"
+wait_for 'surface.popup.power message' 1 "why performance is limited"
 
 # Keep awake, from the popup.
-click_widget 'surface.popup gadget.power idle toggle'
+click_widget 'surface.popup.power idle toggle'
 assert_contains "$(aria debug idle)" "inhibited=true"
-wait_for 'gadget.power > button.idle.inhibited' 2 "held, on both bars"
-click_widget 'surface.popup gadget.power idle toggle'
+wait_for 'gadget.power > button.idle.active' 2 "held, on both bars"
+wait_for 'surface.popup.power idle.active' 1 "and in the popup"
+click_widget 'surface.popup.power idle toggle'
 assert_contains "$(aria debug idle)" "inhibited=false"
 
 # Settings runs settings_command and closes the popup.
-click_widget 'surface.popup gadget.power button.settings'
+click_widget 'surface.popup.power button.settings'
 assert_no_surface popup
 assert_eq "$(cat "$ARIA_UI_OUT/power-settings")" "settings" "settings_command ran"
 
@@ -69,10 +72,12 @@ assert_contains "$(aria debug idle)" "armed=lock=1h"
 upower_send "ac off"
 upower_send "warning low"
 assert_logged '"Battery low"'
+wait_for 'gadget.power > button.battery.warning' 2 "low on the bars"
 wait_for 'notification' 1 "a notification"
 upower_send "battery 4 discharging 600"
 upower_send "warning critical"
 assert_logged '"Battery critically low"'
+wait_for 'gadget.power > button.battery.danger' 2 "critical on the bars"
 wait_for 'notification.critical' 1 "the same one, now critical"
 shot low-battery
 upower_send "battery 5 charging 3600"
@@ -82,5 +87,6 @@ wait_for 'notification' 0 "closed once charging"
 # UPower leaving: back to the eye alone.
 upower_send "profiles off"
 upower_send "battery none"
-wait_for 'gadget.power > button.status' 0 "nothing but the eye"
+wait_for 'gadget.power > button.battery' 0 "no battery"
+wait_for 'gadget.power > button.profile' 0 "nothing but the eye"
 upower_stop

@@ -121,7 +121,7 @@ impl Workspaces {
         icssed::button(children)
             .class("workspace")
             .class_if("active", ws.active)
-            .class_if("urgent", ws.urgent)
+            .class_if("danger", ws.urgent)
             .attr("name", &ws.name)
             .on_press(Message::Activate(ws.id.clone()))
             .into()
@@ -137,7 +137,7 @@ impl Workspaces {
         let window = icssed::row![content]
             .kind("window")
             .class_if("active", win.active)
-            .class_if("urgent", win.urgent)
+            .class_if("danger", win.urgent)
             .attr("class", &win.class);
         if self.config.focus_window_on_click {
             window.on_press(Message::Focus(win.id.clone())).into()

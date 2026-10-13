@@ -14,14 +14,17 @@
 //! (`showcase`).
 //!
 //! ```text
-//! showcase > parts > column                 its own boxes; in them, the parts' roots
-//! ├─ popup > gadget.clock | gadget.themes   the calendar, a menu
-//! ├─ launcher
-//! ├─ exiter
-//! ├─ osd.volume
-//! ├─ notification.normal | notification.critical
-//! ╰─ panel > slot.start > gadget#showcase   the bar's buttons, in a gadget of no kind
-//!    ╰─ button > icon | label
+//! showcase > parts                           its own boxes; in them, the parts' roots
+//! ├─ panel#showcase > slot                   a bar over the columns, of samples:
+//! │  ├─ gadget#showcase > button             of no kind, only what every gadget gets
+//! │  ╰─ gadget.<kind> > button.<state>       a gadget's states (.active, .low, .muted, ...),
+//! │     ╰─ icon | label                      their selector in a tooltip
+//! ╰─ columns > column
+//!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
+//!    ├─ launcher
+//!    ├─ exiter
+//!    ├─ osd.volume
+//!    ╰─ notification.normal | notification.critical
 //! ```
 
 use iced::widget::mouse_area;
@@ -46,15 +49,103 @@ use crate::{AriaShell, Message as Shell};
 /// The gadgets whose popups show, by their config section.
 const GADGETS: &[&str] = &["Clock", "Themes"];
 
-/// The bar's sample buttons: with an icon, a text, or both.
-const BAR_BUTTONS: &[(bool, Option<&str>)] = &[
-    (true, None),
-    (true, Some("gadget > button")),
-    (false, Some("gadget > button")),
+/// A sample button on the bar: its classes, its icon (with a class of
+/// its own), its label. Not a gadget's view: only what the theme's rules
+/// meet, `gadget.<kind> > button.<state> > icon | label`.
+#[derive(Clone, Copy)]
+struct Sample {
+    classes: &'static [&'static str],
+    icon: Option<&'static str>,
+    icon_class: Option<&'static str>,
+    label: Option<&'static str>,
+}
+
+const fn sample(
+    classes: &'static [&'static str],
+    icon: Option<&'static str>,
+    label: Option<&'static str>,
+) -> Sample {
+    Sample {
+        classes,
+        icon,
+        icon_class: None,
+        label,
+    }
+}
+
+/// A sample gadget: its kind (`None`: `gadget#showcase`, of no kind),
+/// its buttons.
+type SampleGadget = (Option<&'static str>, &'static [Sample]);
+
+/// The bar's slots and their gadgets.
+#[rustfmt::skip]
+const BAR: &[(&str, &[SampleGadget])] = &[
+    ("start", &[
+        (Some("workspaces"), &[
+            sample(&["workspace", "active"], None, Some("1")),
+            sample(&["workspace"], None, Some("2")),
+            sample(&["workspace", "urgent"], None, Some("3")),
+        ]),
+        (None, &[
+            sample(&[], Some("dialog-information-symbolic"), None),
+            sample(&[], Some("dialog-information-symbolic"), Some("gadget > button")),
+            sample(&[], None, Some("gadget > button")),
+        ]),
+    ]),
+    ("center", &[
+        (Some("system-monitor"), &[
+            sample(&["mem", "warning"], Some("computer-symbolic"), Some("78%")),
+            sample(&["temp", "critical"], Some("computer-symbolic"), Some("92°C")),
+        ]),
+        (Some("clock"), &[sample(&[], None, Some("10:42"))]),
+        (Some("custom"), &[sample(&["warning"], Some("dialog-warning-symbolic"), Some("!"))]),
+        (Some("tray"), &[sample(&["attention"], Some("mail-unread-symbolic"), None)]),
+    ]),
+    ("end", &[
+        (Some("notifications"), &[
+            sample(&["new"], Some("preferences-system-notifications-symbolic"), Some("3")),
+            sample(&["dnd"], Some("notifications-disabled-symbolic"), None),
+        ]),
+        (Some("network"), &[
+            sample(&["limited"], Some("network-wireless-no-route-symbolic"), None),
+            sample(&["disconnected"], Some("network-offline-symbolic"), None),
+        ]),
+        (Some("audio"), &[
+            sample(&["muted"], Some("audio-volume-muted-symbolic"), Some("40%")),
+        ]),
+        (Some("brightness"), &[
+            sample(&["none"], Some("display-brightness-symbolic"), None),
+        ]),
+        (Some("power"), &[
+            Sample { icon_class: Some("battery"), ..sample(&["status", "discharging", "low"], Some("battery-level-20-symbolic"), Some("15%")) },
+            Sample { icon_class: Some("battery"), ..sample(&["status", "discharging", "critical"], Some("battery-caution-symbolic"), Some("4%")) },
+            sample(&["idle", "inhibited"], Some("view-reveal-symbolic"), None),
+        ]),
+    ]),
 ];
 
-/// The icon the sample buttons draw.
-const BUTTON_ICON: &str = "dialog-information-symbolic";
+/// A sample button's selector, `gadget.<kind> > button.<class>...`,
+/// down to its icon when the icon has a class.
+fn selector(kind: Option<&str>, sample: &Sample) -> String {
+    let gadget = match kind {
+        Some(kind) => format!("gadget.{kind}"),
+        None => "gadget#showcase".to_owned(),
+    };
+    let classes: String = sample.classes.iter().map(|c| format!(".{c}")).collect();
+    let mut selector = format!("{gadget} > button{classes}");
+    if let Some(class) = sample.icon_class {
+        selector.push_str(&format!(" > icon.{class}"));
+    }
+    selector
+}
+
+/// The samples' icons.
+fn sample_icons() -> impl Iterator<Item = &'static str> {
+    BAR.iter()
+        .flat_map(|(_, gadgets)| gadgets.iter())
+        .flat_map(|(_, samples)| samples.iter())
+        .filter_map(|s| s.icon)
+}
 
 pub(crate) struct Showcase {
     pub window: Id,
@@ -94,7 +185,7 @@ impl Showcase {
             .map(str::to_owned)
             .chain(notifications)
             .chain(self.gadgets.iter().flat_map(AnyGadget::icon_names))
-            .chain([BUTTON_ICON.to_owned()])
+            .chain(sample_icons().map(str::to_owned))
     }
 
     /// Desktop ids of the launcher's results, for icon resolution.
@@ -293,43 +384,58 @@ impl AriaShell {
             inert(toast::surface(root, n, &self.notifications, &self.icons).map(nothing))
         });
         let column = |children: Vec<Element<'a, Shell>>| icssed::column(children).kind("column");
-        let parts = icssed::row![
+        let columns = icssed::row![
             column(popups.collect()),
             column(vec![launcher]),
             column([exiter, osd].into_iter().chain(toasts).collect()),
-            column(vec![inert(self.bar_buttons_view(scale))]),
         ]
-        .kind("parts");
+        .kind("columns");
+        let parts = icssed::column![inert(self.bar_view(scale)), columns].kind("parts");
         mouse_area(icssed::column![parts].at(theme.root("showcase", scale)))
             .on_press(Shell::Showcase(Message::PressedOutside))
             .on_release(Shell::Showcase(Message::Released))
             .into()
     }
 
-    /// A bar, with the bar's buttons in a gadget of no kind: only the
-    /// rules every gadget gets apply.
-    fn bar_buttons_view(&self, scale: f32) -> Element<'_, Shell> {
-        let buttons = BAR_BUTTONS.iter().map(|&(icon, label)| {
-            icssed::button(self.button_content(icon, label.map(str::to_owned)))
-                .on_press(nothing(()))
+    /// A bar of samples, slot by slot.
+    fn bar_view(&self, scale: f32) -> Element<'_, Shell> {
+        let slots = BAR.iter().map(|&(slot, gadgets)| {
+            let gadgets = gadgets.iter().map(|&(kind, samples)| {
+                let buttons = samples.iter().map(|s| self.sample_view(kind, s));
+                let gadget = icssed::row(buttons).kind("gadget");
+                match kind {
+                    Some(kind) => gadget.class(kind),
+                    None => gadget.named("showcase"),
+                }
                 .into()
+            });
+            icssed::row(gadgets).kind("slot").class(slot).into()
         });
-        let gadget = icssed::row(buttons).kind("gadget").named("showcase");
-        icssed::row![icssed::row![gadget].kind("slot").class("start")]
-            .at(self.theme.root("panel", scale))
-            .into()
+        // `#showcase`: not a real bar, for `debug widgets`.
+        let root = self.theme.root("panel", scale).id("showcase");
+        icssed::row(slots).at(root).into()
     }
 
-    /// A sample button's content: the icon, the label, or both.
-    fn button_content<'a>(&'a self, icon: bool, label: Option<String>) -> Vec<Element<'a, Shell>> {
-        let icons: &'a dyn icssed::Icons = &self.icons;
-        let mut content = Vec::new();
-        if icon {
-            content.push(icssed::icon((icons, BUTTON_ICON)).into());
+    /// A sample button: its icon, its label, or both; its selector in
+    /// its tooltip.
+    fn sample_view(&self, kind: Option<&str>, sample: &Sample) -> Element<'_, Shell> {
+        let icons: &dyn icssed::Icons = &self.icons;
+        let mut content: Vec<Element<'_, Shell>> = Vec::new();
+        if let Some(name) = sample.icon {
+            let icon = icssed::icon((icons, name));
+            content.push(match sample.icon_class {
+                Some(class) => icon.class(class).into(),
+                None => icon.into(),
+            });
         }
-        if let Some(label) = label {
+        if let Some(label) = sample.label {
             content.push(icssed::text(label).into());
         }
-        content
+        let button = sample
+            .classes
+            .iter()
+            .fold(icssed::button(content), |button, class| button.class(class))
+            .on_press(nothing(()));
+        icssed::tooltip(button, selector(kind, sample)).into()
     }
 }

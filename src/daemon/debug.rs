@@ -212,7 +212,7 @@ impl AriaShell {
     /// estimated by [`AriaShell::surfaces`]), `;`-separated. The surface
     /// is found from the path's root, by its name: `surface.panel[output=..]`,
     /// `surface.launcher`, `surface.popup[output=..]`; the showcase's, for
-    /// a root with no surface of its kind.
+    /// a root with no surface of its kind and for `#showcase`.
     pub(crate) fn describe_widgets(&self, filter: &Option<String>, found: Vec<Found>) -> String {
         let sheet = self.theme.sheet();
         let picked = match filter.as_deref() {
@@ -240,10 +240,13 @@ impl AriaShell {
                 .and_then(|(_, rest)| rest.split('"').next()?.parse::<u32>().ok())
                 .and_then(|id| self.toasts.placed().find(|(_, n, ..)| *n == id))
                 .map(|(window, ..)| window);
+            // The showcase's bar, not a real one.
+            let showcase = root.contains("#showcase");
             surfaces
                 .iter()
                 .find(|(w, k, out, _)| {
-                    *k == kind
+                    !showcase
+                        && *k == kind
                         && output.is_none_or(|o| self.output_name(*out) == o)
                         && window.is_none_or(|id| *w == id)
                 })

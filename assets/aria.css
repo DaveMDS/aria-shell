@@ -545,8 +545,10 @@ notification actions {
  * the boxes around them.
  *
  * surface.showcase            the surface, the parts centred in it
- * ╰─ parts                    a row
- *    ╰─ column                parts, one under the other
+ * ╰─ parts                    a column: the bar (surface.panel), as wide
+ *    │                        as the columns, over them
+ *    ╰─ columns               a row
+ *       ╰─ column             parts, one under the other
  */
 surface.showcase {
   width: fill;
@@ -558,7 +560,8 @@ surface.showcase {
   background: none;
 }
 surface.showcase > parts,
-surface.showcase > parts > column {
+surface.showcase > parts > columns,
+surface.showcase > parts > columns > column {
   gap: 24px;
   align-items: start;
 }

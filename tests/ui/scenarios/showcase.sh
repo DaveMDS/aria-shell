@@ -1,8 +1,8 @@
 # The showcase: `aria showcase show` draws every part of the UI (the
-# popups, the launcher, the exit menu, the OSD, two notifications, the
-# bar's buttons) on one surface between the bars of the focused output,
-# inert; it follows the scheme; Escape, a click beside the parts or the
-# command again close it.
+# popups, the launcher, the exit menu, the OSD, two notifications, a bar
+# of the gadgets' states) on one surface between the bars of the
+# focused output, inert; it follows the scheme; Escape, a click beside
+# the parts or the command again close it.
 
 assert_no_surface showcase
 aria showcase show; wait_keyboard showcase
@@ -16,9 +16,17 @@ wait_for 'surface.osd.volume' 1 "the OSD"
 wait_for 'notification.normal' 1 "a notification"
 wait_for 'notification.critical' 1 "a critical one"
 wait_for 'gadget#showcase > button' 3 "the bar's buttons"
+wait_for 'gadget.workspaces > button.urgent' 1 "a gadget's state"
+wait_for 'gadget.power > button.critical > icon.battery' 1 "an icon's class"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase
+
+# A sample's selector, in its tooltip.
+set -- $(widget 'gadget.power > button.critical')
+pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
+wait_for 'surface.panel#showcase gadget.power > tooltip' 1 "the tooltip"
+shot_surface showcase-tooltip showcase
 
 # The scheme from a bar: the showcase follows.
 click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'

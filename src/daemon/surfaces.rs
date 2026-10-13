@@ -109,6 +109,16 @@ impl AriaShell {
         Task::batch([self.observe_osd(), self.sync_popups(), self.redraw_shared()])
     }
 
+    /// Make the screens' brightness follow idle's dim stage, after
+    /// anything that may have changed it.
+    pub(crate) fn sync_dim(&mut self) -> Task<Message> {
+        if self.brightness.set_dim(self.idle.dim()) {
+            self.brightness_changed()
+        } else {
+            Task::none()
+        }
+    }
+
     /// Read what the OSD watches after a change of the shared state, and
     /// show what changed.
     pub(crate) fn observe_osd(&mut self) -> Task<Message> {

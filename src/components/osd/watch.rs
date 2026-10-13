@@ -192,19 +192,24 @@ impl Watched {
     ) -> Self {
         let output = Level::read(audio, Channel::Output);
         let input = Level::read(audio, Channel::Input);
-        let brightness = brightness
-            .displays()
-            .iter()
-            .filter_map(|d| {
-                Some((
-                    d.id.clone(),
-                    Screen {
-                        output: d.output.clone(),
-                        percent: d.percent()?,
-                    },
-                ))
-            })
-            .collect();
+        // Dimmed by idle: not a change to show, nor its end.
+        let brightness = if brightness.dimmed() {
+            previous.brightness.clone()
+        } else {
+            brightness
+                .displays()
+                .iter()
+                .filter_map(|d| {
+                    Some((
+                        d.id.clone(),
+                        Screen {
+                            output: d.output.clone(),
+                            percent: d.percent()?,
+                        },
+                    ))
+                })
+                .collect()
+        };
         let recording = audio.recordings().map(|mut apps| apps.next().is_some());
         let nm = network.running() && !network.devices().is_empty();
         let wifi = (nm && network.devices_of(DeviceKind::Wifi).next().is_some())

@@ -196,6 +196,8 @@ pub struct Brightness {
     /// readings of the writes before it (a backlight tells each one)
     /// are ignored meanwhile.
     asked: HashMap<String, u32>,
+    /// Dimmed by idle: the raw levels to put back, by id.
+    dimmed: Option<HashMap<String, u32>>,
 }
 
 impl Brightness {
@@ -205,6 +207,7 @@ impl Brightness {
             handle: None,
             displays: Vec::new(),
             asked: HashMap::new(),
+            dimmed: None,
         }
     }
 
@@ -310,23 +313,77 @@ impl Brightness {
             });
             writes.push((d.id.clone(), raw));
         }
-        if writes.is_empty() {
-            if let Target::Output(name) = &target
-                && !self
-                    .displays
-                    .iter()
-                    .any(|d| d.output.as_ref() == Some(name))
-            {
-                log::warn!("brightness: no screen to set on {name}");
-            }
-            return false;
+        if writes.is_empty()
+            && let Target::Output(name) = &target
+            && !self
+                .displays
+                .iter()
+                .any(|d| d.output.as_ref() == Some(name))
+        {
+            log::warn!("brightness: no screen to set on {name}");
         }
+        self.write(writes)
+    }
+
+    /// Dim every screen to `percent` of its level (`Some`), never up,
+    /// or put the levels back (`None`); nothing when it already is so.
+    /// Whether what gadgets see changed.
+    pub fn set_dim(&mut self, percent: Option<u32>) -> bool {
+        let mut writes = Vec::new();
+        match (percent, self.dimmed.take()) {
+            (Some(percent), None) => {
+                let mut saved = HashMap::new();
+                for d in &mut self.displays {
+                    let Some(level) = d.level else {
+                        continue;
+                    };
+                    let raw = ((level.value as u64 * percent as u64 + 50) / 100).max(1) as u32;
+                    if raw >= level.value {
+                        continue;
+                    }
+                    saved.insert(d.id.clone(), level.value);
+                    d.level = Some(Level {
+                        value: raw,
+                        ..level
+                    });
+                    writes.push((d.id.clone(), raw));
+                }
+                log::info!("brightness: dimmed to {percent}%");
+                self.dimmed = Some(saved);
+            }
+            (None, Some(saved)) => {
+                for d in &mut self.displays {
+                    let (Some(level), Some(&raw)) = (d.level, saved.get(&d.id)) else {
+                        continue;
+                    };
+                    d.level = Some(Level {
+                        value: raw,
+                        ..level
+                    });
+                    writes.push((d.id.clone(), raw));
+                }
+                log::info!("brightness: back from dimmed");
+            }
+            (_, dimmed) => self.dimmed = dimmed,
+        }
+        self.write(writes)
+    }
+
+    /// Dimmed by idle.
+    pub fn dimmed(&self) -> bool {
+        self.dimmed.is_some()
+    }
+
+    /// Have the worker write `writes`, raw levels by id: whether there
+    /// were any.
+    fn write(&mut self, writes: Vec<(String, u32)>) -> bool {
+        let any = !writes.is_empty();
         for (id, raw) in writes {
             log::debug!("brightness: {id} to {raw}");
             self.asked.insert(id.clone(), raw);
             self.send(worker::Request::Write(id, raw));
         }
-        true
+        any
     }
 
     /// Outputs came or went: look for the screens again (a monitor
@@ -364,7 +421,9 @@ impl Brightness {
         if self.displays.is_empty() {
             return "displays=none".to_owned();
         }
-        self.displays
+        let dimmed = if self.dimmed() { "dimmed; " } else { "" };
+        let displays = self
+            .displays
             .iter()
             .map(|d| {
                 let level = match d.level {
@@ -379,7 +438,8 @@ impl Brightness {
                 )
             })
             .collect::<Vec<_>>()
-            .join("; ")
+            .join("; ");
+        format!("{dimmed}{displays}")
     }
 }
 
@@ -458,6 +518,32 @@ mod tests {
             !b.run(Command::Set(Target::Output("HDMI-A-1".into()), 50)),
             "already there"
         );
+    }
+
+    #[test]
+    fn dim_and_back() {
+        let mut b = brightness(vec![
+            display("ddc:0", Some("HDMI-A-1"), 80, 100),
+            display("backlight:x", Some("eDP-1"), 2, 100),
+        ]);
+        assert!(b.set_dim(Some(30)));
+        assert!(b.dimmed());
+        assert_eq!(
+            b.get("ddc:0").unwrap().percent(),
+            Some(24),
+            "30% of its own"
+        );
+        assert_eq!(
+            b.get("backlight:x").unwrap().percent(),
+            Some(1),
+            "never off"
+        );
+        assert!(!b.set_dim(Some(10)), "already dimmed");
+        assert!(b.set_dim(None));
+        assert!(!b.dimmed());
+        assert_eq!(b.get("ddc:0").unwrap().percent(), Some(80), "back");
+        assert_eq!(b.get("backlight:x").unwrap().percent(), Some(2));
+        assert!(!b.set_dim(None), "nothing to put back");
     }
 
     #[test]

@@ -262,12 +262,13 @@ A lightweight drop-down terminal.
 What happens when nobody touches the machine (`[Idle]`, `[Idle:battery]`): each
 stage has its own timeout from the last input, on AC and on battery.
 
-- ✅ Screens off (back on at the first input), lock, suspend (through logind)
+- ✅ Screens dimmed (`dim_level` of their brightness), screens off (both back at the first
+  input), lock, suspend (through logind)
 - ✅ Separate timeouts on battery (UPower)
 - ✅ Lock before any sleep (lid, `systemctl suspend`) and on `loginctl lock-session`
 - ✅ Held by the `Power` gadget's eye or `aria-shell idle inhibit`, by a media player playing,
   and by apps inhibiting idle (a fullscreen video)
-- 🔲 A screensaver stage (which would also dim the screens)
+- 🔲 A screensaver stage
 
 
 ---

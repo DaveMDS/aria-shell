@@ -343,6 +343,7 @@ impl AriaShell {
         if showcase {
             tasks.push(self.open_showcase());
         }
+        tasks.push(self.sync_dim());
         Task::batch(tasks)
     }
 

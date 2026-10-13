@@ -503,7 +503,12 @@ impl AriaShell {
                 );
                 let osd = self.observe_osd();
                 self.resolve_icons();
-                Task::batch([osd, self.sync_popups(), self.redraw_shared()])
+                Task::batch([
+                    self.sync_dim(),
+                    osd,
+                    self.sync_popups(),
+                    self.redraw_shared(),
+                ])
             }
             Message::Network(event) => {
                 let (changed, follow_up) = self.network.apply(event);
@@ -573,12 +578,12 @@ impl AriaShell {
             }
             Message::Command(Command::Idle(cmd)) => {
                 self.idle.run(cmd);
-                self.observe_osd()
+                Task::batch([self.sync_dim(), self.observe_osd()])
             }
             Message::Power(event) => {
                 let (changed, low, follow_up) = self.power.apply(event);
                 self.idle.set_on_battery(self.power.on_battery());
-                let mut tasks = vec![follow_up.map(Message::Power)];
+                let mut tasks = vec![follow_up.map(Message::Power), self.sync_dim()];
                 if let Some(low) = low {
                     tasks.push(self.power.notify_low(low, &self.locale).map(Message::Power));
                 }
@@ -670,7 +675,7 @@ impl AriaShell {
                     Some(_) => idle::Locker::Locking,
                 };
                 let (lock, task) = self.idle.apply(event, locker);
-                let task = task.map(Message::Idle);
+                let task = Task::batch([task.map(Message::Idle), self.sync_dim()]);
                 if lock {
                     Task::batch([task, self.lock()])
                 } else {
@@ -829,7 +834,7 @@ impl AriaShell {
             Action::Network(cmd) => self.network.run(cmd).map(Message::Network),
             Action::Idle(cmd) => {
                 self.idle.run(cmd);
-                self.observe_osd()
+                Task::batch([self.sync_dim(), self.observe_osd()])
             }
             Action::Power(cmd) => self.power.run(cmd).map(Message::Power),
             // After the popup it came from is gone from the screen: the

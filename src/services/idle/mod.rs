@@ -1,7 +1,8 @@
-//! Idle: what happens when nobody touches the machine. Three stages,
+//! Idle: what happens when nobody touches the machine. Four stages,
 //! each with its own timeout from the last input (on AC and on
-//! battery): the session locks, the screens go off (back on at the
-//! first input), the machine suspends. The screen is locked before any
+//! battery): the screens dim (back at the first input), the session
+//! locks, the screens go off (back on at the first input), the machine
+//! suspends. The screen is locked before any
 //! sleep too (lid, `systemctl suspend`), and on logind's `Lock`
 //! (`loginctl lock-session`).
 //!
@@ -13,7 +14,8 @@
 //! One [`Idle`] lives in the daemon. The timers and the screens' power
 //! are a Wayland connection of its own (wayland.rs), logind the system
 //! bus (logind.rs), the power source `Power`'s; locking is the daemon's,
-//! told by [`Idle::apply`]. The shell does the locking and the screens,
+//! told by [`Idle::apply`], and so is dimming (`Brightness`'s levels),
+//! following [`Idle::dim`]. The shell does the locking and the screens,
 //! logind does the power: the suspend is a `Suspend` call, not a
 //! program.
 
@@ -35,6 +37,8 @@ pub use logind::SleepLock;
 pub struct IdleConfig {
     pub ac: Timeouts,
     pub battery: Timeouts,
+    /// The dim stage's level, a percent of each screen's own.
+    pub dim_level: u32,
     /// Lock the session before the machine sleeps.
     pub lock_before_sleep: bool,
     /// A media player playing holds the stages.
@@ -50,6 +54,7 @@ impl Section for IdleConfig {
         Self {
             ac,
             battery: ac,
+            dim_level: raw.u64_or("dim_level", 15).clamp(1, 100) as u32,
             lock_before_sleep: raw.bool_or("lock_before_sleep", true),
             inhibit_when_playing: raw.bool_or("inhibit_when_playing", true),
         }
@@ -71,6 +76,7 @@ impl IdleConfig {
 /// The stages' timeouts on one power source; `None`: never.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Timeouts {
+    pub dim: Option<Duration>,
     pub lock: Option<Duration>,
     pub screen_off: Option<Duration>,
     pub suspend: Option<Duration>,
@@ -91,6 +97,7 @@ impl Timeouts {
             })
         };
         Self {
+            dim: read("dim", base.dim),
             lock: read("lock", base.lock),
             screen_off: read("screen_off", base.screen_off),
             suspend: read("suspend", base.suspend),
@@ -99,6 +106,7 @@ impl Timeouts {
 
     fn get(self, stage: Stage) -> Option<Duration> {
         match stage {
+            Stage::Dim => self.dim,
             Stage::Lock => self.lock,
             Stage::ScreenOff => self.screen_off,
             Stage::Suspend => self.suspend,
@@ -135,6 +143,7 @@ fn format_duration(d: Option<Duration>) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
+    Dim,
     Lock,
     ScreenOff,
     Suspend,
@@ -143,6 +152,7 @@ pub enum Stage {
 impl Stage {
     fn name(self) -> &'static str {
         match self {
+            Self::Dim => "dim",
             Self::Lock => "lock",
             Self::ScreenOff => "screen_off",
             Self::Suspend => "suspend",
@@ -193,6 +203,8 @@ pub struct Idle {
     playing: bool,
     /// The timers last asked for (`None`: none asked on this connection).
     armed: Option<Vec<(Stage, Duration)>>,
+    /// The dim stage reached, no input since.
+    dimmed: bool,
     screens_off: bool,
     /// The machine waits for the lock to sleep.
     sleep: Option<SleepLock>,
@@ -208,6 +220,7 @@ impl Idle {
             inhibited: false,
             playing: false,
             armed: None,
+            dimmed: false,
             screens_off: false,
             sleep: None,
         }
@@ -237,6 +250,7 @@ impl Idle {
             Event::Idled(stage) => {
                 log::info!("idle: {} reached", stage.name());
                 match stage {
+                    Stage::Dim => self.dimmed = true,
                     Stage::Lock => return (locker == Locker::None, Task::none()),
                     Stage::ScreenOff => self.screens(false),
                     Stage::Suspend => return (false, self.suspend()),
@@ -244,8 +258,10 @@ impl Idle {
             }
             Event::Resumed(stage) => {
                 log::debug!("idle: {} resumed", stage.name());
-                if stage == Stage::ScreenOff {
-                    self.screens(true);
+                match stage {
+                    Stage::Dim => self.dimmed = false,
+                    Stage::ScreenOff => self.screens(true),
+                    Stage::Lock | Stage::Suspend => {}
                 }
             }
             Event::Sleeping(sleep) => {
@@ -326,6 +342,12 @@ impl Idle {
         self.config.inhibit_when_playing && self.playing
     }
 
+    /// The screens' level while dimmed, a percent of theirs: `None`
+    /// when they shouldn't be.
+    pub fn dim(&self) -> Option<u32> {
+        self.dimmed.then_some(self.config.dim_level)
+    }
+
     /// The timers for the current state.
     fn timers(&self) -> Vec<(Stage, Duration)> {
         if self.inhibited || self.held_by_player() {
@@ -336,14 +358,15 @@ impl Idle {
         } else {
             self.config.ac
         };
-        [Stage::Lock, Stage::ScreenOff, Stage::Suspend]
+        [Stage::Dim, Stage::Lock, Stage::ScreenOff, Stage::Suspend]
             .into_iter()
             .filter_map(|stage| Some((stage, timeouts.get(stage)?)))
             .collect()
     }
 
     /// Ask for the timers the state wants, when they changed; a hold
-    /// turns the screens back on.
+    /// turns the screens back on. New timers count from now: the dim
+    /// is over (the old ones' resume never comes).
     fn sync(&mut self) {
         if self.wayland.is_none() {
             return;
@@ -356,6 +379,7 @@ impl Idle {
             return;
         }
         log::debug!("idle: timers {timers:?}");
+        self.dimmed = false;
         if let Some(handle) = &self.wayland {
             handle.send(wayland::Request::Timers(timers.clone()));
         }
@@ -406,11 +430,13 @@ impl Idle {
                 .join(","),
         };
         format!(
-            "power={} inhibited={} playing={} screens={} armed={armed} {} {} {}",
+            "power={} inhibited={} playing={} dimmed={} screens={} armed={armed} {} {} {} {}",
             if self.on_battery { "battery" } else { "ac" },
             self.inhibited,
             self.playing,
+            self.dimmed,
             if self.screens_off { "off" } else { "on" },
+            t(Stage::Dim),
             t(Stage::Lock),
             t(Stage::ScreenOff),
             t(Stage::Suspend),
@@ -442,13 +468,14 @@ mod tests {
     #[test]
     fn battery_falls_back_to_ac() {
         let config = Config::parse(
-            "[Idle]\nlock = 5m\nscreen_off = 10m\nsuspend =\n[Idle:battery]\nlock = 2m\nscreen_off =\nsuspend = 15m\n",
+            "[Idle]\ndim = 4m\nlock = 5m\nscreen_off = 10m\nsuspend =\n[Idle:battery]\nlock = 2m\nscreen_off =\nsuspend = 15m\n",
         );
         let idle = IdleConfig::load(&config);
         let m = |n: u64| Some(Duration::from_secs(n * 60));
         assert_eq!(
             idle.ac,
             Timeouts {
+                dim: m(4),
                 lock: m(5),
                 screen_off: m(10),
                 suspend: None
@@ -457,6 +484,7 @@ mod tests {
         assert_eq!(
             idle.battery,
             Timeouts {
+                dim: m(4),
                 lock: m(2),
                 screen_off: m(10),
                 suspend: m(15)
@@ -465,6 +493,19 @@ mod tests {
         );
         let config = Config::parse("[Idle]\nlock = 5m\n[Idle:battery]\nlock = 0\n");
         assert_eq!(IdleConfig::load(&config).battery.lock, None, "0 is never");
+    }
+
+    #[test]
+    fn dim_until_input() {
+        let config = Config::parse("[Idle]\ndim = 1m\ndim_level = 20\n");
+        let mut idle = Idle::new(IdleConfig::load(&config));
+        assert_eq!(idle.dim(), None);
+        idle.apply(Event::Idled(Stage::Dim), Locker::None);
+        assert_eq!(idle.dim(), Some(20), "dimmed, to dim_level");
+        idle.apply(Event::Resumed(Stage::Dim), Locker::None);
+        assert_eq!(idle.dim(), None, "back at the first input");
+        let config = Config::parse("[Idle]\ndim = 1m\n");
+        assert_eq!(IdleConfig::load(&config).dim_level, 15, "15% by default");
     }
 
     #[test]

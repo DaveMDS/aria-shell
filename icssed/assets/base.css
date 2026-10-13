@@ -175,6 +175,8 @@
  * round part, a radio, a switch, a knob, stays round).
  *
  * --bg, --fg, --muted        the background, the text, a quieter text
+ * --heading                  a title over a list or a column: a
+ *                            section's, the weekdays
  * --border                   lines and boxes; a hovered row's background
  * --accent, --on-accent      what's chosen or on, and the text over it
  * --accent-soft              a light wash of the accent: a selection
@@ -193,6 +195,7 @@
   --bg: #f4f4f5;
   --fg: #1f1f23;
   --muted: #6e6e78;
+  --heading: #6e6e78;
   --accent: #3466d6;
   --on-accent: #ffffff;
   --border: #c9c9d0;
@@ -204,6 +207,7 @@
   --bg: #1e1e22;
   --fg: #e4e4e8;
   --muted: #8d8d97;
+  --heading: #8d8d97;
   --accent: #7aa2f7;
   --on-accent: #12141a;
   --border: #3d3d45;
@@ -862,7 +866,7 @@ calendar day {
   align-items: center;
 }
 calendar weekday {
-  color: var(--muted);
+  color: var(--heading);
   font-size: var(--font-sm);
 }
 calendar day {

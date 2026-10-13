@@ -32,10 +32,11 @@ use crate::Assets;
 pub const TITLE: &str = "Sheets and palette";
 
 /// The palette's variables, as classes of the swatches.
-const VARIABLES: [&str; 9] = [
+const VARIABLES: [&str; 10] = [
     "bg",
     "fg",
     "muted",
+    "heading",
     "border",
     "accent",
     "on-accent",

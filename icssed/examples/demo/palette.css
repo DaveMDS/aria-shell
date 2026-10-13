@@ -25,6 +25,7 @@ demo#palette cell > label {
 demo#palette swatch.bg { background: var(--bg); }
 demo#palette swatch.fg { background: var(--fg); }
 demo#palette swatch.muted { background: var(--muted); }
+demo#palette swatch.heading { background: var(--heading); }
 demo#palette swatch.border { background: var(--border); }
 demo#palette swatch.accent { background: var(--accent); }
 demo#palette swatch.on-accent { background: var(--on-accent); }

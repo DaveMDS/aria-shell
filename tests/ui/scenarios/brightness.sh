@@ -50,7 +50,7 @@ aria brightness up
 wait_monitor 3 75
 wait_monitor 4 35
 wait_osd 2 "an OSD on each screen"
-wait_for 'osd.brightness meter' 2 "with its level"
+wait_for 'surface.osd.brightness meter' 2 "with its level"
 shot_surface osd-brightness osd
 wait_osd 0 "gone after its duration"
 
@@ -81,7 +81,7 @@ fi
 wait_osd 0
 
 # --- the wheel ---------------------------------------------------------------
-geo=$(widget 'panel[output="HEADLESS-1"] gadget.brightness > button')
+geo=$(widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > button')
 set -- $geo
 pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
 scroll -2
@@ -97,10 +97,10 @@ wait_osd 0
 echo 20 > "$ARIA_UI_OUT/ddc/3"
 settle
 assert_contains "$(aria debug brightness)" "ddc:3 output=HEADLESS-1 model=\"Fake Monitor\" 80%"
-click_widget 'panel[output="HEADLESS-1"] gadget.brightness > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > button'
 assert_surface popup
-wait_for 'popup gadget.brightness screen.ddc' 2 "a row per monitor"
-wait_for 'popup gadget.brightness screen slider' 2 "a slider each"
+wait_for 'surface.popup gadget.brightness screen.ddc' 2 "a row per monitor"
+wait_for 'surface.popup gadget.brightness screen slider' 2 "a slider each"
 i=0
 while ! aria debug brightness | grep -q 'ddc:3 [^;]* 20%' && [ $i -lt 30 ]; do
     sleep 0.1; i=$((i + 1))
@@ -110,11 +110,11 @@ settle
 shot_surface popup popup
 
 # A slider: a click on its middle.
-click_widget 'popup gadget.brightness screen[output="HEADLESS-2"] slider'
+click_widget 'surface.popup gadget.brightness screen[output="HEADLESS-2"] slider'
 wait_monitor 4 50
 assert_eq "$(monitor 3)" 20 "the other one untouched"
 
 # Settings runs settings_command and closes the popup.
-click_widget 'popup gadget.brightness button.settings'
+click_widget 'surface.popup gadget.brightness button.settings'
 assert_no_surface popup
 assert_eq "$(cat "$ARIA_UI_OUT/brightness-settings")" "settings" "settings_command ran"

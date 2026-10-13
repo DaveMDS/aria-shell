@@ -124,6 +124,9 @@ fn theme(&self) -> icssed::Theme {
   what a view is from where it's put (`.kind("gadget").class("clock")`),
   so the view needn't know; `surface(content).at(root)` makes `content`
   a surface's root box.
+- A root, `sheet.root(name, scale)`, is a `surface` with `name` as a
+  class: a sheet writes `surface { }` for every one, `surface.popup { }`
+  for one. base.css gives a surface the palette's background.
 - `Node` is still the place, for reading a style where there's no widget
   (`sheet.root("popup", scale).base().shadow`, `Surface::room(root)`):
   `child(kind)`, `class(c)`, ... step down from a root. Each step is a

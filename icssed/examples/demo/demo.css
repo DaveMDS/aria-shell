@@ -3,7 +3,7 @@
  * stylesheets and the theme given on the command line. Each demo's
  * stylesheet styles its own `demo#<name>` alone.
  *
- * app                              the window
+ * surface.app                      the window
  * ├─ sidebar
  * │  ├─ input                      the search
  * │  ╰─ scroll > entries
@@ -20,7 +20,7 @@
  *    ╰─ scroll.listing > code > text   the source, or the stylesheet
  */
 
-app {
+surface.app {
   width: fill;
   height: fill;
   background: var(--bg);

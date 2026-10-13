@@ -12,20 +12,20 @@ assert_contains "$(surfaces)" "locker HEADLESS-2 1920,0 1920x1080"
 shot locked
 
 # The blocks, on both outputs; no password field.
-wait_for 'locker avatar' 2 "an avatar per surface"
-wait_for 'locker username' 2 "a username per surface"
-wait_for 'locker time' 2 "a time per surface"
-wait_for 'locker date' 2 "a date per surface"
-wait_for 'locker auth button' 2 "an Unlock button per surface"
-wait_for 'locker auth input' 0 "no password field with password_prompt = no"
+wait_for 'surface.locker avatar' 2 "an avatar per surface"
+wait_for 'surface.locker username' 2 "a username per surface"
+wait_for 'surface.locker time' 2 "a time per surface"
+wait_for 'surface.locker date' 2 "a date per surface"
+wait_for 'surface.locker auth button' 2 "an Unlock button per surface"
+wait_for 'surface.locker auth input' 0 "no password field with password_prompt = no"
 # Centred on its output.
-set -- $(widget 'locker[output="HEADLESS-2"] box')
+set -- $(widget 'surface.locker[output="HEADLESS-2"] box')
 [ "$1" -gt 2400 ] && [ "$(($1 + $3))" -lt 3400 ] || { echo "box not centred on HEADLESS-2: $*"; exit 1; }
 [ "$2" -gt 100 ] && [ "$(($2 + $4))" -lt 1000 ] || { echo "box not centred vertically: $*"; exit 1; }
 # The clock ticks (seconds in the scenario's format).
-t1=$(aria debug widgets 'locker[output="HEADLESS-1"] time')
+t1=$(aria debug widgets 'surface.locker[output="HEADLESS-1"] time')
 sleep 1.2
-t2=$(aria debug widgets 'locker[output="HEADLESS-1"] time')
+t2=$(aria debug widgets 'surface.locker[output="HEADLESS-1"] time')
 [ -n "$t1" ] || { echo "no time widget"; exit 1; }
 
 # A second lock is ignored.
@@ -41,7 +41,7 @@ assert_surface panel
 
 # The button unlocks too.
 aria lock; wait_keyboard locker
-click_widget 'locker[output="HEADLESS-1"] auth button'
+click_widget 'surface.locker[output="HEADLESS-1"] auth button'
 settle 0.5
 assert_no_surface locker
 
@@ -49,21 +49,21 @@ assert_no_surface locker
 restart_shell "$ARIA_UI_ROOT/tests/ui/config-locker"
 aria lock; wait_keyboard locker
 assert_eq "$(surfaces | tr ';' '\n' | grep -c '^ *locker ')" 2 "two lock surfaces (second shell)"
-wait_for 'locker auth input' 2 "a password field per surface"
-wait_for 'locker avatar' 0 "no avatar (show_avatar = no)"
-wait_for 'locker date' 0 "no date (show_date = no)"
-wait_for 'locker auth message' 0 "no message at rest"
+wait_for 'surface.locker auth input' 2 "a password field per surface"
+wait_for 'surface.locker avatar' 0 "no avatar (show_avatar = no)"
+wait_for 'surface.locker date' 0 "no date (show_date = no)"
+wait_for 'surface.locker auth message' 0 "no message at rest"
 shot locked-password
 
 # The eye shows the password in clear and hides it again (the field's
 # text isn't readable from outside; the button's state is).
 type_text "not-the-password"
-wait_for 'locker toggle.peek.checked' 0 "hidden at first"
-click_widget 'locker[output="HEADLESS-1"] toggle.peek'
-wait_for 'locker toggle.peek.checked' 2 "shown after a click, on both"
+wait_for 'surface.locker toggle.peek.checked' 0 "hidden at first"
+click_widget 'surface.locker[output="HEADLESS-1"] toggle.peek'
+wait_for 'surface.locker toggle.peek.checked' 2 "shown after a click, on both"
 shot locked-peek
-click_widget 'locker[output="HEADLESS-1"] toggle.peek'
-wait_for 'locker toggle.peek.checked' 0 "hidden again"
+click_widget 'surface.locker[output="HEADLESS-1"] toggle.peek'
+wait_for 'surface.locker toggle.peek.checked' 0 "hidden again"
 
 # The field has the keyboard: a wrong password, checked by PAM, is
 # refused; the field is emptied, the lock stays.
@@ -73,6 +73,6 @@ i=0
 while [ $i -lt 50 ] && ! grep -q "password refused" "$ARIA_UI_OUT/shell.log"; do sleep 0.1; i=$((i + 1)); done
 assert_logged "password refused"
 settle 0.5
-wait_for 'locker auth.error message' 2 "the failure shown on both surfaces"
+wait_for 'surface.locker auth.error message' 2 "the failure shown on both surfaces"
 assert_eq "$(surfaces | tr ';' '\n' | grep -c '^ *locker ')" 2 "still locked"
 shot locked-refused

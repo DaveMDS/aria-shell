@@ -3,8 +3,8 @@
 # profiles, driven against the fake NetworkManager (tests/ui/nm) on the
 # scenario's bus, which the shell takes for the system bus.
 
-bar='panel[output="HEADLESS-1"] gadget.network > button'
-list='popup gadget.network'
+bar='surface.panel[output="HEADLESS-1"] gadget.network > button'
+list='surface.popup gadget.network'
 
 # Nothing but scans for a moment.
 nm_idle() {
@@ -49,7 +49,7 @@ wait_for "$list device.wired.unplugged" 1 "eth0 unplugged"
 wait_for "$list header.vpn" 0 "no VPN section without profiles"
 # The other bar's popup lists the same.
 click 600 600
-click_widget 'panel[output="HEADLESS-2"] gadget.network > button'
+click_widget 'surface.panel[output="HEADLESS-2"] gadget.network > button'
 assert_eq "$(nm_event)" scan "the other bar scans too"
 wait_for "$list ap" 4 "the same four on the other output"
 shot_surface network-list popup

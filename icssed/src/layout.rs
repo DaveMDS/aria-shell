@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn fill_children_share_the_free_room() {
         let sheet = sheet(
-            "row { width: 300px; gap: 10px; } cell { height: 20px; } \
+            ".row { width: 300px; gap: 10px; } cell { height: 20px; } \
              cell.fill { width: fill; } cell.w80 { width: 80px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -520,7 +520,7 @@ mod tests {
         // child's content; a child stretched across takes that height,
         // whatever room the row was offered.
         let sheet = sheet(
-            "row { width: 300px; } cell.h20 { width: 50px; height: 20px; } \
+            ".row { width: 300px; } cell.h20 { width: 50px; height: 20px; } \
              cell.fill { width: 50px; height: fill; }",
         );
         let row = sheet.root("row", 1.0);
@@ -537,7 +537,7 @@ mod tests {
         // Too wide for the row: the children shrink (CSS's flex-shrink),
         // laid out again at their shares; across, still their content.
         let sheet = sheet(
-            "row { width: 50px; } cell.fill { height: fill; } \
+            ".row { width: 50px; } cell.fill { height: fill; } \
              cell.w40 { width: 40px; height: 12px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn shares_are_rounded_to_device_pixels_and_add_up() {
-        let sheet = sheet("row { width: 100px; } cell { width: fill; height: 10px; }");
+        let sheet = sheet(".row { width: 100px; } cell { width: fill; height: 10px; }");
         let row = sheet.root("row", 1.0);
         let node = lay(
             crate::row([cell("a"), cell("b"), cell("c")]).at(row).into(),
@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn children_shrink_down_to_their_automatic_minimum() {
         let sheet = sheet(
-            "row { width: 150px; } cell { height: 10px; } cell.w100 { width: 100px; } \
+            ".row { width: 150px; } cell { height: 10px; } cell.w100 { width: 100px; } \
              cell.w90 { width: 90px; min-width: 90px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -615,7 +615,7 @@ mod tests {
         // doesn't wrap, so a button's label stays whole; nothing with an
         // ellipsis, which cuts it to fit.
         let sheet = sheet(
-            "row { width: 40px; } label { white-space: nowrap; } \
+            ".row { width: 40px; } label { white-space: nowrap; } \
              label.cut { text-overflow: ellipsis; }",
         );
         let row = sheet.root("row", 1.0);
@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn what_cannot_shrink_overflows() {
         let sheet = sheet(
-            "row { width: 100px; gap: 4px; } \
+            ".row { width: 100px; gap: 4px; } \
              cell.w80 { width: 80px; min-width: 80px; height: 10px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -659,7 +659,7 @@ mod tests {
     #[test]
     fn an_explicit_min_width_lets_the_content_overflow_instead() {
         let sheet = sheet(
-            "row { width: 50px; } cell.a { min-width: 0; } \
+            ".row { width: 50px; } cell.a { min-width: 0; } \
              cell.w90 { width: 90px; min-width: 90px; height: 10px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -671,7 +671,7 @@ mod tests {
     #[test]
     fn a_column_of_stretched_items_is_as_wide_as_the_widest() {
         let sheet = sheet(
-            "column { padding: 2px; } cell.w50 { width: 50px; height: 10px; } \
+            ".column { padding: 2px; } cell.w50 { width: 50px; height: 10px; } \
              cell.w90 { width: 90px; height: 10px; }",
         );
         let column = sheet.root("column", 1.0);
@@ -691,7 +691,7 @@ mod tests {
     #[test]
     fn max_width_caps_a_box_and_its_stretched_items() {
         let sheet = sheet(
-            "column { max-width: 60px; } cell.w50 { width: 50px; height: 10px; } \
+            ".column { max-width: 60px; } cell.w50 { width: 50px; height: 10px; } \
              cell.w90 { width: 90px; min-width: 90px; height: 10px; }",
         );
         let column = sheet.root("column", 1.0);
@@ -710,8 +710,8 @@ mod tests {
     #[test]
     fn align_items_and_justify_content() {
         let sheet = sheet(
-            "row { width: 200px; height: 60px; } row.center { align-items: center; \
-             justify-content: center; } row.end { align-items: end; justify-content: end; } \
+            ".row { width: 200px; height: 60px; } .row.center { align-items: center; \
+             justify-content: center; } .row.end { align-items: end; justify-content: end; } \
              cell { width: 40px; height: 20px; }",
         );
         let lay_row = |class: &str| {
@@ -727,7 +727,7 @@ mod tests {
             [rect(120.0, 40.0, 40.0, 20.0), rect(160.0, 40.0, 40.0, 20.0)]
         );
         // Stretched across by default: an auto height takes the row's.
-        let sheet = super::tests::sheet("row { height: 60px; } cell { width: 40px; }");
+        let sheet = super::tests::sheet(".row { height: 60px; } cell { width: 40px; }");
         let row = sheet.root("row", 1.0);
         let node = lay(crate::row([cell("a")]).at(row).into(), MAX);
         assert_eq!(rects(&node), [rect(0.0, 0.0, 40.0, 60.0)]);
@@ -736,7 +736,7 @@ mod tests {
     #[test]
     fn margins_border_and_padding() {
         let sheet = sheet(
-            "row { margin: 5px; border: 2px solid; padding: 10px; } \
+            ".row { margin: 5px; border: 2px solid; padding: 10px; } \
              cell { width: 20px; height: 20px; margin: 3px; }",
         );
         let row = sheet.root("row", 1.0);
@@ -752,7 +752,7 @@ mod tests {
     #[test]
     fn positions_land_on_device_pixels() {
         let sheet = sheet(
-            "row { padding: 3px; gap: 1px; align-items: center; height: 31px; } \
+            ".row { padding: 3px; gap: 1px; align-items: center; height: 31px; } \
              cell { width: 7px; height: 9px; }",
         );
         let scale = 1.5;
@@ -769,7 +769,7 @@ mod tests {
     #[test]
     fn a_surface_leaves_room_for_its_shadow() {
         let sheet =
-            sheet("popup { box-shadow: 0 3px 8px black; } cell { width: 100px; height: 40px; }");
+            sheet(".popup { box-shadow: 0 3px 8px black; } cell { width: 100px; height: 40px; }");
         let popup = sheet.root("popup", 1.0);
         let node = lay(
             crate::surface(crate::row([cell("a")])).at(popup).into(),

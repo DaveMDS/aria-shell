@@ -5,8 +5,8 @@
 # activates it.
 
 ws='gadget.workspaces > button.workspace'
-p1='panel[output="HEADLESS-1"]'
-p2='panel[output="HEADLESS-2"]'
+p1='surface.panel[output="HEADLESS-1"]'
+p2='surface.panel[output="HEADLESS-2"]'
 
 # The gadget on the first bar, with some room after it.
 shot_gadget() {

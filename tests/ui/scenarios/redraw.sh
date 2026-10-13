@@ -24,7 +24,7 @@ region() {
 
 # A clock tick, a bar's own message: each bar's clock.
 for out in HEADLESS-1 HEADLESS-2; do
-    r=$(region "panel[output=\"$out\"] gadget.clock")
+    r=$(region "surface.panel[output=\"$out\"] gadget.clock")
     shot "clock-$out-1" "$r"
     sleep 1.2
     shot "clock-$out-2" "$r"
@@ -32,7 +32,7 @@ for out in HEADLESS-1 HEADLESS-2; do
 done
 
 # A hover: the widget's own redraw request.
-themes='panel[output="HEADLESS-1"] gadget.themes > button'
+themes='surface.panel[output="HEADLESS-1"] gadget.themes > button'
 r=$(region "$themes")
 pointer 900 600
 settle 0.5
@@ -49,7 +49,7 @@ same hover-1 hover-3 "the hover gone with the pointer"
 
 # Shared state reaching a popup: the system monitor's readings (every
 # second)...
-click_widget 'panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
 assert_surface popup
 settle 1
 shot_surface sysmon-1 popup
@@ -61,10 +61,10 @@ assert_no_surface popup
 
 # ... and a player's change, from the bus.
 mpris_start
-click_widget 'panel[output="HEADLESS-1"] gadget.audio > button.output'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.audio > button.output'
 assert_surface popup
 i=0
-while [ "$(count_widgets 'popup player')" != 1 ] && [ $i -lt 30 ]; do
+while [ "$(count_widgets 'surface.popup player')" != 1 ] && [ $i -lt 30 ]; do
     sleep 0.1
     i=$((i + 1))
 done

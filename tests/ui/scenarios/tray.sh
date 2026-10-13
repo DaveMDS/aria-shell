@@ -8,18 +8,18 @@ wait_for 'gadget.tray > button' 0 "no items before"
 sni_start
 settle 1
 wait_for 'gadget.tray > button' 2 "one item per bar"
-set -- $(widget 'panel[output="HEADLESS-1"] gadget.tray > button')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.tray > button')
 shot bar-item "$(($1 - 40)),0 120x32"
 
 # The click methods get the pointer position.
-click_widget 'panel[output="HEADLESS-1"] gadget.tray > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.tray > button'
 event=$(sni_event)
 assert_contains "$event" "activate " "left click activates"
 set -- $event
 [ $(($2 - 1920 + 1920)) -ge 0 ] || exit 1
-click_widget_with middle 'panel[output="HEADLESS-1"] gadget.tray > button'
+click_widget_with middle 'surface.panel[output="HEADLESS-1"] gadget.tray > button'
 assert_contains "$(sni_event)" "secondary " "middle click"
-set -- $(widget 'panel[output="HEADLESS-2"] gadget.tray > button')
+set -- $(widget 'surface.panel[output="HEADLESS-2"] gadget.tray > button')
 pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
 scroll 2
 # Two clicks down; positive is up (as KDE's host sends it), and the
@@ -28,7 +28,7 @@ assert_eq "$(sni_event)" "scroll -2 vertical" "wheel on the second bar"
 sni_quiet
 
 # Right click: the menu, fetched after AboutToShow.
-click_widget_with right 'panel[output="HEADLESS-2"] gadget.tray > button'
+click_widget_with right 'surface.panel[output="HEADLESS-2"] gadget.tray > button'
 assert_eq "$(sni_event)" "about-to-show 0"
 settle
 assert_surface popup
@@ -59,7 +59,7 @@ assert_eq "$(sni_event)" "menu-event 4 clicked"
 assert_no_surface popup
 
 # The app changes a label while the menu is open: reloaded.
-click_widget_with right 'panel[output="HEADLESS-1"] gadget.tray > button'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.tray > button'
 assert_eq "$(sni_event)" "about-to-show 0"
 settle
 assert_surface popup
@@ -73,7 +73,7 @@ assert_no_surface popup
 
 # Property changes are followed.
 sni_send "icon 40 200 40"
-shot bar-item-green "$(($(widget 'panel[output="HEADLESS-1"] gadget.tray > button' | cut -d' ' -f1) - 40)),0 120x32"
+shot bar-item-green "$(($(widget 'surface.panel[output="HEADLESS-1"] gadget.tray > button' | cut -d' ' -f1) - 40)),0 120x32"
 sni_send "status NeedsAttention"
 wait_for 'gadget.tray > button.attention' 2 "attention on both bars"
 

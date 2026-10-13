@@ -6,8 +6,8 @@
 
 mpris_start
 
-button='panel[output="HEADLESS-1"] gadget.audio > button.output'
-player='popup player'
+button='surface.panel[output="HEADLESS-1"] gadget.audio > button.output'
+player='surface.popup player'
 wait_for 'gadget.audio > button.output' 2 "a volume button per bar"
 wait_for 'gadget.audio > button.input' 2 "a microphone button per bar (show_microphone)"
 wait_for 'gadget.audio > button > label' 4 "the percent after each icon (show_percent)"
@@ -15,7 +15,7 @@ wait_for 'gadget.audio > button > label' 4 "the percent after each icon (show_pe
 click_widget "$button"
 assert_surface popup
 wait_for "$player" 1 "the fake player in the popup"
-wait_for 'popup player.paused[name="Aria test player"]' 1 "paused, by its identity"
+wait_for 'surface.popup player.paused[name="Aria test player"]' 1 "paused, by its identity"
 wait_for "$player > controls > button.previous:disabled" 1 "previous disabled (CanGoPrevious false)"
 wait_for "$player > controls > button.next:disabled" 0 "next enabled"
 shot_surface popup popup
@@ -28,13 +28,13 @@ assert_eq "$(mpris_event)" next "next asked"
 
 # The player's changes reach the popup.
 mpris_send "status Playing"
-wait_for 'popup player.playing' 1 "now playing"
+wait_for 'surface.popup player.playing' 1 "now playing"
 mpris_send "title Second song"
 settle
-wait_for 'popup player.playing' 1 "still there after a title change"
+wait_for 'surface.popup player.playing' 1 "still there after a title change"
 
 # The Mixer button runs mixer_command and closes the popup.
-click_widget 'popup gadget.audio button.mixer'
+click_widget 'surface.popup gadget.audio button.mixer'
 assert_no_surface popup
 i=0; while ! [ -f "$ARIA_UI_OUT/clicks" ] && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
 assert_eq "$(cat "$ARIA_UI_OUT/clicks")" mixer "mixer_command ran"
@@ -48,9 +48,9 @@ click 600 600
 assert_no_surface popup
 
 # The microphone button opens the same popup, under itself.
-click_widget 'panel[output="HEADLESS-1"] gadget.audio > button.input'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.audio > button.input'
 assert_surface popup
-set -- $(widget 'panel[output="HEADLESS-1"] gadget.audio > button.input')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.audio > button.input')
 mic_cx=$(($1 + $3 / 2))
 set -- $(surfaces | tr ';' '\n' | grep ' popup ' | head -n 1 | sed 's/.* \([0-9-]*\),\([0-9-]*\) \([0-9]*\)x\([0-9]*\)$/\1 \2 \3 \4/')
 popup_cx=$(($1 + $3 / 2))

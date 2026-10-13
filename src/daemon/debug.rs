@@ -210,9 +210,9 @@ impl AriaShell {
     /// widget the selector matches (the theme's syntax, positions
     /// included; all of them without one), global coordinates (as
     /// estimated by [`AriaShell::surfaces`]), `;`-separated. The surface
-    /// is found from the path's root: `panel[output=..]`, `launcher`,
-    /// `popup[output=..]`; the showcase's, for a root with no surface of
-    /// its kind.
+    /// is found from the path's root, by its name: `surface.panel[output=..]`,
+    /// `surface.launcher`, `surface.popup[output=..]`; the showcase's, for
+    /// a root with no surface of its kind.
     pub(crate) fn describe_widgets(&self, filter: &Option<String>, found: Vec<Found>) -> String {
         let sheet = self.theme.sheet();
         let picked = match filter.as_deref() {
@@ -229,7 +229,10 @@ impl AriaShell {
                 .split_once("[output=\"")
                 .and_then(|(_, rest)| rest.split_once('"'))
                 .map(|(name, _)| name);
-            let kind = root.split(['.', '#', '[', ':']).next()?;
+            let kind = root
+                .strip_prefix("surface.")?
+                .split(['.', '#', '[', ':'])
+                .next()?;
             // Several notifications may show on one output: their
             // root carries the notification id.
             let window = root

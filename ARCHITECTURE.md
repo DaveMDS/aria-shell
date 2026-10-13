@@ -637,7 +637,7 @@ Two things flow between the daemon and the gadgets besides messages:
   (`base :root`, `base :root.<scheme>`, `user :root`, `user
   :root.<scheme>`: a user theme's plain variable still beats the base's
   scheme one); a theme that only sets `:root` looks the same in both.
-  The sheet gives every root the scheme as a class, so `panel.dark { }`
+  The sheet gives every root the scheme as a class, so `surface.panel.dark { }`
   rules work without touching the elements gadgets build. `aria.css`
   repeats both of the toolkit's palettes (`--bg`, `--accent`,
   `--warning`, ...), the same values, so a theme's palette restyles
@@ -717,7 +717,7 @@ Two things flow between the daemon and the gadgets besides messages:
   `OK ...` / `ERR ...` per line; parsing is in the listener, the daemon
   only sees valid `Command`s). The surface is `Layer::Overlay`, no
   anchors (the compositor centres it), sized by its measure (the theme's
-  `launcher { width; height }`), `KeyboardInteractivity::Exclusive` (`OnDemand`
+  `surface.launcher { width; height }`), `KeyboardInteractivity::Exclusive` (`OnDemand`
   works on Hyprland but not on Sway, whose `arrange_layers`, run on
   any layer-surface commit on the output, our grab surfaces mapping
   included, unfocuses a non-exclusive focused layer: the launcher
@@ -753,7 +753,7 @@ Two things flow between the daemon and the gadgets besides messages:
   group, stdio to null, reaped by a thread. Not done: `DBusActivatable`,
   startup notification, other providers (the Python had only apps too).
   The Python `[launcher]` keys `width/height/icon_size/opacity` are
-  theme matters here (`launcher`, `launcher icon { height }`), not
+  theme matters here (`surface.launcher`, `surface.launcher icon { height }`), not
   config.
 - **The exit menu** (`components/exiter.rs`) is the third component
   on a `Dialog` (`components/dialog.rs`, the launcher's
@@ -765,7 +765,7 @@ Two things flow between the daemon and the gadgets besides messages:
   that runs the action by itself; `logout = auto` goes through the
   compositor IPC we already hold (`compositor::Command::Exit`) instead
   of a program; `grab_display` and `opacity` are gone (the grabs are
-  always there, opacity is the theme's `exiter { background }`). The
+  always there, opacity is the theme's `surface.exiter { background }`). The
   surface is sized from the content (measured as the popups are) and
   resized on every change (`LayoutChange`), which is what forced the
   click-outside rework below. The launcher shows the
@@ -799,7 +799,7 @@ Two things flow between the daemon and the gadgets besides messages:
   or refused: the locker is dropped), `LockedFinished` (the compositor
   ended it). `Message::UnLock` tears the surfaces down (`Closed` each).
   The daemon's `view(id)` draws the one `Locker` state on every lock
-  window inside `locker[output=..]`: the password typed on whichever
+  window inside `surface.locker[output=..]`: the password typed on whichever
   surface has the keyboard (the compositor's choice) is the password;
   the field's `widget::Id` is shared so one `operation::focus` on
   `NewShell` focuses it everywhere. Behaviour as the Python: `[locker]`
@@ -835,7 +835,7 @@ Two things flow between the daemon and the gadgets besides messages:
   refuses at once, no tally) and the ignored unit test does the same.
   `faillock --user <name>` shows the tally, `--reset` clears it (root).
   Not ported: the shake, the spinner (a "Unlocking…" text), a
-  wallpaper behind (the theme's `locker { background }` for now).
+  wallpaper behind (the theme's `surface.locker { background }` for now).
 - **The tray** (`services/tray/`) is the first DBus source, the shape
   notifications and MPRIS will copy: one `zbus::Connection` (tokio
   feature) opened in

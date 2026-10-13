@@ -10,7 +10,7 @@ wait_for 'gadget#net.system-monitor > button.net.critical' 2 "the first system r
 
 for output in HEADLESS-1 HEADLESS-2; do
     assert_no_surface popup
-    click_widget "panel[output=\"$output\"] slot.center gadget.clock > button"
+    click_widget "surface.panel[output=\"$output\"] slot.center gadget.clock > button"
     assert_surface popup
     shot_surface "popup-$output" popup
     wait_for 'calendar day.today' 1 "today is shown"
@@ -18,15 +18,15 @@ for output in HEADLESS-1 HEADLESS-2; do
 
     # The popup sits right below the bar (not the button), centred on
     # the clock.
-    set -- $(widget "panel[output=\"$output\"] slot.center gadget.clock > button")
+    set -- $(widget "surface.panel[output=\"$output\"] slot.center gadget.clock > button")
     clock_cx=$(($1 + $3 / 2))
-    set -- $(widget "popup[output=\"$output\"] calendar")
+    set -- $(widget "surface.popup[output=\"$output\"] calendar")
     popup_cx=$(($1 + $3 / 2))
     [ $((popup_cx - clock_cx)) -le 2 ] && [ $((clock_cx - popup_cx)) -le 2 ] \
         || { echo "popup centre $popup_cx, clock centre $clock_cx"; exit 1; }
-    set -- $(widget "panel[output=\"$output\"]")
+    set -- $(widget "surface.panel[output=\"$output\"]")
     bar_bottom=$(($2 + $4))
-    set -- $(widget "popup[output=\"$output\"]")
+    set -- $(widget "surface.popup[output=\"$output\"]")
     assert_eq "$2" "$bar_bottom" "popup top at the bar's bottom"
 
     click_widget 'calendar > header > button.next'
@@ -41,15 +41,15 @@ done
 # A click on the bar itself, beside the gadgets, closes the popup too
 # (Sway delivers it to us instead of dismissing the popup), and so does
 # opening another gadget's popup: one at a time.
-click_widget 'panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > button'
 assert_surface popup
 click 600 16
 assert_no_surface popup
 
-click_widget 'panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > button'
 assert_surface popup
-click_widget 'panel[output="HEADLESS-1"] gadget.notifications > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.notifications > button'
 assert_eq "$(surfaces | tr ';' '\n' | grep -c popup)" 1 "one popup at a time"
-wait_for 'popup calendar' 0 "the calendar's popup is gone"
+wait_for 'surface.popup calendar' 0 "the calendar's popup is gone"
 click 600 600
 assert_no_surface popup

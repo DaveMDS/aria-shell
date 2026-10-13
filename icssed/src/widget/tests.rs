@@ -9,11 +9,13 @@ use iced::{Color, Event, Point, Rectangle, Size, mouse};
 use crate::testing::Harness;
 use crate::{Element, Node, Scheme, Sheet, Source};
 
+/// `css` over a root with no background: the pixels are the widgets'.
 fn sheet(css: &str) -> Sheet {
+    let css = format!("surface {{ background: none; }} {css}");
     let (sheet, warnings) = Sheet::load(
         &[Source {
             name: "t.css",
-            text: css,
+            text: &css,
             dir: None,
         }],
         Scheme::Light,
@@ -88,9 +90,9 @@ fn a_hover_shows_on_the_frame_it_happens() {
 #[test]
 fn an_ancestors_state_reaches_its_descendants() {
     let sheet = sheet(
-        "card { width: 60px; height: 30px; padding: 5px; } \
+        ".card { width: 60px; height: 30px; padding: 5px; } \
          part { width: fill; height: fill; background: rgb(255 0 0); } \
-         card:hover part { background: rgb(0 0 255); }",
+         .card:hover part { background: rgb(0 0 255); }",
     );
     let card = sheet.root("card", 1.0);
     let view = || -> Element<'_, Message> {
@@ -134,7 +136,7 @@ fn tab_moves_the_focus_and_enter_presses() {
 #[test]
 fn the_pointer_follows_a_transform() {
     let sheet = sheet(
-        "root { padding: 20px; } button { width: 40px; height: 20px; } \
+        ".root { padding: 20px; } button { width: 40px; height: 20px; } \
          button:hover { transform: scale(2); }",
     );
     let root = sheet.root("root", 1.0);
@@ -193,10 +195,10 @@ fn a_transition_runs_from_its_cause_to_its_end() {
 #[test]
 fn an_ancestors_hover_starts_its_descendants_transition() {
     let sheet = sheet(
-        "card { width: 60px; height: 30px; padding: 5px; } \
+        ".card { width: 60px; height: 30px; padding: 5px; } \
          part { width: fill; height: fill; background: rgb(255 0 0); \
                 transition: background-color 1s linear; } \
-         card:hover part { background: rgb(0 0 255); }",
+         .card:hover part { background: rgb(0 0 255); }",
     );
     let card = sheet.root("card", 1.0);
     let mut ui = Harness::<Message>::new(
@@ -356,7 +358,7 @@ fn widgets_are_found_by_selector() {
     // No positional pseudo-class in the sheet: the rows share their node,
     // the query still tells them apart.
     let sheet = sheet(
-        "list { width: 100px; } entry { height: 20px; } \
+        ".list { width: 100px; } entry { height: 20px; } \
          label { width: 10px; height: 10px; }",
     );
     let list = sheet.root("list", 1.0);
@@ -374,13 +376,13 @@ fn widgets_are_found_by_selector() {
     let mut ui = Harness::new(view(), Size::new(100.0, 60.0), 1.0);
     let rect = |y: f32| iced::Rectangle::new(Point::new(0.0, y), Size::new(100.0, 20.0));
     assert_eq!(
-        ui.find(&sheet, "list > entry"),
+        ui.find(&sheet, ".list > entry"),
         [rect(0.0), rect(20.0), rect(40.0)]
     );
     assert_eq!(ui.find(&sheet, "entry:nth-child(2)"), [rect(20.0)]);
     assert_eq!(ui.find(&sheet, "entry:last-child"), [rect(40.0)]);
     assert_eq!(ui.find(&sheet, "entry.active"), [rect(20.0)]);
-    assert_eq!(ui.find(&sheet, "list label").len(), 3);
+    assert_eq!(ui.find(&sheet, ".list label").len(), 3);
     assert_eq!(ui.find(&sheet, "entry:first-child label").len(), 1);
     assert!(ui.find(&sheet, "nothing").is_empty());
     ui.click_on(&sheet, "entry:nth-child(3)");
@@ -392,7 +394,7 @@ fn widgets_are_found_by_selector() {
     assert_eq!(active.len(), 1);
     assert_eq!(
         found[active[0]].path(&sheet).as_deref(),
-        Some("list > entry.active")
+        Some("surface.list > entry.active")
     );
     let other = self::sheet("");
     assert_eq!(found[active[0]].path(&other), None, "another sheet's");
@@ -1051,7 +1053,7 @@ fn tipped(root: Node<'_>, the_apps: bool) -> Element<'_, Message> {
 }
 
 /// The button 80px in, a tip wider than it.
-const TIPPED: &str = "root { padding: 0 80px; align-items: start; } \
+const TIPPED: &str = ".root { padding: 0 80px; align-items: start; } \
                       button { width: 40px; height: 20px; } \
                       tooltip { animation: none; margin: 6px 0; }";
 
@@ -1110,7 +1112,7 @@ fn chooser(root: Node<'_>, chosen: Option<usize>, disabled: bool) -> Element<'_,
     .into()
 }
 
-const CHOOSER: &str = "root { padding: 10px; align-items: start; } \
+const CHOOSER: &str = ".root { padding: 10px; align-items: start; } \
                        select { transition: none; } menu item { transition: none; }";
 
 #[test]
@@ -1210,7 +1212,7 @@ fn widgets_without_nodes_find_their_place() {
     let sheet = sheet(
         "label { width: 10px; height: 10px; } \
          button.primary > label { width: 30px; } \
-         root > label:last-child { width: 20px; }",
+         .root > label:last-child { width: 20px; }",
     );
     let root = sheet.root("root", 1.0);
     // The class comes after the children are built: they see it all the
@@ -1233,8 +1235,8 @@ fn widgets_without_nodes_find_their_place() {
             .map(|r| r.width)
             .collect::<Vec<_>>()
     };
-    assert_eq!(widths(&mut ui, "root > label"), [10.0, 20.0]);
-    assert_eq!(widths(&mut ui, "root > button.primary > label"), [30.0]);
+    assert_eq!(widths(&mut ui, ".root > label"), [10.0, 20.0]);
+    assert_eq!(widths(&mut ui, ".root > button.primary > label"), [30.0]);
     ui.rebuild(view());
     assert_eq!(widths(&mut ui, "button.primary > label"), [30.0]);
     ui.click_on(&sheet, "button.primary");

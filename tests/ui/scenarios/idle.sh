@@ -9,7 +9,7 @@
 
 restart_shell "$ARIA_UI_ROOT/tests/ui/config-idle"
 mpris_start
-button='panel[output="HEADLESS-1"] gadget.power > button.idle'
+button='surface.panel[output="HEADLESS-1"] gadget.power > button.idle'
 outputs_on() {
     swaymsg -t get_outputs | grep -c '"power": true'
 }

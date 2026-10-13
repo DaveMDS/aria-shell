@@ -24,7 +24,7 @@ const FONTS: [&[u8]; 2] = [
 ];
 
 /// What every scene starts from: the fonts of the tests, a white page.
-const PAGE: &str = "scene { background: white; padding: 8px; gap: 8px; \
+const PAGE: &str = ".scene { background: white; padding: 8px; gap: 8px; \
                     font-family: \"Noto Sans Display\"; font-size: 13px; color: #222; } \
                     button { transition: none; }";
 
@@ -673,7 +673,7 @@ fn golden_graphs() {
 fn golden_tooltip() {
     scene(
         "tooltip",
-        "scene { padding: 8px 60px; align-items: start; } tooltip { animation: none; } \
+        ".scene { padding: 8px 60px; align-items: start; } tooltip { animation: none; } \
          button { transition: none; }",
         None,
         Size::new(220.0, 70.0),
@@ -697,7 +697,7 @@ fn golden_tooltip() {
 fn golden_select() {
     scene(
         "select",
-        "scene { align-items: start; } select { transition: none; width: 150px; } \
+        ".scene { align-items: start; } select { transition: none; width: 150px; } \
          menu item { transition: none; } select > arrow { content: \"v\"; }",
         None,
         Size::new(220.0, 160.0),

@@ -11,7 +11,9 @@ use rustc_hash::FxHashMap;
 
 use super::computed::Computed;
 use super::keyframes::{Frame, Keyframes};
-use super::node::{Ancestors, Name, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step};
+use super::node::{
+    Ancestors, Name, Node, NodeData, NodeId, Nodes, Sensitivity, States, Step, name,
+};
 use super::parse::{self, Loc};
 use super::selector::{Ctx, Nth, Selector};
 use super::value::{self, Assets, Decl, Moving};
@@ -329,11 +331,12 @@ impl Sheet {
         Ok((sheet, warnings))
     }
 
-    /// The root element of a surface, of type `kind`, at `scale` device
-    /// pixels per logical one (the output's scale times the UI's).
-    pub fn root(&self, kind: &str, scale: f32) -> Node<'_> {
-        let id = self.extend(None, Step::Root(Name::new(kind), scale.to_bits()));
-        Node::new(self, id)
+    /// The root element of a surface, `surface.<name>`, at `scale`
+    /// device pixels per logical one (the output's scale times the
+    /// UI's): every surface the same type, told apart by its class.
+    pub fn root(&self, name: &str, scale: f32) -> Node<'_> {
+        let id = self.extend(None, Step::Root(name!("surface"), scale.to_bits()));
+        Node::new(self, id).class(name)
     }
 
     pub fn scheme(&self) -> Scheme {

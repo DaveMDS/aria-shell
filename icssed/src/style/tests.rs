@@ -20,16 +20,11 @@ fn load(css: &str) -> (Sheet, Vec<Warning>) {
     load_scheme(&[("t.css", css)], Scheme::Light)
 }
 
-/// The node of `path` (`menu > item.active > label`) under a root at
-/// `scale`.
+/// The node of `path` (`menu > item.active > label`) under a root,
+/// `surface.t`, at `scale`.
 fn node<'a>(sheet: &'a Sheet, path: &str, scale: f32) -> Node<'a> {
-    let mut steps = path.split(" > ");
-    let mut parts = steps.next().expect("a root").split('.');
-    let mut node = sheet.root(parts.next().expect("a kind"), scale);
-    for class in parts {
-        node = node.class(class);
-    }
-    for step in steps {
+    let mut node = sheet.root("t", scale);
+    for step in path.split(" > ") {
         let mut parts = step.split('.');
         node = node.child(parts.next().expect("a kind"));
         for class in parts {
@@ -51,7 +46,7 @@ const RED: Color = Color::from_rgb(1.0, 0.0, 0.0);
 
 /// What an element no rule colours inherits: the toolkit's own default.
 fn plain(sheet: &Sheet) -> Color {
-    sheet.root("unstyled", 1.0).base().color
+    node(&sheet, "unstyled", 1.0).base().color
 }
 
 #[test]
@@ -105,7 +100,7 @@ fn specificity_then_source_order() {
     );
     assert_eq!(style(&sheet, "x").color, rgb(128, 0, 128));
     assert_eq!(style(&sheet, "x.c").color, rgb(0, 255, 0));
-    assert_eq!(sheet.root("x", 1.0).class("c").id("i").base().color, RED);
+    assert_eq!(node(&sheet, "x", 1.0).class("c").id("i").base().color, RED);
     assert_eq!(style(&sheet, "x.c").background, RED);
 }
 
@@ -118,25 +113,31 @@ fn selectors_match_as_css_does() {
     assert_eq!(style(&sheet, "a > b").color, RED);
     assert_eq!(style(&sheet, "a > x > b").color, plain(&sheet));
     assert_eq!(style(&sheet, "a > x > c").color, rgb(0, 0, 255));
-    assert_eq!(sheet.root("x", 1.0).attr("k", "v").base().background, RED);
+    assert_eq!(node(&sheet, "x", 1.0).attr("k", "v").base().background, RED);
     assert_eq!(
-        sheet.root("x", 1.0).attr("k", "w").base().background,
+        node(&sheet, "x", 1.0).attr("k", "w").base().background,
         Color::TRANSPARENT
     );
     assert_eq!(style(&sheet, "x > y").padding.left, 1.0);
-    assert_eq!(style(&sheet, "x").margin.left, 2.0);
-    assert_eq!(style(&sheet, "x > y").margin.left, 0.0);
+    assert_eq!(sheet.root("t", 1.0).base().margin.left, 2.0);
+    assert_eq!(style(&sheet, "x").margin.left, 0.0);
 }
 
 #[test]
-fn the_root_carries_the_scheme_as_a_class() {
-    let css = "x.dark { color: red; } x > y.dark { color: blue; }";
+fn a_root_is_a_surface_its_name_and_the_scheme_its_classes() {
+    let css = "surface { padding: 1px; } surface.x { margin: 2px; } \
+               .x.dark { color: red; } .x > y.dark { color: blue; }";
     let (light, _) = load_scheme(&[("t", css)], Scheme::Light);
     let (dark, _) = load_scheme(&[("t", css)], Scheme::Dark);
-    assert_eq!(style(&dark, "x").color, RED);
-    assert_eq!(style(&light, "x").color, plain(&light));
+    let x = |sheet| Node::base(Sheet::root(sheet, "x", 1.0));
+    assert_eq!((x(&light).padding.left, x(&light).margin.left), (1.0, 2.0));
+    assert_eq!(light.root("y", 1.0).base().margin.left, 0.0);
+    assert_eq!(x(&dark).color, RED);
+    assert_eq!(x(&light).color, plain(&light));
     // Inherited, not matched: only the root carries it.
-    assert_eq!(style(&dark, "x > y").color, RED);
+    assert_eq!(dark.root("x", 1.0).child("y").base().color, RED);
+    // Its children aren't surfaces.
+    assert_eq!(light.root("x", 1.0).child("y").base().padding.left, 0.0);
 }
 
 #[test]
@@ -157,7 +158,7 @@ fn own_states_and_ancestors_states() {
             .left,
         3.0
     );
-    let hovered_list = none.push(0, States::HOVER);
+    let hovered_list = none.push(1, States::HOVER);
     assert_eq!(
         entry.resolve(States::NONE, &hovered_list).background,
         rgb(0, 0, 255)
@@ -200,7 +201,8 @@ fn positions_split_only_the_rows_the_sheet_tells_apart() {
     for i in 0..50 {
         assert_eq!(list.child_at("entry", i, 50).base().color, RED);
     }
-    assert_eq!(plain.stats().nodes, 2);
+    // The root (`surface`, `.t`), the list, its entry.
+    assert_eq!(plain.stats().nodes, 4);
 
     let (sheet, _) = load(
         "entry:first-child { color: red; } entry:last-child { color: blue; } \
@@ -218,12 +220,15 @@ fn positions_split_only_the_rows_the_sheet_tells_apart() {
 #[test]
 fn disabled_is_part_of_the_path() {
     let (sheet, _) = load("x:disabled y { color: red; } x:disabled { color: blue; }");
-    let x = sheet.root("x", 1.0).disabled_if(true);
+    let x = node(&sheet, "x", 1.0).disabled_if(true);
     assert!(x.is_disabled());
     assert!(!x.child("y").class("c").is_disabled());
     assert_eq!(x.base().color, rgb(0, 0, 255));
     assert_eq!(x.child("y").base().color, RED);
-    assert_eq!(sheet.root("x", 1.0).child("y").base().color, plain(&sheet));
+    assert_eq!(
+        node(&sheet, "x", 1.0).child("y").base().color,
+        plain(&sheet)
+    );
 }
 
 #[test]
@@ -259,7 +264,7 @@ fn border_widths_snap_down_to_device_pixels() {
         "a { border: 1px solid; } b { border: 0.5px solid; } c { border: 1.5px solid; } \
          d { border-width: 4px; }",
     );
-    let width = |kind: &str, scale: f32| sheet.root(kind, scale).base().border_width.top;
+    let width = |kind: &str, scale: f32| node(&sheet, kind, scale).base().border_width.top;
     assert_eq!(width("a", 1.0), 1.0);
     assert_eq!(width("a", 2.0), 1.0);
     assert!((width("a", 1.5) - 2.0 / 3.0).abs() < 1e-6);
@@ -415,10 +420,10 @@ fn syntax_errors_reject_the_file() {
 #[test]
 fn line_heights_on_device_pixels() {
     let (sheet, _) = load("a { font-size: 14px; line-height: 1.5; } b { line-height: 20px; }");
-    assert_eq!(sheet.root("a", 1.0).base().line_height_px, 21.0);
+    assert_eq!(node(&sheet, "a", 1.0).base().line_height_px, 21.0);
     // 31.5 device pixels, rounded to 32.
-    assert!((sheet.root("a", 1.5).base().line_height_px - 32.0 / 1.5).abs() < 1e-5);
-    assert_eq!(sheet.root("b", 2.0).base().line_height_px, 20.0);
+    assert!((node(&sheet, "a", 1.5).base().line_height_px - 32.0 / 1.5).abs() < 1e-5);
+    assert_eq!(node(&sheet, "b", 2.0).base().line_height_px, 20.0);
 }
 
 #[test]
@@ -430,8 +435,10 @@ fn styles_are_resolved_once() {
         item.base();
         item.resolve(States::HOVER, &Ancestors::default());
     }
+    // The root (`surface`, `.t`), the menu, its item; the styles of
+    // the root, the menu, and the item at rest and hovered.
     let stats = sheet.stats();
-    assert_eq!((stats.nodes, stats.styles), (2, 3));
+    assert_eq!((stats.nodes, stats.styles), (4, 4));
 }
 
 /// A directory with `name`, a `width` x `height` png of colour
@@ -463,7 +470,7 @@ fn outlines_snap_and_default_to_currentcolor() {
         "a { color: red; outline: 1px solid; outline-offset: 2px; } b { outline-width: 3px; }",
     );
     assert!(warnings.is_empty(), "{warnings:?}");
-    let a = sheet.root("t", 1.5).child("a").base();
+    let a = node(&sheet, "t", 1.5).child("a").base();
     assert!((a.outline_width - 2.0 / 3.0).abs() < 1e-6);
     assert_eq!(a.outline_color, RED);
     assert!((a.outline_offset * 1.5 - (a.outline_offset * 1.5).round()).abs() < 1e-5);

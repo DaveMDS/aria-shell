@@ -46,9 +46,9 @@ pub enum Message {
     Invoke(u32, String),
 }
 
-/// The root node of notification `n`'s surface, as [`view`] makes it,
-/// from `root` (a `notification` root at its output's scale, its output
-/// as an attribute): for the room its shadow takes.
+/// The root node of notification `n`'s surface, as [`surface`] makes
+/// it, from `root` (a `notification` root at its output's scale, its
+/// output as an attribute): `n`'s urgency, id and app, as on its card.
 pub fn node<'a>(root: Node<'a>, n: &Notification) -> Node<'a> {
     root.class(n.urgency.name())
         .attr("id", &n.id.to_string())
@@ -354,16 +354,18 @@ impl Toasts {
     }
 }
 
-/// The content of notification `n`'s own surface: its view as `root`'s
-/// box, with its shadow's room around.
+/// The content of notification `n`'s own surface: its view in `root`'s
+/// box (`n`'s urgency, id and app on it too), with its shadow's room
+/// around.
 pub fn surface<'a>(
     root: Node<'a>,
     n: &'a Notification,
     notifications: &'a Notifications,
     icons: &'a Icons,
 ) -> Element<'a, Message> {
-    icssed::surface(view(n, notifications, icons, Extras::default()))
-        .at(root)
+    let card = view(n, notifications, icons, Extras::default());
+    icssed::surface(icssed::column![card])
+        .at(node(root, n))
         .into()
 }
 

@@ -16,10 +16,13 @@
  * the palette and the shell's own elements: every surface, every
  * gadget, with its element tree in a comment above its rules.
  *
- *   - `:root` matches every surface's root (panel, popup, launcher, ...):
- *     the place for inherited defaults, `:root { font-family: ... }`
- *   - root elements carry the colour scheme as a class: `panel.dark { }`,
- *     `popup.light { }` (`[general] color_scheme`, or the Themes gadget)
+ *   - every surface's root is a `surface`, its name a class:
+ *     `surface { }` styles them all, `surface.popup { }` one (below)
+ *   - `:root` matches them too: the place for the variables and the
+ *     inherited defaults, `:root { font-family: ... }`
+ *   - root elements carry the colour scheme as a class:
+ *     `surface.panel.dark { }`, `surface.popup.light { }`
+ *     (`[general] color_scheme`, or the Themes gadget)
  *   - a theme that only sets the palette's and the fonts' variables
  *     restyles all of it, the toolkit's widgets included
  */
@@ -63,7 +66,22 @@
   font-size: var(--font-md);
 }
 
-/* Surfaces */
+/*
+ * Surfaces
+ * ========
+ *
+ * Every surface's root is a `surface`, its name a class: the launcher,
+ * the exit menu, the OSD, a notification, a gadget's popup are boxes,
+ * framed by this rule; the surfaces that cover an output or sit on its
+ * edge (the panel, the lock screen, the wallpaper, the screenshot
+ * picker, the showcase) say `border: none`. The background and the
+ * text colour are the palette's (the toolkit's base).
+ *
+ * surface.<name>[.light|.dark]
+ */
+surface {
+  border: 1px solid var(--border);
+}
 
 /*
  * Launcher
@@ -72,7 +90,7 @@
  * `width` / `height` size its surface. An .action item is a desktop
  * action of the result above it, opened with Right or the chevron.
  *
- * launcher
+ * surface.launcher
  * ├─ actions                           the exit menu's buttons ([launcher] actions)
  * │  ╰─ button.flat.<name> > icon       .lock, .reboot, ...
  * ├─ input                             the search field, the toolkit's (:focus while typing)
@@ -85,41 +103,38 @@
  *          │  ╰─ subtitle              its description, when it has one
  *          ╰─ button.chevron.flat[.active] > arrow   › / ⌄ (.active: open)
  */
-launcher {
+surface.launcher {
   width: 520px;
   height: 420px;
   padding: 12px;
   gap: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
 }
-launcher > actions {
+surface.launcher > actions {
   gap: 4px;
 }
-launcher > actions > button {
+surface.launcher > actions > button {
   padding: 6px;
   color: var(--muted);
 }
-launcher > actions > button:hover {
+surface.launcher > actions > button:hover {
   color: var(--fg);
 }
-launcher > actions > button > icon {
+surface.launcher > actions > button > icon {
   height: 20px;
 }
-launcher > input {
+surface.launcher > input {
   width: fill;
   min-height: 36px;
   padding: 8px 10px;
   border-radius: 6px;
 }
-launcher > scroll {
+surface.launcher > scroll {
   height: fill;
 }
-launcher list {
+surface.launcher list {
   gap: 2px;
 }
-launcher item {
+surface.launcher item {
   padding: 6px 10px;
   gap: 10px;
   justify-content: start;
@@ -127,50 +142,50 @@ launcher item {
   border-radius: 6px;
   background: transparent;
 }
-launcher item:hover {
+surface.launcher item:hover {
   background: var(--border);
 }
-launcher item.selected {
+surface.launcher item.selected {
   background: var(--accent);
   color: var(--on-accent);
 }
-launcher item > icon {
+surface.launcher item > icon {
   height: 32px;
 }
-launcher item > texts {
+surface.launcher item > texts {
   width: fill;
   gap: 8px;
 }
-launcher item title,
-launcher item subtitle {
+surface.launcher item title,
+surface.launcher item subtitle {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-launcher item subtitle {
+surface.launcher item subtitle {
   font-size: var(--font-sm);
   color: var(--muted);
 }
-launcher item.selected subtitle {
+surface.launcher item.selected subtitle {
   color: var(--on-accent);
 }
-launcher button.chevron {
+surface.launcher button.chevron {
   padding: 0 8px;
   font-size: var(--font-lg);
 }
-launcher button.chevron > arrow {
+surface.launcher button.chevron > arrow {
   content: "›";
 }
-launcher button.chevron.active > arrow {
+surface.launcher button.chevron.active > arrow {
   content: "⌄";
 }
-launcher item.selected button.chevron {
+surface.launcher item.selected button.chevron {
   color: var(--on-accent);
 }
 /* indented by the parent's icon and gap: under its text */
-launcher item.action {
+surface.launcher item.action {
   padding: 6px 10px 6px 52px;
 }
-launcher item.action > icon {
+surface.launcher item.action > icon {
   height: 20px;
 }
 
@@ -184,7 +199,7 @@ launcher item.action > icon {
  * `confirm` takes the rows' place while an action waits, with a
  * countdown (confirm_timeout).
  *
- * exiter
+ * surface.exiter
  * ├─ row                                one per `columns` buttons
  * │  ╰─ button.<action>.flat[.selected]
  * │     ├─ icon
@@ -196,46 +211,43 @@ launcher item.action > icon {
  *       ├─ button.cancel > label
  *       ╰─ button.ok.<action>.danger > label   the action's label
  */
-exiter {
+surface.exiter {
   padding: 16px;
   gap: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
 }
-exiter > row {
+surface.exiter > row {
   gap: 8px;
 }
-exiter > row > button {
+surface.exiter > row > button {
   width: 112px;
   padding: 12px 8px;
   gap: 8px;
   flex-direction: column;
   border-radius: 8px;
 }
-exiter > row > button.selected {
+surface.exiter > row > button.selected {
   background: var(--border);
 }
-exiter > row > button > icon {
+surface.exiter > row > button > icon {
   height: 40px;
 }
-exiter > row > button > label {
+surface.exiter > row > button > label {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-exiter confirm {
+surface.exiter confirm {
   gap: 12px;
   align-items: center;
   font-size: var(--font-lg);
 }
-exiter confirm > countdown {
+surface.exiter confirm > countdown {
   font-size: var(--font-sm);
   color: var(--muted);
 }
-exiter confirm > buttons {
+surface.exiter confirm > buttons {
   gap: 12px;
 }
-exiter confirm > buttons > button {
+surface.exiter confirm > buttons > button {
   padding: 6px 16px;
 }
 
@@ -253,7 +265,7 @@ exiter confirm > buttons > button {
  * clipboard, edit without `[Screenshot] editor`; all the buttons but
  * all and cancel are :disabled without a selection.
  *
- * screenshot[output="<connector>"]
+ * surface.screenshot[output="<connector>"]
  * ├─ shade         `background`: dims the picture outside the selection
  * ├─ hover         `background`, `border`
  * ├─ selection     `border`: the selected area's outline
@@ -263,33 +275,35 @@ exiter confirm > buttons > button {
  *       ├─ label   the hint, or the selection's size
  *       ╰─ button.all|.cancel|.copy|.edit|.save.primary > label
  */
-screenshot {
+surface.screenshot {
   width: fill;
   height: fill;
+  border: none;
+  background: none;
 }
-screenshot > shade {
+surface.screenshot > shade {
   background: rgba(0, 0, 0, 0.45);
 }
-screenshot > hover {
+surface.screenshot > hover {
   background: rgba(255, 255, 255, 0.08);
   border: 2px solid var(--accent);
 }
-screenshot > selection {
+surface.screenshot > selection {
   border: 2px solid var(--accent);
 }
-screenshot > selection > handle {
+surface.screenshot > selection > handle {
   height: 10px;
   background: var(--accent);
   border: 1px solid var(--on-accent);
 }
-screenshot > dock {
+surface.screenshot > dock {
   width: fill;
   height: fill;
   padding: 32px;
   justify-content: end;
   align-items: center;
 }
-screenshot toolbar {
+surface.screenshot toolbar {
   padding: 8px 12px;
   gap: 6px;
   align-items: center;
@@ -298,7 +312,7 @@ screenshot toolbar {
   background: var(--bg);
   color: var(--fg);
 }
-screenshot toolbar > button {
+surface.screenshot toolbar > button {
   padding: 6px 12px;
 }
 
@@ -309,12 +323,12 @@ screenshot toolbar > button {
  * The desktop background, one surface per output; its `background` shows
  * without an image or around a `contain`ed one.
  *
- * wallpaper[output="<connector>"]
+ * surface.wallpaper[output="<connector>"]
  */
-wallpaper {
+surface.wallpaper {
   width: fill;
   height: fill;
-  background: var(--bg);
+  border: none;
 }
 
 /*
@@ -326,7 +340,7 @@ wallpaper {
  * `avatar-default` icon without one. auth is .error after a refused
  * password, .busy while checking.
  *
- * locker[output="<connector>"]
+ * surface.locker[output="<connector>"]
  * ╰─ box                        the centred column
  *    ├─ avatar                  an image, or an icon
  *    ├─ username
@@ -339,61 +353,60 @@ wallpaper {
  *       ├─ message              what PAM said, "Unlocking…"
  *       ╰─ button.primary > label   Unlock (:disabled while checking)
  */
-locker {
+surface.locker {
   width: fill;
   height: fill;
   justify-content: center;
   align-items: center;
-  background: var(--bg);
-  color: var(--fg);
+  border: none;
 }
-locker > box {
+surface.locker > box {
   gap: 28px;
   align-items: center;
 }
-locker avatar {
+surface.locker avatar {
   width: 128px;
   height: 128px;
   border-radius: 64px;
   object-fit: cover;
 }
-locker username {
+surface.locker username {
   font-size: var(--font-xl);
   color: var(--accent);
 }
-locker time {
+surface.locker time {
   font-size: var(--font-xxl);
   font-weight: 500;
 }
-locker date {
+surface.locker date {
   font-size: var(--font-xl);
 }
-locker auth {
+surface.locker auth {
   gap: 14px;
   align-items: center;
 }
-locker auth > input {
+surface.locker auth > input {
   width: 280px;
   min-height: 36px;
   padding: 2px 4px 2px 10px;
   border-radius: 6px;
 }
-locker auth.error > input {
+surface.locker auth.error > input {
   border-color: var(--danger);
 }
-locker auth > input > toggle.peek {
+surface.locker auth > input > toggle.peek {
   padding: 4px;
 }
-locker auth > input > toggle.peek > icon {
+surface.locker auth > input > toggle.peek > icon {
   height: 18px;
 }
-locker auth > message {
+surface.locker auth > message {
   color: var(--danger);
 }
-locker auth.busy > message {
+surface.locker auth.busy > message {
   color: var(--muted);
 }
-locker auth > button {
+surface.locker auth > button {
   padding: 10px 24px;
 }
 
@@ -405,43 +418,40 @@ locker auth > button {
  * places it. <kind>: volume, microphone, brightness, recording, wifi,
  * network, vpn, charger, profile, idle, custom.
  *
- * osd.<kind>[.muted][output="<connector>"]   a row
+ * surface.osd.<kind>[.muted][output="<connector>"]   a row
  * ├─ icon
  * ├─ meter > fill   the level, when there is one (the toolkit's)
  * ├─ label          the text: the network, a script's
  * ╰─ value          the percent, when there is a level
  */
-osd {
+surface.osd {
   width: 320px;
   height: 56px;
   padding: 0 18px;
   gap: 14px;
   align-items: center;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
 }
-osd > icon {
+surface.osd > icon {
   height: 24px;
 }
-osd > meter {
+surface.osd > meter {
   width: fill;
   min-width: 0;
   min-height: 6px;
   border-radius: 3px;
 }
-osd > meter > fill {
+surface.osd > meter > fill {
   border-radius: 3px;
 }
-osd.muted > meter > fill {
+surface.osd.muted > meter > fill {
   background: var(--muted);
 }
-osd > label {
+surface.osd > label {
   width: fill;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-osd > value {
+surface.osd > value {
   width: 44px;
   text-align: end;
 }
@@ -450,40 +460,40 @@ osd > value {
  * Notifications
  * =============
  *
- * `notifications` is not a surface: the stack of notifications on an
- * output; `padding` is its distance from the screen edges, `gap` the
- * space between notifications. Each `notification` is a surface: `width`
- * sizes it, the height follows the content; the id is the
- * notification's, the app what it called itself. The same element, with
- * the same rules, is a row of the Notifications gadget's popup.
+ * Each notification is a surface of its own, a toast: its frame is a
+ * surface's, `surface.notification.critical` its colour for an urgent
+ * one. In it the `notification`: `width` sizes it, the height follows
+ * the content; the id is the notification's, the app what it called
+ * itself. The same element, with the same rules, is a row of the
+ * Notifications gadget's popup. `surface.notifications` is not drawn:
+ * the stack of toasts on an output; `padding` is its distance from the
+ * screen edges, `gap` the space between toasts.
  *
- * notifications     the stack on an output
- * notification[.low|.normal|.critical][id="<id>"][app="<name>"]
- * ├─ head                 a row
- * │  ├─ icon              the app's image or icon
- * │  ╰─ texts             a column
- * │     ├─ line           a row
- * │     │  ├─ summary     the title
- * │     │  ├─ time        how long ago it came (popup rows only)
- * │     │  ╰─ button.close.flat > cross   ✕ (popup rows only)
- * │     ╰─ body           the text, wrapped at the width
- * ╰─ actions              a row, at the end
- *    ╰─ button > label    one per action the app offers
+ * surface.notifications   the stack on an output
+ * surface.notification[.low|.normal|.critical][id="<id>"][app="<name>"]   a toast
+ * ╰─ notification[.low|.normal|.critical][id="<id>"][app="<name>"]
+ *    ├─ head                 a row
+ *    │  ├─ icon              the app's image or icon
+ *    │  ╰─ texts             a column
+ *    │     ├─ line           a row
+ *    │     │  ├─ summary     the title
+ *    │     │  ├─ time        how long ago it came (popup rows only)
+ *    │     │  ╰─ button.close.flat > cross   ✕ (popup rows only)
+ *    │     ╰─ body           the text, wrapped at the width
+ *    ╰─ actions              a row, at the end
+ *       ╰─ button > label    one per action the app offers
  */
-notifications {
+surface.notifications {
   padding: 8px;
   gap: 8px;
+}
+surface.notification.critical {
+  border-color: var(--danger);
 }
 notification {
   width: 360px;
   padding: 10px 12px;
   gap: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
-}
-notification.critical {
-  border-color: var(--danger);
 }
 notification.low {
   color: var(--muted);
@@ -532,19 +542,21 @@ notification actions {
  * its own root as on its own surface (launcher, popup, ...); these are
  * the boxes around them.
  *
- * showcase                    the surface, the parts centred in it
+ * surface.showcase            the surface, the parts centred in it
  * ╰─ parts                    a row
  *    ╰─ column                parts, one under the other
  */
-showcase {
+surface.showcase {
   width: fill;
   height: fill;
   padding: 24px;
   justify-content: center;
   align-items: center;
+  border: none;
+  background: none;
 }
-showcase > parts,
-showcase > parts > column {
+surface.showcase > parts,
+surface.showcase > parts > column {
   gap: 24px;
   align-items: start;
 }
@@ -561,28 +573,27 @@ showcase > parts > column {
  * stretches its items: `height` sets another, `align-self` doesn't
  * exist (`align-items` on the parent does).
  *
- * panel[.top|.bottom][#<instance>][output="<connector>"]
+ * surface.panel[.top|.bottom][#<instance>][output="<connector>"]
  * ╰─ slot.start | slot.center | slot.end   a third of the bar each
  *    ╰─ gadget.<kind>[#<instance>]         one per gadget
  */
-panel {
+surface.panel {
   width: fill;
   min-height: 28px;
   padding: 0 3px;
-  background: var(--bg);
-  color: var(--fg);
+  border: none;
 }
-panel > slot {
+surface.panel > slot {
   width: fill;
   gap: 4px;
 }
-panel > slot.center {
+surface.panel > slot.center {
   justify-content: center;
 }
-panel > slot.end {
+surface.panel > slot.end {
   justify-content: end;
 }
-panel icon {
+surface.panel icon {
   height: 16px;
 }
 
@@ -593,15 +604,10 @@ panel icon {
  * A gadget's popup, as tall as its content (a list grows up to its
  * `max-height`, then scrolls), the room for its shadow around it.
  *
- * popup[output="<connector>"]
+ * surface.popup[output="<connector>"]
  * ╰─ gadget.<kind>[#<instance>]   the gadget it belongs to (no box)
  *    ╰─ ...                       the gadget's popup content
  */
-popup {
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
-}
 
 /*
  * Gadgets
@@ -613,7 +619,7 @@ popup {
  * the line for an empty one, a message, details.
  *
  * gadget.<kind> > button            on the bar
- * popup > gadget.<kind>
+ * surface.popup > gadget.<kind>
  * ╰─ list                           a column (`gap`)
  *    ├─ header[.<section>] > title
  *    ├─ item[.<kind>]               a button
@@ -637,24 +643,24 @@ gadget > button {
 gadget > button:hover {
   background: var(--border);
 }
-popup list {
+surface.popup list {
   width: 360px;
   padding: 8px;
   gap: 4px;
 }
-popup list > header {
+surface.popup list > header {
   padding: 8px 4px 4px 4px;
   gap: 8px;
   align-items: center;
 }
 /* not a calendar's: its header is the toolkit's */
-popup list > header > title,
-popup section > header > title {
+surface.popup list > header > title,
+surface.popup section > header > title {
   width: fill;
   font-weight: bold;
   color: var(--muted);
 }
-popup item {
+surface.popup item {
   padding: 6px 8px;
   gap: 8px;
   justify-content: start;
@@ -662,29 +668,29 @@ popup item {
   border-radius: 4px;
   background: transparent;
 }
-popup item:hover {
+surface.popup item:hover {
   background: var(--border);
 }
-popup item > label {
+surface.popup item > label {
   width: fill;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-popup empty {
+surface.popup empty {
   padding: 12px;
   align-items: center;
   color: var(--muted);
 }
-popup message {
+surface.popup message {
   padding: 0 4px 4px 4px;
   font-size: var(--font-sm);
   color: var(--muted);
 }
-popup details > line {
+surface.popup details > line {
   font-size: var(--font-sm);
   color: var(--muted);
 }
-popup calendar {
+surface.popup calendar {
   padding: 12px;
 }
 
@@ -695,7 +701,7 @@ popup calendar {
  * gadget.clock
  * ╰─ button     the time; click opens the calendar
  *    ╰─ label
- * popup > gadget.clock
+ * surface.popup > gadget.clock
  * ╰─ calendar   the toolkit's
  */
 gadget.clock > button > label {
@@ -755,7 +761,7 @@ gadget.workspaces title > label {
  * gadget.tray
  * ╰─ button[.passive][.attention]   one per status notifier item
  *    ╰─ icon                        (symbolic: `color`)
- * popup > gadget.tray
+ * surface.popup > gadget.tray
  * ╰─ menu                           the item's menu (the toolkit's)
  *    ╰─ label                       "…" until it's loaded
  */
@@ -770,7 +776,7 @@ gadget.tray > button.attention > icon {
  * gadget.themes
  * ╰─ button    left: light/dark, right: the menu
  *    ╰─ icon   the scheme's
- * popup > gadget.themes
+ * surface.popup > gadget.themes
  * ╰─ menu      Light / Dark, then Base and every theme found
  */
 
@@ -781,7 +787,7 @@ gadget.tray > button.attention > icon {
  * gadget.screenshot
  * ╰─ button    left: the picker, right: the menu
  *    ╰─ icon   `[Screenshot] icon`
- * popup > gadget.screenshot
+ * surface.popup > gadget.screenshot
  * ╰─ menu      the active window, this screen, all screens
  */
 
@@ -825,7 +831,7 @@ gadget.custom > button.warning {
  * ╰─ button
  *    ├─ icon                               `[Places] icon`
  *    ╰─ label                              `[Places] label`, when set
- * popup > gadget.places
+ * surface.popup > gadget.places
  * ╰─ list
  *    ├─ header.<section> > title
  *    ├─ item.<place>[.full]                a place (a button)
@@ -896,7 +902,7 @@ gadget.places info > meter.critical > fill {
  * │  ╰─ icon.profile                     the active profile's icon
  * ╰─ button.idle[.inhibited][.playing]   left: holds idle / lets it go
  *    ╰─ icon                             the eye
- * popup > gadget.power
+ * surface.popup > gadget.power
  * ╰─ list
  *    ├─ battery[.<state>][.low|.critical]
  *    │  ├─ icon
@@ -1002,7 +1008,7 @@ gadget.power idle.inhibited > icon {
  * ╰─ button[.none]
  *    ├─ icon
  *    ╰─ label                    the bar's screen's percent (show_percent)
- * popup > gadget.brightness
+ * surface.popup > gadget.brightness
  * ╰─ list
  *    ├─ screen.backlight|.ddc[.unknown][output="<connector>"]
  *    │  ├─ icon                  the laptop's panel / a monitor
@@ -1058,7 +1064,7 @@ gadget.brightness screen slider {
  * ╰─ button[.dnd][.new]
  *    ├─ icon
  *    ╰─ label                   the count not looked at (when > 0)
- * popup > gadget.notifications
+ * surface.popup > gadget.notifications
  * ╰─ scroll                     `max-height` caps it (then it scrolls)
  *    ╰─ list                    `width` sizes it
  *       ├─ header
@@ -1081,9 +1087,14 @@ gadget.notifications > scroll {
 gadget.notifications list {
   width: 380px;
 }
-/* The rows: the desktop `notification` rules, as wide as the list. */
+/* The rows: the desktop `notification` rules, as wide as the list,
+   framed as a toast is. */
 gadget.notifications list > notification {
   width: fill;
+  border: 1px solid var(--border);
+}
+gadget.notifications list > notification.critical {
+  border-color: var(--danger);
 }
 gadget.notifications list > notification.unseen summary {
   color: var(--accent);
@@ -1115,7 +1126,7 @@ gadget.notifications list > notification.unseen summary {
  *    ├─ label                   (text)
  *    ├─ graph > series, label   (sparkline)
  *    ╰─ meter > fill, label     (gauge)
- * popup > gadget.system-monitor
+ * surface.popup > gadget.system-monitor
  * ╰─ monitor                    `width` / `height` size the popup
  *    ├─ tabs                    the toolkit's
  *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active] > label
@@ -1355,7 +1366,7 @@ gadget.system-monitor monitor > actions.none > label {
  * │  ├─ icon
  * │  ╰─ label                    the percent
  * ╰─ button.input[.muted][.none]
- * popup > gadget.audio
+ * surface.popup > gadget.audio
  * ╰─ scroll                      `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
@@ -1492,7 +1503,7 @@ gadget.audio player > controls > button > icon {
  *    ├─ icon                                     its state
  *    ├─ icon.vpn                                 the VPN badge (show_vpn)
  *    ╰─ label                                    the connection's name (show_label)
- * popup > gadget.network
+ * surface.popup > gadget.network
  * ╰─ scroll                                      `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ header.wifi[.off] | header.wired | header.vpn

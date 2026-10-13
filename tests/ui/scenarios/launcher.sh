@@ -14,13 +14,13 @@ shot launcher-open
 # Typing filters, the first result is selected.
 type_text "aria test"
 shot_surface launcher-search launcher
-wait_for 'launcher item' 2 "two results for 'aria test'"
+wait_for 'surface.launcher item' 2 "two results for 'aria test'"
 wait_for 'item.selected:nth-child(1)' 1 "the first is selected"
 
 # Arrows move the selection.
 key BackSpace; key BackSpace; key BackSpace; key BackSpace; key BackSpace
 key BackSpace; key BackSpace; key BackSpace; key BackSpace
-n=$(count_widgets 'launcher item')
+n=$(count_widgets 'surface.launcher item')
 [ "$n" -gt 2 ] || { echo "expected several results with an empty query, got $n"; exit 1; }
 key Down; key Down
 wait_for 'item.selected:nth-child(3)' 1 "third item selected after Down Down"
@@ -43,7 +43,7 @@ assert_no_surface launcher
 # A click on a result launches it and closes.
 aria launcher show; wait_keyboard launcher
 type_text "aria test"
-click_widget 'launcher item'
+click_widget 'surface.launcher item'
 assert_logged 'launched "aria-test":'
 assert_no_surface launcher
 
@@ -76,7 +76,7 @@ aria-test 2" "usage file"
 aria launcher show; wait_keyboard launcher
 type_text "aria test"
 wait_for 'item.action' 0 "closed at first"
-wait_for 'launcher button.chevron' 1 "only Zzz has a chevron"
+wait_for 'surface.launcher button.chevron' 1 "only Zzz has a chevron"
 key Right
 wait_for 'item.action' 2 "two action rows"
 wait_for 'item.action.selected:nth-child(2)' 1 "the first action selected"
@@ -94,10 +94,10 @@ key Right
 key Left
 wait_for 'item.action' 0 "closed by Left"
 wait_for 'item.selected:nth-child(1)' 1 "Zzz selected again"
-wait_for 'launcher item' 2 "the two results"
+wait_for 'surface.launcher item' 2 "the two results"
 
 # The chevron opens them with a click, a click on an action runs it.
-click_widget 'launcher button.chevron'
+click_widget 'surface.launcher button.chevron'
 assert_surface launcher
 wait_for 'item.action' 2 "opened by the chevron"
 click_widget 'item.action'

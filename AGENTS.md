@@ -56,7 +56,7 @@ aria-shell screenshot               # the picker; `window`, `output [connector]`
 aria-shell open terminal            # [general] terminal; `open file-manager [dir]`: [general] file_manager
 aria-shell wallpaper next           # every wallpaper folder's next image
 aria-shell debug surfaces           # where our surfaces are (global rects), which has the keyboard
-aria-shell debug widgets 'launcher item:nth-child(2)'   # widget rects, by theme selector
+aria-shell debug widgets 'surface.launcher item:nth-child(2)'   # widget rects, by theme selector
 aria-shell debug cursor             # where the pointer was last seen on us
 aria-shell debug audio              # the mixer channels and the media players as the daemon sees them
 aria-shell debug network            # the devices, the Wi‑Fi networks around, the profiles and the active connections
@@ -132,8 +132,9 @@ Every view is built with the toolkit, `icssed` (icssed/AGENTS.md says
 how): its widgets, styled by one sheet. `ui/theme.rs` compiles it from
 `assets/aria.css` (always) and `[general] style`, over the toolkit's own
 base, for a light or dark scheme (`:root.light` / `:root.dark`
-variables, `panel.dark { }` rules; the `Themes` gadget switches scheme
-and theme at runtime). Gadgets never hard-code colours, paddings,
+variables, `surface.panel.dark { }` rules; the `Themes` gadget switches
+scheme and theme at runtime). Every surface's root is a `surface`, its
+name a class: `surface { }` is all of them, `surface.popup { }` one. Gadgets never hard-code colours, paddings,
 spacing or sizes: they build the toolkit's widgets (`icssed::row![..]`,
 `icssed::button![..]`, `icssed::text`, ...) and say what each element is
 (`.kind("title")`, `.class_if("active", ..)`); where it is in the tree

@@ -118,7 +118,7 @@ when Aria can. The modules are mapped in AGENTS.md.
 one cascade. The toolkit's base is under the others as CSS's user-agent
 stylesheet is: any rule of the app's or the theme's wins over its,
 whatever their specificity (else its `:root { color }` would beat a
-theme's `panel { color }`). Variables (`:root { --x }`, `var(--x,
+theme's `surface.panel { color }`). Variables (`:root { --x }`, `var(--x,
 fallback)`) and schemes (`:root.light` / `:root.dark` folded over the
 plain ones, the root elements carrying the scheme as a class) work as
 Aria's did: a sheet is compiled for one scheme; switching scheme or
@@ -155,9 +155,11 @@ fn view<'a>(&'a self) -> icssed::Element<'a, Message> {
 }
 ```
 
-A surface's tree starts from its root element, `sheet.root(kind,
+A surface's tree starts from its root element, `sheet.root(name,
 scale)`, given to the top of the view (`.at(root)`): the scale is
-carried by every node under it (see Scale). Each step interns one
+carried by every node under it (see Scale). Every root is a
+`surface`, its name a class (`surface.popup`): a sheet styles every
+surface at once, as CSS styles every `button`, and one by its class. Each step interns one
 `(previous id, Kind | Class | Id | Attr | Position | Disabled)` → id,
 so a node is a chain of steps with a canonical id. Names (types,
 classes, ids, attribute values) are interned once for every sheet,
@@ -273,7 +275,7 @@ scale enters at the root, as the device pixel ratio enters CSS's
 computed values:
 
 - the app makes a surface's root node with its scale
-  (`sheet.root(kind, scale)`); every node under it carries it, and the
+  (`sheet.root(name, scale)`); every node under it carries it, and the
   computed styles are made for it (a second scale, a second set of
   cached styles);
 - border widths are snapped in the computed style, as CSS snaps them

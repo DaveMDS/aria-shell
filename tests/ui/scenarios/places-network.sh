@@ -49,7 +49,7 @@ show = devices network
 EOF
 
 restart_shell "$config"
-button='panel[output="HEADLESS-1"] gadget.places > button'
+button='surface.panel[output="HEADLESS-1"] gadget.places > button'
 
 click_widget "$button"
 shot_surface network popup

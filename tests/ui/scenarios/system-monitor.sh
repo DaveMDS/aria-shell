@@ -6,7 +6,7 @@
 # offers Terminate/Kill, and Terminate ends the process we started; a
 # right click on the bar runs `command`, or the terminal monitor.
 
-bell='panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
+bell='surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
 first_pid() {
     aria debug widgets 'table row' | tr ';' '\n' | head -n 1 | sed 's/.*row\[pid="\([0-9]*\)".*/\1/'
 }
@@ -168,7 +168,7 @@ wait_for 'monitor > actions.none' 1 "back to the help once the process is gone"
 click 300 900
 assert_no_surface popup
 wait_for 'monitor' 0
-click_widget 'panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
 assert_surface popup
 wait_for 'monitor tabs tab.mem.active' 1 "the mem instance opens on the mem tab"
 wait_for 'section.mem' 1
@@ -180,7 +180,7 @@ assert_no_surface popup
 click_widget_with right "$bell"
 settle 0.5
 assert_eq "$(cat "$ARIA_UI_OUT/sysmon")" run "command ran"
-click_widget_with right 'panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
 settle 0.5
 monitor=$(command -v btop || command -v htop || command -v top)
 assert_logged "ran [\"true\", \"-e\", \"$(basename "$monitor")\"]"

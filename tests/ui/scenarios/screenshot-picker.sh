@@ -94,7 +94,7 @@ wait_picker 2
 click 960 600
 assert_eq "$(selection)" "$geometry" "a click on a window: the window"
 before=$(last)
-click_widget 'screenshot toolbar button.copy'
+click_widget 'surface.screenshot toolbar button.copy'
 wait_picker 0 "Copy takes it"
 assert_eq "$(wait_picture "$before")" "${geometry#* }" "copied"
 assert_eq "$(wl-paste --list-types)" image/png
@@ -105,7 +105,7 @@ aria screenshot
 wait_picker 2
 click 2500 500
 before=$(last)
-click_widget 'screenshot toolbar button.edit'
+click_widget 'surface.screenshot toolbar button.edit'
 wait_picker 0
 assert_eq "$(wait_picture "$before")" 1920x1080
 settle
@@ -116,16 +116,16 @@ wait_picker 2
 drag 1800 500 2100 600
 assert_eq "$(selection)" "1800,500 120x100" "stopped at the output's edge"
 before=$(last)
-click_widget 'screenshot toolbar button.all'
+click_widget 'surface.screenshot toolbar button.all'
 wait_picker 0
 assert_eq "$(wait_picture "$before")" 3840x1080 "every output"
 
 # --- the gadget ------------------------------------------------------------------
-click_widget 'panel[output="HEADLESS-2"] gadget.screenshot > button'
+click_widget 'surface.panel[output="HEADLESS-2"] gadget.screenshot > button'
 wait_picker 2 "a left click opens the picker"
 key Escape
 wait_picker 0
-click_widget_with right 'panel[output="HEADLESS-2"] gadget.screenshot > button'
+click_widget_with right 'surface.panel[output="HEADLESS-2"] gadget.screenshot > button'
 wait_for 'menu > item' 3 "window, screen, all"
 before=$(last)
 click_widget 'menu > item:nth-child(2)'

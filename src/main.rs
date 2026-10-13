@@ -998,7 +998,7 @@ fn main() -> iced_exwlshell::Result {
     theme::load_fonts();
 
     // Every surface is cleared transparent (the toolkit's default
-    // `Theme`): what shows is the theme's `panel` / `popup` box, which
+    // `Theme`): what shows is each root's `surface` box, which
     // may itself be translucent or rounded.
     daemon(
         move || {

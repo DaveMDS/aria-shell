@@ -214,7 +214,7 @@ A full-featured desktop notification server, replacing tools like `mako`.
 ### 🔆 Aria OSD
 A short-lived bar on every screen when something changes, whatever changed it
 (a keybind, a gadget, another app). It only shows,
-it never changes anything (`[osd]`, the theme's `osd`).
+it never changes anything (`[osd]`, the theme's `surface.osd`).
 
 - ✅ Volume and mute of the default output, the device changing (headphones plugged in)
 - ✅ Microphone level and mute (the default input)
@@ -283,6 +283,8 @@ light and dark colour schemes. Themes are found in
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
+- ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
+  every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)
 - ✅ A font built into the binary (Noto Sans Display, its Latin part,
   `assets/fonts/`): the same text on every system, whatever is installed;

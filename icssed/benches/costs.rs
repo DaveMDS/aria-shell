@@ -26,17 +26,17 @@ fn time(name: &str, iterations: u32, mut f: impl FnMut()) {
     println!("{name:<44} {:>10.2} µs", each.as_secs_f64() * 1e6);
 }
 
-const CSS: &str = "bar { height: 32px; padding: 0 6px; gap: 2px; align-items: center; \
+const CSS: &str = ".bar { height: 32px; padding: 0 6px; gap: 2px; align-items: center; \
                    background: #222; color: #eee; } \
                    gadget { padding: 2px 8px; gap: 6px; align-items: center; border-radius: 4px; \
                    transition: background-color 120ms; } \
                    gadget:hover { background: #444; } gadget > icon { height: 16px; } \
-                   menu { max-width: 260px; padding: 4px; border: 1px solid #555; \
+                   .menu { max-width: 260px; padding: 4px; border: 1px solid #555; \
                    border-radius: 6px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3); } \
                    item { gap: 8px; padding: 4px 8px; align-items: center; } \
                    item:hover { background: #333; } item > icon { height: 16px; } \
                    item > label { width: fill; white-space: nowrap; text-overflow: ellipsis; } \
-                   list { gap: 1px; } row > label { padding: 2px 4px; }";
+                   .list { gap: 1px; } row > label { padding: 2px 4px; }";
 
 fn star() -> IconFile {
     IconFile::Svg {

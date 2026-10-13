@@ -6,19 +6,19 @@ restart_shell "$ARIA_UI_ROOT/tests/ui/config-bottom"
 
 for output in HEADLESS-1 HEADLESS-2; do
     assert_no_surface popup
-    click_widget "panel[output=\"$output\"] gadget.clock > button"
+    click_widget "surface.panel[output=\"$output\"] gadget.clock > button"
     assert_surface popup
     shot_surface "popup-$output" popup
 
-    set -- $(widget "panel[output=\"$output\"] gadget.clock > button")
+    set -- $(widget "surface.panel[output=\"$output\"] gadget.clock > button")
     clock_cx=$(($1 + $3 / 2))
-    set -- $(widget "popup[output=\"$output\"] calendar")
+    set -- $(widget "surface.popup[output=\"$output\"] calendar")
     popup_cx=$(($1 + $3 / 2))
     [ $((popup_cx - clock_cx)) -le 2 ] && [ $((clock_cx - popup_cx)) -le 2 ] \
         || { echo "popup centre $popup_cx, clock centre $clock_cx"; exit 1; }
-    set -- $(widget "panel[output=\"$output\"]")
+    set -- $(widget "surface.panel[output=\"$output\"]")
     bar_top=$2
-    set -- $(widget "popup[output=\"$output\"]")
+    set -- $(widget "surface.popup[output=\"$output\"]")
     assert_eq "$(($2 + $4))" "$bar_top" "popup bottom at the bar's top"
 
     click 600 300

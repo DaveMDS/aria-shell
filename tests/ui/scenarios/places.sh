@@ -61,7 +61,7 @@ EOF
 
 restart_shell "$config"
 
-click_widget 'panel[output="HEADLESS-1"] gadget.places button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.places button'
 assert_surface popup
 shot_surface places popup
 wait_for 'header' 2 "two sections"
@@ -71,9 +71,9 @@ wait_for 'item.remote' 1 "the sftp bookmark"
 
 click_widget 'item.remote'
 assert_no_surface popup
-click_widget 'panel[output="HEADLESS-1"] gadget.places button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.places button'
 click_widget 'item.download'
-click_widget 'panel[output="HEADLESS-1"] gadget.places button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.places button'
 click_widget 'item.trash'
 i=0
 while [ "$(wc -l < "$ARIA_UI_OUT/opened" 2> /dev/null)" != 3 ] && [ $i -lt 20 ]; do

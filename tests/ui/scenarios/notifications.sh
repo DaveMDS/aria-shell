@@ -31,7 +31,8 @@ wait_for 'notification' 1 "one toast"
 set -- $(toast_geo)
 assert_eq "$2" HEADLESS-1 "on the focused output"
 x=${3%,*}; y=${3#*,}; w=${4%x*}; h=${4#*x}
-assert_eq "$w" 360 "theme width"
+# The card's 360 px (aria.css) in the surface's 1 px border.
+assert_eq "$w" 362 "theme width"
 assert_eq "$((x + w))" $((1920 - 8)) "8px from the right edge"
 assert_eq "$y" "$top" "under the bar, 8px down"
 [ "$h" -gt 40 ] || { echo "toast too short: $h"; exit 1; }

@@ -1,30 +1,45 @@
 /*
  * Manjaro: "highly inspired" by the waybar theme used in manjaro sway.
- * A flat monospace bar; the clock, the first gadget on the left and the
- * last on the right in reversed colours.
  *
- * See assets/aria.css for the element trees, icssed/assets/base.css for
- * the properties.
  */
 
-/* The bar alone in monospace: `panel:root`, as a plain `panel` loses to
-   aria.css's `:root` font. */
-panel:root {
-  font-family: "JetBrains Mono NL", "Roboto Mono", monospace;
+:root.light {
+  --bg: #f4f4f5;
+  --fg: #1f1f23;
+  --muted: #6e6e78;
+  --heading: #6e6e78;
+  --accent: #3466d6;
+  --on-accent: #ffffff;
+  --border: #c9c9d0;
+  --danger: #c62f2f;
+  --warning: #b9770e;
+  --accent-soft: rgba(52, 102, 214, 0.25);
+}
+:root.dark {
+  --bg: #1e1e22;
+  --fg: #e4e4e8;
+  --muted: #8d8d97;
+  --heading: #8d8d97;
+  --accent: #7aa2f7;
+  --on-accent: #12141a;
+  --border: #3d3d45;
+  --danger: #f06262;
+  --warning: #e5b85c;
+  --accent-soft: rgba(122, 162, 247, 0.3);
 }
 
-/* Gadgets sit flush against each other, as high as the bar, so a
-   background covers the whole cell. */
-panel > slot {
+/* The bar alone in monospace. */
+surface.panel {
+  font-family: "JetBrains Mono NL", "Roboto Mono", monospace;
+  padding: 0;
+}
+
+surface.panel > slot {
   padding: 0;
   gap: 0;
 }
-panel gadget {
-  padding: 0 8px;
-}
 
-/* The first gadget, the last one and the clock in reversed colours... */
-gadget.clock,
+/* The first gadget and the last one in the accent... */
 slot.start > gadget:first-child,
 slot.end > gadget:last-child {
   color: var(--bg);
@@ -47,7 +62,7 @@ gadget.workspaces > button.workspace.active {
   background: var(--accent);
   color: var(--bg);
 }
-gadget.workspaces > button.workspace.urgent {
+gadget.workspaces > button.workspace.danger {
   background: var(--danger);
   color: var(--on-accent);
 }

@@ -37,7 +37,7 @@ base_light=$(sample)
 
 # The menu: schemes, then the base and every theme in assets/themes.
 open_menu
-wait_for 'menu > item' 5 "Light, Dark, Base, manjaro, waybar"
+wait_for 'menu > item' 5 "Light, Dark, Base, manjaro, sway"
 wait_for 'menu > separator' 1
 wait_for 'menu > item.checked:nth-child(1)' 1 "Light checked"
 wait_for 'menu > item.checked:nth-child(4)' 1 "Base checked"

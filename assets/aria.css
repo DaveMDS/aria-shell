@@ -126,7 +126,7 @@ surface.launcher > input {
   width: fill;
   min-height: 36px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
 }
 surface.launcher > scroll {
   height: fill;
@@ -139,7 +139,7 @@ surface.launcher item {
   gap: 10px;
   justify-content: start;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   background: transparent;
 }
 surface.launcher item:hover {
@@ -223,7 +223,7 @@ surface.exiter > row > button {
   padding: 12px 8px;
   gap: 8px;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
 }
 surface.exiter > row > button.selected {
   background: var(--border);
@@ -308,7 +308,7 @@ surface.screenshot toolbar {
   gap: 6px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: var(--bg);
   color: var(--fg);
 }
@@ -389,7 +389,7 @@ surface.locker auth > input {
   width: 280px;
   min-height: 36px;
   padding: 2px 4px 2px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
 }
 surface.locker auth.error > input {
   border-color: var(--danger);
@@ -438,10 +438,10 @@ surface.osd > meter {
   width: fill;
   min-width: 0;
   min-height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 surface.osd > meter > fill {
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 surface.osd.muted > meter > fill {
   background: var(--muted);
@@ -665,7 +665,7 @@ surface.popup item {
   gap: 8px;
   justify-content: start;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: transparent;
 }
 surface.popup item:hover {
@@ -873,10 +873,10 @@ gadget.places info > label {
 gadget.places info > meter {
   min-width: 0;
   min-height: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 gadget.places info > meter > fill {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 gadget.places info > meter.critical > fill {
   background: var(--danger);
@@ -1161,7 +1161,7 @@ gadget.system-monitor > button > meter {
   justify-content: center;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: transparent;
 }
 gadget.system-monitor > button > graph > label,
@@ -1170,7 +1170,7 @@ gadget.system-monitor > button > meter > label {
   color: var(--fg);
 }
 gadget.system-monitor > button > meter > fill {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--accent-soft);
 }
 gadget.system-monitor > button.warning > graph > series {
@@ -1284,7 +1284,7 @@ gadget.system-monitor table > header > column.sorted {
 }
 gadget.system-monitor table > row {
   padding: 6px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-sm);
 }
 gadget.system-monitor table > row:hover {
@@ -1449,7 +1449,7 @@ gadget.audio player {
   padding: 8px;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 gadget.audio player > info {
   gap: 8px;

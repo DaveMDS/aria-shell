@@ -283,6 +283,8 @@ light and dark colour schemes. Themes are found in
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
+- ✅ A theme of variables alone: the palette, the font sizes, the corner radii
+  (`--radius-xs` to `--radius-xl`, 0 for square corners)
 - ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
   every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)

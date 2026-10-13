@@ -1,0 +1,126 @@
+/*
+ * Sway theme
+ * ============
+ * The look of waybar's default style; with ideas from mako, wlogout and friends.
+ *
+ */
+
+:root {
+  --bg: #285577;
+  --fg: white;
+  --border: #4c7899;
+  --muted: #8d8d97;
+  --heading: #b4c7d8;
+  --accent: #9cc4e4;
+  --on-accent: #285577;
+  --accent-soft: rgba(156, 196, 228, 0.3);
+  --danger: #f06262;
+  --warning: #e5b85c;
+
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+
+  font-family: Roboto;
+}
+
+surface {
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+
+/* Panel */
+
+surface.panel {
+  min-height: 30px;
+  font-size: 13px;
+  background: rgba(43, 48, 59, 0.5);
+  box-shadow: inset 0 -3px rgba(100, 114, 125, 0.5);
+}
+
+surface.panel icon {
+  height: 13px;
+}
+
+/* Gadgets */
+
+gadget > button {
+  min-width: 30px;
+}
+gadget > button:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* workspaces */
+gadget.workspaces {
+  padding: 0;
+  gap: 0;
+}
+gadget.workspaces > button.workspace {
+  padding: 0 5px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #eff1f5;
+}
+gadget.workspaces > button.workspace:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+gadget.workspaces > button.workspace.active {
+  background: #64727d;
+  box-shadow: inset 0 -3px #ffffff;
+}
+gadget.workspaces > button.workspace.urgent {
+  background: var(--danger);
+}
+
+/* tray */
+gadget.tray icon {
+  height: 16px;
+}
+
+/* clock */
+gadget.clock > button > label {
+  font-weight: normal;
+}
+
+/* Colorful gadgets */
+surface.panel gadget.clock,
+surface.panel gadget.notifications {
+  background: #64727d;
+  color: white;
+}
+surface.panel gadget.audio {
+  background: #f1c40f;
+  color: black;
+}
+surface.panel gadget.network {
+  background: #2980b9;
+  color: white;
+}
+surface.panel gadget.power {
+  background: #ffffff;
+  color: black;
+}
+surface.panel gadget.brightness,
+surface.panel gadget.screenshot {
+  background: #90b1b1;
+  color: white;
+}
+surface.panel gadget.system-monitor {
+  background: #2ecc71;
+  color: black;
+}
+surface.panel gadget.system-monitor#mem {
+  background: #9b59b6;
+}
+surface.panel gadget.system-monitor#temp {
+  background: #f0932b;
+}
+surface.panel gadget.system-monitor#disk {
+  background: #964B00;
+}

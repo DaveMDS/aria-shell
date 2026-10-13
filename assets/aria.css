@@ -576,10 +576,12 @@ surface.showcase > parts > columns > column {
  * at least. Every box in the bar (a slot, a gadget, its buttons) takes
  * the bar's height inside its border and padding, as a CSS flex row
  * stretches its items: `height` sets another, `align-self` doesn't
- * exist (`align-items` on the parent does).
+ * exist (`align-items` on the parent does). The center slot is as wide
+ * as its gadgets, in the middle of the bar; the start and end ones
+ * share what's left, half each (CSS's `1fr auto 1fr`).
  *
  * surface.panel[.top|.bottom][#<instance>][output="<connector>"]
- * ╰─ slot.start | slot.center | slot.end   a third of the bar each
+ * ╰─ slot.start | slot.center | slot.end
  *    ╰─ gadget.<kind>[#<instance>]         one per gadget
  */
 surface.panel {
@@ -593,6 +595,7 @@ surface.panel > slot {
   gap: 4px;
 }
 surface.panel > slot.center {
+  width: auto;
   justify-content: center;
 }
 surface.panel > slot.end {

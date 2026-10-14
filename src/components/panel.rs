@@ -3,7 +3,8 @@
 //! child of the bar's ([`crate::ui::popup`]), one at a time, which the
 //! panel opens, sizes and places ([`Surfaces`]) as its gadgets ask. The
 //! bar's thickness and the popups' sizes are their content's, measured
-//! at the output's scale.
+//! at the output's scale; so is its length, when it doesn't span its
+//! edge (`align`).
 
 use std::collections::BTreeMap;
 
@@ -23,14 +24,15 @@ use crate::ui::theme::Theme;
 use crate::ui::{self, Measuring, Surfaces};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
-/// and defaults match the Python implementation; `size`, `align`,
-/// `margin`, `opacity` are not honoured yet.
+/// and defaults match the Python implementation, but for its `size` and
+/// `align`, one `align` here; `margin`, `opacity` are not honoured.
 #[derive(Debug, Clone)]
 pub struct PanelConfig {
     /// `all`, or the connector names (`DP-1 HDMI-A-1`) to show this bar on.
     pub outputs: Vec<String>,
     pub position: Position,
     pub layer: Layer,
+    pub align: Align,
     pub items_start: Vec<String>,
     pub items_center: Vec<String>,
     pub items_end: Vec<String>,
@@ -40,6 +42,30 @@ pub struct PanelConfig {
 pub enum Position {
     Top,
     Bottom,
+}
+
+/// Where the bar is along its edge: all of it, or as long as its
+/// gadgets at its start, middle or end. At the start or the end it's in
+/// a corner, where layer-shell reserves no room (no exclusive zone):
+/// windows go under it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Align {
+    Stretch,
+    Start,
+    Center,
+    End,
+}
+
+impl Align {
+    /// `panel[align=..]`.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Stretch => "stretch",
+            Self::Start => "start",
+            Self::Center => "center",
+            Self::End => "end",
+        }
+    }
 }
 
 impl Section for PanelConfig {
@@ -63,10 +89,21 @@ impl Section for PanelConfig {
                 Layer::Bottom
             }
         };
+        let align = match raw.get("align") {
+            None | Some("stretch") => Align::Stretch,
+            Some("start") => Align::Start,
+            Some("center") => Align::Center,
+            Some("end") => Align::End,
+            Some(other) => {
+                log::warn!("invalid panel align {other:?}, using stretch");
+                Align::Stretch
+            }
+        };
         Self {
             outputs: raw.list_or("outputs", &["all"]),
             position,
             layer,
+            align,
             items_start: raw.list_or("items_start", &[]),
             items_center: raw.list_or("items_center", &[]),
             items_end: raw.list_or("items_end", &[]),
@@ -136,6 +173,9 @@ pub struct Panel {
     /// its content's (`min-height` a minimum), measured, since
     /// layer-shell needs it up front.
     height: u32,
+    /// Its length, measured as the thickness: the content's when it
+    /// doesn't stretch (the output's otherwise, unused).
+    width: u32,
     gadgets: Vec<Entry>,
     /// Open popups, by window id. The panel mints the ids so the daemon
     /// only has to map them back to the panel.
@@ -211,21 +251,24 @@ impl Panel {
             config,
             scale,
             height: 1,
+            width: 1,
             gadgets,
             popups: BTreeMap::new(),
             keyboard: false,
         }
     }
 
-    /// `panel[.top|.bottom][#instance][output=..]`, the root of every
-    /// node on this bar.
+    /// `panel[.top|.bottom][#instance][output=..][align=..]`, the root
+    /// of every node on this bar.
     fn root<'a>(&self, theme: &'a Theme) -> Node<'a> {
         let position = match self.config.position {
             Position::Top => "top",
             Position::Bottom => "bottom",
         };
         let root = theme.root("panel", self.scale).class(position);
-        with_id(root, instance_id(&self.section)).attr("output", &self.output_name)
+        with_id(root, instance_id(&self.section))
+            .attr("output", &self.output_name)
+            .attr("align", self.config.align.name())
     }
 
     /// `popup[output=..]`, the root of a popup of this bar.
@@ -249,15 +292,66 @@ impl Panel {
             Position::Top => Anchor::Top,
             Position::Bottom => Anchor::Bottom,
         };
-        edge | Anchor::Left | Anchor::Right
+        match self.config.align {
+            Align::Stretch => edge | Anchor::Left | Anchor::Right,
+            Align::Start => edge | Anchor::Left,
+            Align::Center => edge,
+            Align::End => edge | Anchor::Right,
+        }
+    }
+
+    fn layer_size(&self) -> LayerSize {
+        match self.config.align {
+            Align::Stretch => LayerSize::fill_width(self.height),
+            _ => LayerSize::px(self.width, self.height),
+        }
+    }
+
+    /// The room it keeps windows out of: none in a corner, where
+    /// layer-shell would ignore it.
+    fn exclusive_zone(&self) -> i32 {
+        if self.reserves() {
+            self.height as i32
+        } else {
+            0
+        }
+    }
+
+    /// Whether it keeps its thickness from the windows ([`Align`]).
+    pub fn reserves(&self) -> bool {
+        matches!(self.config.align, Align::Stretch | Align::Center)
+    }
+
+    /// Whether its length is its content's, measured again after every
+    /// change.
+    pub fn fits(&self) -> bool {
+        self.config.align != Align::Stretch
+    }
+
+    /// Where it is on an output whose rectangle is `out`.
+    pub fn rect_in(&self, out: Rectangle) -> Rectangle {
+        let (w, h) = match self.config.align {
+            Align::Stretch => (out.width, self.height as f32),
+            _ => (self.width as f32, self.height as f32),
+        };
+        let x = match self.config.align {
+            Align::Stretch | Align::Start => out.x,
+            Align::Center => out.x + ((out.width - w) / 2.0).floor(),
+            Align::End => out.x + out.width - w,
+        };
+        let y = match self.config.position {
+            Position::Top => out.y,
+            Position::Bottom => out.y + out.height - h,
+        };
+        Rectangle::new(iced::Point::new(x, y), Size::new(w, h))
     }
 
     pub fn layer_settings(&self) -> NewLayerShellSettings {
         NewLayerShellSettings {
             anchor: self.anchor(),
-            size: LayerSize::fill_width(self.height),
+            size: self.layer_size(),
             layer: self.config.layer,
-            exclusive_zone: Some(self.height as i32),
+            exclusive_zone: Some(self.exclusive_zone()),
             margin: None,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option: OutputOption::GlobalName(self.output.0),
@@ -266,25 +360,30 @@ impl Panel {
         }
     }
 
-    /// Measure the bar again (it's new, the theme or the scale changed):
-    /// if its thickness changed, the new layout (and exclusive zone) to
-    /// send for its surface `bar`.
+    /// Measure the bar again (it's new, the theme or the scale changed,
+    /// or its content when it [`fits`](Self::fits) it): if its size
+    /// changed, the new layout (and exclusive zone) to send for its
+    /// surface `bar`.
     pub fn resize(
         &mut self,
         bar: window::Id,
         m: Measuring<'_>,
     ) -> Option<(Anchor, LayerSize, i32)> {
-        let (_, height) = ui::size(
+        let (width, height) = ui::size(
             &mut m.measure.borrow_mut(),
             bar,
             self.view(m.shared),
             self.room,
         );
-        if height == self.height {
+        if (width, height) == (self.width, self.height) {
             return None;
         }
-        self.height = height;
-        Some((self.anchor(), LayerSize::fill_width(height), height as i32))
+        let thicker = height != self.height;
+        (self.width, self.height) = (width, height);
+        if !thicker && !self.fits() {
+            return None;
+        }
+        Some((self.anchor(), self.layer_size(), self.exclusive_zone()))
     }
 
     pub fn position(&self) -> Position {
@@ -528,10 +627,15 @@ impl Panel {
                     }
                     .into()
                 });
-            icssed::row(gadgets).kind("slot").class(slot.name())
+            icssed::row(gadgets)
+                .kind("slot")
+                .class(slot.name())
+                .auto_width_if(self.fits())
         };
+        // A bar as long as its gadgets: the config's, not the theme's.
         icssed::row![slot(Slot::Start), slot(Slot::Center), slot(Slot::End)]
             .at(self.root(shared.theme))
+            .auto_width_if(self.fits())
             .into()
     }
 

@@ -64,7 +64,9 @@ bar per monitor (or per `[panel:*]` section):
 - ✅ Autostart: programs run once when the shell starts (`[autostart]`)
 - ✅ One shell per display: a second `aria-shell` refuses to start
 - ✅ `make install`, a systemd user service, the programs it starts in systemd scopes of their own
-- 🔲 `[panel]` `size`, `align`, `margin`, `opacity`
+- ✅ A bar along its whole edge, or as long as its gadgets at its start, middle or end
+  (`[panel] align`; at the start or the end it keeps no room from the windows)
+- 🔲 `[panel]` `margin`, `opacity`
 
 Full configuration via the `aria.conf` file.
 

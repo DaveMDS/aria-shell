@@ -18,7 +18,7 @@ aria() {
 wait_for_shell() {
     i=0
     while [ $i -lt 50 ]; do
-        [ "$(aria debug surfaces 2> /dev/null | tr ';' '\n' | grep -c '^ *panel')" = 2 ] && return 0
+        [ "$(aria debug surfaces 2> /dev/null | tr ';' '\n' | grep -c '^ *panel')" -ge 2 ] && return 0
         sleep 0.1
         i=$((i + 1))
     done

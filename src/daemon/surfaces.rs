@@ -25,16 +25,26 @@ const EXITER: &str = "exiter";
 impl AriaShell {
     /// The popups' content may have changed with the shared state: the
     /// bars take or give back the keyboard, the popups whose gadget
-    /// wants another size are placed again.
+    /// wants another size are placed again, and so are the bars as long
+    /// as their gadgets.
     pub(crate) fn sync_popups(&mut self) -> Task<Message> {
         let m = measuring!(self);
+        let mut tasks = Vec::new();
+        // A bar as long as its gadgets follows them.
+        for (&id, panel) in self.panels.iter_mut().filter(|(_, p)| p.fits()) {
+            if let Some((anchor, size, zone_size)) = panel.resize(id, m) {
+                tasks.push(Task::done(Message::LayoutChange { id, anchor, size }));
+                tasks.push(Task::done(Message::ExclusiveZoneChange { id, zone_size }));
+            }
+        }
         let surfaces = self
             .panels
             .iter_mut()
             .fold(Surfaces::default(), |all, (&id, panel)| {
                 all.and(panel.sync_popups(id, m))
             });
-        surface_tasks(surfaces)
+        tasks.push(surface_tasks(surfaces));
+        Task::batch(tasks)
     }
 
     /// Every surface measured again (the theme or a scale changed): the

@@ -96,17 +96,7 @@ impl AriaShell {
             let Some(out) = self.output_rect(panel.output) else {
                 continue;
             };
-            let h = panel.height() as f32;
-            let y = match panel.position() {
-                panel::Position::Top => out.y,
-                panel::Position::Bottom => out.y + out.height - h,
-            };
-            list.push((
-                id,
-                "panel",
-                panel.output,
-                Rectangle::new(Point::new(out.x, y), Size::new(out.width, h)),
-            ));
+            list.push((id, "panel", panel.output, panel.rect_in(out)));
         }
         let bars: Vec<(Id, OutputId, Rectangle)> = list
             .iter()
@@ -307,7 +297,7 @@ impl AriaShell {
     fn bar_height(&self, output: OutputId, position: panel::Position) -> f32 {
         self.panels
             .values()
-            .filter(|p| p.output == output && p.position() == position)
+            .filter(|p| p.output == output && p.position() == position && p.reserves())
             .map(|p| p.height() as f32)
             .fold(0.0, f32::max)
     }

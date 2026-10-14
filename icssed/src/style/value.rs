@@ -155,9 +155,11 @@ pub(crate) enum WeightValue {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineHeight {
     Normal,
-    /// Times the font size.
+    /// Times the font size, inherited as such.
     Number(f32),
-    Px(f32),
+    /// A percentage is of the element's own font size, inherited as the
+    /// length it comes to (computed at the end of the cascade).
+    Length(LengthPercentage),
 }
 
 /// `white-space`.
@@ -238,20 +240,67 @@ impl TextBoxEdge {
     };
 }
 
+/// A `<length-percentage>`: px, plus a fraction of what the property
+/// measures against (the box, the parent's font size), resolved when
+/// that's known. CSS computes one as `calc(px + %)`, so a translation
+/// composed of both, or one moving from one to the other, is one value.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct LengthPercentage {
+    pub px: f32,
+    pub fraction: f32,
+}
+
+impl LengthPercentage {
+    pub const ZERO: Self = Self::px(0.0);
+
+    pub const fn px(px: f32) -> Self {
+        Self { px, fraction: 0.0 }
+    }
+
+    pub const fn fraction(fraction: f32) -> Self {
+        Self { px: 0.0, fraction }
+    }
+
+    /// Its length, against `reference` (what 100% is).
+    pub fn of(self, reference: f32) -> f32 {
+        self.px + self.fraction * reference
+    }
+
+    /// `self` grown by `factor`, both parts.
+    pub fn times(self, factor: f32) -> Self {
+        Self {
+            px: self.px * factor,
+            fraction: self.fraction * factor,
+        }
+    }
+
+    pub fn plus(self, other: Self) -> Self {
+        Self {
+            px: self.px + other.px,
+            fraction: self.fraction + other.fraction,
+        }
+    }
+
+    fn is_negative(self) -> bool {
+        self.px < 0.0 || self.fraction < 0.0
+    }
+}
+
 /// `transform`: a uniform scale, then a translation, about the
-/// `transform-origin` (iced's `Transformation` has nothing else).
+/// `transform-origin` (iced's `Transformation` has nothing else). A
+/// translation's percentages are of the border box's own size.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform {
     pub scale: f32,
-    pub x: f32,
-    pub y: f32,
+    pub x: LengthPercentage,
+    pub y: LengthPercentage,
 }
 
 impl Transform {
     pub const IDENTITY: Self = Self {
         scale: 1.0,
-        x: 0.0,
-        y: 0.0,
+        x: LengthPercentage::ZERO,
+        y: LengthPercentage::ZERO,
     };
 
     /// `self` applied after `inner`: CSS composes a list's functions
@@ -259,18 +308,10 @@ impl Transform {
     fn then(self, inner: Self) -> Self {
         Self {
             scale: self.scale * inner.scale,
-            x: self.scale * inner.x + self.x,
-            y: self.scale * inner.y + self.y,
+            x: inner.x.times(self.scale).plus(self.x),
+            y: inner.y.times(self.scale).plus(self.y),
         }
     }
-}
-
-/// One coordinate of `transform-origin`: a length from the border
-/// box's left or top, or a fraction of its size (the keywords).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Origin {
-    Px(f32),
-    Fraction(f32),
 }
 
 /// `background-size`.
@@ -530,7 +571,7 @@ pub(crate) enum Decl {
     BorderWidth(Side, f32),
     BorderStyle(Side, LineStyle),
     BorderColor(Side, ColorValue),
-    Radius(Corner, f32),
+    Radius(Corner, LengthPercentage),
     RowGap(f32),
     ColumnGap(f32),
     FlexDirection(Direction),
@@ -541,7 +582,7 @@ pub(crate) enum Decl {
     BoxShadow(Shadows),
     Opacity(f32),
     FontFamily(Arc<[FamilyName]>),
-    FontSize(f32),
+    FontSize(LengthPercentage),
     FontWeight(WeightValue),
     FontStyle(FontStyle),
     LineHeight(LineHeight),
@@ -556,10 +597,10 @@ pub(crate) enum Decl {
     OutlineColor(ColorValue),
     OutlineOffset(f32),
     Transform(Option<Transform>),
-    TransformOrigin(Origin, Origin),
+    TransformOrigin(LengthPercentage, LengthPercentage),
     BackgroundImage(Option<Picture>),
     BackgroundSize(BackgroundSize),
-    BackgroundPosition(Origin, Origin),
+    BackgroundPosition(LengthPercentage, LengthPercentage),
     BackgroundRepeat(Repeat),
     BorderImageSource(Option<Picture>),
     /// Top, right, bottom, left, in image pixels; `fill` keeps the middle.
@@ -772,7 +813,7 @@ fn value_of(
             Prop::BorderWidth(s) => Decl::BorderWidth(s, border_width(p)?),
             Prop::BorderStyle(s) => Decl::BorderStyle(s, line_style(p)?),
             Prop::BorderColor(s) => Decl::BorderColor(s, color_value(p)?),
-            Prop::Radius(c) => Decl::Radius(c, non_negative(p)?),
+            Prop::Radius(c) => Decl::Radius(c, non_negative_percentage(p)?),
             _ => unreachable!("not a one-value longhand: {prop:?}"),
         })
     };
@@ -809,7 +850,7 @@ fn value_of(
             .map(|(v, s)| Decl::BorderColor(s, v))
             .collect(),
         "border-radius" => {
-            let radii = four(p, non_negative)?;
+            let radii = four(p, non_negative_percentage)?;
             if p.try_parse(|p| p.expect_delim('/')).is_ok() {
                 return fail("elliptical corners (`/`) aren't supported");
             }
@@ -904,7 +945,7 @@ fn value_of(
                 Decl::Background(color.unwrap_or(ColorValue::Rgba(Color::TRANSPARENT))),
                 Decl::BackgroundImage(image.flatten()),
                 Decl::BackgroundSize(BackgroundSize::Auto),
-                Decl::BackgroundPosition(Origin::Fraction(0.0), Origin::Fraction(0.0)),
+                Decl::BackgroundPosition(LengthPercentage::ZERO, LengthPercentage::ZERO),
                 Decl::BackgroundRepeat(repeat.unwrap_or(Repeat { x: true, y: true })),
             ]
         }
@@ -1011,7 +1052,7 @@ fn value_of(
             t => return fail(format!("expected a number, found `{}`", t.to_css_string())),
         })],
         "font-family" => vec![Decl::FontFamily(p.parse_comma_separated(family)?.into())],
-        "font-size" => vec![Decl::FontSize(non_negative(p)?)],
+        "font-size" => vec![Decl::FontSize(non_negative_percentage(p)?)],
         "font-weight" => vec![Decl::FontWeight(font_weight(p)?)],
         "font-style" => vec![Decl::FontStyle(keyword(
             p,
@@ -1028,11 +1069,14 @@ fn value_of(
             Token::Dimension { value, unit, .. }
                 if unit.eq_ignore_ascii_case("px") && value >= 0.0 =>
             {
-                LineHeight::Px(value)
+                LineHeight::Length(LengthPercentage::px(value))
+            }
+            Token::Percentage { unit_value, .. } if unit_value >= 0.0 => {
+                LineHeight::Length(LengthPercentage::fraction(unit_value))
             }
             t => {
                 return fail(format!(
-                    "expected `normal`, a number or a length in px, found `{}`",
+                    "expected `normal`, a number, a length in px or a percentage, found `{}`",
                     t.to_css_string()
                 ));
             }
@@ -1533,20 +1577,20 @@ fn transform(p: &mut Parser) -> Result<Option<Transform>, Error> {
         };
         let step = p.parse_nested_block(|p| match &*name {
             "translate" => {
-                let x = length(p)?;
+                let x = length_percentage(p)?;
                 let y = if p.try_parse(|p| p.expect_comma()).is_ok() {
-                    length(p)?
+                    length_percentage(p)?
                 } else {
-                    0.0
+                    LengthPercentage::ZERO
                 };
                 Ok(Transform { scale: 1.0, x, y })
             }
             "translatex" => Ok(Transform {
-                x: length(p)?,
+                x: length_percentage(p)?,
                 ..Transform::IDENTITY
             }),
             "translatey" => Ok(Transform {
-                y: length(p)?,
+                y: length_percentage(p)?,
                 ..Transform::IDENTITY
             }),
             "scale" => {
@@ -1572,12 +1616,13 @@ fn transform(p: &mut Parser) -> Result<Option<Transform>, Error> {
     Ok(Some(total))
 }
 
-/// `<x> [<y>]`: `left`, `center`, `right` or a length; `top`, `center`,
-/// `bottom` or a length.
-fn transform_origin(p: &mut Parser) -> Result<(Origin, Origin), Error> {
-    let coordinate = |p: &mut Parser| -> Result<(Origin, Option<bool>), Error> {
+/// `<x> [<y>]`: `left`, `center`, `right` or a length-percentage;
+/// `top`, `center`, `bottom` or a length-percentage.
+fn transform_origin(p: &mut Parser) -> Result<(LengthPercentage, LengthPercentage), Error> {
+    let coordinate = |p: &mut Parser| -> Result<(LengthPercentage, Option<bool>), Error> {
         if let Ok(word) = p.try_parse(|p| p.expect_ident_cloned()) {
-            let at = |f: f32, horizontal: Option<bool>| Ok((Origin::Fraction(f), horizontal));
+            let at =
+                |f: f32, horizontal: Option<bool>| Ok((LengthPercentage::fraction(f), horizontal));
             return match &*word.to_ascii_lowercase() {
                 "left" => at(0.0, Some(true)),
                 "right" => at(1.0, Some(true)),
@@ -1587,14 +1632,14 @@ fn transform_origin(p: &mut Parser) -> Result<(Origin, Origin), Error> {
                 other => fail(format!("`{other}` isn't an origin")),
             };
         }
-        Ok((Origin::Px(length(p)?), None))
+        Ok((length_percentage(p)?, None))
     };
     let (first, first_horizontal) = coordinate(p)?;
     let Ok((second, _)) = p.try_parse(coordinate) else {
         // One value: `top` and `bottom` are vertical, the rest horizontal.
         return Ok(match first_horizontal {
-            Some(false) => (Origin::Fraction(0.5), first),
-            _ => (first, Origin::Fraction(0.5)),
+            Some(false) => (LengthPercentage::fraction(0.5), first),
+            _ => (first, LengthPercentage::fraction(0.5)),
         });
     };
     // `top left` names them the other way round.
@@ -1715,12 +1760,28 @@ fn length(p: &mut Parser) -> Result<f32, Error> {
             fail(format!("`{unit}` isn't a unit here: lengths are px"))
         }
         Token::Number { value: 0.0, .. } => Ok(0.0),
-        Token::Percentage { .. } => fail("percentages aren't supported: lengths are px"),
+        Token::Percentage { .. } => fail("a percentage isn't supported here: a length in px"),
         Token::Ident(name) if name.eq_ignore_ascii_case("auto") => {
             fail("`auto` isn't a length here")
         }
         t => fail(format!("expected a length, found `{}`", t.to_css_string())),
     }
+}
+
+/// A length or a percentage: `10px`, `-100%`, a unitless 0.
+fn length_percentage(p: &mut Parser) -> Result<LengthPercentage, Error> {
+    if let Ok(fraction) = p.try_parse(|p| p.expect_percentage()) {
+        return Ok(LengthPercentage::fraction(fraction));
+    }
+    Ok(LengthPercentage::px(length(p)?))
+}
+
+fn non_negative_percentage(p: &mut Parser) -> Result<LengthPercentage, Error> {
+    let value = length_percentage(p)?;
+    if value.is_negative() {
+        return fail("a negative length isn't allowed here");
+    }
+    Ok(value)
 }
 
 fn non_negative(p: &mut Parser) -> Result<f32, Error> {

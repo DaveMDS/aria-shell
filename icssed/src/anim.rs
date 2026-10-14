@@ -18,8 +18,8 @@ use iced::{Color, Event, window};
 
 use crate::Theme;
 use crate::style::{
-    AnimationDirection, Computed, Easing, FillMode, Keyframes, Moving, Node, Shadow, StepPosition,
-    Transform,
+    AnimationDirection, Computed, Easing, FillMode, Keyframes, LengthPercentage, Moving, Node,
+    Shadow, StepPosition, Transform,
 };
 
 impl Easing {
@@ -176,8 +176,8 @@ impl Paint {
                 let (a, b) = (from.transform, to.transform);
                 self.transform = Transform {
                     scale: number(a.scale, b.scale, t).max(0.0),
-                    x: number(a.x, b.x, t),
-                    y: number(a.y, b.y, t),
+                    x: length(a.x, b.x, t),
+                    y: length(a.y, b.y, t),
                 };
             }
             Moving::Rotate => self.rotate = number(from.rotate, to.rotate, t),
@@ -187,6 +187,15 @@ impl Paint {
 
 fn number(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
+}
+
+/// Its px and its percentage each: `0` to `-100%` passes through
+/// `-50%`, `10px` to `50%` through `calc(5px + 25%)`.
+fn length(a: LengthPercentage, b: LengthPercentage, t: f32) -> LengthPercentage {
+    LengthPercentage {
+        px: number(a.px, b.px, t),
+        fraction: number(a.fraction, b.fraction, t),
+    }
 }
 
 /// Mixed premultiplied, as CSS does: from `transparent` a colour fades

@@ -11,9 +11,9 @@ use super::images::{Nine, Picture};
 use super::keyframes::Keyframes;
 use super::value::{
     Align, AnimationDirection, BackgroundSize, ColorValue, Decl, Direction, Easing, FULL_SLICE,
-    FamilyName, FillMode, FontStyle, Justify, LineHeight, LineStyle, MinSize, Moving, ObjectFit,
-    Origin, Prop, Repeat, Shadows, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow,
-    TextTransform, Transform, WeightValue, WhiteSpace, Wide,
+    FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight, LineStyle, MinSize,
+    Moving, ObjectFit, Prop, Repeat, Shadows, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim,
+    TextOverflow, TextTransform, Transform, WeightValue, WhiteSpace, Wide,
 };
 
 /// Four lengths, one per side.
@@ -150,7 +150,8 @@ pub struct Computed {
     /// Top, right, bottom, left.
     pub border_color: [Color; 4],
     /// Top-left, top-right, bottom-right, bottom-left.
-    pub border_radius: [f32; 4],
+    /// A percentage is of the box's shorter side (see [`Computed::radii`]).
+    pub border_radius: [LengthPercentage; 4],
     pub row_gap: f32,
     pub column_gap: f32,
     /// `None`: the widget's own (a row's, a column's).
@@ -178,10 +179,10 @@ pub struct Computed {
     pub outline_color: Color,
     pub outline_offset: f32,
     pub transform: Option<Transform>,
-    pub transform_origin: (Origin, Origin),
+    pub transform_origin: (LengthPercentage, LengthPercentage),
     pub background_image: Option<Picture>,
     pub background_size: BackgroundSize,
-    pub background_position: (Origin, Origin),
+    pub background_position: (LengthPercentage, LengthPercentage),
     pub background_repeat: Repeat,
     pub border_image_source: Option<Picture>,
     pub border_image_slice: ([f32; 4], bool),
@@ -223,7 +224,7 @@ impl Computed {
             padding: Sides::default(),
             border_width: Sides::default(),
             border_color: [Color::BLACK; 4],
-            border_radius: [0.0; 4],
+            border_radius: [LengthPercentage::ZERO; 4],
             row_gap: 0.0,
             column_gap: 0.0,
             flex_direction: None,
@@ -249,10 +250,13 @@ impl Computed {
             outline_color: Color::BLACK,
             outline_offset: 0.0,
             transform: None,
-            transform_origin: (Origin::Fraction(0.5), Origin::Fraction(0.5)),
+            transform_origin: (
+                LengthPercentage::fraction(0.5),
+                LengthPercentage::fraction(0.5),
+            ),
             background_image: None,
             background_size: BackgroundSize::Auto,
-            background_position: (Origin::Fraction(0.0), Origin::Fraction(0.0)),
+            background_position: (LengthPercentage::ZERO, LengthPercentage::ZERO),
             background_repeat: Repeat { x: true, y: true },
             border_image_source: None,
             border_image_slice: FULL_SLICE,
@@ -301,20 +305,33 @@ impl Computed {
             && self.text_box_edge == other.text_box_edge
     }
 
+    /// Its corner radii on a border box of `size` (top-left, top-right,
+    /// bottom-right, bottom-left): a percentage of the shorter side (CSS
+    /// takes each axis's, an ellipse iced can't draw; the same on a
+    /// square, a pill on a long box), scaled down as CSS does where
+    /// they'd overlap.
+    pub fn radii(&self, size: iced::Size) -> [f32; 4] {
+        let short = size.width.min(size.height);
+        let [tl, tr, br, bl] = self.border_radius.map(|r| r.of(short));
+        let fit = |side: f32, sum: f32| if sum > side { side / sum } else { 1.0 };
+        let f = fit(size.width, tl + tr)
+            .min(fit(size.width, bl + br))
+            .min(fit(size.height, tl + bl))
+            .min(fit(size.height, tr + br));
+        [tl * f, tr * f, br * f, bl * f]
+    }
+
     /// Its `transform` as iced draws it, about its origin in the border
     /// box `bounds`.
     pub fn transformation(&self, bounds: iced::Rectangle) -> Option<iced::Transformation> {
         let t = self.transform?;
-        let at = |origin: Origin, start: f32, size: f32| match origin {
-            Origin::Px(v) => start + v,
-            Origin::Fraction(f) => start + f * size,
-        };
+        let at = |origin: LengthPercentage, start: f32, size: f32| start + origin.of(size);
         let (ox, oy) = (
             at(self.transform_origin.0, bounds.x, bounds.width),
             at(self.transform_origin.1, bounds.y, bounds.height),
         );
         Some(
-            iced::Transformation::translate(ox + t.x, oy + t.y)
+            iced::Transformation::translate(ox + t.x.of(bounds.width), oy + t.y.of(bounds.height))
                 * iced::Transformation::scale(t.scale)
                 * iced::Transformation::translate(-ox, -oy),
         )
@@ -392,7 +409,7 @@ impl<'p> Cascade<'p> {
             Decl::BoxShadow(v) => self.shadows = *v,
             Decl::Opacity(v) => out.opacity = *v,
             Decl::FontFamily(v) => out.font_family = v.clone(),
-            Decl::FontSize(v) => out.font_size = *v,
+            Decl::FontSize(v) => out.font_size = v.of(self.parent.font_size),
             Decl::FontWeight(v) => out.font_weight = weight(*v, self.parent.font_weight),
             Decl::FontStyle(v) => out.font_style = *v,
             Decl::LineHeight(v) => out.line_height = *v,
@@ -569,7 +586,13 @@ impl<'p> Cascade<'p> {
         let line_height = match out.line_height {
             LineHeight::Normal => (m.ascent + m.descent + m.leading) * size,
             LineHeight::Number(n) => n * size,
-            LineHeight::Px(px) => px,
+            LineHeight::Length(length) => {
+                // What the children inherit: the length, not the
+                // percentage.
+                let px = length.of(size);
+                out.line_height = LineHeight::Length(LengthPercentage::px(px));
+                px
+            }
         };
         out.line_height_px = ((line_height * scale).round().max(1.0)) / scale;
         out.ascent = m.ascent * size;

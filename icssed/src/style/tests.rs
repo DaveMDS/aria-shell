@@ -296,7 +296,10 @@ fn shorthands_expand_as_in_css() {
     );
     assert_eq!((a.margin.top, a.margin.right), (-4.0, 5.0));
     assert_eq!((a.row_gap, a.column_gap), (6.0, 7.0));
-    assert_eq!(a.border_radius, [1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(
+        a.border_radius,
+        [1.0, 2.0, 3.0, 4.0].map(LengthPercentage::px)
+    );
     let b = style(&sheet, "b");
     assert_eq!(b.border_width.top, 0.0);
     assert_eq!(b.border_width.left, 2.0);
@@ -492,8 +495,8 @@ fn transforms_compose_as_css_does() {
         t("a"),
         Some(Transform {
             scale: 2.0,
-            x: 4.0,
-            y: 6.0
+            x: LengthPercentage::px(4.0),
+            y: LengthPercentage::px(6.0)
         })
     );
     // The last function first: the translation scaled too.
@@ -501,8 +504,8 @@ fn transforms_compose_as_css_does() {
         t("b"),
         Some(Transform {
             scale: 2.0,
-            x: 8.0,
-            y: 0.0
+            x: LengthPercentage::px(8.0),
+            y: LengthPercentage::ZERO
         })
     );
     assert_eq!(t("c"), None);
@@ -514,9 +517,13 @@ fn transforms_compose_as_css_does() {
         "{messages:?}"
     );
     let origin = |kind: &str| style(&sheet, &format!("t > {kind}")).transform_origin;
-    assert_eq!(origin("e"), (Origin::Fraction(0.0), Origin::Fraction(0.0)));
-    assert_eq!(origin("f"), (Origin::Fraction(0.5), Origin::Fraction(1.0)));
-    assert_eq!(origin("g"), (Origin::Px(10.0), Origin::Px(20.0)));
+    let fraction = LengthPercentage::fraction;
+    assert_eq!(origin("e"), (fraction(0.0), fraction(0.0)));
+    assert_eq!(origin("f"), (fraction(0.5), fraction(1.0)));
+    assert_eq!(
+        origin("g"),
+        (LengthPercentage::px(10.0), LengthPercentage::px(20.0))
+    );
     // Drawn about the origin: the centre stays where it was.
     let bounds = iced::Rectangle::new(iced::Point::new(10.0, 10.0), iced::Size::new(20.0, 20.0));
     let scaled = load("x { transform: scale(2); }").0;
@@ -525,6 +532,64 @@ fn transforms_compose_as_css_does() {
     assert_eq!(centre, iced::Point::new(20.0, 20.0));
     let corner = iced::Point::new(10.0, 10.0) * transformation;
     assert_eq!(corner, iced::Point::new(0.0, 0.0));
+}
+
+#[test]
+fn percentages_are_of_what_css_measures_them_against() {
+    let (sheet, warnings) = load(
+        "a { transform: translateY(-100%); } \
+         b { transform: scale(2) translate(50%, 10px); } \
+         c { transform-origin: 25% 100%; background-position: 50% 0; } \
+         d { border-radius: 50% 4px; } \
+         e { font-size: 20px; line-height: 150%; } \
+         e > f { font-size: 50%; } \
+         g { line-height: 1.5; } g > h { font-size: 10px; } \
+         i { padding: 10%; border-radius: -10%; }",
+    );
+    // The translation is of the border box's own size, scaled with it
+    // when a scale comes after.
+    let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(200.0, 30.0));
+    let a = style(&sheet, "t > a").transformation(bounds).expect("one");
+    assert_eq!(iced::Point::ORIGIN * a, iced::Point::new(0.0, -30.0));
+    let b = style(&sheet, "t > b").transform.expect("one");
+    assert_eq!(
+        (b.x, b.y),
+        (LengthPercentage::fraction(1.0), LengthPercentage::px(20.0))
+    );
+    let c = style(&sheet, "t > c");
+    assert_eq!(
+        c.transform_origin,
+        (
+            LengthPercentage::fraction(0.25),
+            LengthPercentage::fraction(1.0)
+        )
+    );
+    assert_eq!(c.background_position.0, LengthPercentage::fraction(0.5));
+    // A radius is of the shorter side: a pill's ends round, then fitted
+    // where the corners would overlap, as CSS does.
+    let d = style(&sheet, "t > d");
+    assert_eq!(
+        d.radii(iced::Size::new(200.0, 30.0)),
+        [15.0, 4.0, 15.0, 4.0]
+    );
+    assert_eq!(d.radii(iced::Size::new(10.0, 10.0)), [5.0, 4.0, 5.0, 4.0]);
+    // A font size is of the parent's; a line height of the element's
+    // own font size, inherited as the length it came to.
+    let e = style(&sheet, "t > e");
+    assert_eq!(e.line_height_px, 30.0);
+    let f = style(&sheet, "t > e > f");
+    assert_eq!(f.font_size, 10.0);
+    assert_eq!(f.line_height_px, 30.0);
+    // A number is inherited as a number.
+    assert_eq!(style(&sheet, "t > g > h").line_height_px, 15.0);
+    // Nowhere else, and never negative where a length can't be.
+    let messages: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert!(
+        messages[0].contains("a percentage isn't supported here"),
+        "{messages:?}"
+    );
+    assert!(messages[1].contains("negative"), "{messages:?}");
 }
 
 #[test]
@@ -555,7 +620,10 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
     assert_eq!(b.background_size, BackgroundSize::Px(Some(10.0), None));
     assert_eq!(
         b.background_position,
-        (Origin::Fraction(0.5), Origin::Fraction(1.0))
+        (
+            LengthPercentage::fraction(0.5),
+            LengthPercentage::fraction(1.0)
+        )
     );
     assert_eq!(b.background_repeat, Repeat { x: true, y: true });
     assert_eq!(

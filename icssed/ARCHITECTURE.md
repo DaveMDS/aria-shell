@@ -693,6 +693,12 @@ for overlays at every event and every frame.
   transition), not each item's. A box keyed per child (`.keyed(key)`)
   would carry them along.
 - `stack`: children on top of each other (a badge on an icon).
+- Percentages in the layout's lengths (`width`, `height`, their min and
+  max, `padding`, `margin`, `gap`): of the containing block, as CSS has
+  them (padding and margin of its width, both ways; `auto` where it's
+  indefinite), resolved in `layout.rs`'s flex; no use for them yet,
+  `fill` takes the free room. `<length-percentage>`
+  (`style::LengthPercentage`) is there for them.
 - States forced on a box in the demo, as a browser's devtools do.
 
 ## To decide

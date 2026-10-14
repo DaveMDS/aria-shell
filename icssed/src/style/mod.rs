@@ -29,7 +29,7 @@ pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
 pub(crate) use value::Moving;
 pub use value::{
     Align, AnimationDirection, BackgroundSize, Corner, Direction, Easing, EdgeOver, EdgeUnder,
-    FamilyName, FillMode, FontStyle, Justify, LineHeight, MinSize, ObjectFit, Origin, Repeat, Side,
-    Size, StepPosition, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform,
-    Transform, WhiteSpace,
+    FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight, MinSize, ObjectFit,
+    Repeat, Side, Size, StepPosition, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow,
+    TextTransform, Transform, WhiteSpace,
 };

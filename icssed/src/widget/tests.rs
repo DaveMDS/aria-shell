@@ -193,6 +193,39 @@ fn a_transition_runs_from_its_cause_to_its_end() {
 }
 
 #[test]
+fn a_box_slides_out_by_its_own_height() {
+    let sheet = sheet(
+        "cell { width: 20px; height: 20px; background: rgb(255 0 0); \
+                transition: transform 1s linear; } \
+         cell.hidden { transform: translateY(-100%); }",
+    );
+    let root = sheet.root("root", 1.0);
+    let view = |hidden: bool| -> Element<'_, Message> {
+        crate::row([crate::row([])
+            .kind("cell")
+            .class_if("hidden", hidden)
+            .into()])
+        .at(root)
+        .into()
+    };
+    let red = [255, 0, 0, 255];
+    let white = [255, 255, 255, 255];
+    let mut ui = Harness::new(view(false), Size::new(20.0, 20.0), 1.0);
+    let start = Instant::now();
+    ui.frame(start);
+    assert_eq!(ui.pixels(Color::WHITE).at(10, 15), red);
+    // From none to -100%: halfway, half of its height up.
+    ui.rebuild(view(true));
+    ui.frame(at(start, 0));
+    ui.frame(at(start, 500));
+    let pixels = ui.pixels(Color::WHITE);
+    assert_eq!((pixels.at(10, 5), pixels.at(10, 15)), (red, white));
+    // Then out of its place.
+    ui.frame(at(start, 1100));
+    assert_eq!(ui.pixels(Color::WHITE).at(10, 5), white);
+}
+
+#[test]
 fn an_ancestors_hover_starts_its_descendants_transition() {
     let sheet = sheet(
         ".card { width: 60px; height: 30px; padding: 5px; } \

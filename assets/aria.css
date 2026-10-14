@@ -600,10 +600,10 @@ surface.panel {
   transition: transform 200ms ease-out;
 }
 surface.panel.top.hidden {
-  transform: translateY(-60px);
+  transform: translateY(-100%);
 }
 surface.panel.bottom.hidden {
-  transform: translateY(60px);
+  transform: translateY(100%);
 }
 surface.panel > slot {
   width: fill;

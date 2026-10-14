@@ -167,11 +167,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Image<'_> {
         let mut image = image::Image::new(self.handle.clone());
         image.opacity = theme.opacity * s.opacity;
         image.rotation = Radians(s.rotate.to_radians());
-        image.border_radius = Radius {
-            top_left: s.border_radius[0],
-            top_right: s.border_radius[1],
-            bottom_right: s.border_radius[2],
-            bottom_left: s.border_radius[3],
+        image.border_radius = {
+            let [top_left, top_right, bottom_right, bottom_left] = s.radii(bounds.size());
+            Radius {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            }
         };
         if bounds.contains(drawn.position())
             && bounds.contains(Point::new(drawn.x + drawn.width, drawn.y + drawn.height))

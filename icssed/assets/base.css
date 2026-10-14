@@ -27,13 +27,16 @@
  *   - `@keyframes name { from { } 50% { } to { } }`: an animation's steps,
  *     with what moves only (below); the last one of a name wins
  *   - not supported: other @-rules, !important, the `+` and `~`
- *     combinators, pseudo-elements, % and em
+ *     combinators, pseudo-elements, em; a percentage where a
+ *     property below says <length-percentage> only
  *   - a syntax error (a bracket never closed, a comment never ended, a
  *     rule without a block) rejects the whole file; anything else that
  *     can't be used is a warning with its file:line:col, and is skipped
  *
  * Values:
  *   <length>   px, or a unitless 0
+ *   <length-percentage>
+ *              a <length> or a <percentage>, of what the property says
  *   <color>    #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba(), hsl(),
  *              hsla(), a CSS colour name, transparent, currentcolor
  *   <time>     s or ms
@@ -61,7 +64,11 @@
  *                          down to whole device pixels, at least one, as
  *                          CSS does. Sides may differ in width and colour,
  *                          with or without a radius
- *   border-radius          1 to 4 <length>s; border-top-left-radius, ...
+ *   border-radius          1 to 4 <length-percentage>s;
+ *                          border-top-left-radius, ...: a percentage of
+ *                          the border box's shorter side (unlike CSS,
+ *                          which takes each axis's for an ellipse: the
+ *                          same on a square, round ends on a long box)
  *   gap                    <length> [<length>]: row-gap, column-gap
  *   flex-direction         row | column; a box's own when not set
  *   align-items            stretch | start | center | end
@@ -75,7 +82,9 @@
  *   background-size        auto (a pixel of the image a px) | cover |
  *                          contain | <length> [<length> | auto]
  *   background-position    left | center | right, top | center | bottom,
- *                          or lengths; the top left if not set
+ *                          or <length-percentage>s (of the room the image
+ *                          leaves: 100% puts its end at the area's); the
+ *                          top left if not set
  *   background-repeat      repeat | no-repeat | repeat-x | repeat-y
  *   border-image           url() || <number>{1,4} [fill];
  *                          border-image-source, -slice: a 9-patch drawn in
@@ -96,11 +105,14 @@
  *                          group: where children overlap inside a faded
  *                          box, the lower shows through the upper
  *   transform              none | translate(), translateX(),
- *                          translateY(), scale() (one factor, no rotate:
- *                          iced draws neither), on boxes: painted only,
- *                          the layout untouched, the pointer following it
+ *                          translateY() (<length-percentage>s: of the
+ *                          border box's own size), scale() (one factor,
+ *                          no rotate: iced draws neither), on boxes:
+ *                          painted only, the layout untouched, the pointer
+ *                          following it
  *   transform-origin       left | center | right, top | center | bottom,
- *                          or lengths; the border box's centre if not set
+ *                          or <length-percentage>s (of the border box);
+ *                          its centre if not set
  *   object-fit             fill | contain | cover | none | scale-down: how
  *                          an image fills its box, centred
  *   rotate                 none | <angle>: an icon's or an image's turn
@@ -134,11 +146,14 @@
  *                          first frame); a widget can say when it ends
  *   font-family*           font names and serif, sans-serif, monospace,
  *                          comma-separated
- *   font-size*             <length>
+ *   font-size*             <length-percentage>: a percentage of the
+ *                          parent's font size
  *   font-weight*           normal | bold | bolder | lighter | 1 to 1000
  *   font-style*            normal | italic | oblique
- *   line-height*           normal | <number> (times the font size) |
- *                          <length>
+ *   line-height*           normal | <number> (times the font size,
+ *                          inherited as a number) | <length-percentage>
+ *                          (of the element's own font size, inherited as
+ *                          the length it comes to)
  *   white-space*           normal (wraps at words) | nowrap
  *   text-overflow          clip | ellipsis
  *   text-align*            start | end | left | right | center

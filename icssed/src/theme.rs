@@ -175,9 +175,11 @@ impl<'a> ScrollClass<'a> {
     }
 }
 
-/// A uniform border as iced draws one: the top side's.
-fn border(s: &Computed, opacity: f32) -> Border {
-    let [top_left, top_right, bottom_right, bottom_left] = s.border_radius;
+/// A uniform border as iced draws one: the top side's, its corners for
+/// a box whose shorter side is `short` (what a percentage is of).
+fn border(s: &Computed, opacity: f32, short: f32) -> Border {
+    let [top_left, top_right, bottom_right, bottom_left] =
+        s.radii(iced::Size::new(short, f32::INFINITY));
     Border {
         color: fade(s.border_color[0], opacity),
         width: s.border_width.top,
@@ -253,24 +255,27 @@ impl scrollable::Catalog for Theme {
             ),
         };
         let under = self.ancestors.push(class.scroll.depth(), scroll);
-        let rail = |bar: Node<'_>, thumb: Node<'_>, states: States| {
+        let rail = |bar: Node<'_>, thumb: Node<'_>, states: States, vertical: bool| {
             let s = bar.resolve(states, &under);
             let opacity = self.opacity * s.opacity;
             let t = thumb.resolve(States::NONE, &under.push(bar.depth(), states));
             let thumb_opacity = opacity * t.opacity;
+            // Their shorter side is their thickness.
+            let short = crate::widget::scroll::thickness(&s, vertical).unwrap_or(0.0);
+            let thumb_short = crate::widget::scroll::thickness(&t, vertical).unwrap_or(short);
             scrollable::Rail {
                 background: Some(Background::Color(fade(s.background, opacity))),
-                border: border(&s, opacity),
+                border: border(&s, opacity, short),
                 scroller: scrollable::Scroller {
                     background: Background::Color(fade(t.background, thumb_opacity)),
-                    border: border(&t, thumb_opacity),
+                    border: border(&t, thumb_opacity, thumb_short),
                 },
             }
         };
         scrollable::Style {
             container: container::Style::default(),
-            vertical_rail: rail(class.vertical, class.vertical_thumb, vertical),
-            horizontal_rail: rail(class.horizontal, class.horizontal_thumb, horizontal),
+            vertical_rail: rail(class.vertical, class.vertical_thumb, vertical, true),
+            horizontal_rail: rail(class.horizontal, class.horizontal_thumb, horizontal, false),
             gap: None,
             auto_scroll,
         }

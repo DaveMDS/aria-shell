@@ -16,7 +16,7 @@ use iced::widget::canvas::{Fill, Path, Style, fill::Rule, path::Builder};
 use iced::{Border, Color, Point, Radians, Rectangle, Shadow, Size, Vector};
 
 use crate::Renderer;
-use crate::style::{BackgroundSize, Computed, Drawn, Nine, Origin, Picture};
+use crate::style::{BackgroundSize, Computed, Drawn, LengthPercentage, Nine, Picture};
 
 /// `color` at `opacity`.
 pub(crate) fn fade(color: Color, opacity: f32) -> Color {
@@ -24,18 +24,6 @@ pub(crate) fn fade(color: Color, opacity: f32) -> Color {
         a: color.a * opacity,
         ..color
     }
-}
-
-/// A box's corner radii, scaled down as CSS does where they'd overlap:
-/// top-left, top-right, bottom-right, bottom-left.
-fn radii(s: &Computed, size: Size) -> [f32; 4] {
-    let [tl, tr, br, bl] = s.border_radius;
-    let fit = |side: f32, sum: f32| if sum > side { side / sum } else { 1.0 };
-    let f = fit(size.width, tl + tr)
-        .min(fit(size.width, bl + br))
-        .min(fit(size.height, tl + bl))
-        .min(fit(size.height, tr + br));
-    [tl * f, tr * f, br * f, bl * f]
 }
 
 fn radius([tl, tr, br, bl]: [f32; 4]) -> Radius {
@@ -77,7 +65,7 @@ pub(crate) fn draw_box(
         blur_radius: s.blur,
     });
     let background = fade(s.background, opacity);
-    let corners = radii(s, bounds.size());
+    let corners = s.radii(bounds.size());
     // A border image replaces the border; a background image goes
     // between the background colour and the border.
     let border_in_quad = uniform && s.border_image.is_none() && s.background_image.is_none();
@@ -224,10 +212,10 @@ fn draw_background(
     if size.width < 0.5 || size.height < 0.5 {
         return;
     }
-    let place = |origin: Origin, start: f32, room: f32, size: f32| match origin {
-        Origin::Fraction(f) => start + (room - size) * f,
-        Origin::Px(v) => start + v,
-    };
+    // A percentage is of the room left, as in CSS: 100% puts the
+    // image's end at the area's.
+    let place =
+        |origin: LengthPercentage, start: f32, room: f32, size: f32| start + origin.of(room - size);
     let (x, y) = (
         place(s.background_position.0, area.x, area.width, size.width),
         place(s.background_position.1, area.y, area.height, size.height),
@@ -361,7 +349,9 @@ pub(crate) fn draw_outline(renderer: &mut Renderer, s: &Computed, bounds: Rectan
         return;
     }
     // It follows the border's corners, as browsers draw it.
-    let corners = radii(s, bounds.size()).map(|r| if r > 0.0 { (r + grow).max(0.0) } else { 0.0 });
+    let corners = s
+        .radii(bounds.size())
+        .map(|r| if r > 0.0 { (r + grow).max(0.0) } else { 0.0 });
     renderer.fill_quad(
         Quad {
             bounds: outer,

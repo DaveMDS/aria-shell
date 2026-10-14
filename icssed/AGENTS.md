@@ -235,8 +235,15 @@ surface closes.
   alphabetic` on every element): a label's box runs from its capitals'
   top to its baseline.
 - `transform` takes translate and a uniform `scale` (iced has nothing
-  else); `rotate` turns only icons and images. `opacity` isn't a group:
+  else), a translation's percentage of the box's own size (`translateY(-100%)`
+  slides a box out by its height, whatever it is); `rotate` turns only
+  icons and images. `opacity` isn't a group:
   overlapping children show through each other.
+- **Percentages** where they're of the element itself or of its font:
+  `transform`, `transform-origin`, `border-radius` (of the shorter side:
+  no ellipses), `background-position`, `font-size`, `line-height`. Not
+  in the layout's lengths (sizes, padding, margin, gap): those would be
+  of the containing block (ARCHITECTURE.md, "Not done yet").
 - `min-height` beats `height`, as in CSS: a test's 30 px input stays at
   the base's 32 px `min-height`.
 - Animations: `transition` (colours, opacity, shadow, transform,

@@ -12,7 +12,7 @@ mod input;
 mod menu;
 mod meter;
 pub(crate) mod place;
-mod scroll;
+pub(crate) mod scroll;
 mod select;
 mod slider;
 mod slot;

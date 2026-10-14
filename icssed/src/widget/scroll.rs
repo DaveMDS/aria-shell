@@ -19,7 +19,7 @@ use iced::{Event, Length, Rectangle, Size, Vector};
 use super::place::{self, Place, placed};
 use crate::layout::snap;
 use crate::query::Reported;
-use crate::style::{MinSize, Node, Size as Len, name};
+use crate::style::{Computed, MinSize, Node, Size as Len, name};
 use crate::theme::ScrollClass;
 use crate::{Element, Renderer, Theme};
 
@@ -68,20 +68,26 @@ fn bar(node: Node<'_>, vertical: bool) -> Scrollbar {
     let s = node.base();
     let thumb = node.child("thumb").base();
     let scale = node.scale();
-    let px = |len: Len| match len {
-        Len::Px(v) => Some(snap(v, scale)),
-        Len::Auto | Len::Fill => None,
-    };
-    let (thickness, thumb, margin) = if vertical {
-        (px(s.width), px(thumb.width), s.margin.left)
+    let px = |s: &Computed| thickness(s, vertical).map(|v| snap(v, scale));
+    let margin = if vertical {
+        s.margin.left
     } else {
-        (px(s.height), px(thumb.height), s.margin.top)
+        s.margin.top
     };
-    let thickness = thickness.unwrap_or(0.0);
+    let (thickness, thumb) = (px(&s).unwrap_or(0.0), px(&thumb));
     Scrollbar::new()
         .width(thickness)
         .scroller_width(thumb.unwrap_or(thickness))
         .margin(snap(margin, scale))
+}
+
+/// A scrollbar's or its thumb's thickness, as its style says: a
+/// vertical one's `width`, a horizontal one's `height`.
+pub(crate) fn thickness(s: &Computed, vertical: bool) -> Option<f32> {
+    match if vertical { s.width } else { s.height } {
+        Len::Px(v) => Some(v),
+        Len::Auto | Len::Fill => None,
+    }
 }
 
 impl<'a, Message: 'a> Scroll<'a, Message> {

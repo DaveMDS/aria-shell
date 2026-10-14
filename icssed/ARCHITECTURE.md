@@ -678,7 +678,7 @@ for overlays at every event and every frame.
   icons over a background image vanished. The layer over a background
   image starts with a transparent quad, which keeps the two apart
   (`paint.rs`, TEMPORARY: one quad per such box, until iced draws them
-  in order).
+  in order: iced-rs/iced#3512).
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.
 - Layout runs on every rebuild of a surface's tree, changed or not.

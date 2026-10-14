@@ -389,7 +389,8 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
   svg) before every linear one (a raster). So svg icons over a
   background image vanished, and showed again under a hovered button's
   quad. `draw_box` starts the layer over a background image with a
-  transparent quad, marked TEMPORARY, until iced draws them in order.
+  transparent quad, marked TEMPORARY, until iced draws them in order
+  (iced-rs/iced#3512).
 - tiny-skia (the headless renderer, the golden images) places a
   stretched image on a grid as coarse as its stretch and doesn't round
   an image's corners: right on wgpu only.

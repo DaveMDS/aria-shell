@@ -171,7 +171,8 @@ pub(crate) fn draw_box(
                 // before it (same clip), and there iced_wgpu 0.14 draws
                 // every nearest-filtered image (an svg) before every
                 // linear one (this picture), whatever came first. A quad
-                // first keeps the layers apart. See ARCHITECTURE.md.
+                // first keeps the layers apart. See ARCHITECTURE.md and
+                // https://github.com/iced-rs/iced/issues/3512.
                 renderer.fill_quad(Quad::default(), Color::TRANSPARENT);
                 edges(renderer);
             });

@@ -29,9 +29,9 @@
  */
 
 /* Enable debug inspector */
-* :hover {
+/* * :hover {
   -debug: box;
-}
+} */
 
 
 /*
@@ -668,7 +668,6 @@ gadget {
   gap: 2px;
 }
 gadget > button {
-  min-width: 32px;
   padding: 6px 6px;
   gap: 4px;
   border: none;

@@ -143,7 +143,7 @@ impl AriaShell {
         if self.general.reload_config {
             files.extend(self.config.files().map(Path::to_path_buf));
         }
-        if self.general.reload_style {
+        if self.general.reload_theme {
             files.extend(self.theme.files().iter().cloned());
         }
         files.extend(self.icons.watch_dirs().iter().cloned());

@@ -1,6 +1,6 @@
 //! Styling: the toolkit's base stylesheet, then Aria's
 //! (`assets/aria.css`: its own elements, the palette), then the user
-//! theme `[general] style` names, then the user's own touches over any
+//! theme `[general] theme` names, then the user's own touches over any
 //! theme (`theme-override.css` beside the config file), compiled into
 //! one `icssed::Sheet` for one [`Scheme`]. The views build their nodes from a surface's root
 //! ([`Theme::root`]); the toolkit's widgets resolve their styles.
@@ -33,8 +33,8 @@ const OVERRIDE: &str = "theme-override.css";
 pub enum Command {
     ToggleScheme,
     SetScheme(Scheme),
-    /// A theme name (as `[general] style`), or `None` for the base alone.
-    SetStyle(Option<String>),
+    /// A theme name (as `[general] theme`), or `None` for the base alone.
+    SetTheme(Option<String>),
     /// Read the theme's own config over the user's, or stop.
     ToggleConfig,
 }
@@ -62,12 +62,12 @@ pub struct LoadError {
 }
 
 impl Theme {
-    /// The base stylesheets plus the user theme `style` (a name looked
+    /// The base stylesheets plus the user theme `name` (looked
     /// up in the theme directories, or a path), if any, for `scheme`.
     /// Never fails: a missing or broken user theme is logged and the
     /// base alone is used (its file still watched).
-    pub fn load(config: &Config, style: Option<&str>, scheme: Scheme) -> Self {
-        Self::try_load(config, style, scheme).unwrap_or_else(|e| {
+    pub fn load(config: &Config, name: Option<&str>, scheme: Scheme) -> Self {
+        Self::try_load(config, name, scheme).unwrap_or_else(|e| {
             log::error!("{}, using the base theme", e.message);
             let mut base = Self::base(config, scheme);
             base.files.extend(e.files);
@@ -79,15 +79,15 @@ impl Theme {
     /// syntax error is an error, so a reload can keep the last good one.
     pub fn try_load(
         config: &Config,
-        style: Option<&str>,
+        name: Option<&str>,
         scheme: Scheme,
     ) -> Result<Self, LoadError> {
-        let Some(style) = style else {
+        let Some(name) = name else {
             return Ok(Self::base(config, scheme));
         };
-        let Some(path) = locate(style, config) else {
+        let Some(path) = locate(name, config) else {
             return Err(LoadError {
-                message: format!("theme {style:?} not found"),
+                message: format!("theme {name:?} not found"),
                 files: Vec::new(),
             });
         };
@@ -100,9 +100,9 @@ impl Theme {
             files: files.clone(),
         })?;
         log::info!("loading theme {} ({})", path.display(), scheme.name());
-        let name = path.display().to_string();
+        let file = path.display().to_string();
         let user = Source {
-            name: &name,
+            name: &file,
             text: &text,
             dir: path.parent(),
         };
@@ -116,7 +116,7 @@ impl Theme {
         Ok(Self {
             sheet,
             files,
-            name: Some(style.to_owned()),
+            name: Some(name.to_owned()),
             config: config_beside(&path),
             config_on: false,
         })
@@ -183,10 +183,10 @@ impl Theme {
     }
 }
 
-/// The config of the theme `style` names (`<name>.conf` beside its
+/// The config of the theme `name` (`<name>.conf` beside its
 /// file), if it has one: read over the user's (`Config::with_theme`).
-pub fn config_file(style: &str, config: &Config) -> Option<PathBuf> {
-    locate(style, config).and_then(|path| config_beside(&path))
+pub fn config_file(name: &str, config: &Config) -> Option<PathBuf> {
+    locate(name, config).and_then(|path| config_beside(&path))
 }
 
 fn config_beside(file: &Path) -> Option<PathBuf> {
@@ -337,18 +337,18 @@ fn available_in(dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
     found
 }
 
-/// Where `[general] style = <value>` points: a path if it looks like
+/// Where `[general] theme = <value>` points: a path if it looks like
 /// one (has a `/` or ends in `.css`, relative to the config file's
 /// directory), else the theme of that name under the config dirs, the
 /// data dirs, then the source tree's `assets/` (see [`theme_in`]).
-fn locate(style: &str, config: &Config) -> Option<PathBuf> {
-    if style.contains('/') || style.ends_with(".css") {
-        let path = config.resolve_path(style);
+fn locate(name: &str, config: &Config) -> Option<PathBuf> {
+    if name.contains('/') || name.ends_with(".css") {
+        let path = config.resolve_path(name);
         return path.is_file().then_some(path);
     }
     theme_dirs()
         .into_iter()
-        .find_map(|dir| theme_in(&dir.join("themes"), style))
+        .find_map(|dir| theme_in(&dir.join("themes"), name))
 }
 
 /// The theme `name` in a `themes/` directory: its folder

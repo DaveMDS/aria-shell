@@ -3,7 +3,7 @@
 //! schemes and every theme found in the theme directories (the base
 //! alone first); picking one restyles the shell live. Last, a check:
 //! the theme's own config read over the user's (only for a theme that
-//! has one). Nothing is persisted: `[general] style` / `color_scheme` /
+//! has one). Nothing is persisted: `[general] theme` / `color_scheme` /
 //! `theme_config` rule again at the next start.
 //!
 //! Holds no theme state: the current scheme and theme name come from
@@ -90,10 +90,10 @@ impl Gadget for Themes {
             Message::Menu(m) => match self.menu.update(m) {
                 menu::Event::Clicked(ID_LIGHT) => self.pick(Command::SetScheme(Scheme::Light)),
                 menu::Event::Clicked(ID_DARK) => self.pick(Command::SetScheme(Scheme::Dark)),
-                menu::Event::Clicked(ID_BASE) => self.pick(Command::SetStyle(None)),
+                menu::Event::Clicked(ID_BASE) => self.pick(Command::SetTheme(None)),
                 menu::Event::Clicked(ID_CONFIG) => self.pick(Command::ToggleConfig),
                 menu::Event::Clicked(id) => match self.available.get((id - 1) as usize) {
-                    Some(name) => self.pick(Command::SetStyle(Some(name.clone()))),
+                    Some(name) => self.pick(Command::SetTheme(Some(name.clone()))),
                     None => Action::None,
                 },
                 menu::Event::None | menu::Event::Unfolded(_) => Action::None,

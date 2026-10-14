@@ -37,7 +37,7 @@ gadget.themes > button:hover {
   border-left: 2px solid #ffff00;
 }
 EOF
-sed -i "s|^style =.*|style = $conf/borders.css|" "$conf/aria-shell/aria.conf"
+sed -i "s|^theme =.*|theme = $conf/borders.css|" "$conf/aria-shell/aria.conf"
 restart_shell "$conf"
 settle 1
 

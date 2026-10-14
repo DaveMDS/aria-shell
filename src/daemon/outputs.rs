@@ -305,7 +305,7 @@ impl AriaShell {
     /// too (a theme's config just read, or left).
     pub(crate) fn reload_config(&mut self, scheme: bool) -> Task<Message> {
         log::info!("config changed, rebuilding panels");
-        self.config = Config::load().themed(self.style.as_deref(), self.theme_config);
+        self.config = Config::load().themed(self.theme_name.as_deref(), self.theme_config);
         self.general = self.config.section(None);
         // Before anything is measured again below.
         self.scales.set_ui(self.general.scale);
@@ -314,7 +314,7 @@ impl AriaShell {
         }
         self.set_theme(Theme::load(
             &self.config,
-            self.style.as_deref(),
+            self.theme_name.as_deref(),
             self.scheme,
         ));
         self.locale = Locale::new(&self.general.language);
@@ -362,7 +362,7 @@ impl AriaShell {
     /// thickness changed is resized). A file that doesn't parse
     /// (mid-edit, typically) keeps the current theme.
     pub(crate) fn reload_theme(&mut self) -> Task<Message> {
-        match Theme::try_load(&self.config, self.style.as_deref(), self.scheme) {
+        match Theme::try_load(&self.config, self.theme_name.as_deref(), self.scheme) {
             Ok(theme) => self.set_theme(theme),
             Err(e) => {
                 log::error!("{}, keeping the current theme", e.message);

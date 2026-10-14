@@ -28,11 +28,11 @@ format = shelf
 source = ./bg.png
 fit = fill
 EOF
-sed -i -e "s|^style =.*|style = shelf\ntheme_config = yes|" "$conf/aria-shell/aria.conf"
+sed -i -e "s|^theme =.*|theme = shelf\ntheme_config = yes|" "$conf/aria-shell/aria.conf"
 restart_shell "$conf"
 settle 1
 
-assert_eq "$(aria debug theme)" "style=shelf scheme=dark config=$theme/shelf.conf" \
+assert_eq "$(aria debug theme)" "theme=shelf scheme=dark config=$theme/shelf.conf" \
     "the theme's config read, its scheme"
 assert_contains "$(surfaces)" "panel HEADLESS-1 0,1052 1920x28" "its panel, at the bottom"
 wait_for 'gadget' 4 "its two gadgets on each output, nothing of the user's"
@@ -49,7 +49,7 @@ shot_surface menu popup
 click_widget 'menu > item:last-child'
 assert_no_surface popup
 settle 1
-assert_eq "$(aria debug theme)" "style=shelf scheme=light" "the user's config alone, its scheme"
+assert_eq "$(aria debug theme)" "theme=shelf scheme=light" "the user's config alone, its scheme"
 assert_contains "$(surfaces)" "panel HEADLESS-1 0,0 1920x28" "the user's panel, at the top"
 assert_eq "$(aria debug wallpaper | grep -o "\[wallpaper[^]]*\]" | wc -l)" 2 "the user's two wallpapers"
 
@@ -58,10 +58,10 @@ click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > butt
 assert_surface popup
 click_widget 'menu > item:last-child'
 settle 1
-assert_eq "$(aria debug theme)" "style=shelf scheme=dark config=$theme/shelf.conf" "read again"
+assert_eq "$(aria debug theme)" "theme=shelf scheme=dark config=$theme/shelf.conf" "read again"
 click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
 assert_surface popup
 click_widget 'menu > item:nth-child(4)'
 settle 1
-assert_eq "$(aria debug theme)" "style=- scheme=light" "Base: no theme, no theme config"
+assert_eq "$(aria debug theme)" "theme=- scheme=light" "Base: no theme, no theme config"
 assert_contains "$(surfaces)" "panel HEADLESS-1 0,0 1920x28" "the user's panel"

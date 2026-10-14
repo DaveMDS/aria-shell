@@ -130,7 +130,7 @@ never each other's helpers.
 
 Every view is built with the toolkit, `icssed` (icssed/AGENTS.md says
 how): its widgets, styled by one sheet. `ui/theme.rs` compiles it from
-`assets/aria.css` (always), `[general] style` and the user's
+`assets/aria.css` (always), `[general] theme` and the user's
 `theme-override.css` beside the config, over the toolkit's own base, for a light or dark scheme (`:root.light` / `:root.dark`
 variables, `surface.panel.dark { }` rules; the `Themes` gadget switches
 scheme and theme at runtime). Every surface's root is a `surface`, its
@@ -143,9 +143,9 @@ new element or class is documented in
 `assets/aria.css`, in the element tree in the comment above its owner's
 rules, and given a neutral default there.
 
-The config format is the one the Python implementation had, kept
-compatible on purpose; nothing else of its structure (`Singleton`/
-`Service`/`Module` machinery) belongs here.
+No backward compatibility of any kind (0.0.x): config keys, commands,
+the theme's elements and classes change freely when a better shape
+comes; no aliases for old names, no migrations.
 
 ## Verifying
 

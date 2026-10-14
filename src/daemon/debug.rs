@@ -77,7 +77,7 @@ impl AriaShell {
                     _ => String::new(),
                 };
                 reply.send(format!(
-                    "style={} scheme={}{config}",
+                    "theme={} scheme={}{config}",
                     self.theme.name().unwrap_or("-"),
                     self.theme.scheme().name()
                 ));

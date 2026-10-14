@@ -1,11 +1,11 @@
 # theme-override.css beside the config: the user's touches over
-# whatever theme is in use, read with `reload_style` when it appears,
+# whatever theme is in use, read with `reload_theme` when it appears,
 # changes or goes; a broken one is left out, the theme kept.
 
 conf=$(mktemp -d)
 trap 'rm -rf "$conf"' EXIT
 cp -r "$XDG_CONFIG_HOME/." "$conf"
-sed -i "s|^reload_style =.*|reload_style = yes|" "$conf/aria-shell/aria.conf"
+sed -i "s|^reload_theme =.*|reload_theme = yes|" "$conf/aria-shell/aria.conf"
 restart_shell "$conf"
 settle 1
 

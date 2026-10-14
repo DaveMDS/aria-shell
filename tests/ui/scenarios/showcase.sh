@@ -30,11 +30,11 @@ shot_surface showcase-tooltip showcase
 
 # The scheme from a bar: the showcase follows.
 click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
-assert_eq "$(aria debug theme)" "style=- scheme=dark" "dark"
+assert_eq "$(aria debug theme)" "theme=- scheme=dark" "dark"
 settle 0.5
 shot_surface showcase-dark showcase
 click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
-assert_eq "$(aria debug theme)" "style=- scheme=light" "light again"
+assert_eq "$(aria debug theme)" "theme=- scheme=light" "light again"
 
 # Inert: a click on a part does nothing, the showcase stays.
 click_widget 'surface.exiter > row > button.suspend'

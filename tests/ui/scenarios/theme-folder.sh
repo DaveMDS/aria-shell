@@ -1,6 +1,6 @@
 # A theme as a folder: `themes/<name>/<name>.css` found by its name, its
 # images beside it (url() from the theme's directory), the Themes menu
-# listing it; and with `reload_style`, an image of the folder rewritten
+# listing it; and with `reload_theme`, an image of the folder rewritten
 # reloads the theme, the new picture drawn.
 
 conf=$(mktemp -d)
@@ -29,12 +29,12 @@ EOF
     mv "$4.tmp" "$4"
 }
 png 255 0 0 "$theme/tile.png"
-sed -i -e "s|^style =.*|style = tile|" -e "s|^reload_style =.*|reload_style = yes|" \
+sed -i -e "s|^theme =.*|theme = tile|" -e "s|^reload_theme =.*|reload_theme = yes|" \
     "$conf/aria-shell/aria.conf"
 restart_shell "$conf"
 settle 1
 
-assert_eq "$(aria debug theme)" "style=tile scheme=light" "found by its name"
+assert_eq "$(aria debug theme)" "theme=tile scheme=light" "found by its name"
 sample() {
     set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')
     grim -g "$(($1 + 1)),$(($2 + 1)) 1x1" -t ppm - | tail -c 3 | od -An -tu1 | tr -s ' ' | sed 's/^ //'

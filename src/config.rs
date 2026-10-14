@@ -122,10 +122,10 @@ impl Config {
         self.path.as_deref()
     }
 
-    /// This config with the theme `style`'s own read over it, when `on`
+    /// This config with the theme `name`'s own read over it, when `on`
     /// and the theme has one.
-    pub fn themed(self, style: Option<&str>, on: bool) -> Self {
-        match style
+    pub fn themed(self, name: Option<&str>, on: bool) -> Self {
+        match name
             .filter(|_| on)
             .and_then(|s| theme::config_file(s, &self))
         {
@@ -293,11 +293,11 @@ fn new_parser() -> Ini {
 pub struct GeneralConfig {
     /// Theme to load on top of the built-in base: a name looked up in
     /// the theme directories, or a path. `None` for the base alone.
-    pub style: Option<String>,
+    pub theme: Option<String>,
     /// Colour scheme the theme is loaded for.
     pub color_scheme: Scheme,
     /// Reload the theme when its file changes.
-    pub reload_style: bool,
+    pub reload_theme: bool,
     /// Rebuild the panels when the config file changes.
     pub reload_config: bool,
     /// Read the theme's own config (`<name>.conf`) over this one.
@@ -335,10 +335,10 @@ impl Section for GeneralConfig {
             }),
         };
         Self {
-            style: raw.get("style").map(str::to_owned),
+            theme: raw.get("theme").map(str::to_owned),
             language: raw.str_or("language", ""),
             color_scheme,
-            reload_style: raw.bool_or("reload_style", true),
+            reload_theme: raw.bool_or("reload_theme", true),
             reload_config: raw.bool_or("reload_config", true),
             theme_config: raw.bool_or("theme_config", false),
             icon_theme: raw.get("icon_theme").map(str::to_owned),

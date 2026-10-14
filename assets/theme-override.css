@@ -4,8 +4,8 @@
  *
  * Copy this file beside your aria.conf (~/.config/aria-shell/) and
  * uncomment what you want: it's read after the built-in look and after
- * the theme [general] style names, so its rules win, and switching
- * theme from the Themes gadget keeps them. With reload_style = yes a
+ * the theme [general] theme names, so its rules win, and switching
+ * theme from the Themes gadget keeps them. With reload_theme = yes a
  * save shows at once; a broken file is left out (the error is in the
  * log) and the theme stays.
  *

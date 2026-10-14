@@ -63,7 +63,7 @@ pub enum DebugCommand {
     Surfaces,
     /// Where the pointer was last seen over one of our surfaces.
     Cursor,
-    /// The theme in use: `style=<name|-> scheme=<light|dark>`.
+    /// The theme in use: `theme=<name|-> scheme=<light|dark>`.
     Theme,
     /// The language in use: `lang=<code> dates=<locale>`.
     Locale,

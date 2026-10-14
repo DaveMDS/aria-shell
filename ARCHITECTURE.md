@@ -20,9 +20,10 @@ ships every subsystem we need and is the pattern reference; we stay on
 vanilla `iced` and don't depend on `libcosmic`.
 
 The config format (`aria.conf`: INI, case-sensitive, `[Name]` /
-`[Name:id]`, empty value = default) is the Python implementation's,
-kept compatible on purpose; nothing of its structure (`Singleton`,
-`AriaService`, `AriaModule`, `importlib` loading) is.
+`[Name:id]`, empty value = default) came from the Python
+implementation, nothing of its structure (`Singleton`, `AriaService`,
+`AriaModule`, `importlib` loading) did; no compatibility with it, or
+with any earlier version, is kept (0.0.x).
 
 ## Known risks (from real research, not memory)
 
@@ -461,8 +462,8 @@ Theme      (theme.rs)       daemon-owned styling: the toolkit's base, aria.css a
   config() / config_on()    the theme's own `<name>.conf` beside its file, and whether it's read
                             (`Config::with_theme`: over the user's, its keys winning, its `[panel*]` and
                             `[wallpaper*]` replacing the user's; `./` = the theme's folder)
-  Command                   ToggleScheme | SetScheme | SetStyle | ToggleConfig: from a gadget
-                            (Action::Theme), the daemon keeps `style`/`scheme`/`theme_config` at runtime
+  Command                   ToggleScheme | SetScheme | SetTheme | ToggleConfig: from a gadget
+                            (Action::Theme), the daemon keeps `theme_name`/`scheme`/`theme_config` at runtime
                             and reloads, the whole config when the theme's changes (no persistence)
 
 Measuring  (ui/mod.rs)      what sizing a surface takes: `Shared`, the toolkit's `Measure` (one layout tree
@@ -664,7 +665,7 @@ Two things flow between the daemon and the gadgets besides messages:
   repeats both of the toolkit's palettes (`--bg`, `--accent`,
   `--warning`, ...), the same values, so a theme's palette restyles
   the toolkit's widgets too.
-  `debug theme` prints `style=<name|-> scheme=<..>`.
+  `debug theme` prints `theme=<name|-> scheme=<..>`.
 - **Programs, not shells**: every command line in the config
   (`[Custom] command*`, `command_wheel_*`, `exec`) is a program and its
   arguments, split with shell-like quoting (`process::split_words`) and
@@ -688,7 +689,7 @@ Two things flow between the daemon and the gadgets besides messages:
   for every surface). `assets/aria.css` (compiled in, over the
   toolkit's base, under the user's) documents the shell's element trees
   for theme authors, the toolkit's base its widgets' and the
-  properties; `[general] style` names a user theme loaded on top
+  properties; `[general] theme` names a user theme loaded on top
   (`themes/<name>/<name>.css` or `themes/<name>.css` in the config dirs, the XDG data dirs, then
   `assets/`; or a path), and over it, whatever the theme,
   `theme-override.css` beside the config file: the user's own touches

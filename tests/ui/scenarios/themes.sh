@@ -17,13 +17,13 @@ open_menu() {
     assert_surface popup
 }
 
-assert_eq "$(aria debug theme)" "style=- scheme=light" "starts light, base only"
+assert_eq "$(aria debug theme)" "theme=- scheme=light" "starts light, base only"
 wait_for 'gadget.themes > button' 2 "one per bar"
 set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')
 shot bar-light "$(($1 - 60)),0 160x32"
 
 click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
-assert_eq "$(aria debug theme)" "style=- scheme=dark" "left click toggles"
+assert_eq "$(aria debug theme)" "theme=- scheme=dark" "left click toggles"
 shot bar-dark "$(($1 - 60)),0 160x32"
 # The last gadget's top left corner: the bar's background in the base.
 sample() {
@@ -32,7 +32,7 @@ sample() {
 }
 base_dark=$(sample)
 click_widget 'surface.panel[output="HEADLESS-2"] gadget.themes > button'
-assert_eq "$(aria debug theme)" "style=- scheme=light" "and back, from either bar"
+assert_eq "$(aria debug theme)" "theme=- scheme=light" "and back, from either bar"
 base_light=$(sample)
 
 # The menu: schemes, then the base and every theme in assets/themes,
@@ -46,16 +46,16 @@ shot_surface menu popup
 
 click_widget 'menu > item:nth-child(6)'
 assert_no_surface popup
-assert_eq "$(aria debug theme)" "style=manjaro scheme=light" "manjaro picked"
+assert_eq "$(aria debug theme)" "theme=manjaro scheme=light" "manjaro picked"
 [ "$(sample)" != "$base_light" ] || { echo "manjaro's last gadget looks as the base's"; exit 1; }
 
 open_menu
 wait_for 'menu > item.checked:nth-child(6)' 1 "manjaro checked"
 click_widget 'menu > item:nth-child(2)'
 assert_no_surface popup
-assert_eq "$(aria debug theme)" "style=manjaro scheme=dark" "Dark from the menu"
+assert_eq "$(aria debug theme)" "theme=manjaro scheme=dark" "Dark from the menu"
 
 open_menu
 click_widget 'menu > item:nth-child(4)'
-assert_eq "$(aria debug theme)" "style=- scheme=dark" "Base picked"
+assert_eq "$(aria debug theme)" "theme=- scheme=dark" "Base picked"
 assert_eq "$(sample)" "$base_dark" "back to the base bar"

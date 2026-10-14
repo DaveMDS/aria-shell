@@ -240,9 +240,9 @@ struct AriaShell {
     config: Config,
     general: GeneralConfig,
     /// The theme in use, chosen at runtime (the `Themes` gadget) or
-    /// from `[general] style` / `color_scheme`; a config reload keeps
+    /// from `[general] theme` / `color_scheme`; a config reload keeps
     /// the runtime choice.
-    style: Option<String>,
+    theme_name: Option<String>,
     scheme: theme::Scheme,
     /// The theme's own config read over the user's: `[general]
     /// theme_config`, switched at runtime by the `Themes` gadget.
@@ -298,13 +298,13 @@ impl AriaShell {
     fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
         let general: GeneralConfig = config.section(None);
-        let style = general.style.clone();
+        let theme_name = general.theme.clone();
         let theme_config = general.theme_config;
-        let config = config.themed(style.as_deref(), theme_config);
+        let config = config.themed(theme_name.as_deref(), theme_config);
         autostart(&config);
         let general: GeneralConfig = config.section(None);
         let scheme = general.color_scheme;
-        let mut theme = Theme::load(&config, style.as_deref(), scheme);
+        let mut theme = Theme::load(&config, theme_name.as_deref(), scheme);
         theme.set_config_on(theme_config);
         let locale = Locale::new(&general.language);
         let icons = Icons::new(&config, locale.languages());
@@ -319,7 +319,7 @@ impl AriaShell {
         let mut shell = Self {
             config,
             general,
-            style,
+            theme_name,
             scheme,
             theme_config,
             shell_events,
@@ -792,7 +792,7 @@ impl AriaShell {
                 let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
                 if config_changed && self.general.reload_config {
                     self.reload_config(false)
-                } else if theme_changed && self.general.reload_style {
+                } else if theme_changed && self.general.reload_theme {
                     log::info!("theme file changed, reloading");
                     self.reload_theme()
                 } else if let Some(changes) = self.wallpapers.changed(&paths) {
@@ -897,12 +897,12 @@ impl AriaShell {
                         self.scheme = scheme;
                         false
                     }
-                    theme::Command::SetStyle(style) => {
-                        self.style = style;
+                    theme::Command::SetTheme(name) => {
+                        self.theme_name = name;
                         self.theme_config
                             && (self.theme.config().is_some()
                                 || self
-                                    .style
+                                    .theme_name
                                     .as_deref()
                                     .and_then(|s| theme::config_file(s, &self.config))
                                     .is_some())
@@ -914,7 +914,7 @@ impl AriaShell {
                 };
                 log::info!(
                     "theme: {} ({}{})",
-                    self.style.as_deref().unwrap_or("base"),
+                    self.theme_name.as_deref().unwrap_or("base"),
                     self.scheme.name(),
                     if self.theme_config {
                         ", its config"

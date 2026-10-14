@@ -283,7 +283,7 @@ stage has its own timeout from the last input, on AC and on battery.
 The look comes from a CSS stylesheet, drawn by the shell's own toolkit
 (`icssed/`): `assets/aria.css` documents the shell's element trees,
 `icssed/assets/base.css` the toolkit's widgets and the supported
-properties; a user theme (`[general] style`) is loaded on top, with
+properties; a user theme (`[general] theme`) is loaded on top, with
 light and dark colour schemes. Themes are found in
 `~/.config/aria-shell/themes/`, the XDG data dirs and `assets/themes/`:
 a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.

@@ -673,6 +673,12 @@ for overlays at every event and every frame.
   9-patch, a stretched background or a rounded picture are right on
   wgpu only. The golden images keep to images at their own size.
 - Opacity isn't a group (above).
+- iced_wgpu merges a layer that starts with images into the one below
+  it, and draws a layer's svgs before its rasters, whatever came first:
+  icons over a background image vanished. The layer over a background
+  image starts with a transparent quad, which keeps the two apart
+  (`paint.rs`, TEMPORARY: one quad per such box, until iced draws them
+  in order).
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.
 - Layout runs on every rebuild of a surface's tree, changed or not.

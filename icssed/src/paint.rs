@@ -165,7 +165,16 @@ pub(crate) fn draw_box(
     match &s.background_image {
         Some(picture) => {
             draw_background(renderer, s, picture, bounds, corners, opacity);
-            renderer.with_layer(viewport, edges);
+            renderer.with_layer(viewport, |renderer| {
+                // TEMPORARY, until iced draws a layer's images in order:
+                // a layer that starts with images is merged into the one
+                // before it (same clip), and there iced_wgpu 0.14 draws
+                // every nearest-filtered image (an svg) before every
+                // linear one (this picture), whatever came first. A quad
+                // first keeps the layers apart. See ARCHITECTURE.md.
+                renderer.fill_quad(Quad::default(), Color::TRANSPARENT);
+                edges(renderer);
+            });
         }
         None => edges(renderer),
     }

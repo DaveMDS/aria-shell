@@ -383,6 +383,13 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
   a layer made after it. A layer's clip is its own bounds, not cut by
   the clip around it: give it the viewport, not something larger.
   tiny-skia draws in order, so the golden images don't show this.
+- Before drawing, wgpu merges a layer into the one below it when their
+  clips match and the upper starts where the lower ends (images over
+  images); in a layer, iced_wgpu draws every nearest-filtered image (an
+  svg) before every linear one (a raster). So svg icons over a
+  background image vanished, and showed again under a hovered button's
+  quad. `draw_box` starts the layer over a background image with a
+  transparent quad, marked TEMPORARY, until iced draws them in order.
 - tiny-skia (the headless renderer, the golden images) places a
   stretched image on a grid as coarse as its stretch and doesn't round
   an image's corners: right on wgpu only.

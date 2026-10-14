@@ -222,7 +222,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Graph<'_, Message> {
             layout.bounds(),
             *viewport,
             cursor,
-            |renderer, theme, style, cursor| {
+            |renderer, theme, style, cursor, _| {
                 let paint = |node: Node<'_>| {
                     let s = node.resolve(States::NONE, &theme.ancestors);
                     let opacity = theme.opacity * s.opacity;

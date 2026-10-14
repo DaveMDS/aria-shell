@@ -352,6 +352,47 @@ fn a_symbolic_icon_fades_with_its_colour_and_opacity() {
 }
 
 #[test]
+fn icons_and_images_are_boxes() {
+    // Their width or height is their border box, as every box's; the
+    // picture in the content box, the padding's background and the
+    // border around it, the margin outside.
+    let sheet = sheet(
+        "row { gap: 0; } \
+         icon, image { padding: 2px; border: 1px solid red; background: blue; margin: 1px; } \
+         icon { height: 16px; color: black; } image { width: 16px; }",
+    );
+    let root = sheet.root("root", 1.0);
+    let square = crate::IconFile::Svg {
+        handle: iced::advanced::svg::Handle::from_memory(
+            b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2'><rect width='2' height='2'/></svg>".as_slice(),
+        ),
+        symbolic: true,
+    };
+    // As big as it's drawn: tiny-skia puts a scaled raster at a whole
+    // pixel of its own (`x / scale as i32`), off by up to a scale.
+    let green = iced::advanced::image::Handle::from_rgba(10, 10, [0, 255, 0, 255].repeat(100));
+    let mut ui = Harness::<Message>::new(
+        crate::row![crate::icon(square), crate::image(green)].at(root),
+        Size::new(36.0, 18.0),
+        1.0,
+    );
+    ui.frame(Instant::now());
+    let pixels = ui.pixels(Color::WHITE);
+    let (white, red, blue) = ([255, 255, 255, 255], [255, 0, 0, 255], [0, 0, 255, 255]);
+    // The icon: 18 px with its margin, its picture 10 px inside.
+    assert_eq!(
+        [0, 1, 3, 9].map(|x| pixels.at(x, 9)),
+        [white, red, blue, [0, 0, 0, 255]]
+    );
+    // The image beside it, the same: its height from its picture's ratio.
+    assert_eq!(
+        [19, 21, 27].map(|x| pixels.at(x, 9)),
+        [red, blue, [0, 255, 0, 255]]
+    );
+    assert_eq!(pixels.at(27, 3), blue);
+}
+
+#[test]
 fn a_new_widget_asks_for_its_entry_animations_frames() {
     // Its animation is known at its first draw, after the frame's
     // `update`: that frame still asks for the next, and the next goes on.

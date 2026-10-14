@@ -46,6 +46,12 @@ pub(crate) struct BoxState {
 }
 
 impl BoxState {
+    /// Drawn without `Boxed::draw`, so with no transform: the pointer
+    /// is where the layout is.
+    pub fn drawn_untransformed(&self) {
+        self.drawn.set(None);
+    }
+
     /// `cursor` where the box's layout is, before its transform.
     pub fn local(&self, cursor: mouse::Cursor) -> mouse::Cursor {
         match self.drawn.get() {
@@ -85,6 +91,51 @@ pub(crate) fn border_box(bounds: Rectangle, s: &Computed, scale: f32) -> Rectang
         width: (bounds.width - left - snap(m.right, scale)).max(0.0),
         height: (bounds.height - top - snap(m.bottom, scale)).max(0.0),
     }
+}
+
+/// The room its padding and border take around its content, both
+/// axes.
+pub(crate) fn frame(s: &Computed, scale: f32) -> Size {
+    let (b, p) = (s.border_width, s.padding);
+    let sn = |v: f32| snap(v, scale);
+    Size::new(
+        b.left + b.right + sn(p.left) + sn(p.right),
+        b.top + b.bottom + sn(p.top) + sn(p.bottom),
+    )
+}
+
+/// The corners of its content box, inside its border box `bounds`: its
+/// own radii less the border and the padding beside them, as CSS
+/// rounds a content box (a picture drawn there).
+pub(crate) fn inner_radius(s: &Computed, bounds: Rectangle, scale: f32) -> iced::border::Radius {
+    let [tl, tr, br, bl] = s.radii(bounds.size());
+    let (b, p) = (s.border_width, s.padding);
+    let sn = |v: f32| snap(v, scale);
+    let (left, right) = (b.left + sn(p.left), b.right + sn(p.right));
+    let (top, bottom) = (b.top + sn(p.top), b.bottom + sn(p.bottom));
+    let less = |r: f32, x: f32, y: f32| (r - x.max(y)).max(0.0);
+    iced::border::Radius {
+        top_left: less(tl, left, top),
+        top_right: less(tr, right, top),
+        bottom_right: less(br, right, bottom),
+        bottom_left: less(bl, left, bottom),
+    }
+}
+
+/// Whether a box styled `s` paints nothing of its own (no background,
+/// border, shadow, outline, picture or transform): a leaf (an icon, an
+/// image) then draws its content alone, as cheaply as before it was a
+/// box.
+pub(crate) fn bare(s: &Computed) -> bool {
+    let w = s.border_width;
+    s.background.a == 0.0
+        && w.top + w.right + w.bottom + w.left == 0.0
+        && s.shadow.is_none()
+        && s.inset_shadow.is_none()
+        && s.outline_width == 0.0
+        && s.background_image.is_none()
+        && s.border_image.is_none()
+        && s.transform.is_none()
 }
 
 impl<'a> Boxed<'a> {
@@ -149,8 +200,9 @@ impl<'a> Boxed<'a> {
 
     /// Draws it in its margin box `bounds`, shown within `viewport`: its
     /// box, then `content` (its children, given the theme and the text
-    /// style they're drawn with, and the pointer where they are), then
-    /// its outline. Its transform moves all of it.
+    /// style they're drawn with, the pointer where they are, and the
+    /// box's style as drawn: its states, its transitions), then its
+    /// outline. Its transform moves all of it.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
@@ -160,7 +212,7 @@ impl<'a> Boxed<'a> {
         bounds: Rectangle,
         viewport: Rectangle,
         cursor: mouse::Cursor,
-        content: impl FnOnce(&mut Renderer, &Theme, &renderer::Style, mouse::Cursor),
+        content: impl FnOnce(&mut Renderer, &Theme, &renderer::Style, mouse::Cursor, &Computed),
     ) {
         let node = self.node();
         let resolved = node.resolve(state.states, &theme.ancestors);
@@ -189,7 +241,7 @@ impl<'a> Boxed<'a> {
                 let style = renderer::Style {
                     text_color: fade(s.color, opacity),
                 };
-                content(renderer, theme, &style, cursor);
+                content(renderer, theme, &style, cursor, s);
                 draw_outline(renderer, s, bounds, opacity);
             });
         };

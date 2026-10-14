@@ -396,7 +396,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for InputBox<'_, Message> 
             layout.bounds(),
             *viewport,
             cursor,
-            |renderer, theme, style, cursor| {
+            |renderer, theme, style, cursor, _| {
                 for ((child, tree), layout) in self
                     .children
                     .iter()

@@ -150,8 +150,8 @@ to choose.
 | `row(children)`, `column(..)`, `button(..)`; `row![..]`, `column![..]`, `button![..]` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus); `.auto_width_if(b)`: its width its content's, whatever the theme says (a length the app decides: a surface as long as its content) |
 | `text(content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
 | `mark()` | a text whose words are its style's `content` (a check, an arrow): the theme's, picked by its classes |
-| `icon(source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |
-| `image(handle)` | `object-fit`, `border-radius` |
+| `icon(source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale; a box (background, border, padding, margin), the picture in its content box |
+| `image(handle)` | `object-fit`, `border-radius`; a box as an icon is |
 | `surface(content).at(root)` | a surface's root: `content` is its box, and it adds the room the box's shadow needs, so a popup's size includes it; `Surface::room(root)` is that room, for placing the surface |
 | `slot(view).kind(k).class(c)` | nothing of its own: `view`'s top widget is the slot's element, with its own classes too; a frame says what a page is, a bar what a gadget is |
 | `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
@@ -458,6 +458,10 @@ yourself.
   separators once vanished that way).
 - Root a scene in its root node (`column![..].at(root)`), or the page's
   padding and background are lost.
+- tiny-skia draws a scaled raster image at a whole pixel of the image's
+  own (`iced_tiny_skia` `raster.rs`: `(x / scale) as i32`): a 4 px
+  image drawn 10 px wide at x 22 lands at 20. Give a test's picture the
+  size it's drawn at; wgpu places it where it's asked.
 - Bless only after looking at the images.
 
 ### The demo on wgpu, in a headless nested Sway

@@ -292,6 +292,9 @@ a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.
 - ✅ Hot reload while editing (a broken file keeps the running theme)
 - ✅ A theme as a folder (`themes/<name>/<name>.css`), its images beside it: an image
   changed reloads it too
+- ✅ A theme's own config (`<name>.conf` beside its `.css`), read over yours when
+  `[general] theme_config = yes` or from the Themes gadget's menu: its keys win, its
+  panels and wallpaper replace yours, `./` in a value is the theme's folder
 - ✅ A font built into the binary (Noto Sans Display, its Latin part,
   `assets/fonts/`): the same text on every system, whatever is installed;
   tabular digits, numbers don't shift as they change

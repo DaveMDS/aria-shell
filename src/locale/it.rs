@@ -127,6 +127,7 @@ pub const CATALOGUE: Catalogue = &[
     ("themes.light", "Chiaro"),
     ("themes.dark", "Scuro"),
     ("themes.base", "Base"),
+    ("themes.config", "Impostazioni del tema"),
     // power
     ("power.charging", "In carica"),
     ("power.charging_time", "In carica, piena tra {time}"),

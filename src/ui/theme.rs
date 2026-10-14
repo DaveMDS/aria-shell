@@ -30,6 +30,8 @@ pub enum Command {
     SetScheme(Scheme),
     /// A theme name (as `[general] style`), or `None` for the base alone.
     SetStyle(Option<String>),
+    /// Read the theme's own config over the user's, or stop.
+    ToggleConfig,
 }
 
 pub struct Theme {
@@ -39,6 +41,11 @@ pub struct Theme {
     /// The user theme loaded, as named in the config or picked by the
     /// user; `None` for the base alone.
     name: Option<String>,
+    /// Its own config, `<name>.conf` beside its file, if it has one.
+    config: Option<PathBuf>,
+    /// Whether that config is read over the user's: the daemon's
+    /// choice, kept here for the views.
+    config_on: bool,
 }
 
 /// Why a user theme couldn't be loaded. `files` are still the ones to
@@ -102,6 +109,8 @@ impl Theme {
             sheet,
             files,
             name: Some(style.to_owned()),
+            config: config_beside(&path),
+            config_on: false,
         })
     }
 
@@ -111,6 +120,8 @@ impl Theme {
             sheet: compile(&[base_source()], scheme).expect("aria.css is valid"),
             files: Vec::new(),
             name: None,
+            config: None,
+            config_on: false,
         }
     }
 
@@ -136,6 +147,30 @@ impl Theme {
     pub fn files(&self) -> &[PathBuf] {
         &self.files
     }
+
+    /// The theme's own config, if it has one.
+    pub fn config(&self) -> Option<&Path> {
+        self.config.as_deref()
+    }
+
+    /// Whether the theme's config is read over the user's.
+    pub fn config_on(&self) -> bool {
+        self.config_on && self.config.is_some()
+    }
+
+    pub fn set_config_on(&mut self, on: bool) {
+        self.config_on = on;
+    }
+}
+
+/// The config of the theme `style` names (`<name>.conf` beside its
+/// file), if it has one: read over the user's (`Config::with_theme`).
+pub fn config_file(style: &str, config: &Config) -> Option<PathBuf> {
+    locate(style, config).and_then(|path| config_beside(&path))
+}
+
+fn config_beside(file: &Path) -> Option<PathBuf> {
+    Some(file.with_extension("conf")).filter(|f| f.is_file())
 }
 
 impl Default for Theme {

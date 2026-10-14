@@ -239,6 +239,9 @@ struct AriaShell {
     /// the runtime choice.
     style: Option<String>,
     scheme: theme::Scheme,
+    /// The theme's own config read over the user's: `[general]
+    /// theme_config`, switched at runtime by the `Themes` gadget.
+    theme_config: bool,
     shell_events: ShellReceiver,
     compositor: Compositor,
     theme: Theme,
@@ -289,11 +292,15 @@ struct AriaShell {
 impl AriaShell {
     fn new(shell_events: ShellReceiver) -> (Self, Task<Message>) {
         let config = Config::load();
-        autostart(&config);
         let general: GeneralConfig = config.section(None);
         let style = general.style.clone();
+        let theme_config = general.theme_config;
+        let config = config.themed(style.as_deref(), theme_config);
+        autostart(&config);
+        let general: GeneralConfig = config.section(None);
         let scheme = general.color_scheme;
-        let theme = Theme::load(&config, style.as_deref(), scheme);
+        let mut theme = Theme::load(&config, style.as_deref(), scheme);
+        theme.set_config_on(theme_config);
         let locale = Locale::new(&general.language);
         let icons = Icons::new(&config, locale.languages());
         let load_icons = icons.load().map(Message::Icons);
@@ -309,6 +316,7 @@ impl AriaShell {
             general,
             style,
             scheme,
+            theme_config,
             shell_events,
             compositor: Compositor::detect(),
             theme,
@@ -755,13 +763,10 @@ impl AriaShell {
                 }
             }
             Message::Files(watch::Changed(paths)) => {
-                let config_changed = self
-                    .config
-                    .path()
-                    .is_some_and(|p| paths.contains(&p.to_path_buf()));
+                let config_changed = self.config.files().any(|f| paths.iter().any(|p| p == f));
                 let theme_changed = self.theme.files().iter().any(|f| paths.contains(f));
                 if config_changed && self.general.reload_config {
-                    self.reload_config()
+                    self.reload_config(false)
                 } else if theme_changed && self.general.reload_style {
                     log::info!("theme file changed, reloading");
                     self.reload_theme()
@@ -856,17 +861,47 @@ impl AriaShell {
                 .run(cmd, self.general.file_manager.as_deref())
                 .map(Message::Places),
             Action::Theme(cmd) => {
-                match cmd {
-                    theme::Command::ToggleScheme => self.scheme = self.scheme.toggled(),
-                    theme::Command::SetScheme(scheme) => self.scheme = scheme,
-                    theme::Command::SetStyle(style) => self.style = style,
-                }
+                // Whether the config changes with it: a theme's own
+                // read, or no longer.
+                let config = match cmd {
+                    theme::Command::ToggleScheme => {
+                        self.scheme = self.scheme.toggled();
+                        false
+                    }
+                    theme::Command::SetScheme(scheme) => {
+                        self.scheme = scheme;
+                        false
+                    }
+                    theme::Command::SetStyle(style) => {
+                        self.style = style;
+                        self.theme_config
+                            && (self.theme.config().is_some()
+                                || self
+                                    .style
+                                    .as_deref()
+                                    .and_then(|s| theme::config_file(s, &self.config))
+                                    .is_some())
+                    }
+                    theme::Command::ToggleConfig => {
+                        self.theme_config = !self.theme_config;
+                        true
+                    }
+                };
                 log::info!(
-                    "theme: {} ({})",
+                    "theme: {} ({}{})",
                     self.style.as_deref().unwrap_or("base"),
-                    self.scheme.name()
+                    self.scheme.name(),
+                    if self.theme_config {
+                        ", its config"
+                    } else {
+                        ""
+                    }
                 );
-                self.reload_theme()
+                if config {
+                    self.reload_config(true)
+                } else {
+                    self.reload_theme()
+                }
             }
             Action::OpenPopup { id, anchor } => {
                 if !self.panels.get(&panel).is_some_and(|p| p.has_popup(id)) {

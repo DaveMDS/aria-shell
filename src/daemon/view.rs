@@ -141,7 +141,7 @@ impl AriaShell {
         });
         let mut files = Vec::new();
         if self.general.reload_config {
-            files.extend(self.config.path().map(Path::to_path_buf));
+            files.extend(self.config.files().map(Path::to_path_buf));
         }
         if self.general.reload_style {
             files.extend(self.theme.files().iter().cloned());

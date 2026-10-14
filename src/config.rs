@@ -5,9 +5,14 @@
 //! section and key names, `[Name]` for the default instance of a section
 //! and `[Name:id]` for additional instances, empty values meaning "use the
 //! default".
+//!
+//! A theme can bring its own config (`<name>.conf` beside its
+//! `<name>.css`), read over the user's when `[general] theme_config`
+//! (or the Themes gadget) says so: see [`Config::with_theme`].
 
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use configparser::ini::Ini;
@@ -22,7 +27,13 @@ pub struct Config {
     /// The file it was loaded from, if any; relative paths in values
     /// (a theme file) are resolved against its directory.
     path: Option<PathBuf>,
+    /// The theme's config read over it, if any.
+    theme: Option<PathBuf>,
 }
+
+/// The sections a theme's config brings as a whole: when it has any of
+/// one family (`panel`, `panel:2`), the user's are left out.
+const THEME_FAMILIES: [&str; 2] = ["panel", "wallpaper"];
 
 impl Config {
     /// Load the first `aria-shell/aria.conf` found in `$XDG_CONFIG_HOME`
@@ -39,7 +50,52 @@ impl Config {
             },
             None => log::warn!("no configuration file found, using defaults"),
         }
-        Self { ini, path }
+        Self {
+            ini,
+            path,
+            theme: None,
+        }
+    }
+
+    /// This config with a theme's own (`file`) read over it: every key
+    /// the theme writes wins, the rest stays the user's; if the theme
+    /// has panels, or a wallpaper, the user's aren't read
+    /// ([`THEME_FAMILIES`]). A value starting with `./` is in the
+    /// theme's folder (`source = ./bg.jpg`, `exec = ./clock.sh`). A file
+    /// that can't be read or parsed is logged and left out.
+    pub fn with_theme(mut self, file: &Path) -> Self {
+        let mut theme = new_parser();
+        let text = match fs::read_to_string(file) {
+            Ok(text) => text,
+            Err(e) => {
+                log::error!("cannot read {}: {e}", file.display());
+                return self;
+            }
+        };
+        if let Err(e) = theme.read(text) {
+            log::error!("cannot parse {}: {e}", file.display());
+            return self;
+        }
+        log::info!("using the theme's config {}", file.display());
+        let dir = file.parent().unwrap_or(Path::new("."));
+        let map = self.ini.get_mut_map();
+        for family in THEME_FAMILIES {
+            if theme.sections().iter().any(|s| in_family(s, family)) {
+                map.retain(|s, _| !in_family(s, family));
+            }
+        }
+        for (section, keys) in theme.get_map_ref() {
+            let into = map.entry(section.clone()).or_default();
+            for (key, value) in keys {
+                let value = value.as_deref().map(|v| match v.strip_prefix("./") {
+                    Some(rest) => dir.join(rest).display().to_string(),
+                    None => v.to_owned(),
+                });
+                into.insert(key.clone(), value);
+            }
+        }
+        self.theme = Some(file.to_path_buf());
+        self
     }
 
     /// Parse from an in-memory string (tests).
@@ -47,12 +103,33 @@ impl Config {
     pub fn parse(text: &str) -> Self {
         let mut ini = new_parser();
         ini.read(text.to_owned()).expect("valid ini text");
-        Self { ini, path: None }
+        Self {
+            ini,
+            path: None,
+            theme: None,
+        }
     }
 
     /// The file it was loaded from, if any.
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    /// This config with the theme `style`'s own read over it, when `on`
+    /// and the theme has one.
+    pub fn themed(self, style: Option<&str>, on: bool) -> Self {
+        match style
+            .filter(|_| on)
+            .and_then(|s| theme::config_file(s, &self))
+        {
+            Some(file) => self.with_theme(&file),
+            None => self,
+        }
+    }
+
+    /// Its files: the user's, then the theme's read over it.
+    pub fn files(&self) -> impl Iterator<Item = &Path> {
+        self.path.iter().chain(&self.theme).map(PathBuf::as_path)
     }
 
     /// Directory of the loaded file, if any.
@@ -108,9 +185,16 @@ impl Config {
         self.ini
             .sections()
             .into_iter()
-            .filter(|s| s == prefix || s.strip_prefix(prefix).is_some_and(|r| r.starts_with(':')))
+            .filter(|s| in_family(s, prefix))
             .collect()
     }
+}
+
+/// `section` is `name` or one of its instances (`name:id`).
+fn in_family(section: &str, name: &str) -> bool {
+    section
+        .strip_prefix(name)
+        .is_some_and(|r| r.is_empty() || r.starts_with(':'))
 }
 
 /// A typed view over one INI section.
@@ -209,6 +293,8 @@ pub struct GeneralConfig {
     pub reload_style: bool,
     /// Rebuild the panels when the config file changes.
     pub reload_config: bool,
+    /// Read the theme's own config (`<name>.conf`) over this one.
+    pub theme_config: bool,
     /// Icon theme name; `None` to detect it from the GTK settings.
     pub icon_theme: Option<String>,
     /// The UI language (`en`, `it`, ...); empty for the environment's.
@@ -244,6 +330,7 @@ impl Section for GeneralConfig {
             color_scheme,
             reload_style: raw.bool_or("reload_style", true),
             reload_config: raw.bool_or("reload_config", true),
+            theme_config: raw.bool_or("theme_config", false),
             icon_theme: raw.get("icon_theme").map(str::to_owned),
             terminal: process::chosen(raw.get("terminal"), process::auto_terminal),
             file_manager: process::chosen(raw.get("file_manager"), process::auto_file_manager),

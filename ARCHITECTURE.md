@@ -458,8 +458,12 @@ Theme      (theme.rs)       daemon-owned styling: the toolkit's base, aria.css a
   root(kind, scale)         a surface's root node: where its view is (`.at(root)`), and its style read
   scheme() / name()         what's loaded; `available()` lists the themes of every theme dir
                             (`<name>/<name>.css`, a folder watched with its file, or `<name>.css`)
-  Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
-                            keeps `style`/`scheme` at runtime and reloads (no persistence)
+  config() / config_on()    the theme's own `<name>.conf` beside its file, and whether it's read
+                            (`Config::with_theme`: over the user's, its keys winning, its `[panel*]` and
+                            `[wallpaper*]` replacing the user's; `./` = the theme's folder)
+  Command                   ToggleScheme | SetScheme | SetStyle | ToggleConfig: from a gadget
+                            (Action::Theme), the daemon keeps `style`/`scheme`/`theme_config` at runtime
+                            and reloads, the whole config when the theme's changes (no persistence)
 
 Measuring  (ui/mod.rs)      what sizing a surface takes: `Shared`, the toolkit's `Measure` (one layout tree
                             per surface key, run headlessly), `Scales` (each output's scale, what its

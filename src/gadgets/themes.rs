@@ -1,9 +1,10 @@
 //! Themes gadget: an icon showing the colour scheme in use. A left
 //! click toggles light/dark, a right click opens a menu with the two
 //! schemes and every theme found in the theme directories (the base
-//! alone first); picking one restyles the shell live. Nothing is
-//! persisted: `[general] style` / `color_scheme` rule again at the next
-//! start.
+//! alone first); picking one restyles the shell live. Last, a check:
+//! the theme's own config read over the user's (only for a theme that
+//! has one). Nothing is persisted: `[general] style` / `color_scheme` /
+//! `theme_config` rule again at the next start.
 //!
 //! Holds no theme state: the current scheme and theme name come from
 //! `ctx.theme`; the list is rescanned when the menu opens.
@@ -37,10 +38,13 @@ impl Section for ThemesConfig {
     }
 }
 
-/// Row ids: the two schemes, the base, then the themes by index.
+/// Row ids: the two schemes, the base, then the themes by index, the
+/// theme's config.
 const ID_LIGHT: i32 = -1;
 const ID_DARK: i32 = -2;
 const ID_SEPARATOR: i32 = -3;
+const ID_CONFIG_SEPARATOR: i32 = -4;
+const ID_CONFIG: i32 = -5;
 const ID_BASE: i32 = 0;
 
 pub struct Themes {
@@ -87,6 +91,7 @@ impl Gadget for Themes {
                 menu::Event::Clicked(ID_LIGHT) => self.pick(Command::SetScheme(Scheme::Light)),
                 menu::Event::Clicked(ID_DARK) => self.pick(Command::SetScheme(Scheme::Dark)),
                 menu::Event::Clicked(ID_BASE) => self.pick(Command::SetStyle(None)),
+                menu::Event::Clicked(ID_CONFIG) => self.pick(Command::ToggleConfig),
                 menu::Event::Clicked(id) => match self.available.get((id - 1) as usize) {
                     Some(name) => self.pick(Command::SetStyle(Some(name.clone()))),
                     None => Action::None,
@@ -150,6 +155,10 @@ impl Themes {
         items.extend(self.available.iter().enumerate().map(|(i, name)| {
             Item::new(i as i32 + 1, name.as_str()).radio(current == Some(name.as_str()))
         }));
+        items.push(Item::separator(ID_CONFIG_SEPARATOR));
+        let mut config = Item::new(ID_CONFIG, locale.tr("themes.config")).check(theme.config_on());
+        config.enabled = theme.config().is_some();
+        items.push(config);
         items
     }
 }

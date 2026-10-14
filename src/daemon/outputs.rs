@@ -295,13 +295,18 @@ impl AriaShell {
             .or_else(|| self.outputs.values().next())
     }
 
-    /// Re-read the config (and the theme, it may name another one),
-    /// then close every panel and open them again for the monitors we
-    /// know: same path as a monitor being plugged in.
-    pub(crate) fn reload_config(&mut self) -> Task<Message> {
+    /// Re-read the config (the user's, the theme's over it when it's
+    /// read, and the theme: it may name another one), then close every
+    /// panel and open them again for the monitors we know: same path as
+    /// a monitor being plugged in. With `scheme`, its `color_scheme`
+    /// too (a theme's config just read, or left).
+    pub(crate) fn reload_config(&mut self, scheme: bool) -> Task<Message> {
         log::info!("config changed, rebuilding panels");
-        self.config = Config::load();
+        self.config = Config::load().themed(self.style.as_deref(), self.theme_config);
         self.general = self.config.section(None);
+        if scheme {
+            self.scheme = self.general.color_scheme;
+        }
         self.set_theme(Theme::load(
             &self.config,
             self.style.as_deref(),
@@ -364,7 +369,8 @@ impl AriaShell {
 
     /// A new theme: the trees measured with the old one go with it (its
     /// nodes are its own).
-    pub(crate) fn set_theme(&mut self, theme: Theme) {
+    pub(crate) fn set_theme(&mut self, mut theme: Theme) {
+        theme.set_config_on(self.theme_config);
         self.theme = theme;
         *self.measure.borrow_mut() = icssed::Measure::new();
     }

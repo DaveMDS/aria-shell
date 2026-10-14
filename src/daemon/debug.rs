@@ -71,8 +71,13 @@ impl AriaShell {
                 Task::none()
             }
             DebugCommand::Theme => {
+                // The theme's own config only while it's read.
+                let config = match self.theme.config() {
+                    Some(file) if self.theme.config_on() => format!(" config={}", file.display()),
+                    _ => String::new(),
+                };
                 reply.send(format!(
-                    "style={} scheme={}",
+                    "style={} scheme={}{config}",
                     self.theme.name().unwrap_or("-"),
                     self.theme.scheme().name()
                 ));

@@ -56,6 +56,14 @@ impl Item {
         }
     }
 
+    pub fn check(self, checked: bool) -> Self {
+        Self {
+            toggle: Some(Toggle::Check),
+            checked: Some(checked),
+            ..self
+        }
+    }
+
     pub fn radio(self, checked: bool) -> Self {
         Self {
             toggle: Some(Toggle::Radio),

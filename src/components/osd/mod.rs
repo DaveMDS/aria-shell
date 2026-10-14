@@ -292,7 +292,7 @@ impl Osd {
                     size: LayerSize::px(size.0, size.1),
                     layer: Layer::Overlay,
                     exclusive_zone: None,
-                    margin: Some(self.margin(room)),
+                    margin: Some(self.margin(room, m.scales.ui())),
                     keyboard_interactivity: KeyboardInteractivity::None,
                     output_option: OutputOption::GlobalName(info.id),
                     // Shown over whatever is under the pointer: it must
@@ -320,11 +320,11 @@ impl Osd {
             .theme
             .root("osd", m.scales.of(OutputId::from(info)));
         let room = match &self.content {
-            Some(content) => popup::room(node(root, content, output)),
+            Some(content) => popup::room(node(root, content, output), m.scales.ui()),
             None => Padding::ZERO,
         };
         let size = ui::size(
-            &mut m.measure.borrow_mut(),
+            m,
             window,
             self.view_at::<()>(root, m.shared.icons, output),
             ui::room_on(Some(info)),
@@ -342,7 +342,7 @@ impl Osd {
         m: Measuring<'_>,
     ) -> Surfaces {
         let (size, room) = self.size(info, window, m);
-        let margin = self.margin(room);
+        let margin = self.margin(room, m.scales.ui());
         let anchor = anchor(self.config.position);
         let Some(shown) = self.windows.get_mut(&output) else {
             return Surfaces::default();
@@ -361,13 +361,14 @@ impl Osd {
         surfaces
     }
 
-    /// The margins that put the box `margin` from its edge, its shadow's
-    /// room nearer.
-    fn margin(&self, room: Padding) -> (i32, i32, i32, i32) {
+    /// The margins that put the box `margin` from its edge (a length
+    /// of the UI's, at its scale `ui`), its shadow's room nearer.
+    fn margin(&self, room: Padding, ui: f32) -> (i32, i32, i32, i32) {
+        let margin = (self.config.margin as f32 * ui).round() as i32;
         match self.config.position {
-            Position::Top => (self.config.margin - room.top as i32, 0, 0, 0),
+            Position::Top => (margin - room.top as i32, 0, 0, 0),
             Position::Center => (0, 0, 0, 0),
-            Position::Bottom => (0, 0, self.config.margin - room.bottom as i32, 0),
+            Position::Bottom => (0, 0, margin - room.bottom as i32, 0),
         }
     }
 

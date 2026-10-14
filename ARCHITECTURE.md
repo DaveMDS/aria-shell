@@ -995,6 +995,18 @@ Two things flow between the daemon and the gadgets besides messages:
   a 1.5 output, nested Sway 1.12). The daemon asks it then, and again
   of the bars when their output changes (`OutputUpdated`); per output,
   `ui::Scales`, the output's integer scale until a surface has told.
+- The UI's scale (`[general] scale`) is iced's application scale
+  factor (`daemon(..).scale_factor(|state, window|)`, asked when a
+  window is made and synced after each update): iced lays a surface out
+  at its size divided by it, draws at the Wayland scale times it, and
+  divides the pointer's positions by it (`conversion.rs`). The size a
+  layer surface or a popup asks for stays the compositor's, so what
+  goes to the compositor is multiplied by it on the way: a measured
+  size (`ui::size`, within a room divided by it), a margin or a shadow's
+  room read from the theme (`popup::room`, `popup::padding`), a popup's
+  anchor, the picker's pointer and rectangles, `debug widgets` and
+  `debug cursor`. The roots carry the output's scale times it
+  (`Scales::of`), so the toolkit snaps to the device grid.
 - `Message::PopUpReposition { settings: IcedNewPopupSettings, id }`
   resizes and re-places a mapped popup (xdg_popup v3 `reposition`;
   Hyprland and Sway have it, older compositors log and ignore); the

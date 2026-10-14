@@ -70,6 +70,12 @@ impl AriaShell {
         }))
     }
 
+    /// What iced draws surface `window` at, over its output's scale: the
+    /// UI's (`[general] scale`), every surface the same.
+    pub(crate) fn scale_factor(&self, _window: Id) -> f32 {
+        self.scales.ui()
+    }
+
     /// The part of bar `id` that takes the pointer: all of it, or the
     /// strip at its edge while it's hidden.
     pub(crate) fn input_region(&self, id: Id) -> Task<Message> {
@@ -223,7 +229,7 @@ impl AriaShell {
             launcher::Message::Nothing,
         );
         ui::size(
-            &mut self.measure.borrow_mut(),
+            measuring!(self),
             LAUNCHER,
             content,
             ui::room_on(Some(output)),
@@ -275,12 +281,7 @@ impl AriaShell {
     fn exiter_size(&self, exiter: &Exiter, output: &OutputInfo) -> (u32, u32) {
         let root = self.theme.root("exiter", self.scales.of(output.into()));
         let content = dialog_surface(root, exiter.view(self.shared()), exiter::Message::Nothing);
-        ui::size(
-            &mut self.measure.borrow_mut(),
-            EXITER,
-            content,
-            ui::room_on(Some(output)),
-        )
+        ui::size(measuring!(self), EXITER, content, ui::room_on(Some(output)))
     }
 
     pub(crate) fn close_exiter(&mut self) -> Task<Message> {

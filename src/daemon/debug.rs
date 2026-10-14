@@ -106,7 +106,7 @@ impl AriaShell {
             let Some(panel) = self.panels.get(&bar_id) else {
                 continue;
             };
-            for (id, rect) in panel.popup_rects(&self.theme) {
+            for (id, rect) in panel.popup_rects(&self.theme, self.scales.ui()) {
                 list.push((id, "popup", output, rect + iced::Vector::new(bar.x, bar.y)));
             }
         }
@@ -221,7 +221,9 @@ impl AriaShell {
             },
         };
         let surfaces = self.surfaces();
-        let origin = |path: &str| -> Option<Point> {
+        // Where its surface is, and the surface's own scale: a widget's
+        // rectangle is in the UI's units, the surface's that much bigger.
+        let origin = |path: &str| -> Option<(Point, f32)> {
             let root = path.split(" > ").next()?;
             let output = root
                 .split_once("[output=\"")
@@ -251,14 +253,14 @@ impl AriaShell {
                 // The showcase draws every kind of root on its surface:
                 // one with no surface of its own is there.
                 .or_else(|| surfaces.iter().find(|(_, k, ..)| *k == "showcase"))
-                .map(|(_, _, _, r)| r.position())
+                .map(|(w, _, _, r)| (r.position(), self.scale_factor(*w)))
         };
         picked
             .into_iter()
             .filter_map(|i| {
-                let r = found[i].bounds;
                 let path = found[i].path(sheet)?;
-                let o = origin(&path)?;
+                let (o, z) = origin(&path)?;
+                let r = found[i].bounds * z;
                 Some(format!(
                     "{path} {},{} {}x{}",
                     (o.x + r.x) as i32,
@@ -282,6 +284,9 @@ impl AriaShell {
         let Some((window, p)) = self.cursor else {
             return "unknown".to_owned();
         };
+        // In the surface's units, as the compositor sees them.
+        let z = self.scale_factor(window);
+        let p = Point::new(p.x * z, p.y * z);
         match self.surfaces().into_iter().find(|(id, ..)| *id == window) {
             Some((_, kind, output, r)) => format!(
                 "{kind} {} local {},{} global {},{}",

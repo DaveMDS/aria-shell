@@ -231,14 +231,15 @@ impl Toasts {
             // The stack: its padding from the edges, its gap between
             // the boxes.
             let stack = theme.root("notifications", scale).base();
-            let edge = popup::padding(stack.padding);
-            let gap = stack.row_gap as i32;
+            let ui = m.scales.ui();
+            let edge = popup::padding(stack.padding, ui);
+            let gap = (stack.row_gap * ui).round() as i32;
             let root = theme
                 .root("notification", scale)
                 .attr("output", output_name);
-            let room = popup::room(node(root, n));
+            let room = popup::room(node(root, n), ui);
             let size = crate::ui::size(
-                &mut m.measure.borrow_mut(),
+                m,
                 toast.window,
                 surface(root, n, notifications, icons),
                 crate::ui::room_on(info),

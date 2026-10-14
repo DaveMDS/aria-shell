@@ -297,6 +297,7 @@ whatever theme is in use.
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ A theme of variables alone: the palette, the font sizes, the corner radii
   (`--radius-xs` to `--radius-xl`, 0 for square corners)
+- ✅ The whole UI bigger or smaller (`[general] scale = 1.5`), sharp at any scale
 - ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
   every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)

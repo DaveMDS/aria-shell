@@ -504,12 +504,7 @@ impl Panel {
         bar: window::Id,
         m: Measuring<'_>,
     ) -> Option<(Anchor, LayerSize, i32)> {
-        let (width, height) = ui::size(
-            &mut m.measure.borrow_mut(),
-            bar,
-            self.view(m.shared),
-            self.room,
-        );
+        let (width, height) = ui::size(m, bar, self.view(m.shared), self.room);
         if (width, height) == (self.width, self.height) {
             return None;
         }
@@ -604,9 +599,10 @@ impl Panel {
         }
     }
 
-    /// The room around a popup's box for its shadow.
-    fn popup_room(&self, theme: &Theme) -> iced::Padding {
-        popup::room(self.popup_root(theme))
+    /// The room around a popup's box for its shadow, at the UI's scale
+    /// `ui`.
+    fn popup_room(&self, theme: &Theme, ui: f32) -> iced::Padding {
+        popup::room(self.popup_root(theme), ui)
     }
 
     /// Surface size for popup `id`: its content's, measured, within the
@@ -614,7 +610,7 @@ impl Panel {
     fn popup_size(&self, id: window::Id, m: Measuring<'_>) -> Option<(u32, u32)> {
         let content = self.popup_view(id, m.shared)?;
         let room = Size::new(self.room.width, self.room.height - self.height as f32);
-        Some(ui::size(&mut m.measure.borrow_mut(), id, content, room))
+        Some(ui::size(m, id, content, room))
     }
 
     pub fn has_popup(&self, id: window::Id) -> bool {
@@ -644,13 +640,16 @@ impl Panel {
         let Some(size) = self.popup_size(id, m) else {
             return Surfaces::default();
         };
+        // The widget in the UI's units, the anchor in the surface's.
+        let ui = m.scales.ui();
         let anchor = Rectangle {
+            x: widget.x * ui,
             y: 0.0,
+            width: widget.width * ui,
             height: self.height as f32,
-            ..widget
         };
         let side = self.popup_side();
-        let room = self.popup_room(m.shared.theme);
+        let room = self.popup_room(m.shared.theme, m.scales.ui());
         let Some(p) = self.popups.get_mut(&id) else {
             return Surfaces::default();
         };
@@ -680,7 +679,7 @@ impl Panel {
             surfaces.keyboard.push((bar, interactivity));
         }
         let side = self.popup_side();
-        let room = self.popup_room(m.shared.theme);
+        let room = self.popup_room(m.shared.theme, m.scales.ui());
         let ids: Vec<window::Id> = self.popups.keys().copied().collect();
         for id in ids {
             let Some(size) = self.popup_size(id, m) else {
@@ -735,9 +734,13 @@ impl Panel {
 
     /// Where the placed popups are asked to be, relative to the bar's
     /// surface: for `debug surfaces`.
-    pub fn popup_rects(&self, theme: &Theme) -> impl Iterator<Item = (window::Id, Rectangle)> {
+    pub fn popup_rects(
+        &self,
+        theme: &Theme,
+        ui: f32,
+    ) -> impl Iterator<Item = (window::Id, Rectangle)> {
         let side = self.popup_side();
-        let room = self.popup_room(theme);
+        let room = self.popup_room(theme, ui);
         self.popups.iter().filter_map(move |(&id, p)| {
             let (anchor, size) = p.placed?;
             Some((id, popup::estimate(side, anchor, size, room)))

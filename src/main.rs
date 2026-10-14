@@ -316,7 +316,7 @@ impl AriaShell {
         let brightness = Brightness::new(config.section(None));
         let osd = Osd::new(config.section(None));
         let screenshot = Screenshot::new(&config);
-        let shell = Self {
+        let mut shell = Self {
             config,
             general,
             style,
@@ -353,6 +353,7 @@ impl AriaShell {
             measure: RefCell::new(icssed::Measure::new()),
             scales: Scales::default(),
         };
+        shell.scales.set_ui(shell.general.scale);
         (shell, load_icons)
     }
 
@@ -669,7 +670,8 @@ impl AriaShell {
                     return task;
                 };
                 let focused = self.compositor.focused_output.as_deref();
-                let (picker, surfaces) = Picker::open(frozen, &self.outputs, focused);
+                let (picker, surfaces) =
+                    Picker::open(frozen, &self.outputs, focused, self.scales.ui());
                 self.picker = Some(picker);
                 Task::batch([task, surface_tasks(surfaces)])
             }
@@ -1011,6 +1013,10 @@ impl Pinned {
     fn subscription(&self) -> iced::Subscription<Message> {
         self.0.subscription()
     }
+
+    fn scale_factor(&self, window: Id) -> f32 {
+        self.0.scale_factor(window)
+    }
 }
 
 /// `[autostart]`: `name = command line` pairs, run in file order once
@@ -1073,6 +1079,7 @@ fn main() -> iced_exwlshell::Result {
         Pinned::view,
     )
     .subscription(Pinned::subscription)
+    .scale_factor(Pinned::scale_factor)
     .redraw_scope(Message::redraw_scope)
     .settings(Settings {
         shell_broadcast,

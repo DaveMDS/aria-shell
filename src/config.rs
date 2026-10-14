@@ -315,6 +315,9 @@ pub struct GeneralConfig {
     /// (last when there's none); `auto`: the first of
     /// [`process::FILE_MANAGERS`] on the PATH; `none`/`off`: none.
     pub file_manager: Option<String>,
+    /// How much bigger than the theme says the whole UI is drawn: every
+    /// surface, its content and its size (1: as the theme says).
+    pub scale: f32,
 }
 
 impl Section for GeneralConfig {
@@ -341,6 +344,14 @@ impl Section for GeneralConfig {
             icon_theme: raw.get("icon_theme").map(str::to_owned),
             terminal: process::chosen(raw.get("terminal"), process::auto_terminal),
             file_manager: process::chosen(raw.get("file_manager"), process::auto_file_manager),
+            scale: match raw.get("scale").map(str::parse::<f32>) {
+                None => 1.0,
+                Some(Ok(scale)) if scale > 0.0 => scale,
+                Some(_) => {
+                    log::warn!("invalid scale {:?}, using 1", raw.get("scale"));
+                    1.0
+                }
+            },
         }
     }
 }

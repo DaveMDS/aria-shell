@@ -20,18 +20,20 @@ pub enum Side {
     Above,
 }
 
-/// The room around a popup's box (root `root`) for its shadow.
-pub fn room(root: Node<'_>) -> Padding {
-    padding(Surface::<()>::room(root))
+/// The room around a popup's box (root `root`) for its shadow, in the
+/// compositor's units at the UI's scale `ui`.
+pub fn room(root: Node<'_>, ui: f32) -> Padding {
+    padding(Surface::<()>::room(root), ui)
 }
 
-/// The toolkit's sides as iced's padding.
-pub fn padding(sides: icssed::style::Sides) -> Padding {
+/// The toolkit's sides as iced's padding, in the compositor's units at
+/// the UI's scale `ui`.
+pub fn padding(sides: icssed::style::Sides, ui: f32) -> Padding {
     Padding {
-        top: sides.top,
-        right: sides.right,
-        bottom: sides.bottom,
-        left: sides.left,
+        top: sides.top * ui,
+        right: sides.right * ui,
+        bottom: sides.bottom * ui,
+        left: sides.left * ui,
     }
 }
 

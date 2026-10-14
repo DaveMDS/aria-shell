@@ -307,6 +307,8 @@ impl AriaShell {
         log::info!("config changed, rebuilding panels");
         self.config = Config::load().themed(self.style.as_deref(), self.theme_config);
         self.general = self.config.section(None);
+        // Before anything is measured again below.
+        self.scales.set_ui(self.general.scale);
         if scheme {
             self.scheme = self.general.color_scheme;
         }

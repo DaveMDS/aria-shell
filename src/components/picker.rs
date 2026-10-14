@@ -61,6 +61,10 @@ pub struct Picker {
     destination: Destination,
     can_copy: bool,
     can_edit: bool,
+    /// The UI's scale (`[general] scale`): what's drawn and where the
+    /// pointer is, in the UI's units, are that much smaller than the
+    /// outputs'.
+    ui: f32,
 }
 
 /// One output's surface.
@@ -146,11 +150,13 @@ struct Look {
 
 impl Picker {
     /// The picker and its surfaces, one per output with a shot;
-    /// `focused` (the compositor's focused output) gets the toolbar.
+    /// `focused` (the compositor's focused output) gets the toolbar; at
+    /// the UI's scale `ui`.
     pub fn open(
         frozen: Frozen,
         outputs: &BTreeMap<OutputId, OutputInfo>,
         focused: Option<&str>,
+        ui: f32,
     ) -> (Self, Surfaces) {
         let mut surfaces = Vec::new();
         let mut settings = Vec::new();
@@ -203,6 +209,7 @@ impl Picker {
             destination: frozen.destination,
             can_copy: frozen.can_copy,
             can_edit: frozen.can_edit,
+            ui,
         };
         let open = Surfaces {
             open: settings,
@@ -268,7 +275,10 @@ impl Picker {
                     return Action::Redraw(Vec::new());
                 };
                 let origin = self.surfaces[i].rect;
-                let p = Point::new(p.x + origin.x as f32, p.y + origin.y as f32);
+                let p = Point::new(
+                    p.x * self.ui + origin.x as f32,
+                    p.y * self.ui + origin.y as f32,
+                );
                 self.cursor = Some(p);
                 self.drag_to(p);
             }
@@ -277,7 +287,10 @@ impl Picker {
                     return Action::Redraw(Vec::new());
                 };
                 let origin = self.surfaces[i].rect;
-                let p = Point::new(p.x + origin.x as f32, p.y + origin.y as f32);
+                let p = Point::new(
+                    p.x * self.ui + origin.x as f32,
+                    p.y * self.ui + origin.y as f32,
+                );
                 self.cursor = Some(p);
                 self.press(p);
             }
@@ -482,10 +495,15 @@ impl Picker {
         let root = theme
             .root("screenshot", scale)
             .attr("output", &surface.name);
+        // Global, in the outputs' units; drawn in the UI's.
+        let ui = self.ui;
         let local = |r: Rect| {
             Rectangle::new(
-                Point::new((r.x - surface.rect.x) as f32, (r.y - surface.rect.y) as f32),
-                Size::new(r.width as f32, r.height as f32),
+                Point::new(
+                    (r.x - surface.rect.x) as f32 / ui,
+                    (r.y - surface.rect.y) as f32 / ui,
+                ),
+                Size::new(r.width as f32 / ui, r.height as f32 / ui),
             )
         };
         let on_this = |r: &Rect| r.intersection(&surface.rect).is_some();

@@ -121,7 +121,12 @@
  *                          the border box; an icon without either is a
  *                          square of the font size, an image its
  *                          picture's size, the padding and the border
- *                          around
+ *                          around. One side given or `fill`, the other
+ *                          not: that one keeps the picture's ratio (a
+ *                          dock's `icon { height: fill; }`, square, as
+ *                          tall as the bar's `height` leaves it; with
+ *                          the bar's `min-height` only, the room offered
+ *                          is the output's)
  *   rotate                 none | <angle>: an icon's or an image's turn
  *                          (a box doesn't turn: iced can't rotate it)
  *   content                none | normal | <string>...: a mark's text (a

@@ -393,6 +393,32 @@ fn icons_and_images_are_boxes() {
 }
 
 #[test]
+fn an_icon_filling_its_height_stays_square() {
+    // A dock: a bar of a given height, a button in it, its icon as tall
+    // as the room left inside both paddings, as wide as that.
+    let sheet = sheet(
+        "row { gap: 0; } row.bar { height: 40px; padding: 2px; } \
+         button { padding: 4px; border: none; } icon { height: fill; padding: 2px; }",
+    );
+    let root = sheet.root("root", 1.0);
+    let square = crate::IconFile::Svg {
+        handle: iced::advanced::svg::Handle::from_memory(
+            b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2'><rect width='2' height='2'/></svg>".as_slice(),
+        ),
+        symbolic: true,
+    };
+    let mut ui = Harness::<Message>::new(
+        crate::row![crate::row![crate::button![crate::icon(square)]].class("bar")].at(root),
+        Size::new(100.0, 40.0),
+        1.0,
+    );
+    ui.frame(Instant::now());
+    let rect = |x, y, w, h| Rectangle::new(Point::new(x, y), Size::new(w, h));
+    assert_eq!(ui.find(&sheet, "icon"), [rect(6.0, 6.0, 28.0, 28.0)]);
+    assert_eq!(ui.find(&sheet, "button"), [rect(2.0, 2.0, 36.0, 36.0)]);
+}
+
+#[test]
 fn debug_shows_the_innermost_boxes() {
     // An outer box with a 4 px padding around an inner one, 3 px padding
     // around its 4 px content: 18 px, beside 6 px of nothing.

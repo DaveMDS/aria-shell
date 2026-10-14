@@ -1,7 +1,8 @@
 //! Icons: boxes sized by the theme (`width`, `height`, their border box
 //! as every box's; a square of the font size when neither is set, its
-//! padding and border around), whether or not the file is found yet,
-//! the picture in their content box. A symbolic svg takes the element's
+//! padding and border around; one side `fill` and the other not given,
+//! that one following it, a square picture), whether or not the file
+//! is found yet, the picture in their content box. A symbolic svg takes the element's
 //! `color`, so an ancestor's state (`button:hover`) reaches it.
 
 use std::borrow::Cow;
@@ -159,13 +160,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
         let s = self.boxed.style();
         let natural = self.natural(s);
         let m = s.margin;
-        let length = |len: Len, px: f32, margins: f32| match len {
+        // A side following a `fill` one is known only in layout.
+        let follows = |len: Len, other: Len| len == Len::Auto && other == Len::Fill;
+        let length = |len: Len, other: Len, px: f32, margins: f32| match len {
             Len::Fill => Length::Fill,
+            _ if follows(len, other) => Length::Shrink,
             _ => Length::Fixed(px + margins),
         };
         Size::new(
-            length(s.width, natural.width, m.horizontal()),
-            length(s.height, natural.height, m.vertical()),
+            length(s.width, s.height, natural.width, m.horizontal()),
+            length(s.height, s.width, natural.height, m.vertical()),
         )
     }
 
@@ -182,20 +186,38 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
             // Its size whatever it's offered: it can't shrink.
             _ => px.max(min),
         };
-        layout::Node::new(Size::new(
+        let margins = Size::new(sn(m.left) + sn(m.right), sn(m.top) + sn(m.bottom));
+        let mut size = Size::new(
             axis(
                 s.width,
-                natural.width + sn(m.left) + sn(m.right),
+                natural.width + margins.width,
                 limits.min().width,
                 limits.max().width,
             ),
             axis(
                 s.height,
-                natural.height + sn(m.top) + sn(m.bottom),
+                natural.height + margins.height,
                 limits.min().height,
                 limits.max().height,
             ),
-        ))
+        );
+        // One side `fill`, the other not given: the picture square, as
+        // big as the `fill` side makes it (a dock's icons as tall as the
+        // bar).
+        let frame = frame(&s, scale);
+        let square = |side: f32, margins: f32, frame: f32| (side - margins - frame).max(0.0);
+        match (s.width, s.height) {
+            (Len::Auto, Len::Fill) => {
+                let picture = square(size.height, margins.height, frame.height);
+                size.width = (picture + frame.width + margins.width).max(limits.min().width);
+            }
+            (Len::Fill, Len::Auto) => {
+                let picture = square(size.width, margins.width, frame.width);
+                size.height = (picture + frame.height + margins.height).max(limits.min().height);
+            }
+            _ => {}
+        }
+        layout::Node::new(size)
     }
 
     fn draw(

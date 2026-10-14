@@ -30,6 +30,8 @@ pub struct Flex<'a, Message> {
     on_press: Option<Message>,
     on_animation_end: Option<Message>,
     id: Option<widget::Id>,
+    /// Its width is its content's, whatever the theme's `width`.
+    auto_width: bool,
 }
 
 /// A `row` box laying `children` out in a row.
@@ -101,6 +103,7 @@ impl<'a, Message> Flex<'a, Message> {
             on_press: None,
             on_animation_end: None,
             id: None,
+            auto_width: false,
         }
     }
 
@@ -128,6 +131,14 @@ impl<'a, Message> Flex<'a, Message> {
         self
     }
 
+    /// Its width is its content's (`width: auto`), whatever the theme
+    /// says: for a length the app decides, not the theme (a surface as
+    /// long as its content, where the app puts it).
+    pub fn auto_width_if(mut self, on: bool) -> Self {
+        self.auto_width = on;
+        self
+    }
+
     fn pressable(&self) -> bool {
         self.on_press.is_some() && !self.boxed.node().is_disabled()
     }
@@ -135,7 +146,12 @@ impl<'a, Message> Flex<'a, Message> {
 
 impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     fn size(&self) -> Size<Length> {
-        self.boxed.size()
+        let size = self.boxed.size();
+        if self.auto_width {
+            Size::new(Length::Shrink, size.height)
+        } else {
+            size
+        }
     }
 
     fn tag(&self) -> tree::Tag {
@@ -159,9 +175,12 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
-        let style = self
+        let mut style = self
             .boxed
             .layout_style(tree.state.downcast_ref::<BoxState>().states);
+        if self.auto_width && style.width != crate::style::Size::Auto {
+            std::sync::Arc::make_mut(&mut style).width = crate::style::Size::Auto;
+        }
         let direction = style.flex_direction.unwrap_or(self.direction);
         flex(
             &style,

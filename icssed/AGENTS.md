@@ -147,7 +147,7 @@ to choose.
 
 | Call | Notes |
 |---|---|
-| `row(children)`, `column(..)`, `button(..)`; `row![..]`, `column![..]`, `button![..]` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus) |
+| `row(children)`, `column(..)`, `button(..)`; `row![..]`, `column![..]`, `button![..]` | the box: CSS box model and a flex subset; `.on_press(m)` makes it a button; `.on_animation_end(m)` for exit animations; `.id(id)` for iced's operations (its bounds, the focus); `.auto_width_if(b)`: its width its content's, whatever the theme says (a length the app decides: a surface as long as its content) |
 | `text(content)` | a paragraph: wraps, ellipsis (`white-space: nowrap; text-overflow: ellipsis`), centred on its capitals. No padding or margin: put it in a box |
 | `mark()` | a text whose words are its style's `content` (a check, an arrow): the theme's, picked by its classes |
 | `icon(source)` | `IconFile::Svg { handle, symbolic }` (a symbolic one takes `color`), `IconFile::Image`, or `(&dyn Icons, name)`: the app's lookup, asked at draw for size and scale |

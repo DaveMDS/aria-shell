@@ -515,6 +515,42 @@ mod tests {
     }
 
     #[test]
+    fn auto_width_is_the_content_s_whatever_the_theme_says() {
+        // The app's length (a surface as long as its content): the
+        // theme's `fill` gives way, on the box and inside its parent.
+        let sheet = sheet(
+            ".row { width: fill; gap: 10px; } cell { height: 20px; } \
+             cell.w80 { width: 80px; } cell.fill { width: fill; }",
+        );
+        let row = sheet.root("row", 1.0);
+        let node = lay(
+            crate::row([cell("w80"), cell("w80")])
+                .at(row)
+                .auto_width_if(true)
+                .into(),
+            MAX,
+        );
+        assert_eq!(node.size(), Size::new(170.0, 20.0));
+        let node = lay(
+            crate::row([
+                crate::row([cell("w80")])
+                    .kind("cell")
+                    .class("fill")
+                    .auto_width_if(true)
+                    .into(),
+                cell("fill"),
+            ])
+            .at(row)
+            .into(),
+            MAX,
+        );
+        assert_eq!(
+            rects(&node),
+            [rect(0.0, 0.0, 80.0, 20.0), rect(90.0, 0.0, 910.0, 20.0)]
+        );
+    }
+
+    #[test]
     fn a_child_filling_across_takes_the_box_s_height_not_the_room() {
         // CSS's stretch: an auto-sized row is as tall as its tallest
         // child's content; a child stretched across takes that height,

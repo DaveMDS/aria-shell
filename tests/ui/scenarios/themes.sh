@@ -3,14 +3,14 @@
 # and the themes found; picking a theme restyles live (manjaro's last
 # gadget is in the accent), picking Base goes back.
 
-# A right click on the first bar's button, until the menu's five items
+# A right click on the first bar's button, until the menu's seven items
 # are there (3s): the popup is the shell's as soon as it's asked for,
 # its widgets once the compositor has mapped it (up to ~1s here, longer
 # while a theme loads).
 open_menu() {
     click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
     i=0
-    while [ "$(count_widgets 'menu > item')" != 5 ] && [ $i -lt 30 ]; do
+    while [ "$(count_widgets 'menu > item')" != 7 ] && [ $i -lt 30 ]; do
         sleep 0.1
         i=$((i + 1))
     done
@@ -35,21 +35,22 @@ click_widget 'surface.panel[output="HEADLESS-2"] gadget.themes > button'
 assert_eq "$(aria debug theme)" "style=- scheme=light" "and back, from either bar"
 base_light=$(sample)
 
-# The menu: schemes, then the base and every theme in assets/themes.
+# The menu: schemes, then the base and every theme in assets/themes,
+# a folder (e17) or a file, then the theme's settings.
 open_menu
-wait_for 'menu > item' 5 "Light, Dark, Base, manjaro, sway"
-wait_for 'menu > separator' 1
+wait_for 'menu > item' 7 "Light, Dark, Base, e17, manjaro, sway, the theme's settings"
+wait_for 'menu > separator' 2
 wait_for 'menu > item.checked:nth-child(1)' 1 "Light checked"
 wait_for 'menu > item.checked:nth-child(4)' 1 "Base checked"
 shot_surface menu popup
 
-click_widget 'menu > item:nth-child(5)'
+click_widget 'menu > item:nth-child(6)'
 assert_no_surface popup
 assert_eq "$(aria debug theme)" "style=manjaro scheme=light" "manjaro picked"
 [ "$(sample)" != "$base_light" ] || { echo "manjaro's last gadget looks as the base's"; exit 1; }
 
 open_menu
-wait_for 'menu > item.checked:nth-child(5)' 1 "manjaro checked"
+wait_for 'menu > item.checked:nth-child(6)' 1 "manjaro checked"
 click_widget 'menu > item:nth-child(2)'
 assert_no_surface popup
 assert_eq "$(aria debug theme)" "style=manjaro scheme=dark" "Dark from the menu"

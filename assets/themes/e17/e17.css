@@ -1,0 +1,28 @@
+/*
+ * E17: the look of the old Enlightenment 17's default theme, its bevels,
+ * brushed metal and glows, in images as edje drew them.
+ *
+ * A theme as a folder: this file, its images beside it (url() is
+ * found from this file's directory; a change to one reloads the theme).
+ */
+
+ :root {
+  --bg: black;
+  --fg: white;
+  --border: #4c7899;
+  --muted: #8d8d97;
+  --heading: #b4c7d8;
+  --accent: #9cc4e4;
+  --on-accent: #285577;
+  --accent-soft: rgba(156, 196, 228, 0.3);
+  --danger: #f06262;
+  --warning: #e5b85c;
+
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+
+  font-family: Roboto;
+}

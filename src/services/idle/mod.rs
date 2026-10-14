@@ -500,9 +500,9 @@ mod tests {
         let config = Config::parse("[Idle]\ndim = 1m\ndim_level = 20\n");
         let mut idle = Idle::new(IdleConfig::load(&config));
         assert_eq!(idle.dim(), None);
-        idle.apply(Event::Idled(Stage::Dim), Locker::None);
+        let _ = idle.apply(Event::Idled(Stage::Dim), Locker::None);
         assert_eq!(idle.dim(), Some(20), "dimmed, to dim_level");
-        idle.apply(Event::Resumed(Stage::Dim), Locker::None);
+        let _ = idle.apply(Event::Resumed(Stage::Dim), Locker::None);
         assert_eq!(idle.dim(), None, "back at the first input");
         let config = Config::parse("[Idle]\ndim = 1m\n");
         assert_eq!(IdleConfig::load(&config).dim_level, 15, "15% by default");

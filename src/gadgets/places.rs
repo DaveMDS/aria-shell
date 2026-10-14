@@ -268,7 +268,7 @@ impl PlacesGadget {
                 open: open.filter(|_| !busy),
                 eject: share
                     .mounted
-                    .then(|| (!busy).then(|| Message::UnmountDir(dir))),
+                    .then_some((!busy).then_some(Message::UnmountDir(dir))),
             },
         )
         .kind(if share.network { "share" } else { "device" })

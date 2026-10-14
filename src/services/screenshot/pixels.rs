@@ -96,7 +96,7 @@ impl Shot {
 /// The frame as RGBA, the right way up.
 pub fn upright(frame: &RawFrame) -> RgbaImage {
     let mut data = frame.data.clone();
-    for px in data.chunks_exact_mut(4) {
+    for px in data.as_chunks_mut::<4>().0 {
         match frame.format {
             Format::Xrgb | Format::Argb => px.swap(0, 2),
             Format::Xbgr | Format::Abgr => {}

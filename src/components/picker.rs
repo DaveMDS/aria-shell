@@ -221,7 +221,7 @@ impl Picker {
 
     /// The surfaces, with their output.
     pub fn windows(&self) -> impl Iterator<Item = (Id, OutputId)> + '_ {
-        self.surfaces.iter().map(|s| (s.window, s.output.clone()))
+        self.surfaces.iter().map(|s| (s.window, s.output))
     }
 
     pub fn has_window(&self, window: Id) -> bool {

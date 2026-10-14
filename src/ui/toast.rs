@@ -160,6 +160,11 @@ pub struct Toasts {
     toasts: Vec<Toast>,
 }
 
+/// Where a toast is, as [`Toasts::placed`] gives it: window,
+/// notification id, output, surface size and margins (top, right,
+/// bottom, left).
+pub type Placed = (Id, u32, OutputId, (u32, u32), (i32, i32, i32, i32));
+
 /// A notification's surface.
 struct Toast {
     window: Id,
@@ -313,11 +318,8 @@ impl Toasts {
         self.toasts.len() != before
     }
 
-    /// The surfaces: window, notification id, output, surface size and
-    /// margins, for `debug surfaces` (with [`rect`]).
-    pub fn placed(
-        &self,
-    ) -> impl Iterator<Item = (Id, u32, OutputId, (u32, u32), (i32, i32, i32, i32))> + '_ {
+    /// The surfaces, for `debug surfaces` (with [`rect`]).
+    pub fn placed(&self) -> impl Iterator<Item = Placed> + '_ {
         self.toasts
             .iter()
             .map(|t| (t.window, t.id, t.output, t.size, t.margin))

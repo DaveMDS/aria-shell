@@ -46,7 +46,7 @@ const RED: Color = Color::from_rgb(1.0, 0.0, 0.0);
 
 /// What an element no rule colours inherits: the toolkit's own default.
 fn plain(sheet: &Sheet) -> Color {
-    node(&sheet, "unstyled", 1.0).base().color
+    node(sheet, "unstyled", 1.0).base().color
 }
 
 #[test]

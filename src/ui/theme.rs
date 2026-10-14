@@ -12,7 +12,7 @@
 
 use std::borrow::Cow;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use icssed::{Node, Sheet, Source};
 
@@ -80,7 +80,9 @@ impl Theme {
                 files: Vec::new(),
             });
         };
-        let files = vec![path.clone()];
+        // A theme's folder is watched too: an image changed reloads it.
+        let mut files = vec![path.clone()];
+        files.extend(folder_of(&path));
         let text = fs::read_to_string(&path).map_err(|e| LoadError {
             message: format!("cannot read theme {}: {e}", path.display()),
             files: files.clone(),
@@ -211,19 +213,26 @@ pub fn available() -> Vec<(String, PathBuf)> {
 fn available_in(dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
     let mut found: Vec<(String, PathBuf)> = Vec::new();
     for dir in dirs {
-        let Ok(entries) = fs::read_dir(dir.join("themes")) else {
+        let themes = dir.join("themes");
+        let Ok(entries) = fs::read_dir(&themes) else {
             continue;
         };
         for path in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
-            let Some(name) = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .filter(|_| path.extension().is_some_and(|e| e == "css") && path.is_file())
-            else {
+            let name = if path.is_dir() {
+                path.file_name()
+            } else if path.extension().is_some_and(|e| e == "css") {
+                path.file_stem()
+            } else {
+                None
+            };
+            let Some(name) = name.and_then(|s| s.to_str()) else {
                 continue;
             };
-            if !found.iter().any(|(n, _)| n == name) {
-                found.push((name.to_owned(), path.clone()));
+            if found.iter().any(|(n, _)| n == name) {
+                continue;
+            }
+            if let Some(file) = theme_in(&themes, name) {
+                found.push((name.to_owned(), file));
             }
         }
     }
@@ -233,8 +242,8 @@ fn available_in(dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
 
 /// Where `[general] style = <value>` points: a path if it looks like
 /// one (has a `/` or ends in `.css`, relative to the config file's
-/// directory), else `themes/<name>.css` under the config dirs, the data
-/// dirs, then the source tree's `assets/`.
+/// directory), else the theme of that name under the config dirs, the
+/// data dirs, then the source tree's `assets/` (see [`theme_in`]).
 fn locate(style: &str, config: &Config) -> Option<PathBuf> {
     if style.contains('/') || style.ends_with(".css") {
         let path = config.resolve_path(style);
@@ -242,8 +251,25 @@ fn locate(style: &str, config: &Config) -> Option<PathBuf> {
     }
     theme_dirs()
         .into_iter()
-        .map(|dir| dir.join("themes").join(format!("{style}.css")))
-        .find(|f| f.is_file())
+        .find_map(|dir| theme_in(&dir.join("themes"), style))
+}
+
+/// The theme `name` in a `themes/` directory: its folder
+/// (`<name>/<name>.css`, its images beside it), else `<name>.css`.
+fn theme_in(themes: &Path, name: &str) -> Option<PathBuf> {
+    [
+        themes.join(name).join(format!("{name}.css")),
+        themes.join(format!("{name}.css")),
+    ]
+    .into_iter()
+    .find(|f| f.is_file())
+}
+
+/// The folder a theme's file is in, if it's the theme's own
+/// (`<name>/<name>.css`), not a directory of themes.
+fn folder_of(file: &Path) -> Option<PathBuf> {
+    let dir = file.parent()?;
+    (dir.file_name()? == file.file_stem()?).then(|| dir.to_path_buf())
 }
 
 #[cfg(test)]
@@ -278,10 +304,20 @@ mod tests {
         fs::write(b.join("alpha.css"), "").unwrap();
         fs::write(b.join("beta.css"), "").unwrap();
         fs::write(b.join("notes.txt"), "").unwrap();
+        fs::create_dir_all(b.join("gamma")).unwrap();
+        fs::write(b.join("gamma/gamma.css"), "").unwrap();
+        fs::create_dir_all(b.join("images")).unwrap();
         let list = available_in(&[dir.join("a"), dir.join("b")]);
         let names: Vec<&str> = list.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["alpha", "beta", "zeta"]);
+        assert_eq!(names, ["alpha", "beta", "gamma", "zeta"]);
         assert_eq!(list[0].1, a.join("alpha.css"), "the first directory wins");
+        assert_eq!(list[2].1, b.join("gamma/gamma.css"), "a theme as a folder");
+        assert_eq!(folder_of(&list[2].1), Some(b.join("gamma")));
+        assert_eq!(
+            folder_of(&list[0].1),
+            None,
+            "themes/ isn't a theme's folder"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 

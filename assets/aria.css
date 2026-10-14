@@ -5,6 +5,7 @@
  * theme: one cascade. Keep it neutral: these are the defaults a theme
  * overrides, not a look. Don't edit it to restyle the shell, write a
  * theme (`[general] style = <name>` in aria.conf, looked up as
+ * `themes/<name>/<name>.css`, a folder with its images, or
  * `themes/<name>.css` under ~/.config/aria-shell/, the XDG data dirs,
  * then assets/; or a path). assets/themes/ has examples.
  *

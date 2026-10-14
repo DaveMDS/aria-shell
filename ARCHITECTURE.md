@@ -456,7 +456,8 @@ Theme      (theme.rs)       daemon-owned styling: the toolkit's base, aria.css a
   load / try_load(&Config, style, scheme)   what can't be used logged with its file:line:col, a syntax
                             error rejecting the user's file (a reload keeps the last good one)
   root(kind, scale)         a surface's root node: where its view is (`.at(root)`), and its style read
-  scheme() / name()         what's loaded; `available()` lists the themes/*.css of every theme dir
+  scheme() / name()         what's loaded; `available()` lists the themes of every theme dir
+                            (`<name>/<name>.css`, a folder watched with its file, or `<name>.css`)
   Command                   ToggleScheme | SetScheme | SetStyle: from a gadget (Action::Theme), the daemon
                             keeps `style`/`scheme` at runtime and reloads (no persistence)
 
@@ -667,7 +668,7 @@ Two things flow between the daemon and the gadgets besides messages:
   toolkit's base, under the user's) documents the shell's element trees
   for theme authors, the toolkit's base its widgets' and the
   properties; `[general] style` names a user theme loaded on top
-  (`themes/<name>.css` in the config dirs, the XDG data dirs, then
+  (`themes/<name>/<name>.css` or `themes/<name>.css` in the config dirs, the XDG data dirs, then
   `assets/`; or a path). In `view` every widget is an element: its type
   and classes said on it, its place found by the toolkit under the
   container it's in, from its surface's root (`Theme::root(kind,

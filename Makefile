@@ -18,7 +18,7 @@ PAMDIR     ?= $(SYSCONFDIR)/pam.d
 CARGO      ?= cargo
 
 BIN = target/release/aria-shell
-THEMES = $(notdir $(wildcard assets/themes/*.css))
+THEMEDIR = $(DESTDIR)$(DATADIR)/aria-shell/themes
 
 .PHONY: all build run install uninstall
 
@@ -33,7 +33,8 @@ run:
 install:
 	@test -x $(BIN) || { echo "$(BIN) is missing: run make first"; exit 1; }
 	install -Dm755 $(BIN) $(DESTDIR)$(BINDIR)/aria-shell
-	install -Dm644 -t $(DESTDIR)$(DATADIR)/aria-shell/themes assets/themes/*.css
+	install -dm755 $(THEMEDIR)
+	cp -r assets/themes/. $(THEMEDIR)
 	install -dm755 $(DESTDIR)$(UNITDIR)
 	sed 's|@bindir@|$(BINDIR)|g' assets/systemd/aria-shell.service.in \
 		> $(DESTDIR)$(UNITDIR)/aria-shell.service
@@ -49,8 +50,8 @@ install:
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/aria-shell
-	rm -f $(addprefix $(DESTDIR)$(DATADIR)/aria-shell/themes/,$(THEMES))
-	-rmdir --ignore-fail-on-non-empty $(DESTDIR)$(DATADIR)/aria-shell/themes $(DESTDIR)$(DATADIR)/aria-shell
+	rm -rf $(THEMEDIR)
+	-rmdir --ignore-fail-on-non-empty $(DESTDIR)$(DATADIR)/aria-shell
 	rm -f $(DESTDIR)$(UNITDIR)/aria-shell.service
 	rm -rf $(DESTDIR)$(DOCDIR)
 	@if [ -n "$(DESTDIR)" ] || [ -w $(PAMDIR) ]; then \

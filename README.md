@@ -279,7 +279,8 @@ The look comes from a CSS stylesheet, drawn by the shell's own toolkit
 `icssed/assets/base.css` the toolkit's widgets and the supported
 properties; a user theme (`[general] style`) is loaded on top, with
 light and dark colour schemes. Themes are found in
-`~/.config/aria-shell/themes/`, the XDG data dirs and `assets/themes/`.
+`~/.config/aria-shell/themes/`, the XDG data dirs and `assets/themes/`:
+a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.
 
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
@@ -289,6 +290,8 @@ light and dark colour schemes. Themes are found in
 - ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
   every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)
+- ✅ A theme as a folder (`themes/<name>/<name>.css`), its images beside it: an image
+  changed reloads it too
 - ✅ A font built into the binary (Noto Sans Display, its Latin part,
   `assets/fonts/`): the same text on every system, whatever is installed;
   tabular digits, numbers don't shift as they change

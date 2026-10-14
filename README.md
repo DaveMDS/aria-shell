@@ -289,8 +289,8 @@ light and dark colour schemes. Themes are found in
 a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.
 Over any theme, `theme-override.css` beside `aria.conf` holds your own touches
 (`assets/theme-override.css` is an example to start from):
-`surface.panel#dock { min-height: 48px; }` makes the `[panel:dock]` bar thicker
-whatever theme is in use.
+`surface.panel#dock icon { height: 48px; }` makes the `[panel:dock]` bar thicker
+whatever theme is in use (a bar is as thick as its content).
 
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
@@ -301,6 +301,8 @@ whatever theme is in use.
 - ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
   every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)
+- ✅ An inspector while editing: `*:hover { -debug: box; }` paints the margin, border,
+  padding and content of the element under the pointer
 - ✅ Your own touches over any theme: `theme-override.css` beside `aria.conf`
   (a broken one is left out, the theme kept)
 - ✅ A theme as a folder (`themes/<name>/<name>.css`), its images beside it: an image

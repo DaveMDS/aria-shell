@@ -28,6 +28,12 @@
  *     restyles all of it, the toolkit's widgets included
  */
 
+/* Enable debug inspector */
+/* * :hover {
+  -debug: box;
+} */
+
+
 /*
  * The palette: the toolkit's own, the same values, here to be read
  * beside the rules that use them.
@@ -594,7 +600,7 @@ surface.showcase > parts > columns > column {
  */
 surface.panel {
   width: fill;
-  min-height: 28px;
+  min-height: 28px;  /* 16 (icon) + 6x2 (padding) */
   padding: 0 3px;
   border: none;
   transition: transform 200ms ease-out;
@@ -618,6 +624,9 @@ surface.panel > slot.end {
 }
 surface.panel icon {
   height: 16px;
+}
+surface.panel#dock icon {
+  height: 32px;
 }
 
 /*
@@ -660,7 +669,7 @@ gadget {
 }
 gadget > button {
   min-width: 32px;
-  padding: 0 6px;
+  padding: 6px 6px;
   gap: 4px;
   border: none;
   border-radius: 0;

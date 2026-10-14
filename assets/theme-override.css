@@ -50,12 +50,19 @@
 }
 */
 
-/* A thicker bar, bigger icons: here the [panel:dock] one. */
+/* A thicker bar, bigger icons: here the [panel:dock] one. A bar is as
+   thick as its content, min-height at least (lower it too for smaller
+   icons). */
 /*
-surface.panel#dock {
-  min-height: 48px;
-}
 surface.panel#dock icon {
-  height: 32px;
+  height: 48px;
+}
+*/
+
+/* An inspector: the margin, border, padding and content of the element
+   under the pointer. */
+/*
+*:hover {
+  -debug: box;
 }
 */

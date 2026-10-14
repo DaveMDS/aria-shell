@@ -26,7 +26,8 @@ use crate::ui::{self, Measuring, Surfaces};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
 /// and defaults match the Python implementation, but for its `size` and
-/// `align`, one `align` here; `margin`, `opacity` are not honoured.
+/// `align`, one `align` here, and `layer`, `top` unless said (under the
+/// windows a bar is rarely wanted); `margin`, `opacity` are not honoured.
 #[derive(Debug, Clone)]
 pub struct PanelConfig {
     /// `all`, or the connector names (`DP-1 HDMI-A-1`) to show this bar on.
@@ -93,12 +94,12 @@ impl Section for PanelConfig {
             }
         };
         let layer = match raw.get("layer") {
-            None | Some("bottom") => Layer::Bottom,
-            Some("top") => Layer::Top,
+            None | Some("top") => Layer::Top,
+            Some("bottom") => Layer::Bottom,
             Some("overlay") => Layer::Overlay,
             Some(other) => {
-                log::warn!("invalid panel layer {other:?}, using bottom");
-                Layer::Bottom
+                log::warn!("invalid panel layer {other:?}, using top");
+                Layer::Top
             }
         };
         let align = match raw.get("align") {

@@ -581,9 +581,13 @@ surface.showcase > parts > columns > column {
  * as its gadgets, in the middle of the bar; the start and end ones
  * share what's left, half each (CSS's `1fr auto 1fr`). A bar that
  * doesn't span its edge ([panel] align = start, center or end) is as
- * long as its gadgets, whatever `width` says: it and its slots.
+ * long as its gadgets, whatever `width` says: it and its slots. A bar
+ * that hides ([panel] autohide = yes or smart) is .hidden while it is:
+ * its surface stays, only a strip at its edge taking the pointer, the
+ * rest letting it through; what shows of it is the theme's (here it
+ * slides away).
  *
- * surface.panel[.top|.bottom][#<instance>][output="<connector>"]
+ * surface.panel[.top|.bottom][.hidden][#<instance>][output="<connector>"]
  *              [align="stretch|start|center|end"]
  * ╰─ slot.start | slot.center | slot.end
  *    ╰─ gadget.<kind>[#<instance>]         one per gadget
@@ -593,6 +597,13 @@ surface.panel {
   min-height: 28px;
   padding: 0 3px;
   border: none;
+  transition: transform 200ms ease-out;
+}
+surface.panel.top.hidden {
+  transform: translateY(-60px);
+}
+surface.panel.bottom.hidden {
+  transform: translateY(60px);
 }
 surface.panel > slot {
   width: fill;

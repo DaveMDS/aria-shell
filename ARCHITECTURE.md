@@ -588,6 +588,23 @@ Two things flow between the daemon and the gadgets besides messages:
   handle. A new service's command is one variant here and one arm in
   `perform` (and in `map_dyn`).
 
+- **A bar that hides** (`[panel] autohide = yes | smart`) never
+  changes its surface: hidden, its root is `panel.hidden` (the theme
+  slides it away, a `transition`) and its input region (`Message::
+  SetInputRegion`) a strip of 2 px at its edge, the rest letting the
+  pointer through to the windows; shown, all of it again. A resize
+  each time (`LayoutChange`, a configure, a frame at a new size)
+  flickers and can't animate; a negative margin moved by steps is a
+  commit each and may show on the output beyond. It keeps no room
+  (`exclusive_zone` 0). The pointer resting on the strip
+  (`PointerCrossed`) shows it after `SHOW_DELAY`, not one passing
+  over it; leaving hides it after `HIDE_DELAY`, never while a popup is
+  open or the bar has the keyboard (`Panel::wants_hidden`); `smart`
+  shows it on a desktop without windows (`Compositor::desktop_empty`,
+  told after every compositor event). The timers are `Message::
+  Autohide(id, serial)`, a stale serial ignored. noctalia's dock does
+  the same (surface, strip, slide; seen with `WAYLAND_DEBUG`), with no
+  delays.
 - **Popups** are xdg popups parented to the panel's layer surface. A
   gadget with one keeps a `gadgets::Popup` field, exposes it through
   `Gadget::popup()`, gives the box the popup hangs from the id
@@ -991,6 +1008,12 @@ Two things flow between the daemon and the gadgets besides messages:
   button anywhere under a tray gadget, its popup's too; aria.css
   styles the bar's buttons with `gadget > button` (the child
   combinator), which a popup's content never is.
+- `Message::SetInputRegion { id, callback }` (`ActionCallback::new(|region|
+  region.add(..))`): the runtime has **one** `wl_region` for every
+  surface, emptied (`subtract` of the surface's size) before the
+  callback adds to it, then set and committed; a region is copied when
+  set, so the sharing is harmless. Sent at the surface's `NewShell`,
+  once it exists.
 - A layer surface's `margin: Some((top, right, bottom, left))` and
   `Message::MarginChange { id, margin }` place it from its anchored
   edges; `exclusive_zone: None` keeps it out of the bars' zones (Sway

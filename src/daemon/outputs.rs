@@ -56,7 +56,9 @@ impl AriaShell {
                 Some((dialog, launcher)) if dialog.is_window(info.window) => {
                     launcher.focus().map(Message::Launcher)
                 }
-                _ => Task::none(),
+                // A bar that hides starts hidden: only its edge's strip
+                // takes the pointer.
+                _ => self.input_region(info.window),
             },
             ShellEvent::WindowOutputChanged {
                 window,
@@ -260,6 +262,7 @@ impl AriaShell {
         }
         // New gadgets may draw icons of their own.
         self.resolve_icons();
+        tasks.push(self.observe_desktops());
         Task::batch(tasks)
     }
 

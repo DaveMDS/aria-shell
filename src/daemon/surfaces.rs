@@ -5,6 +5,7 @@
 
 use iced::Task;
 use iced::window::Id;
+use iced_exwlshell::actions::ActionCallback;
 use iced_exwlshell::reexport::NewLayerShellSettings;
 use iced_wayland_subscriber::OutputInfo;
 
@@ -44,7 +45,40 @@ impl AriaShell {
                 all.and(panel.sync_popups(id, m))
             });
         tasks.push(surface_tasks(surfaces));
+        // A popup closed may let its bar hide.
+        tasks.push(self.autohide_timers());
         Task::batch(tasks)
+    }
+
+    /// The bars told whether their output shows a workspace without
+    /// windows (a `smart` one shows then), and the timers that arms.
+    pub(crate) fn observe_desktops(&mut self) -> Task<Message> {
+        for panel in self.panels.values_mut() {
+            panel.set_empty(self.compositor.desktop_empty(panel.output_name()));
+        }
+        self.autohide_timers()
+    }
+
+    /// The timers the bars that hide want armed: each goes off as a
+    /// `Message::Autohide`.
+    pub(crate) fn autohide_timers(&mut self) -> Task<Message> {
+        Task::batch(self.panels.iter_mut().filter_map(|(&id, panel)| {
+            let (serial, delay) = panel.autohide_timer()?;
+            Some(Task::perform(tokio::time::sleep(delay), move |()| {
+                Message::Autohide(id, serial)
+            }))
+        }))
+    }
+
+    /// The part of bar `id` that takes the pointer: all of it, or the
+    /// strip at its edge while it's hidden.
+    pub(crate) fn input_region(&self, id: Id) -> Task<Message> {
+        let Some(panel) = self.panels.get(&id).filter(|p| p.autohide()) else {
+            return Task::none();
+        };
+        let (x, y, width, height) = panel.input_region();
+        let callback = ActionCallback::new(move |region| region.add(x, y, width, height));
+        Task::done(Message::SetInputRegion { id, callback })
     }
 
     /// Every surface measured again (the theme or a scale changed): the

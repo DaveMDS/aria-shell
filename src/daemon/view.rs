@@ -203,9 +203,12 @@ impl AriaShell {
                     Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                         Some(Message::Cursor(window, position))
                     }
-                    Event::Mouse(
-                        iced::mouse::Event::CursorEntered | iced::mouse::Event::CursorLeft,
-                    ) => Some(Message::PointerCrossed(window)),
+                    Event::Mouse(iced::mouse::Event::CursorEntered) => {
+                        Some(Message::PointerCrossed(window, true))
+                    }
+                    Event::Mouse(iced::mouse::Event::CursorLeft) => {
+                        Some(Message::PointerCrossed(window, false))
+                    }
                     Event::Keyboard(k) => Some(Message::PanelKey(window, k)),
                     Event::Window(iced::window::Event::Focused) => {
                         Some(Message::KeyboardFocus(window, true))

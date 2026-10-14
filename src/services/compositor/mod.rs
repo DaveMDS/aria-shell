@@ -205,6 +205,15 @@ impl Compositor {
             .iter()
             .filter(move |w| w.workspace_id == workspace.id)
     }
+
+    /// Whether output `output` (a connector name) shows a workspace
+    /// without windows; `false` while its workspace isn't known.
+    pub fn desktop_empty(&self, output: &str) -> bool {
+        self.workspaces
+            .iter()
+            .find(|ws| ws.active && ws.output == output)
+            .is_some_and(|ws| self.windows_of(ws).next().is_none())
+    }
 }
 
 #[cfg(test)]

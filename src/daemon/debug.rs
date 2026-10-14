@@ -10,7 +10,7 @@ use icssed::query::{Found, Report};
 
 use crate::commands::{DebugCommand, Reply};
 use crate::components::locker::Locker;
-use crate::components::panel;
+use crate::components::panel::{self, Panel};
 use crate::ui::toast;
 use crate::{AriaShell, Message};
 
@@ -177,19 +177,22 @@ impl AriaShell {
     }
 
     /// `debug surfaces`: `<kind> <output> <x>,<y> <w>x<h>` per surface,
-    /// then `keyboard` on the one the keyboard is on, `;`-separated (the
+    /// then `hidden` on a bar hidden at its edge (`autohide`) and
+    /// `keyboard` on the one the keyboard is on, `;`-separated (the
     /// protocol is one line per reply).
     fn describe_surfaces(&self) -> String {
         self.surfaces()
             .into_iter()
             .map(|(window, kind, output, r)| {
+                let hidden = self.panels.get(&window).is_some_and(Panel::hidden);
                 format!(
-                    "{kind} {} {},{} {}x{}{}",
+                    "{kind} {} {},{} {}x{}{}{}",
                     self.output_name(output),
                     r.x as i32,
                     r.y as i32,
                     r.width as i32,
                     r.height as i32,
+                    if hidden { " hidden" } else { "" },
                     if self.keyboard == Some(window) {
                         " keyboard"
                     } else {

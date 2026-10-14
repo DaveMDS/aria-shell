@@ -7,6 +7,7 @@
 //! edge (`align`).
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use iced::{Rectangle, Size, Subscription, window};
 use iced_exwlshell::reexport::{
@@ -33,6 +34,7 @@ pub struct PanelConfig {
     pub position: Position,
     pub layer: Layer,
     pub align: Align,
+    pub autohide: Autohide,
     pub items_start: Vec<String>,
     pub items_center: Vec<String>,
     pub items_end: Vec<String>,
@@ -42,6 +44,16 @@ pub struct PanelConfig {
 pub enum Position {
     Top,
     Bottom,
+}
+
+/// Whether the bar hides at its edge, shown while the pointer rests
+/// there (it then keeps no room from the windows): `smart` shows it on
+/// a desktop without windows too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Autohide {
+    No,
+    Yes,
+    Smart,
 }
 
 /// Where the bar is along its edge: all of it, or as long as its
@@ -99,11 +111,24 @@ impl Section for PanelConfig {
                 Align::Stretch
             }
         };
+        let autohide = match raw.get("autohide") {
+            None | Some("no") => Autohide::No,
+            Some("yes") => Autohide::Yes,
+            Some("smart") => Autohide::Smart,
+            Some(other) => {
+                log::warn!("invalid panel autohide {other:?}, using no");
+                Autohide::No
+            }
+        };
+        if autohide != Autohide::No && layer == Layer::Bottom {
+            log::warn!("panel autohide on the bottom layer: windows cover it, use top");
+        }
         Self {
             outputs: raw.list_or("outputs", &["all"]),
             position,
             layer,
             align,
+            autohide,
             items_start: raw.list_or("items_start", &[]),
             items_center: raw.list_or("items_center", &[]),
             items_end: raw.list_or("items_end", &[]),
@@ -183,7 +208,25 @@ pub struct Panel {
     /// Whether the surface was last made keyboard-interactive, for a
     /// popup with a text field (see [`Panel::wants_keyboard`]).
     pub keyboard: bool,
+    /// With `autohide`: whether it's hidden now (`panel.hidden`, only a
+    /// strip at its edge taking the pointer).
+    hidden: bool,
+    /// Whether the pointer is over the bar.
+    pointer: bool,
+    /// Whether its output shows a workspace without windows (`smart`).
+    empty: bool,
+    /// The timer armed to hide (`true`) or show it, and its serial: one
+    /// armed before the last is stale.
+    timer: Option<bool>,
+    serial: u64,
 }
+
+/// How long the pointer rests at the edge before a hidden bar shows.
+const SHOW_DELAY: Duration = Duration::from_millis(250);
+/// How long the bar stays once the pointer left it.
+const HIDE_DELAY: Duration = Duration::from_millis(600);
+/// The strip of a hidden bar that takes the pointer, at its edge.
+const STRIP: i32 = 2;
 
 /// An open popup.
 struct Popup {
@@ -243,6 +286,7 @@ impl Panel {
                 });
             }
         }
+        let hidden = config.autohide != Autohide::No;
         Self {
             section,
             output: OutputId::from(output),
@@ -255,6 +299,11 @@ impl Panel {
             gadgets,
             popups: BTreeMap::new(),
             keyboard: false,
+            hidden,
+            pointer: false,
+            empty: false,
+            timer: None,
+            serial: 0,
         }
     }
 
@@ -267,6 +316,7 @@ impl Panel {
         };
         let root = theme.root("panel", self.scale).class(position);
         with_id(root, instance_id(&self.section))
+            .class_if("hidden", self.hidden)
             .attr("output", &self.output_name)
             .attr("align", self.config.align.name())
     }
@@ -317,9 +367,93 @@ impl Panel {
         }
     }
 
-    /// Whether it keeps its thickness from the windows ([`Align`]).
+    /// Whether it keeps its thickness from the windows ([`Align`]): a
+    /// bar that hides doesn't.
     pub fn reserves(&self) -> bool {
-        matches!(self.config.align, Align::Stretch | Align::Center)
+        self.config.autohide == Autohide::No
+            && matches!(self.config.align, Align::Stretch | Align::Center)
+    }
+
+    /// The pointer entered the bar (`true`) or left it.
+    pub fn pointer_crossed(&mut self, inside: bool) {
+        self.pointer = inside;
+    }
+
+    /// Whether its output shows a workspace without windows: a `smart`
+    /// bar shows then.
+    pub fn set_empty(&mut self, empty: bool) {
+        self.empty = empty;
+    }
+
+    /// Whether it should be hidden now: the pointer away, no popup
+    /// open, and for a `smart` one some window on its desktop.
+    fn wants_hidden(&self) -> bool {
+        let shown = match self.config.autohide {
+            Autohide::No => true,
+            Autohide::Yes => false,
+            Autohide::Smart => self.empty,
+        };
+        !shown && !self.pointer && self.popups.is_empty() && !self.keyboard
+    }
+
+    /// After a crossing or a popup closed: the timer to arm (its serial
+    /// and delay) when the bar wants to show or hide, unless one for it
+    /// is armed already.
+    pub fn autohide_timer(&mut self) -> Option<(u64, Duration)> {
+        let hide = self.wants_hidden();
+        if hide == self.hidden {
+            self.timer = None;
+            return None;
+        }
+        if self.timer == Some(hide) {
+            return None;
+        }
+        self.serial += 1;
+        self.timer = Some(hide);
+        Some((self.serial, if hide { HIDE_DELAY } else { SHOW_DELAY }))
+    }
+
+    /// Timer `serial` went off: whether the bar was shown or hidden.
+    pub fn autohide_elapsed(&mut self, serial: u64) -> bool {
+        if serial != self.serial {
+            return false;
+        }
+        let Some(hide) = self.timer.take() else {
+            return false;
+        };
+        if hide != self.wants_hidden() || hide == self.hidden {
+            return false;
+        }
+        self.hidden = hide;
+        true
+    }
+
+    /// The part of its surface that takes the pointer (x, y, width,
+    /// height): all of it, or the strip at its edge while hidden.
+    pub fn input_region(&self) -> (i32, i32, i32, i32) {
+        let width = match self.config.align {
+            Align::Stretch => self.room.width as i32,
+            _ => self.width as i32,
+        };
+        let height = self.height as i32;
+        match (self.hidden, self.config.position) {
+            (false, _) => (0, 0, width, height),
+            (true, Position::Top) => (0, 0, width, STRIP),
+            (true, Position::Bottom) => (0, height - STRIP, width, STRIP),
+        }
+    }
+
+    /// Its output's connector name.
+    pub fn output_name(&self) -> &str {
+        &self.output_name
+    }
+
+    pub fn autohide(&self) -> bool {
+        self.config.autohide != Autohide::No
+    }
+
+    pub fn hidden(&self) -> bool {
+        self.hidden
     }
 
     /// Whether its length is its content's, measured again after every

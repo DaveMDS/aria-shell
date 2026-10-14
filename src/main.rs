@@ -165,8 +165,11 @@ enum Message {
     PressedOutside(Id),
     /// The pointer moved over one of our surfaces (for `debug cursor`).
     Cursor(Id, Point),
-    /// The pointer entered or left one of our surfaces.
-    PointerCrossed(Id),
+    /// The pointer entered (`true`) or left one of our surfaces.
+    PointerCrossed(Id, bool),
+    /// A bar's autohide timer went off, with the serial it was armed
+    /// with.
+    Autohide(Id, u64),
     /// The keyboard came to one of our surfaces (`true`) or left it
     /// (for `debug surfaces`).
     KeyboardFocus(Id, bool),
@@ -207,7 +210,9 @@ impl Message {
             // keeps its status (hovered, pressed) in itself, rebuilt as
             // unknown with every message and known again only when
             // drawn; until then a hover change asks no frame.
-            Message::Cursor(id, _) | Message::PointerCrossed(id) => Scope::Window(*id),
+            Message::Cursor(id, _) | Message::PointerCrossed(id, _) | Message::Autohide(id, _) => {
+                Scope::Window(*id)
+            }
             Message::KeyboardFocus(..)
             | Message::Compositor(_)
             | Message::Tray(_)
@@ -460,11 +465,29 @@ impl AriaShell {
                 }
                 None => Task::none(),
             },
-            Message::Redraw(_) | Message::PointerCrossed(_) => Task::none(),
+            Message::Redraw(_) => Task::none(),
+            Message::PointerCrossed(id, inside) => match self.panels.get_mut(&id) {
+                Some(panel) => {
+                    panel.pointer_crossed(inside);
+                    self.autohide_timers()
+                }
+                None => Task::none(),
+            },
+            Message::Autohide(id, serial) => {
+                let changed = self
+                    .panels
+                    .get_mut(&id)
+                    .is_some_and(|p| p.autohide_elapsed(serial));
+                if changed {
+                    self.input_region(id)
+                } else {
+                    Task::none()
+                }
+            }
             Message::Compositor(event) => {
                 self.compositor.apply(event);
                 self.resolve_icons();
-                self.redraw_shared()
+                Task::batch([self.observe_desktops(), self.redraw_shared()])
             }
             Message::Icons(event) => {
                 self.icons.apply(event);

@@ -66,7 +66,11 @@ bar per monitor (or per `[panel:*]` section):
 - ✅ `make install`, a systemd user service, the programs it starts in systemd scopes of their own
 - ✅ A bar along its whole edge, or as long as its gadgets at its start, middle or end
   (`[panel] align`; at the start or the end it keeps no room from the windows)
+- ✅ A bar that hides at its edge, shown while the pointer rests there (`[panel] autohide = yes`),
+  and on a desktop without windows too (`smart`)
 - 🔲 `[panel]` `margin`, `opacity`
+- 🔲 Special workspaces (Hyprland's special ones, Sway's scratchpad): not in `WorkSpaces`,
+  and not counted by `autohide = smart` (one shown over an empty desktop doesn't hide the bar)
 
 Full configuration via the `aria.conf` file.
 

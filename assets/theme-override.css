@@ -1,0 +1,61 @@
+/*
+ * Your own touches, over whatever theme is in use
+ * ===============================================
+ *
+ * Copy this file beside your aria.conf (~/.config/aria-shell/) and
+ * uncomment what you want: it's read after the built-in look and after
+ * the theme [general] style names, so its rules win, and switching
+ * theme from the Themes gadget keeps them. With reload_style = yes a
+ * save shows at once; a broken file is left out (the error is in the
+ * log) and the theme stays.
+ *
+ * The elements are the ones assets/aria.css documents (surface.panel,
+ * gadget.clock, surface.popup, ...), the properties those of
+ * icssed/assets/base.css. A bar is #<id> for its [panel:<id>] section.
+ */
+
+/* The palette, both schemes at once: the accent is the colour of what's
+ * active, chosen, focused. */
+/*
+:root {
+  --accent: #d6336c;
+  --accent-soft: rgba(214, 51, 108, 0.25);
+}
+*/
+
+/* Or one scheme only. */
+/*
+:root.dark {
+  --bg: #101014;
+  --fg: #f0f0f0;
+}
+*/
+
+/* The font, and its sizes (--font-xs to --font-xl). */
+/*
+:root {
+  font-family: "Inter", sans-serif;
+  --font-md: 14px;
+}
+*/
+
+/* Square corners everywhere. */
+/*
+:root {
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+}
+*/
+
+/* A thicker bar, bigger icons: here the [panel:dock] one. */
+/*
+surface.panel#dock {
+  min-height: 48px;
+}
+surface.panel#dock icon {
+  height: 32px;
+}
+*/

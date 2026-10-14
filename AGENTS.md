@@ -130,8 +130,8 @@ never each other's helpers.
 
 Every view is built with the toolkit, `icssed` (icssed/AGENTS.md says
 how): its widgets, styled by one sheet. `ui/theme.rs` compiles it from
-`assets/aria.css` (always) and `[general] style`, over the toolkit's own
-base, for a light or dark scheme (`:root.light` / `:root.dark`
+`assets/aria.css` (always), `[general] style` and the user's
+`theme-override.css` beside the config, over the toolkit's own base, for a light or dark scheme (`:root.light` / `:root.dark`
 variables, `surface.panel.dark { }` rules; the `Themes` gadget switches
 scheme and theme at runtime). Every surface's root is a `surface`, its
 name a class: `surface { }` is all of them, `surface.popup { }` one. Gadgets never hard-code colours, paddings,

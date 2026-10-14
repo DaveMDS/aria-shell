@@ -690,7 +690,10 @@ Two things flow between the daemon and the gadgets besides messages:
   for theme authors, the toolkit's base its widgets' and the
   properties; `[general] style` names a user theme loaded on top
   (`themes/<name>/<name>.css` or `themes/<name>.css` in the config dirs, the XDG data dirs, then
-  `assets/`; or a path). In `view` every widget is an element: its type
+  `assets/`; or a path), and over it, whatever the theme,
+  `theme-override.css` beside the config file: the user's own touches
+  (a dock bigger than the bar, `surface.panel#dock { }`), watched
+  before it exists, left out alone when broken. In `view` every widget is an element: its type
   and classes said on it, its place found by the toolkit under the
   container it's in, from its surface's root (`Theme::root(kind,
   scale)`: `panel`, `popup`, `launcher`, ..., given with `.at(root)`)

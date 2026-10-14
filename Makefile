@@ -39,7 +39,7 @@ install:
 	sed 's|@bindir@|$(BINDIR)|g' assets/systemd/aria-shell.service.in \
 		> $(DESTDIR)$(UNITDIR)/aria-shell.service
 	chmod 644 $(DESTDIR)$(UNITDIR)/aria-shell.service
-	install -Dm644 -t $(DESTDIR)$(DOCDIR) README.md assets/aria.conf
+	install -Dm644 -t $(DESTDIR)$(DOCDIR) README.md assets/aria.conf assets/theme-override.css
 	install -Dm644 -t $(DESTDIR)$(DOCDIR)/compositors assets/compositors/*
 	@if [ -n "$(DESTDIR)" ] || [ -w $(PAMDIR) ]; then \
 		echo "install -Dm644 assets/pam.d/aria-shell $(DESTDIR)$(PAMDIR)/aria-shell"; \

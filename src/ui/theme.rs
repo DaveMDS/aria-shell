@@ -1,7 +1,8 @@
 //! Styling: the toolkit's base stylesheet, then Aria's
 //! (`assets/aria.css`: its own elements, the palette), then the user
-//! theme `[general] style` names, compiled into one `icssed::Sheet` for
-//! one [`Scheme`]. The views build their nodes from a surface's root
+//! theme `[general] style` names, then the user's own touches over any
+//! theme (`theme-override.css` beside the config file), compiled into
+//! one `icssed::Sheet` for one [`Scheme`]. The views build their nodes from a surface's root
 //! ([`Theme::root`]); the toolkit's widgets resolve their styles.
 //!
 //! Loaded once, and again on a scheme or theme switch (the `Themes`
@@ -22,6 +23,10 @@ pub use icssed::Scheme;
 
 /// Aria's own stylesheet, over the toolkit's base, under the user's.
 const BASE: &str = include_str!("../../assets/aria.css");
+
+/// The user's stylesheet over whatever theme is in use, beside the
+/// config file.
+const OVERRIDE: &str = "theme-override.css";
 
 /// What a gadget asks the daemon to change about the theme.
 #[derive(Debug, Clone)]
@@ -64,10 +69,9 @@ impl Theme {
     pub fn load(config: &Config, style: Option<&str>, scheme: Scheme) -> Self {
         Self::try_load(config, style, scheme).unwrap_or_else(|e| {
             log::error!("{}, using the base theme", e.message);
-            Self {
-                files: e.files,
-                ..Self::base(scheme)
-            }
+            let mut base = Self::base(config, scheme);
+            base.files.extend(e.files);
+            base
         })
     }
 
@@ -79,7 +83,7 @@ impl Theme {
         scheme: Scheme,
     ) -> Result<Self, LoadError> {
         let Some(style) = style else {
-            return Ok(Self::base(scheme));
+            return Ok(Self::base(config, scheme));
         };
         let Some(path) = locate(style, config) else {
             return Err(LoadError {
@@ -87,6 +91,7 @@ impl Theme {
                 files: Vec::new(),
             });
         };
+        let over = Override::read(config);
         // A theme's folder is watched too: an image changed reloads it.
         let mut files = vec![path.clone()];
         files.extend(folder_of(&path));
@@ -101,10 +106,13 @@ impl Theme {
             text: &text,
             dir: path.parent(),
         };
-        let sheet = compile(&[base_source(), user], scheme).map_err(|message| LoadError {
-            message,
-            files: files.clone(),
-        })?;
+        let sheet = over
+            .compile(&[base_source(), user], scheme)
+            .map_err(|message| LoadError {
+                message,
+                files: files.clone(),
+            })?;
+        files.extend(over.path);
         Ok(Self {
             sheet,
             files,
@@ -114,8 +122,20 @@ impl Theme {
         })
     }
 
-    /// The base stylesheets alone.
-    fn base(scheme: Scheme) -> Self {
+    /// The base stylesheets alone, the user's override over them.
+    fn base(config: &Config, scheme: Scheme) -> Self {
+        let over = Override::read(config);
+        Self {
+            sheet: over
+                .compile(&[base_source()], scheme)
+                .expect("aria.css is valid"),
+            files: over.path.into_iter().collect(),
+            ..Self::default_for(scheme)
+        }
+    }
+
+    /// The base stylesheets alone, nothing of the user's.
+    fn default_for(scheme: Scheme) -> Self {
         Self {
             sheet: compile(&[base_source()], scheme).expect("aria.css is valid"),
             files: Vec::new(),
@@ -176,7 +196,7 @@ fn config_beside(file: &Path) -> Option<PathBuf> {
 impl Default for Theme {
     /// The base stylesheets alone, light.
     fn default() -> Self {
-        Self::base(Scheme::default())
+        Self::default_for(Scheme::default())
     }
 }
 
@@ -185,6 +205,48 @@ fn base_source() -> Source<'static> {
         name: "aria.css",
         text: BASE,
         dir: None,
+    }
+}
+
+/// The user's override: its path (watched even before it exists) and
+/// its text, when there's a config file to be beside and it's there.
+struct Override {
+    path: Option<PathBuf>,
+    text: Option<String>,
+}
+
+impl Override {
+    fn read(config: &Config) -> Self {
+        let path = config.dir().map(|dir| dir.join(OVERRIDE));
+        let text = path.as_ref().and_then(|p| match fs::read_to_string(p) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => {
+                log::error!("cannot read {}: {e}, skipped", p.display());
+                None
+            }
+        });
+        Self { path, text }
+    }
+
+    /// One sheet from `sources` and the override over them. A syntax
+    /// error in the override drops it alone (logged): the theme stays.
+    fn compile(&self, sources: &[Source], scheme: Scheme) -> Result<Sheet, String> {
+        let (Some(path), Some(text)) = (&self.path, &self.text) else {
+            return compile(sources, scheme);
+        };
+        let name = path.display().to_string();
+        let over = Source {
+            name: &name,
+            text,
+            dir: path.parent(),
+        };
+        let all: Vec<Source> = sources.iter().cloned().chain([over]).collect();
+        compile(&all, scheme).or_else(|e| {
+            let sheet = compile(sources, scheme)?;
+            log::error!("{e}, {OVERRIDE} skipped");
+            Ok(sheet)
+        })
     }
 }
 
@@ -354,6 +416,60 @@ mod tests {
             "themes/ isn't a theme's folder"
         );
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_users_override_goes_over_any_theme() {
+        let dir = std::env::temp_dir().join(format!("aria-override-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let config = Config::parse("").at(&dir.join("aria.conf"));
+        let over = dir.join(OVERRIDE);
+        let theme = dir.join("mine.css");
+        fs::write(&theme, "surface.panel { font-size: 40px; }").unwrap();
+        let size = |t: &Theme| t.root("panel", 1.0).base().font_size;
+        // Watched before it exists: creating it reloads.
+        let t = Theme::load(&config, None, Scheme::Light);
+        assert_eq!(t.files(), std::slice::from_ref(&over));
+        fs::write(&over, "surface.panel { font-size: 50px; }").unwrap();
+        let t = Theme::load(&config, None, Scheme::Light);
+        assert_eq!(size(&t), 50.0, "over the base");
+        let t = Theme::load(&config, Some("mine.css"), Scheme::Light);
+        assert_eq!(size(&t), 50.0, "over a theme");
+        assert!(t.files().contains(&over));
+        // Broken, it's left out alone: the theme stays.
+        fs::write(&over, "surface.panel { font-size: 50px;").unwrap();
+        let t = Theme::try_load(&config, Some("mine.css"), Scheme::Light).expect("the theme");
+        assert_eq!(size(&t), 40.0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_override_example_holds_uncommented() {
+        // Its rules are each in a comment of their own, `/*` and `*/`
+        // alone on their lines; its explanations aren't.
+        let text = include_str!("../../assets/theme-override.css");
+        let lines: Vec<&str> = text.lines().collect();
+        let open = lines
+            .iter()
+            .enumerate()
+            .filter(|(i, line)| match **line {
+                "*/" => false,
+                "/*" => lines.get(i + 1).is_some_and(|next| next.starts_with(" *")),
+                _ => true,
+            })
+            .map(|(_, line)| *line)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(open.contains("--accent: #d6336c"), "uncommented");
+        for scheme in [Scheme::Light, Scheme::Dark] {
+            let over = Source {
+                name: OVERRIDE,
+                text: &open,
+                dir: None,
+            };
+            let (_, warnings) = Sheet::load(&[base_source(), over], scheme).expect("it parses");
+            assert!(warnings.is_empty(), "{OVERRIDE}: {warnings:?}");
+        }
     }
 
     #[test]

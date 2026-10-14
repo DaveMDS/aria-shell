@@ -98,6 +98,13 @@ impl Config {
         self
     }
 
+    /// As if read from `path` (tests).
+    #[cfg(test)]
+    pub fn at(mut self, path: &Path) -> Self {
+        self.path = Some(path.to_path_buf());
+        self
+    }
+
     /// Parse from an in-memory string (tests).
     #[cfg(test)]
     pub fn parse(text: &str) -> Self {

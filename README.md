@@ -287,6 +287,10 @@ properties; a user theme (`[general] style`) is loaded on top, with
 light and dark colour schemes. Themes are found in
 `~/.config/aria-shell/themes/`, the XDG data dirs and `assets/themes/`:
 a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.
+Over any theme, `theme-override.css` beside `aria.conf` holds your own touches
+(`assets/theme-override.css` is an example to start from):
+`surface.panel#dock { min-height: 48px; }` makes the `[panel:dock]` bar thicker
+whatever theme is in use.
 
 - ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:disabled`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
@@ -296,6 +300,8 @@ a `<name>.css`, or a folder `<name>/` with its `<name>.css` and its images.
 - ✅ Every surface a `surface`, its name a class: `surface { border: ... }` frames
   every window at once, `surface.popup { }` one
 - ✅ Hot reload while editing (a broken file keeps the running theme)
+- ✅ Your own touches over any theme: `theme-override.css` beside `aria.conf`
+  (a broken one is left out, the theme kept)
 - ✅ A theme as a folder (`themes/<name>/<name>.css`), its images beside it: an image
   changed reloads it too
 - ✅ A theme's own config (`<name>.conf` beside its `.css`), read over yours when

@@ -70,7 +70,14 @@ i=0
 while [ "$(surfaces | tr ';' '\n' | grep -c '^ *screenshot ')" -lt 2 ] && [ $i -lt 60 ]; do
     sleep 0.05; i=$((i + 1))
 done
+# The pointer on it first, as a hand would: the picker sees it come.
+pointer 960 540
+settle
 drag 100 100 500 400
+i=0
+while ! aria debug screenshot | grep -q "selection=100,100 400x300" && [ $i -lt 60 ]; do
+    sleep 0.05; i=$((i + 1))
+done
 assert_contains "$(aria debug screenshot)" "selection=100,100 400x300" "the picker's selection"
 key Escape
 assert_no_surface screenshot

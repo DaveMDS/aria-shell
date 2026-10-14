@@ -199,6 +199,9 @@ pub struct Computed {
     pub fill: Color,
     pub stroke: Color,
     pub stroke_width: f32,
+    /// `-debug: box`: its margin, border, padding and content painted
+    /// over it, for a theme's work.
+    pub debug_box: bool,
     /// The family picked from `font_family`, with the weight and style.
     pub font: Font,
     /// `line-height`, in logical px: whole device pixels.
@@ -269,6 +272,7 @@ impl Computed {
             fill: Color::BLACK,
             stroke: Color::TRANSPARENT,
             stroke_width: 1.0,
+            debug_box: false,
             font: Font::DEFAULT,
             line_height_px: 0.0,
             ascent: 0.0,
@@ -448,6 +452,7 @@ impl<'p> Cascade<'p> {
             Decl::Fill(v) => self.fill = *v,
             Decl::Stroke(v) => self.stroke = *v,
             Decl::StrokeWidth(v) => out.stroke_width = *v,
+            Decl::Debug(v) => out.debug_box = *v,
             Decl::Wide(prop, wide) => {
                 let inherit = match wide {
                     Wide::Inherit => true,
@@ -720,5 +725,6 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::Fill => to.fill = from.fill,
         Prop::Stroke => to.stroke = from.stroke,
         Prop::StrokeWidth => to.stroke_width = from.stroke_width,
+        Prop::Debug => to.debug_box = from.debug_box,
     }
 }

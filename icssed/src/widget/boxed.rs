@@ -18,12 +18,12 @@ use iced::advanced::Renderer as _;
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::Focusable;
 use iced::advanced::{Shell, mouse};
-use iced::{Length, Rectangle, Size, Transformation};
+use iced::{Length, Rectangle, Size, Transformation, Vector};
 
 use super::place::Place;
 use crate::anim::Animated;
-use crate::layout::{length, snap};
-use crate::paint::{draw_box, draw_outline, fade};
+use crate::layout::{content_box, length, snap};
+use crate::paint::{draw_box, draw_debug, draw_outline, fade};
 use crate::style::{Ancestors, Computed, Node, States};
 use crate::{Renderer, Theme};
 
@@ -104,6 +104,21 @@ pub(crate) fn frame(s: &Computed, scale: f32) -> Size {
     )
 }
 
+/// Its margin, border, padding and content boxes, from its margin box
+/// `bounds`: what `debug: box` paints.
+fn debug_boxes(bounds: Rectangle, s: &Computed, scale: f32) -> [Rectangle; 4] {
+    let border = border_box(bounds, s, scale);
+    let b = s.border_width;
+    let padding = Rectangle {
+        x: border.x + b.left,
+        y: border.y + b.top,
+        width: (border.width - b.left - b.right).max(0.0),
+        height: (border.height - b.top - b.bottom).max(0.0),
+    };
+    let content = content_box(bounds.size(), s, scale) + Vector::new(bounds.x, bounds.y);
+    [bounds, border, padding, content]
+}
+
 /// The corners of its content box, inside its border box `bounds`: its
 /// own radii less the border and the padding beside them, as CSS
 /// rounds a content box (a picture drawn there).
@@ -136,6 +151,7 @@ pub(crate) fn bare(s: &Computed) -> bool {
         && s.background_image.is_none()
         && s.border_image.is_none()
         && s.transform.is_none()
+        && !s.debug_box
 }
 
 impl<'a> Boxed<'a> {
@@ -202,7 +218,8 @@ impl<'a> Boxed<'a> {
     /// box, then `content` (its children, given the theme and the text
     /// style they're drawn with, the pointer where they are, and the
     /// box's style as drawn: its states, its transitions), then its
-    /// outline. Its transform moves all of it.
+    /// outline, and its boxes if `debug: box`. Its transform moves all
+    /// of it.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
@@ -218,12 +235,14 @@ impl<'a> Boxed<'a> {
         let resolved = node.resolve(state.states, &theme.ancestors);
         let moving = state.animated.style(&resolved, theme);
         let s = moving.as_ref().unwrap_or(&resolved);
+        let margin_box = bounds;
         let bounds = border_box(bounds, s, node.scale());
         let transformation = s.transformation(bounds);
         state.drawn.set(transformation);
         let cursor = state.local(cursor);
         let paint = |renderer: &mut Renderer| {
             let opacity = theme.opacity * s.opacity;
+            let before = theme.debugged.replace(false);
             draw_box(renderer, s, bounds, viewport, opacity, |renderer| {
                 // What its children get: its states, where a descendant's
                 // style can see them or inherits what they change (a
@@ -231,7 +250,7 @@ impl<'a> Boxed<'a> {
                 let seen = state.states & node.sensitivity().any();
                 let since = state.animated.since;
                 let derived;
-                let theme = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity
+                let inner = if !seen.is_empty() || theme.changed < since || opacity != theme.opacity
                 {
                     derived = theme.under(node.depth(), seen, since).with_opacity(opacity);
                     &derived
@@ -241,8 +260,15 @@ impl<'a> Boxed<'a> {
                 let style = renderer::Style {
                     text_color: fade(s.color, opacity),
                 };
-                content(renderer, theme, &style, cursor, s);
+                content(renderer, inner, &style, cursor, s);
                 draw_outline(renderer, s, bounds, opacity);
+                // The innermost shows its boxes, as an inspector does
+                // (`* :hover` matches every ancestor too).
+                let below = inner.debugged.get();
+                if s.debug_box && !below {
+                    draw_debug(renderer, debug_boxes(margin_box, s, node.scale()));
+                }
+                theme.debugged.set(before || below || s.debug_box);
             });
         };
         match transformation {

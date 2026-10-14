@@ -205,6 +205,10 @@ surface closes.
   differs. Variables live in `:root`, `:root.light`, `:root.dark` only.
   A syntax error rejects a file; anything else is a warning with its
   `file:line:col`, and is skipped.
+- **`-debug: box` shows an element's boxes** (margin, border, padding,
+  content, in an inspector's colours), the innermost only:
+  `*:hover { -debug: box; }` in a sheet that reloads is an inspector
+  under the pointer. A text shows its content box, but never hovers.
 - **The toolkit's base is the user-agent origin**: any app or theme rule
   beats it, whatever the specificity.
 - **Element types are global, as in CSS.** An app's own `track`, `fill`,

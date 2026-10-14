@@ -482,6 +482,17 @@ fn outlines_snap_and_default_to_currentcolor() {
 }
 
 #[test]
+fn debug_is_ours_and_not_inherited() {
+    let (sheet, warnings) =
+        load("a { -debug: box; } a > b { } c { -debug: none; } d { -debug: all; }");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(style(&sheet, "t > a").debug_box);
+    assert!(!style(&sheet, "t > a > b").debug_box);
+    assert!(!style(&sheet, "t > c").debug_box);
+    assert!(!style(&sheet, "t > d").debug_box);
+}
+
+#[test]
 fn transforms_compose_as_css_does() {
     let (sheet, warnings) = load(
         "a { transform: translate(4px, 6px) scale(2); } \

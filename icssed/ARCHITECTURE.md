@@ -240,7 +240,11 @@ subtree, from the parent:
 - the **states of the ancestors** a descendant may depend on (depth,
   states), pushed by a stateful box only while it isn't at rest;
 - the last instant an ancestor's states **changed**, which a
-  descendant's transition starts from (see Animation).
+  descendant's transition starts from (see Animation);
+- and one thing the other way, from the children back up: whether one
+  of them painted `-debug: box`, a `Cell` a box clears before drawing
+  them and reads after, so that only the innermost shows its boxes
+  (`* :hover` matches every hovered ancestor too).
 
 A parent hands its children a modified copy only when something
 changes (a hovered item, a faded box, a box changed later than its

@@ -393,6 +393,39 @@ fn icons_and_images_are_boxes() {
 }
 
 #[test]
+fn debug_shows_the_innermost_boxes() {
+    // An outer box with a 4 px padding around an inner one, 3 px padding
+    // around its 4 px content: 18 px, beside 6 px of nothing.
+    let draw = |css: &str| {
+        let sheet = sheet(&format!(
+            "row {{ gap: 0; }} row.outer {{ padding: 4px; }} \
+             row.inner {{ padding: 3px; width: 10px; height: 10px; }} {css}"
+        ));
+        let root = sheet.root("root", 1.0);
+        let mut ui = Harness::<Message>::new(
+            crate::row![crate::row![crate::row![].class("inner")].class("outer")].at(root),
+            Size::new(24.0, 18.0),
+            1.0,
+        );
+        ui.frame(Instant::now());
+        let pixels = ui.pixels(Color::WHITE);
+        [1, 5, 9, 21].map(|x| pixels.at(x, 9))
+    };
+    let green = |[r, g, b, _]: [u8; 4]| g > r && g > b;
+    let blue = |[r, g, b, _]: [u8; 4]| b > r && b > g;
+    let white = [255, 255, 255, 255];
+    // Alone, the outer one: its padding green, its content blue.
+    let [padding, content, _, outside] = draw("row.outer { -debug: box; }");
+    assert!(green(padding) && blue(content), "{padding:?} {content:?}");
+    assert_eq!(outside, white);
+    // Both: the inner one only, as an inspector shows one element (`*
+    // :hover` matches its ancestors too).
+    let [outer, padding, content, _] = draw("row.outer, row.inner { -debug: box; }");
+    assert_eq!(outer, white);
+    assert!(green(padding) && blue(content), "{padding:?} {content:?}");
+}
+
+#[test]
 fn a_new_widget_asks_for_its_entry_animations_frames() {
     // Its animation is known at its first draw, after the frame's
     // `update`: that frame still asks for the next, and the next goes on.

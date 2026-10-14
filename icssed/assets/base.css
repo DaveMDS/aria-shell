@@ -133,6 +133,14 @@
  *                          stroke's none
  *   stroke-width*          <length>: a path's line, snapped to whole
  *                          device pixels
+ *   -debug                 none | box: ours, for a theme's work: its
+ *                          margin, border, padding and content painted
+ *                          over it in an inspector's colours (orange,
+ *                          yellow, green, blue), live as the sheet
+ *                          reloads. Only the innermost shows them, as
+ *                          an inspector does: `* :hover` shows the
+ *                          element under the pointer, not its ancestors,
+ *                          hovered too. A text has its content box only
  *   transition             [<property> | all | none] || <time> || <easing>
  *                          || <time>, comma-separated (the first time the
  *                          duration, the second the delay);

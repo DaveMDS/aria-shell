@@ -19,7 +19,7 @@ use iced::{Event, Length, Pixels, Point, Rectangle, Size};
 use super::place::{Place, placed};
 use crate::anim::Animated;
 use crate::layout::{snap, snap_up};
-use crate::paint::fade;
+use crate::paint::{draw_debug, fade};
 use crate::query::Reported;
 use crate::style::{
     Computed, EdgeOver, EdgeUnder, Name, Node, Size as Len, States, TextAlign, TextOverflow,
@@ -332,6 +332,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
         let s = moving.as_ref().unwrap_or(&resolved);
         let color = fade(s.color, theme.opacity * s.opacity);
         let bounds = layout.bounds();
+        if s.debug_box {
+            // No box of its own: its content alone.
+            draw_debug(renderer, [bounds; 4]);
+            theme.debugged.set(true);
+        }
         let scale = self.node().scale();
         // The first baseline on a whole device pixel.
         let mut y = bounds.y - state.trim.0;

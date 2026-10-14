@@ -367,6 +367,33 @@ pub(crate) fn draw_outline(renderer: &mut Renderer, s: &Computed, bounds: Rectan
     );
 }
 
+/// What `-debug: box` paints over an element: its margin box, border
+/// box, padding box and content box (`boxes`, each inside the one
+/// before), each ring in the colour browsers' inspectors give it.
+pub(crate) fn draw_debug(renderer: &mut Renderer, boxes: [Rectangle; 4]) {
+    const COLORS: [Color; 4] = [
+        Color::from_rgba8(246, 178, 107, 0.66),
+        Color::from_rgba8(255, 229, 153, 0.66),
+        Color::from_rgba8(147, 196, 125, 0.55),
+        Color::from_rgba8(111, 168, 220, 0.66),
+    ];
+    for (i, color) in COLORS.into_iter().enumerate().take(3) {
+        let (outer, inner) = (boxes[i], boxes[i + 1]);
+        let widths = [
+            inner.y - outer.y,
+            outer.x + outer.width - inner.x - inner.width,
+            outer.y + outer.height - inner.y - inner.height,
+            inner.x - outer.x,
+        ];
+        for side in sides(outer, widths.map(|w| w.max(0.0))) {
+            if side.width > 0.0 && side.height > 0.0 {
+                fill(renderer, side, color);
+            }
+        }
+    }
+    fill(renderer, boxes[3], COLORS[3]);
+}
+
 /// The four sides of a square border, top and bottom whole.
 fn sides(b: Rectangle, [top, right, bottom, left]: [f32; 4]) -> [Rectangle; 4] {
     let middle = (b.height - top - bottom).max(0.0);

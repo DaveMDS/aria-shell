@@ -525,6 +525,7 @@ pub(crate) enum Prop {
     Fill,
     Stroke,
     StrokeWidth,
+    Debug,
 }
 
 impl Prop {
@@ -628,6 +629,8 @@ pub(crate) enum Decl {
     Fill(ColorValue),
     Stroke(ColorValue),
     StrokeWidth(f32),
+    /// `box`: its margin, border, padding and content painted over it.
+    Debug(bool),
     Wide(Prop, Wide),
 }
 
@@ -742,6 +745,7 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "fill" => vec![Prop::Fill],
         "stroke" => vec![Prop::Stroke],
         "stroke-width" => vec![Prop::StrokeWidth],
+        "-debug" => vec![Prop::Debug],
         _ => {
             // margin-top, padding-left, border-bottom, border-left-width, ...
             let (head, rest) = name.split_once('-')?;
@@ -954,6 +958,11 @@ fn value_of(
         "fill" => vec![Decl::Fill(paint(p)?)],
         "stroke" => vec![Decl::Stroke(paint(p)?)],
         "stroke-width" => vec![Decl::StrokeWidth(non_negative(p)?)],
+        "-debug" => vec![Decl::Debug(keyword(
+            p,
+            "a debug view",
+            &[("none", false), ("box", true)],
+        )?)],
         "background-size" => vec![Decl::BackgroundSize(background_size(p)?)],
         "background-position" => {
             let (x, y) = transform_origin(p)?;

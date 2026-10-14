@@ -3,6 +3,7 @@
 //! draw-time context"); and the `Catalog`s of the stock widgets the
 //! toolkit embeds, which read their styles from the sheet through it.
 
+use std::cell::Cell;
 use std::time::Instant;
 
 use iced::border::Radius;
@@ -21,6 +22,9 @@ pub struct Theme {
     pub ancestors: Ancestors,
     /// The last instant an ancestor's states changed.
     pub changed: Option<Instant>,
+    /// Whether an element drawn so far with it painted `-debug: box`:
+    /// a box's children tell it so, and it paints none of its own.
+    pub(crate) debugged: Cell<bool>,
     /// What iced clears a window with.
     background: Color,
     /// iced's default text colour.
@@ -33,6 +37,7 @@ impl Default for Theme {
             opacity: 1.0,
             ancestors: Ancestors::default(),
             changed: None,
+            debugged: Cell::new(false),
             background: Color::TRANSPARENT,
             text: Color::BLACK,
         }

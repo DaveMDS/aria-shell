@@ -122,7 +122,8 @@ surface.launcher > actions {
   gap: 4px;
 }
 surface.launcher > actions > button {
-  padding: 6px;
+  min-width: 40px;
+  min-height: 40px;
   color: var(--muted);
 }
 surface.launcher > actions > button:hover {
@@ -229,7 +230,7 @@ surface.exiter > row {
 }
 surface.exiter > row > button {
   width: 112px;
-  padding: 12px 8px;
+  min-height: 96px;
   gap: 8px;
   flex-direction: column;
   border-radius: var(--radius-xl);

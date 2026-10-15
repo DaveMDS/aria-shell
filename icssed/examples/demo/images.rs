@@ -11,10 +11,13 @@
 //!
 //! A box's `background` takes `url()`, found from its sheet's directory:
 //! tiled (`background-repeat`), placed (`background-position`), sized
-//! (`background-size: cover | contain | <length>`). `border-image` draws a
-//! 9-patch in place of the border, its middle with `fill`: a frame that
-//! keeps its corners at any size. The three boxes below are rows with a
-//! label, all of it in `images.css`.
+//! (`background-size: cover | contain | <length-percentage>`), in
+//! layers (each longhand a list, the first layer on top).
+//! `border-image` draws a 9-patch in place of the border, its middle
+//! with `fill`: a frame that keeps its corners at any size;
+//! `-background-slice` (not CSS) cuts a layer in nine the same way,
+//! its middle drawn with `fill` too. The four boxes below are rows
+//! with a label, all of it in `images.css`.
 
 use icssed::{Element, column, image, row, text};
 
@@ -47,6 +50,7 @@ pub fn view<'a>(_state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             boxed("tiled", "Tiled"),
             boxed("framed", "A 9-patch"),
             boxed("scenery", "Cover"),
+            boxed("layered", "Layers"),
         ]
         .kind("line"),
     ]

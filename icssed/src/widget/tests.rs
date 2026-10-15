@@ -392,44 +392,129 @@ fn icons_and_images_are_boxes() {
     assert_eq!(pixels.at(27, 3), blue);
 }
 
+const GREEN: [u8; 4] = [0, 255, 0, 255];
+const RED: [u8; 4] = [255, 0, 0, 255];
+const BLUE: [u8; 4] = [0, 0, 255, 255];
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+
+/// The test's pictures, in a directory of their own: `green.png` (4x2),
+/// `red.png` (2x2), and `ring.png` (12x12: red, its middle 4..8 green).
+fn pictures() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("icssed-{}-backgrounds", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temporary directory");
+    let save = |name: &str, image: ::image::RgbaImage| {
+        image.save(dir.join(name)).expect("the png written");
+    };
+    save(
+        "green.png",
+        ::image::RgbaImage::from_pixel(4, 2, ::image::Rgba(GREEN)),
+    );
+    save(
+        "red.png",
+        ::image::RgbaImage::from_pixel(2, 2, ::image::Rgba(RED)),
+    );
+    save(
+        "ring.png",
+        ::image::RgbaImage::from_fn(12, 12, |x, y| {
+            let middle = (4..8).contains(&x) && (4..8).contains(&y);
+            ::image::Rgba(if middle { GREEN } else { RED })
+        }),
+    );
+    dir
+}
+
+/// A `cell`, styled by `css` with the test's pictures, drawn alone in
+/// `size`.
+fn cell_drawn(css: &str, size: Size) -> crate::testing::Pixels {
+    let dir = pictures();
+    let css = format!("surface {{ background: none; }} {css}");
+    let (sheet, warnings) = Sheet::load(
+        &[Source {
+            name: "t.css",
+            text: &css,
+            dir: Some(&dir),
+        }],
+        Scheme::Light,
+    )
+    .expect("loads");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let root = sheet.root("root", 1.0);
+    let mut ui =
+        Harness::<Message>::new(crate::row![crate::row([]).kind("cell")].at(root), size, 1.0);
+    ui.frame(Instant::now());
+    ui.pixels(Color::WHITE)
+}
+
 #[test]
 fn a_background_sized_in_percentages_follows_its_box() {
     // A 4x2 image: `auto 100%` as tall as the box, tiled across it;
     // `50% 50%` a quarter of it, tiled across the top half only.
-    let dir = std::env::temp_dir().join(format!("icssed-{}-background", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a temporary directory");
-    ::image::RgbaImage::from_pixel(4, 2, ::image::Rgba([0, 255, 0, 255]))
-        .save(dir.join("green.png"))
-        .expect("the png written");
-    let (green, white) = ([0, 255, 0, 255], [255, 255, 255, 255]);
-    for (size, low) in [("auto 100%", green), ("50% 50%", white)] {
-        let css = format!(
-            "surface {{ background: none; }} \
-             cell {{ width: 100px; height: 40px; background: url(green.png) repeat-x; \
-                     background-size: {size}; }}"
-        );
-        let (sheet, warnings) = Sheet::load(
-            &[Source {
-                name: "t.css",
-                text: &css,
-                dir: Some(&dir),
-            }],
-            Scheme::Light,
-        )
-        .expect("loads");
-        assert!(warnings.is_empty(), "{warnings:?}");
-        let root = sheet.root("root", 1.0);
-        let mut ui = Harness::<Message>::new(
-            crate::row![crate::row([]).kind("cell")].at(root),
+    for (size, low) in [("auto 100%", GREEN), ("50% 50%", WHITE)] {
+        let pixels = cell_drawn(
+            &format!(
+                "cell {{ width: 100px; height: 40px; background: url(green.png) repeat-x; \
+                         background-size: {size}; }}"
+            ),
             Size::new(100.0, 40.0),
-            1.0,
         );
-        ui.frame(Instant::now());
-        let pixels = ui.pixels(Color::WHITE);
         assert_eq!(
             [(10, 5), (95, 5), (10, 35), (95, 35)].map(|(x, y)| pixels.at(x, y)),
-            [green, green, low, low],
+            [GREEN, GREEN, low, low],
             "{size}"
+        );
+    }
+}
+
+#[test]
+fn background_layers_stack_the_first_on_top() {
+    // Green over the left half only, red under it all, the colour under
+    // both.
+    let pixels = cell_drawn(
+        "cell { width: 40px; height: 20px; \
+                background: url(green.png) no-repeat, url(red.png) blue; \
+                background-size: 50% 100%, 100% 100%; }",
+        Size::new(40.0, 20.0),
+    );
+    assert_eq!([pixels.at(10, 10), pixels.at(30, 10)], [GREEN, RED]);
+}
+
+#[test]
+fn a_sliced_layer_keeps_its_corners_and_fills_its_middle_with_fill() {
+    // The ring cut 4 px in, over 24x24 (its edges and middle stretched
+    // four times, on tiny-skia's grid): its red border 4 px wide all
+    // round, its middle green with `fill`, else the colour under it.
+    for (slice, middle) in [("4 fill", GREEN), ("4", BLUE)] {
+        let pixels = cell_drawn(
+            &format!(
+                "cell {{ width: 24px; height: 24px; background: url(ring.png) no-repeat, blue; \
+                         background-size: 100% 100%; -background-slice: {slice}; }}"
+            ),
+            Size::new(24.0, 24.0),
+        );
+        assert_eq!(
+            [(1, 1), (22, 22), (22, 12), (12, 22), (12, 12), (5, 5)].map(|(x, y)| pixels.at(x, y)),
+            [RED, RED, RED, RED, middle, middle],
+            "{slice}"
+        );
+    }
+}
+
+#[test]
+fn background_origin_places_a_layer_in_the_padding_or_the_border_box() {
+    // A transparent 4 px border, the 4x2 picture at its own size in the
+    // top left corner of the padding box, or of the border box.
+    for (origin, corner, inside) in [("padding-box", WHITE, GREEN), ("border-box", GREEN, WHITE)] {
+        let pixels = cell_drawn(
+            &format!(
+                "cell {{ width: 40px; height: 20px; border: 4px solid transparent; \
+                         background: url(green.png) no-repeat; background-origin: {origin}; }}"
+            ),
+            Size::new(40.0, 20.0),
+        );
+        assert_eq!(
+            [pixels.at(1, 1), pixels.at(5, 5)],
+            [corner, inside],
+            "{origin}"
         );
     }
 }

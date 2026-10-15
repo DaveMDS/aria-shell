@@ -440,8 +440,13 @@ root node's, and what was measured is what the window lays out.
   image rotates (its own `rotation`), which is what a spinner needs.
 - **Background images and 9-patches**: CSS's `background-image` and
   `border-image`, the image sliced at load (iced draws whole images:
-  no source rectangle), the slices drawn stretched; a background image
-  drawn in a layer that clips it to the border box. What the box draws
+  no source rectangle), the slices drawn stretched. A background has
+  layers, as in CSS: its longhands are lists, matched up once when the
+  style is computed (`Computed::backgrounds`, each layer cut in nine
+  there when `-background-slice` says, the cut kept with the picture);
+  not CSS, that slice: e17-style themes stack a gradient and a bevel on
+  one box, which CSS can only do with a border. The layers are drawn
+  in one layer that clips them to the border box. What the box draws
   after it (its border, its children, its outline) goes in a layer of
   its own made after that one, clipped to the viewport: wgpu draws a
   layer over everything in the layer around it, so in that one it
@@ -678,7 +683,9 @@ for overlays at every event and every frame.
   icons over a background image vanished. The layer over a background
   image starts with a transparent quad, which keeps the two apart
   (`paint.rs`, TEMPORARY: one quad per such box, until iced draws them
-  in order: iced-rs/iced#3512).
+  in order: iced-rs/iced#3512). Among a box's background layers, drawn
+  in one layer, an svg one goes under every raster one, wherever it is
+  in the list.
 - No accessibility.
 - No damage tracking: a frame redraws its whole surface.
 - Layout runs on every rebuild of a surface's tree, changed or not.

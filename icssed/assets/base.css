@@ -73,20 +73,31 @@
  *   flex-direction         row | column; a box's own when not set
  *   align-items            stretch | start | center | end
  *   justify-content        start | center | end
- *   background             <color> || url() || <repeat>, or none;
- *                          background-color, and:
+ *   background             layers of url() || <repeat>, the last one with
+ *                          a <color> too; or none; background-color, and
+ *                          the layers' longhands below, each a list (one
+ *                          value per layer, a short list repeated, as in
+ *                          CSS). The first layer on top:
  *   background-image       none | url(): png, jpeg, webp or svg, found
  *                          from its sheet's directory. Placed in the
- *                          padding box, clipped to the border box and its
- *                          corners
+ *                          background-origin's box, clipped to the border
+ *                          box and its corners
  *   background-size        auto (a pixel of the image a px) | cover |
  *                          contain | [<length-percentage> | auto]{1,2}
- *                          (a percentage of the padding box)
+ *                          (a percentage of the origin's box)
  *   background-position    left | center | right, top | center | bottom,
  *                          or <length-percentage>s (of the room the image
  *                          leaves: 100% puts its end at the area's); the
  *                          top left if not set
  *   background-repeat      repeat | no-repeat | repeat-x | repeat-y
+ *   background-origin      padding-box | border-box (no content-box)
+ *   -background-slice      none | <number>{1,4} && fill?, not CSS: a
+ *                          layer's image cut in nine as border-image-slice
+ *                          cuts it (the slices in image pixels: top,
+ *                          right, bottom, left), each tile drawn with its
+ *                          corners at their own size (less where two
+ *                          don't fit), its edges stretched, its middle
+ *                          too with `fill`. Raster images only
  *   border-image           url() || <number>{1,4} [fill];
  *                          border-image-source, -slice: a 9-patch drawn in
  *                          place of the border, at its widths, stretched

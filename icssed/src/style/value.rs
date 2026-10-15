@@ -326,6 +326,18 @@ pub enum BackgroundSize {
     Length(Option<LengthPercentage>, Option<LengthPercentage>),
 }
 
+/// `background-origin`: the box a background layer is placed and sized
+/// in (no `content-box`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundOrigin {
+    PaddingBox,
+    BorderBox,
+}
+
+/// `-background-slice`, one layer's: its image cut in nine (top, right,
+/// bottom, left, in image pixels), the middle drawn with `fill`.
+pub type Slice = Option<([f32; 4], bool)>;
+
 /// `background-repeat`: whether the image tiles across, down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Repeat {
@@ -507,6 +519,8 @@ pub(crate) enum Prop {
     BackgroundSize,
     BackgroundPosition,
     BackgroundRepeat,
+    BackgroundOrigin,
+    BackgroundSlice,
     BorderImageSource,
     BorderImageSlice,
     ObjectFit,
@@ -600,10 +614,13 @@ pub(crate) enum Decl {
     OutlineOffset(f32),
     Transform(Option<Transform>),
     TransformOrigin(LengthPercentage, LengthPercentage),
-    BackgroundImage(Option<Picture>),
-    BackgroundSize(BackgroundSize),
-    BackgroundPosition(LengthPercentage, LengthPercentage),
-    BackgroundRepeat(Repeat),
+    /// The background's layers, one value each, the first on top.
+    BackgroundImage(Arc<[Option<Picture>]>),
+    BackgroundSize(Arc<[BackgroundSize]>),
+    BackgroundPosition(Arc<[(LengthPercentage, LengthPercentage)]>),
+    BackgroundRepeat(Arc<[Repeat]>),
+    BackgroundOrigin(Arc<[BackgroundOrigin]>),
+    BackgroundSlice(Arc<[Slice]>),
     BorderImageSource(Option<Picture>),
     /// Top, right, bottom, left, in image pixels; `fill` keeps the middle.
     BorderImageSlice([f32; 4], bool),
@@ -683,12 +700,16 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
             Prop::BackgroundSize,
             Prop::BackgroundPosition,
             Prop::BackgroundRepeat,
+            Prop::BackgroundOrigin,
+            Prop::BackgroundSlice,
         ],
         "background-color" => vec![Prop::Background],
         "background-image" => vec![Prop::BackgroundImage],
         "background-size" => vec![Prop::BackgroundSize],
         "background-position" => vec![Prop::BackgroundPosition],
         "background-repeat" => vec![Prop::BackgroundRepeat],
+        "background-origin" => vec![Prop::BackgroundOrigin],
+        "-background-slice" => vec![Prop::BackgroundSlice],
         "border-image" => vec![Prop::BorderImageSource, Prop::BorderImageSlice],
         "border-image-source" => vec![Prop::BorderImageSource],
         "border-image-slice" => vec![Prop::BorderImageSlice],
@@ -923,38 +944,53 @@ fn value_of(
             ],
         )?)],
         "background" => {
-            // `<color> || <image> || <repeat>`: what's left out is its
-            // initial value, as a CSS shorthand has it.
-            let (mut color, mut image, mut repeat) = (None, None, None);
-            for _ in 0..3 {
-                if image.is_none()
-                    && let Ok(i) = p.try_parse(|p| url(p, assets))
-                {
-                    image = Some(i);
-                } else if color.is_none()
-                    && let Ok(c) = p.try_parse(color_value)
-                {
-                    color = Some(c);
-                } else if repeat.is_none()
-                    && let Ok(r) = p.try_parse(background_repeat)
-                {
-                    repeat = Some(r);
-                } else {
-                    break;
+            // Layers of `<image> || <repeat>`, the last one with a
+            // `<color>` too: what's left out is its initial value, as a
+            // CSS shorthand has it.
+            let mut color = None;
+            let layers = p.parse_comma_separated(|p| {
+                let (mut image, mut repeat) = (None, None);
+                for _ in 0..3 {
+                    if image.is_none()
+                        && let Ok(i) = p.try_parse(|p| url(p, assets))
+                    {
+                        image = Some(i);
+                    } else if color.is_none()
+                        && let Ok(c) = p.try_parse(color_value)
+                    {
+                        color = Some(c);
+                    } else if repeat.is_none()
+                        && let Ok(r) = p.try_parse(background_repeat)
+                    {
+                        repeat = Some(r);
+                    } else {
+                        break;
+                    }
                 }
-            }
-            if color.is_none() && image.is_none() && repeat.is_none() {
-                color_value(p)?;
-            }
+                if color.is_none() && image.is_none() && repeat.is_none() {
+                    color_value(p)?;
+                }
+                Ok((
+                    image.flatten(),
+                    repeat.unwrap_or(Repeat { x: true, y: true }),
+                ))
+            })?;
             vec![
                 Decl::Background(color.unwrap_or(ColorValue::Rgba(Color::TRANSPARENT))),
-                Decl::BackgroundImage(image.flatten()),
-                Decl::BackgroundSize(BackgroundSize::Auto),
-                Decl::BackgroundPosition(LengthPercentage::ZERO, LengthPercentage::ZERO),
-                Decl::BackgroundRepeat(repeat.unwrap_or(Repeat { x: true, y: true })),
+                Decl::BackgroundImage(layers.iter().map(|(image, _)| image.clone()).collect()),
+                Decl::BackgroundSize(Arc::from([BackgroundSize::Auto])),
+                Decl::BackgroundPosition(Arc::from([(
+                    LengthPercentage::ZERO,
+                    LengthPercentage::ZERO,
+                )])),
+                Decl::BackgroundRepeat(layers.iter().map(|(_, repeat)| *repeat).collect()),
+                Decl::BackgroundOrigin(Arc::from([BackgroundOrigin::PaddingBox])),
+                Decl::BackgroundSlice(Arc::from([None])),
             ]
         }
-        "background-image" => vec![Decl::BackgroundImage(url(p, assets)?)],
+        "background-image" => vec![Decl::BackgroundImage(
+            p.parse_comma_separated(|p| url(p, assets))?.into(),
+        )],
         "content" => vec![Decl::Content(content(p)?)],
         "fill" => vec![Decl::Fill(paint(p)?)],
         "stroke" => vec![Decl::Stroke(paint(p)?)],
@@ -964,12 +1000,31 @@ fn value_of(
             "a debug view",
             &[("none", false), ("box", true)],
         )?)],
-        "background-size" => vec![Decl::BackgroundSize(background_size(p)?)],
-        "background-position" => {
-            let (x, y) = transform_origin(p)?;
-            vec![Decl::BackgroundPosition(x, y)]
-        }
-        "background-repeat" => vec![Decl::BackgroundRepeat(background_repeat(p)?)],
+        "background-size" => vec![Decl::BackgroundSize(
+            p.parse_comma_separated(background_size)?.into(),
+        )],
+        "background-position" => vec![Decl::BackgroundPosition(
+            p.parse_comma_separated(transform_origin)?.into(),
+        )],
+        "background-repeat" => vec![Decl::BackgroundRepeat(
+            p.parse_comma_separated(background_repeat)?.into(),
+        )],
+        "background-origin" => vec![Decl::BackgroundOrigin(
+            p.parse_comma_separated(|p| {
+                keyword(
+                    p,
+                    "a background origin",
+                    &[
+                        ("padding-box", BackgroundOrigin::PaddingBox),
+                        ("border-box", BackgroundOrigin::BorderBox),
+                    ],
+                )
+            })?
+            .into(),
+        )],
+        "-background-slice" => vec![Decl::BackgroundSlice(
+            p.parse_comma_separated(background_slice)?.into(),
+        )],
         "border-image" => {
             let mut source = None;
             let mut slice = None;
@@ -1563,6 +1618,15 @@ fn border_image_slice(p: &mut Parser) -> Result<([f32; 4], bool), Error> {
     let slices = four(p, number)?;
     let fill = fill_first || p.try_parse(|p| p.expect_ident_matching("fill")).is_ok();
     Ok((slices, fill))
+}
+
+/// One layer's `-background-slice`: `none`, or `border-image-slice`'s
+/// slices and `fill`.
+fn background_slice(p: &mut Parser) -> Result<Slice, Error> {
+    if p.try_parse(|p| p.expect_ident_matching("none")).is_ok() {
+        return Ok(None);
+    }
+    Ok(Some(border_image_slice(p)?))
 }
 
 /// `none`, or `translate()`, `translateX()`, `translateY()` and

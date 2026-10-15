@@ -10,10 +10,11 @@ use super::fonts;
 use super::images::{Nine, Picture};
 use super::keyframes::Keyframes;
 use super::value::{
-    Align, AnimationDirection, BackgroundSize, ColorValue, Decl, Direction, Easing, FULL_SLICE,
-    FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight, LineStyle, MinSize,
-    Moving, ObjectFit, Prop, Repeat, Shadows, Side, Size, TextAlign, TextBoxEdge, TextBoxTrim,
-    TextOverflow, TextTransform, Transform, WeightValue, WhiteSpace, Wide,
+    Align, AnimationDirection, BackgroundOrigin, BackgroundSize, ColorValue, Decl, Direction,
+    Easing, FULL_SLICE, FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight,
+    LineStyle, MinSize, Moving, ObjectFit, Prop, Repeat, Shadows, Side, Size, Slice, TextAlign,
+    TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WeightValue, WhiteSpace,
+    Wide,
 };
 
 /// Four lengths, one per side.
@@ -115,6 +116,21 @@ impl Animations {
     }
 }
 
+/// A background layer: its picture and the values of the background's
+/// lists at its place (a list shorter than the images repeats, as in
+/// CSS).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Layer {
+    pub picture: Picture,
+    pub size: BackgroundSize,
+    pub position: (LengthPercentage, LengthPercentage),
+    pub repeat: Repeat,
+    pub origin: BackgroundOrigin,
+    /// The picture cut in nine (`-background-slice`): drawn at its size,
+    /// its corners at theirs.
+    pub nine: Option<Arc<Nine>>,
+}
+
 /// An outer shadow.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shadow {
@@ -180,10 +196,16 @@ pub struct Computed {
     pub outline_offset: f32,
     pub transform: Option<Transform>,
     pub transform_origin: (LengthPercentage, LengthPercentage),
-    pub background_image: Option<Picture>,
-    pub background_size: BackgroundSize,
-    pub background_position: (LengthPercentage, LengthPercentage),
-    pub background_repeat: Repeat,
+    /// The background's lists, one value per layer, the first on top.
+    pub background_image: Arc<[Option<Picture>]>,
+    pub background_size: Arc<[BackgroundSize]>,
+    pub background_position: Arc<[(LengthPercentage, LengthPercentage)]>,
+    pub background_repeat: Arc<[Repeat]>,
+    pub background_origin: Arc<[BackgroundOrigin]>,
+    pub background_slice: Arc<[Slice]>,
+    /// The layers with a picture, from the lists: what's drawn, the
+    /// first on top.
+    pub backgrounds: Arc<[Layer]>,
     pub border_image_source: Option<Picture>,
     pub border_image_slice: ([f32; 4], bool),
     /// The source cut at the slices: drawn in place of the border.
@@ -257,10 +279,13 @@ impl Computed {
                 LengthPercentage::fraction(0.5),
                 LengthPercentage::fraction(0.5),
             ),
-            background_image: None,
-            background_size: BackgroundSize::Auto,
-            background_position: (LengthPercentage::ZERO, LengthPercentage::ZERO),
-            background_repeat: Repeat { x: true, y: true },
+            background_image: Arc::from([None]),
+            background_size: Arc::from([BackgroundSize::Auto]),
+            background_position: Arc::from([(LengthPercentage::ZERO, LengthPercentage::ZERO)]),
+            background_repeat: Arc::from([Repeat { x: true, y: true }]),
+            background_origin: Arc::from([BackgroundOrigin::PaddingBox]),
+            background_slice: Arc::from([None]),
+            backgrounds: Arc::from([]),
             border_image_source: None,
             border_image_slice: FULL_SLICE,
             border_image: None,
@@ -430,9 +455,11 @@ impl<'p> Cascade<'p> {
             Decl::Transform(v) => out.transform = *v,
             Decl::TransformOrigin(x, y) => out.transform_origin = (*x, *y),
             Decl::BackgroundImage(v) => out.background_image = v.clone(),
-            Decl::BackgroundSize(v) => out.background_size = *v,
-            Decl::BackgroundPosition(x, y) => out.background_position = (*x, *y),
-            Decl::BackgroundRepeat(v) => out.background_repeat = *v,
+            Decl::BackgroundSize(v) => out.background_size = v.clone(),
+            Decl::BackgroundPosition(v) => out.background_position = v.clone(),
+            Decl::BackgroundRepeat(v) => out.background_repeat = v.clone(),
+            Decl::BackgroundOrigin(v) => out.background_origin = v.clone(),
+            Decl::BackgroundSlice(v) => out.background_slice = v.clone(),
             Decl::BorderImageSource(v) => out.border_image_source = v.clone(),
             Decl::BorderImageSlice(slices, fill) => out.border_image_slice = (*slices, *fill),
             Decl::ObjectFit(v) => out.object_fit = *v,
@@ -581,6 +608,7 @@ impl<'p> Cascade<'p> {
             y: s.y,
             color: resolve(s.color),
         });
+        out.backgrounds = layers(&out);
         out.border_image = out.border_image_source.as_ref().and_then(|source| {
             let (slices, fill) = out.border_image_slice;
             source.nine(slices.map(|s| s.min(u32::MAX as f32) as u32), fill)
@@ -658,6 +686,33 @@ const INHERITED: [Prop; 13] = [
     Prop::StrokeWidth,
 ];
 
+/// The layers of `s`'s background lists that have a picture, the slices
+/// cut.
+fn layers(s: &Computed) -> Arc<[Layer]> {
+    // A list's value for layer `i`: its own, or the list repeated.
+    fn at<T: Copy>(list: &[T], i: usize) -> T {
+        list[i % list.len()]
+    }
+    s.background_image
+        .iter()
+        .enumerate()
+        .filter_map(|(i, picture)| {
+            let picture = picture.clone()?;
+            let nine = at(&s.background_slice, i).and_then(|(slices, fill)| {
+                picture.nine(slices.map(|s| s.min(u32::MAX as f32) as u32), fill)
+            });
+            Some(Layer {
+                size: at(&s.background_size, i),
+                position: at(&s.background_position, i),
+                repeat: at(&s.background_repeat, i),
+                origin: at(&s.background_origin, i),
+                nine,
+                picture,
+            })
+        })
+        .collect()
+}
+
 /// One property's computed value, from `from` to `to`.
 fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
     match prop {
@@ -703,9 +758,11 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::Transform => to.transform = from.transform,
         Prop::TransformOrigin => to.transform_origin = from.transform_origin,
         Prop::BackgroundImage => to.background_image = from.background_image.clone(),
-        Prop::BackgroundSize => to.background_size = from.background_size,
-        Prop::BackgroundPosition => to.background_position = from.background_position,
-        Prop::BackgroundRepeat => to.background_repeat = from.background_repeat,
+        Prop::BackgroundSize => to.background_size = from.background_size.clone(),
+        Prop::BackgroundPosition => to.background_position = from.background_position.clone(),
+        Prop::BackgroundRepeat => to.background_repeat = from.background_repeat.clone(),
+        Prop::BackgroundOrigin => to.background_origin = from.background_origin.clone(),
+        Prop::BackgroundSlice => to.background_slice = from.background_slice.clone(),
         Prop::BorderImageSource => to.border_image_source = from.border_image_source.clone(),
         Prop::BorderImageSlice => to.border_image_slice = from.border_image_slice,
         Prop::ObjectFit => to.object_fit = from.object_fit,

@@ -575,7 +575,7 @@ fn percentages_are_of_what_css_measures_them_against() {
             LengthPercentage::fraction(1.0)
         )
     );
-    assert_eq!(c.background_position.0, LengthPercentage::fraction(0.5));
+    assert_eq!(c.background_position[0].0, LengthPercentage::fraction(0.5));
     // A radius is of the shorter side: a pill's ends round, then fitted
     // where the corners would overlap, as CSS does.
     let d = style(&sheet, "t > d");
@@ -616,8 +616,8 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
     );
     let a = style(&sheet, "t > a");
     assert_eq!(a.background, RED);
-    assert_eq!(a.background_repeat, Repeat { x: false, y: false });
-    let picture = a.background_image.clone().expect("an image");
+    assert_eq!(*a.background_repeat, [Repeat { x: false, y: false }]);
+    let picture = a.background_image[0].clone().expect("an image");
     assert!(matches!(
         picture.drawn(),
         Drawn::Raster {
@@ -628,31 +628,90 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
     ));
     let b = style(&sheet, "t > b");
     // The same file, loaded once.
-    assert_eq!(b.background_image, Some(picture));
+    assert_eq!(*b.background_image, [Some(picture)]);
     assert_eq!(
-        b.background_size,
-        BackgroundSize::Length(Some(LengthPercentage::px(10.0)), None)
+        *b.background_size,
+        [BackgroundSize::Length(
+            Some(LengthPercentage::px(10.0)),
+            None
+        )]
     );
     assert_eq!(
-        b.background_position,
-        (
+        *b.background_position,
+        [(
             LengthPercentage::fraction(0.5),
             LengthPercentage::fraction(1.0)
-        )
+        )]
     );
-    assert_eq!(b.background_repeat, Repeat { x: true, y: true });
+    assert_eq!(*b.background_repeat, [Repeat { x: true, y: true }]);
     assert_eq!(
-        style(&sheet, "t > c").background_size,
-        BackgroundSize::Cover
+        *style(&sheet, "t > c").background_size,
+        [BackgroundSize::Cover]
     );
     assert_eq!(
-        style(&sheet, "t > e").background_size,
-        BackgroundSize::Length(None, Some(LengthPercentage::fraction(1.0)))
+        *style(&sheet, "t > e").background_size,
+        [BackgroundSize::Length(
+            None,
+            Some(LengthPercentage::fraction(1.0))
+        )]
     );
     assert!(warnings[0].message.contains("missing.png"), "{warnings:?}");
     // Without a directory, a relative url() has nowhere to be found.
     let (_, warnings) = load("x { background-image: url(dot.png); }");
     assert!(warnings[0].message.contains("directory"), "{warnings:?}");
+}
+
+#[test]
+fn a_background_has_layers() {
+    let dir = images("layers", "dot.png", 4, 2, [0, 0, 255, 255]);
+    ::image::RgbaImage::from_pixel(6, 6, ::image::Rgba([255, 0, 0, 255]))
+        .save(dir.join("ring.png"))
+        .expect("the png written");
+    let (sheet, warnings) = load_from(
+        "a { background: url(dot.png) no-repeat, url(ring.png) repeat-x red; } \
+         b { background-image: url(dot.png), none, url(ring.png); \
+             background-size: 10px, cover; -background-slice: 1 fill, none; \
+             background-origin: border-box, padding-box; } \
+         c { background-image: url(ring.png); -background-slice: 2; }",
+        &dir,
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // The shorthand: a layer per comma, the colour in the last one, the
+    // other longhands back to their initial value.
+    let a = style(&sheet, "t > a");
+    assert_eq!(a.background, RED);
+    assert_eq!(
+        *a.background_repeat,
+        [Repeat { x: false, y: false }, Repeat { x: true, y: false }]
+    );
+    assert_eq!(*a.background_size, [BackgroundSize::Auto]);
+    assert_eq!(a.backgrounds.len(), 2);
+    assert!(matches!(
+        a.backgrounds[0].picture.drawn(),
+        Drawn::Raster { width: 4, .. }
+    ));
+    assert_eq!(a.backgrounds[1].repeat, Repeat { x: true, y: false });
+    assert!(a.backgrounds.iter().all(|l| l.nine.is_none()));
+    // A layer without a picture draws nothing; a short list repeats: the
+    // third layer takes the first value of each.
+    let b = style(&sheet, "t > b");
+    let [dot, ring] = &b.backgrounds[..] else {
+        panic!("two layers: {:?}", b.backgrounds);
+    };
+    let ten = BackgroundSize::Length(Some(LengthPercentage::px(10.0)), None);
+    assert_eq!((dot.size, ring.size), (ten, ten));
+    assert_eq!(
+        (dot.origin, ring.origin),
+        (BackgroundOrigin::BorderBox, BackgroundOrigin::BorderBox)
+    );
+    let nine = ring.nine.clone().expect("cut");
+    assert_eq!(nine.slices, [1, 1, 1, 1]);
+    assert!(nine.parts[4].is_some(), "the middle with `fill`");
+    // Without `fill`, no middle, as border-image-slice has it.
+    let c = style(&sheet, "t > c");
+    let nine = c.backgrounds[0].nine.clone().expect("cut");
+    assert_eq!(nine.slices, [2, 2, 2, 2]);
+    assert!(nine.parts[4].is_none());
 }
 
 #[test]

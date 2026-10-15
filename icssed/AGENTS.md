@@ -245,7 +245,8 @@ surface closes.
   overlapping children show through each other.
 - **Percentages** where they're of the element itself or of its font:
   `transform`, `transform-origin`, `border-radius` (of the shorter side:
-  no ellipses), `background-position`, `font-size`, `line-height`. Not
+  no ellipses), `background-position`, `background-size` (of the
+  background's box), `font-size`, `line-height`. Not
   in the layout's lengths (sizes, padding, margin, gap): those would be
   of the containing block (ARCHITECTURE.md, "Not done yet").
 - `min-height` beats `height`, as in CSS: a test's 30 px input stays at

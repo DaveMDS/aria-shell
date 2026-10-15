@@ -148,7 +148,7 @@ pub(crate) fn bare(s: &Computed) -> bool {
         && s.shadow.is_none()
         && s.inset_shadow.is_none()
         && s.outline_width == 0.0
-        && s.background_image.is_none()
+        && s.backgrounds.is_empty()
         && s.border_image.is_none()
         && s.transform.is_none()
         && !s.debug_box

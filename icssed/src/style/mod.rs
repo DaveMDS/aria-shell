@@ -20,7 +20,7 @@ mod sheet;
 mod tests;
 mod value;
 
-pub use computed::{Animations, Computed, InsetShadow, Shadow, Sides, Transitions};
+pub use computed::{Animations, Computed, InsetShadow, Layer, Shadow, Sides, Transitions};
 pub use images::{Drawn, Nine, Picture};
 pub use keyframes::Keyframes;
 pub use node::{Ancestors, Node, Sensitivity, States};
@@ -28,8 +28,8 @@ pub(crate) use node::{Name, NodeId, Step, name};
 pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
 pub(crate) use value::Moving;
 pub use value::{
-    Align, AnimationDirection, BackgroundSize, Corner, Direction, Easing, EdgeOver, EdgeUnder,
-    FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight, MinSize, ObjectFit,
-    Repeat, Side, Size, StepPosition, TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow,
-    TextTransform, Transform, WhiteSpace,
+    Align, AnimationDirection, BackgroundOrigin, BackgroundSize, Corner, Direction, Easing,
+    EdgeOver, EdgeUnder, FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight,
+    MinSize, ObjectFit, Repeat, Side, Size, Slice, StepPosition, TextAlign, TextBoxEdge,
+    TextBoxTrim, TextOverflow, TextTransform, Transform, WhiteSpace,
 };

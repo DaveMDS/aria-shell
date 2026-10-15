@@ -1,7 +1,7 @@
 /*
  * demo#images
  * ├─ line > fitted > picture.fill|.contain|.cover, label
- * ╰─ line > box.tiled|.framed|.scenery > label   backgrounds, a 9-patch
+ * ╰─ line > box.tiled|.framed|.scenery|.layered > label   backgrounds, a 9-patch
  *
  * url()s are found from this file's directory.
  */
@@ -36,7 +36,8 @@ demo#images picture.cover {
 }
 
 demo#images box.tiled,
-demo#images box.scenery {
+demo#images box.scenery,
+demo#images box.layered {
   width: 140px;
   height: 64px;
   justify-content: center;
@@ -59,4 +60,13 @@ demo#images box.scenery {
   background-repeat: no-repeat;
   color: #1f1f23;
   font-weight: bold;
+}
+/* Two layers, no border: the frame cut in nine and stretched over the
+   whole box, its middle left out, on the dots. */
+demo#images box.layered {
+  background-image: url(../assets/frame.png), url(../assets/dots.png);
+  -background-slice: 10, none;
+  background-size: 100% 100%, auto;
+  background-repeat: no-repeat, repeat;
+  border-radius: 0;
 }

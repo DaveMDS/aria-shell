@@ -16,7 +16,9 @@ use iced::widget::canvas::{Fill, Path, Style, fill::Rule, path::Builder};
 use iced::{Border, Color, Point, Radians, Rectangle, Shadow, Size, Vector};
 
 use crate::Renderer;
-use crate::style::{BackgroundSize, Computed, Drawn, LengthPercentage, Nine, Picture};
+use crate::style::{
+    BackgroundOrigin, BackgroundSize, Computed, Drawn, Layer, LengthPercentage, Nine,
+};
 
 /// `color` at `opacity`.
 pub(crate) fn fade(color: Color, opacity: f32) -> Color {
@@ -66,9 +68,9 @@ pub(crate) fn draw_box(
     });
     let background = fade(s.background, opacity);
     let corners = s.radii(bounds.size());
-    // A border image replaces the border; a background image goes
+    // A border image replaces the border; the background's images go
     // between the background colour and the border.
-    let border_in_quad = uniform && s.border_image.is_none() && s.background_image.is_none();
+    let border_in_quad = uniform && s.border_image.is_none() && s.backgrounds.is_empty();
 
     if background.a > 0.0 || shadow.color.a > 0.0 || border_in_quad {
         renderer.fill_quad(
@@ -93,7 +95,7 @@ pub(crate) fn draw_box(
     // what goes over the box.
     let edges = |renderer: &mut Renderer| {
         if let Some(nine) = &s.border_image {
-            draw_nine(renderer, nine, bounds, widths, opacity);
+            draw_nine(renderer, nine, bounds, widths, opacity, None);
         } else if uniform && !border_in_quad {
             renderer.fill_quad(
                 Quad {
@@ -162,44 +164,55 @@ pub(crate) fn draw_box(
         }
         over(renderer);
     };
-    match &s.background_image {
-        Some(picture) => {
-            draw_background(renderer, s, picture, bounds, corners, opacity);
-            renderer.with_layer(viewport, |renderer| {
-                // TEMPORARY, until iced draws a layer's images in order:
-                // a layer that starts with images is merged into the one
-                // before it (same clip), and there iced_wgpu 0.14 draws
-                // every nearest-filtered image (an svg) before every
-                // linear one (this picture), whatever came first. A quad
-                // first keeps the layers apart. See ARCHITECTURE.md and
-                // https://github.com/iced-rs/iced/issues/3512.
-                renderer.fill_quad(Quad::default(), Color::TRANSPARENT);
-                edges(renderer);
-            });
-        }
-        None => edges(renderer),
+    if s.backgrounds.is_empty() {
+        edges(renderer);
+    } else {
+        // Clipped by a layer too: tiny-skia ignores an image's own
+        // clip. The last layer first, the first on top.
+        renderer.with_layer(bounds, |renderer| {
+            for layer in s.backgrounds.iter().rev() {
+                draw_background(renderer, s, layer, bounds, corners, opacity);
+            }
+        });
+        renderer.with_layer(viewport, |renderer| {
+            // TEMPORARY, until iced draws a layer's images in order:
+            // a layer that starts with images is merged into the one
+            // before it (same clip), and there iced_wgpu 0.14 draws
+            // every nearest-filtered image (an svg) before every
+            // linear one (this picture), whatever came first. A quad
+            // first keeps the layers apart. See ARCHITECTURE.md and
+            // https://github.com/iced-rs/iced/issues/3512.
+            renderer.fill_quad(Quad::default(), Color::TRANSPARENT);
+            edges(renderer);
+        });
     }
 }
 
-/// A background image: sized and placed in the padding box, tiled as
-/// `background-repeat` says, clipped to the border box and its corners
-/// (iced's image shader rounds at the clip).
+/// A background layer: sized and placed in its origin's box (the
+/// padding box, or the border box), tiled as its `background-repeat`
+/// says, each tile its 9-patch when it's sliced, clipped to the border
+/// box and its corners (iced's image shader rounds at the clip).
 fn draw_background(
     renderer: &mut Renderer,
     s: &Computed,
-    picture: &Picture,
+    layer: &Layer,
     bounds: Rectangle,
     corners: [f32; 4],
     opacity: f32,
 ) {
-    let w = s.border_width;
-    let area = Rectangle {
-        x: bounds.x + w.left,
-        y: bounds.y + w.top,
-        width: (bounds.width - w.left - w.right).max(0.0),
-        height: (bounds.height - w.top - w.bottom).max(0.0),
+    let area = match layer.origin {
+        BackgroundOrigin::BorderBox => bounds,
+        BackgroundOrigin::PaddingBox => {
+            let w = s.border_width;
+            Rectangle {
+                x: bounds.x + w.left,
+                y: bounds.y + w.top,
+                width: (bounds.width - w.left - w.right).max(0.0),
+                height: (bounds.height - w.top - w.bottom).max(0.0),
+            }
+        }
     };
-    let drawn = picture.drawn();
+    let drawn = layer.picture.drawn();
     let own = match &drawn {
         Drawn::Raster { width, height, .. } => Size::new(*width as f32, *height as f32),
         Drawn::Svg(handle) => {
@@ -210,7 +223,7 @@ fn draw_background(
     if own.width <= 0.0 || own.height <= 0.0 {
         return;
     }
-    let size = match s.background_size {
+    let size = match layer.size {
         BackgroundSize::Auto => own,
         BackgroundSize::Cover => own * (area.width / own.width).max(area.height / own.height),
         BackgroundSize::Contain => own * (area.width / own.width).min(area.height / own.height),
@@ -232,8 +245,8 @@ fn draw_background(
     let place =
         |origin: LengthPercentage, start: f32, room: f32, size: f32| start + origin.of(room - size);
     let (x, y) = (
-        place(s.background_position.0, area.x, area.width, size.width),
-        place(s.background_position.1, area.y, area.height, size.height),
+        place(layer.position.0, area.x, area.width, size.width),
+        place(layer.position.1, area.y, area.height, size.height),
     );
     // The tiles from the first one reaching into the border box.
     let first = |at: f32, start: f32, step: f32, repeat: bool| {
@@ -243,37 +256,11 @@ fn draw_background(
             at
         }
     };
+    let repeat = layer.repeat;
     let (x0, y0) = (
-        first(x, bounds.x, size.width, s.background_repeat.x),
-        first(y, bounds.y, size.height, s.background_repeat.y),
+        first(x, bounds.x, size.width, repeat.x),
+        first(y, bounds.y, size.height, repeat.y),
     );
-    // Clipped by a layer too: tiny-skia ignores an image's own clip.
-    renderer.with_layer(bounds, |renderer| {
-        tile(
-            renderer,
-            s,
-            &drawn,
-            (x0, y0),
-            size,
-            bounds,
-            corners,
-            opacity,
-        );
-    });
-}
-
-/// The tiles of a background image, from `(x0, y0)` over `bounds`.
-#[allow(clippy::too_many_arguments)]
-fn tile(
-    renderer: &mut Renderer,
-    s: &Computed,
-    drawn: &Drawn,
-    (x0, y0): (f32, f32),
-    size: Size,
-    bounds: Rectangle,
-    corners: [f32; 4],
-    opacity: f32,
-) {
     const MOST: usize = 4096;
     let mut tiles = 0;
     let mut ty = y0;
@@ -281,14 +268,30 @@ fn tile(
         let mut tx = x0;
         while tx < bounds.x + bounds.width && tiles < MOST {
             let tile = Rectangle::new(Point::new(tx, ty), size);
-            match drawn {
-                Drawn::Raster { handle, .. } => {
+            match (&layer.nine, &drawn) {
+                (Some(nine), _) => {
+                    // Its corners at their own size, smaller only where
+                    // the tile can't hold two of them.
+                    let [top, right, bottom, left] = nine.slices.map(|s| s as f32);
+                    let fit = |side: f32, sum: f32| if sum > side { side / sum } else { 1.0 };
+                    let f = fit(size.width, left + right).min(fit(size.height, top + bottom));
+                    let widths = [top, right, bottom, left].map(|w| w * f);
+                    draw_nine(
+                        renderer,
+                        nine,
+                        tile,
+                        widths,
+                        opacity,
+                        Some((bounds, corners)),
+                    );
+                }
+                (None, Drawn::Raster { handle, .. }) => {
                     let mut image = image::Image::new(handle.clone());
                     image.opacity = opacity;
                     image.border_radius = radius(corners);
                     renderer.draw_image(image, tile, bounds);
                 }
-                Drawn::Svg(handle) => renderer.draw_svg(
+                (None, Drawn::Svg(handle)) => renderer.draw_svg(
                     svg::Svg {
                         handle: handle.clone(),
                         color: None,
@@ -300,26 +303,29 @@ fn tile(
                 ),
             }
             tiles += 1;
-            if !s.background_repeat.x {
+            if !repeat.x {
                 break;
             }
             tx += size.width;
         }
-        if !s.background_repeat.y {
+        if !repeat.y {
             break;
         }
         ty += size.height;
     }
 }
 
-/// A 9-patch in place of the border: the corners at the border's widths,
-/// the edges and the middle stretched.
+/// A 9-patch over `bounds`: the corners at `widths` (top, right,
+/// bottom, left; a border's), the edges and the middle stretched. Each
+/// part clipped to its own region, or to `clip` and its corners (a
+/// background's border box).
 fn draw_nine(
     renderer: &mut Renderer,
     nine: &Nine,
     bounds: Rectangle,
     [wt, wr, wb, wl]: [f32; 4],
     opacity: f32,
+    clip: Option<(Rectangle, [f32; 4])>,
 ) {
     let (x0, y0) = (bounds.x, bounds.y);
     let (x1, y1) = (x0 + bounds.width, y0 + bounds.height);
@@ -345,7 +351,13 @@ fn draw_nine(
         {
             let mut image = image::Image::new(handle.clone());
             image.opacity = opacity;
-            renderer.draw_image(image, region, region);
+            match clip {
+                Some((clip, corners)) => {
+                    image.border_radius = radius(corners);
+                    renderer.draw_image(image, region, clip);
+                }
+                None => renderer.draw_image(image, region, region),
+            }
         }
     }
 }

@@ -18,13 +18,10 @@ assert_no_surface exiter
 assert_eq "$(cat "$exits")" "suspend"
 
 # The keyboard (the query doesn't see :focus: what Enter runs says
-# where it is): nothing focused, Enter does nothing; Tab focuses the
-# first, Right Right is the third button, Down the row below, Down
-# again round to the top.
+# where it is): `default_button = suspend` has it on open, Right is the third
+# button, Down the row below, Down again round to the top.
 aria exiter show; wait_keyboard exiter
-key Return; settle 0.5
-assert_surface exiter
-key Tab; key Right; key Right; key Down; key Down
+key Right; key Down; key Down
 shot_surface exiter-focus exiter
 key Return; settle 0.5
 assert_no_surface exiter
@@ -41,6 +38,11 @@ shot_surface exiter-confirm exiter
 key Escape
 assert_surface exiter
 wait_for 'surface.exiter > row > button' 6 "the grid again"
+# Back on the grid, the focus on suspend again.
+key Return; settle 0.5
+assert_no_surface exiter
+assert_eq "$(tail -n 1 "$exits")" "suspend"
+aria exiter show; wait_keyboard exiter
 click_widget 'surface.exiter > row > button.reboot'
 key Return; settle 0.5
 assert_no_surface exiter
@@ -94,4 +96,4 @@ wait_for 'surface.exiter > row > button' 6 "Escape: its grid"
 key Escape
 assert_no_surface exiter
 
-assert_eq "$(cat "$exits" | tr '\n' ' ')" "suspend hibernate reboot shutdown suspend " "every action ran once, suspend twice"
+assert_eq "$(cat "$exits" | tr '\n' ' ')" "suspend hibernate suspend reboot shutdown suspend " "every action ran once, suspend three times"

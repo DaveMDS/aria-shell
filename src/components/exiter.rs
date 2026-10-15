@@ -14,7 +14,8 @@ use std::sync::Arc;
 
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::{Event, Subscription, Task, window};
+use iced::widget::operation;
+use iced::{Event, Subscription, Task, widget, window};
 use icssed::Element;
 
 use crate::config::{RawSection, Section};
@@ -34,6 +35,10 @@ pub struct ExiterConfig {
     pub confirm_timeout: u64,
     /// In the order of `buttons =`.
     pub buttons: Arc<Vec<Button>>,
+    /// The button focused on open (`default_button =` its name, the first one
+    /// otherwise): Enter presses it, the arrows move from it. `None`
+    /// only without buttons.
+    pub focus: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,11 +180,24 @@ impl Section for ExiterConfig {
                 confirm,
             });
         }
+        let focus = raw
+            .get("default_button")
+            .and_then(|name| {
+                let i = buttons.iter().position(|b| b.name == name);
+                if i.is_none() {
+                    log::warn!(
+                        "[exiter] default_button = {name}: no such button, the first focused"
+                    );
+                }
+                i
+            })
+            .or((!buttons.is_empty()).then_some(0));
         Self {
             columns,
             ask_confirm: raw.bool_or("ask_confirm", true),
             confirm_timeout: raw.u64_or("confirm_timeout", 30),
             buttons: Arc::new(buttons),
+            focus,
         }
     }
 }
@@ -193,6 +211,8 @@ impl ExiterConfig {
 pub struct Exiter {
     config: ExiterConfig,
     confirm: Option<Confirm>,
+    /// The id of the button focused on open.
+    focused: widget::Id,
 }
 
 /// A button waiting for its confirmation.
@@ -231,6 +251,7 @@ impl Exiter {
         Self {
             config,
             confirm: None,
+            focused: widget::Id::unique(),
         }
     }
 
@@ -241,6 +262,15 @@ impl Exiter {
         let mut exiter = Self::new(config);
         exiter.confirm = Some(exiter.pending(i));
         Some(exiter)
+    }
+
+    /// Focus the `default_button =` button, once the surface exists (and back
+    /// on the grid from a confirmation).
+    pub fn focus(&self) -> Task<Message> {
+        match self.config.focus {
+            Some(_) if self.confirm.is_none() => operation::focus(self.focused.clone()),
+            _ => Task::none(),
+        }
     }
 
     fn pending(&self, button: usize) -> Confirm {
@@ -290,12 +320,12 @@ impl Exiter {
             Message::Ok => self.perform_confirmed(),
             Message::Cancel => {
                 self.confirm = None;
-                Action::Run(Task::none())
+                Action::Run(self.focus())
             }
             Message::Escape => {
                 if self.confirm.is_some() {
                     self.confirm = None;
-                    Action::Run(Task::none())
+                    Action::Run(self.focus())
                 } else {
                     Action::Close
                 }
@@ -372,16 +402,20 @@ impl Exiter {
                         Some(icon) => icssed::icon(icon.clone()),
                         None => icssed::icon((icons, "")),
                     };
-                    icssed::button![icon, icssed::text(button.label.text(locale))]
+                    let button = icssed::button![icon, icssed::text(button.label.text(locale))]
                         .class(&button.name)
                         .class("flat")
-                        .on_press(Message::Activate(i))
-                        .into()
+                        .on_press(Message::Activate(i));
+                    if self.config.focus == Some(i) {
+                        button.id(self.focused.clone()).into()
+                    } else {
+                        button.into()
+                    }
                 });
                 icssed::row(cells).into()
             });
-        // Tab gives the focus to the first, the arrows move it round
-        // the grid, Enter presses it.
+        // The default button has it on open (Tab gives it back after a
+        // click), the arrows move it round the grid, Enter presses it.
         icssed::focus_scope(icssed::focus_scope(icssed::column(rows)).arrows()).into()
     }
 
@@ -425,6 +459,7 @@ mod tests {
         assert_eq!(cfg.columns, 3);
         assert!(cfg.ask_confirm);
         assert_eq!(cfg.confirm_timeout, 30);
+        assert_eq!(cfg.focus, Some(0), "the first");
         let names: Vec<&str> = cfg.buttons.iter().map(|b| b.name.as_str()).collect();
         assert_eq!(names, DEFAULT_BUTTONS);
         let lock = cfg.button("lock").unwrap();
@@ -463,6 +498,22 @@ mod tests {
         assert_eq!(firefox.icons, ["firefox"]);
         assert_eq!(firefox.label, Label::Text("Browser".into()));
         assert_eq!(cfg.button("lock").unwrap().command, Command::Logout);
+    }
+
+    #[test]
+    fn the_focused_button() {
+        let focus = |value: &str| {
+            Config::parse(&format!(
+                "[exiter]
+default_button = {value}
+"
+            ))
+            .section::<ExiterConfig>(None)
+            .focus
+        };
+        assert_eq!(focus("suspend"), Some(1));
+        assert_eq!(focus(""), Some(0), "empty: the first");
+        assert_eq!(focus("nope"), Some(0), "no such button: the first");
     }
 
     #[test]

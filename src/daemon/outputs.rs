@@ -50,11 +50,14 @@ impl AriaShell {
                     }
                 }
             }
-            ShellEvent::NewShell(info) => match &self.launcher {
+            ShellEvent::NewShell(info) => match (&self.launcher, &self.exiter) {
                 // The search field can only take focus once its surface
-                // exists.
-                Some((dialog, launcher)) if dialog.is_window(info.window) => {
+                // exists; the exit menu's default button the same.
+                (Some((dialog, launcher)), _) if dialog.is_window(info.window) => {
                     launcher.focus().map(Message::Launcher)
+                }
+                (_, Some((dialog, exiter))) if dialog.is_window(info.window) => {
+                    exiter.focus().map(Message::Exiter)
                 }
                 // A bar that hides starts hidden: only its edge's strip
                 // takes the pointer.

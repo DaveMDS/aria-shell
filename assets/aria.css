@@ -211,8 +211,8 @@ surface.launcher item.action > icon {
  *
  * surface.exiter
  * ├─ row                                one per `columns` buttons
- * │  ╰─ button.<action>.flat            :focus: Tab gives it to the
- * │     │                               first, the arrows move it
+ * │  ╰─ button.<action>.flat            :focus: default_button on open,
+ * │     │                               the arrows move it
  * │     ├─ icon
  * │     ╰─ label
  * ╰─ confirm                            while an action waits

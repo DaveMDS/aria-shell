@@ -214,10 +214,15 @@ fn draw_background(
         BackgroundSize::Auto => own,
         BackgroundSize::Cover => own * (area.width / own.width).max(area.height / own.height),
         BackgroundSize::Contain => own * (area.width / own.width).min(area.height / own.height),
-        BackgroundSize::Px(Some(w), Some(h)) => Size::new(w, h),
-        BackgroundSize::Px(Some(w), None) => Size::new(w, w * own.height / own.width),
-        BackgroundSize::Px(None, Some(h)) => Size::new(h * own.width / own.height, h),
-        BackgroundSize::Px(None, None) => own,
+        BackgroundSize::Length(w, h) => {
+            let (w, h) = (w.map(|w| w.of(area.width)), h.map(|h| h.of(area.height)));
+            match (w, h) {
+                (Some(w), Some(h)) => Size::new(w, h),
+                (Some(w), None) => Size::new(w, w * own.height / own.width),
+                (None, Some(h)) => Size::new(h * own.width / own.height, h),
+                (None, None) => own,
+            }
+        }
     };
     if size.width < 0.5 || size.height < 0.5 {
         return;

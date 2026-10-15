@@ -80,7 +80,8 @@
  *                          padding box, clipped to the border box and its
  *                          corners
  *   background-size        auto (a pixel of the image a px) | cover |
- *                          contain | <length> [<length> | auto]
+ *                          contain | [<length-percentage> | auto]{1,2}
+ *                          (a percentage of the padding box)
  *   background-position    left | center | right, top | center | bottom,
  *                          or <length-percentage>s (of the room the image
  *                          leaves: 100% puts its end at the area's); the

@@ -393,6 +393,48 @@ fn icons_and_images_are_boxes() {
 }
 
 #[test]
+fn a_background_sized_in_percentages_follows_its_box() {
+    // A 4x2 image: `auto 100%` as tall as the box, tiled across it;
+    // `50% 50%` a quarter of it, tiled across the top half only.
+    let dir = std::env::temp_dir().join(format!("icssed-{}-background", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temporary directory");
+    ::image::RgbaImage::from_pixel(4, 2, ::image::Rgba([0, 255, 0, 255]))
+        .save(dir.join("green.png"))
+        .expect("the png written");
+    let (green, white) = ([0, 255, 0, 255], [255, 255, 255, 255]);
+    for (size, low) in [("auto 100%", green), ("50% 50%", white)] {
+        let css = format!(
+            "surface {{ background: none; }} \
+             cell {{ width: 100px; height: 40px; background: url(green.png) repeat-x; \
+                     background-size: {size}; }}"
+        );
+        let (sheet, warnings) = Sheet::load(
+            &[Source {
+                name: "t.css",
+                text: &css,
+                dir: Some(&dir),
+            }],
+            Scheme::Light,
+        )
+        .expect("loads");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let root = sheet.root("root", 1.0);
+        let mut ui = Harness::<Message>::new(
+            crate::row![crate::row([]).kind("cell")].at(root),
+            Size::new(100.0, 40.0),
+            1.0,
+        );
+        ui.frame(Instant::now());
+        let pixels = ui.pixels(Color::WHITE);
+        assert_eq!(
+            [(10, 5), (95, 5), (10, 35), (95, 35)].map(|(x, y)| pixels.at(x, y)),
+            [green, green, low, low],
+            "{size}"
+        );
+    }
+}
+
+#[test]
 fn an_icon_filling_its_height_stays_square() {
     // A dock: a bar of a given height, a button in it, its icon as tall
     // as the room left inside both paddings, as wide as that.

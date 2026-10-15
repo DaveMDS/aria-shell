@@ -321,8 +321,9 @@ pub enum BackgroundSize {
     Auto,
     Cover,
     Contain,
-    /// A width and a height, `None` for `auto` (the image's ratio kept).
-    Px(Option<f32>, Option<f32>),
+    /// A width and a height, `None` for `auto` (the image's ratio
+    /// kept); a percentage is of the background's area.
+    Length(Option<LengthPercentage>, Option<LengthPercentage>),
 }
 
 /// `background-repeat`: whether the image tiles across, down.
@@ -1512,17 +1513,17 @@ fn background_size(p: &mut Parser) -> Result<BackgroundSize, Error> {
     }) {
         return Ok(size);
     }
-    let side = |p: &mut Parser| -> Result<Option<f32>, Error> {
+    let side = |p: &mut Parser| -> Result<Option<LengthPercentage>, Error> {
         if p.try_parse(|p| p.expect_ident_matching("auto")).is_ok() {
             return Ok(None);
         }
-        Ok(Some(non_negative(p)?))
+        Ok(Some(non_negative_percentage(p)?))
     };
     let width = side(p)?;
     let height = p.try_parse(side).unwrap_or(None);
     Ok(match (width, height) {
         (None, None) => BackgroundSize::Auto,
-        (w, h) => BackgroundSize::Px(w, h),
+        (w, h) => BackgroundSize::Length(w, h),
     })
 }
 

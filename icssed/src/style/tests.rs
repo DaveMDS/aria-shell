@@ -610,7 +610,8 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
         "a { background: url(dot.png) red no-repeat; } \
          b { background-image: url(\"dot.png\"); background-size: 10px auto; \
              background-position: center bottom; } \
-         c { background-size: cover; } d { background: url(missing.png); }",
+         c { background-size: cover; } d { background: url(missing.png); } \
+         e { background-size: auto 100%; }",
         &dir,
     );
     let a = style(&sheet, "t > a");
@@ -628,7 +629,10 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
     let b = style(&sheet, "t > b");
     // The same file, loaded once.
     assert_eq!(b.background_image, Some(picture));
-    assert_eq!(b.background_size, BackgroundSize::Px(Some(10.0), None));
+    assert_eq!(
+        b.background_size,
+        BackgroundSize::Length(Some(LengthPercentage::px(10.0)), None)
+    );
     assert_eq!(
         b.background_position,
         (
@@ -640,6 +644,10 @@ fn backgrounds_load_their_images_from_the_sheets_directory() {
     assert_eq!(
         style(&sheet, "t > c").background_size,
         BackgroundSize::Cover
+    );
+    assert_eq!(
+        style(&sheet, "t > e").background_size,
+        BackgroundSize::Length(None, Some(LengthPercentage::fraction(1.0)))
     );
     assert!(warnings[0].message.contains("missing.png"), "{warnings:?}");
     // Without a directory, a relative url() has nowhere to be found.

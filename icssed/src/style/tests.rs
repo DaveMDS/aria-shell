@@ -246,6 +246,17 @@ fn inheritance_and_the_wide_keywords() {
 }
 
 #[test]
+fn white_space_wrap_is_normal() {
+    let (sheet, warnings) = load(
+        "a { white-space: nowrap; } a > b { white-space: wrap; } a > c { white-space: normal; }",
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(style(&sheet, "a").white_space, WhiteSpace::Nowrap);
+    assert_eq!(style(&sheet, "a > b").white_space, WhiteSpace::Normal);
+    assert_eq!(style(&sheet, "a > c").white_space, WhiteSpace::Normal);
+}
+
+#[test]
 fn currentcolor_is_the_elements_own_colour() {
     let (sheet, _) = load(
         "x { border: 1px solid; background: currentcolor; color: red; \

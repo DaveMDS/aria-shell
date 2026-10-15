@@ -186,7 +186,7 @@
  *                          inherited as a number) | <length-percentage>
  *                          (of the element's own font size, inherited as
  *                          the length it comes to)
- *   white-space*           normal (wraps at words) | nowrap
+ *   white-space*           normal | wrap (wraps at words, the same) | nowrap
  *   text-overflow          clip | ellipsis
  *   text-align*            start | end | left | right | center
  *   text-transform*        none | uppercase | lowercase | capitalize

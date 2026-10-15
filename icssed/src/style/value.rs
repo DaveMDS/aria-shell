@@ -1149,8 +1149,11 @@ fn value_of(
         "white-space" => vec![Decl::WhiteSpace(keyword(
             p,
             "a white-space mode",
+            // `wrap` and `nowrap` are CSS Text 4's `text-wrap-mode`
+            // through the shorthand: `wrap` is `normal` here.
             &[
                 ("normal", WhiteSpace::Normal),
+                ("wrap", WhiteSpace::Normal),
                 ("nowrap", WhiteSpace::Nowrap),
             ],
         )?)],

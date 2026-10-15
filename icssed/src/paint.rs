@@ -168,12 +168,17 @@ pub(crate) fn draw_box(
         edges(renderer);
     } else {
         // Clipped by a layer too: tiny-skia ignores an image's own
-        // clip. The last layer first, the first on top.
-        renderer.with_layer(bounds, |renderer| {
-            for layer in s.backgrounds.iter().rev() {
-                draw_background(renderer, s, layer, bounds, corners, opacity);
-            }
-        });
+        // clip. To what shows of the box: a new layer's clip isn't the
+        // one around it (a scroll's), and a box scrolled out of sight
+        // would show its pictures. The last layer first, the first on
+        // top.
+        if let Some(clip) = bounds.intersection(&viewport) {
+            renderer.with_layer(clip, |renderer| {
+                for layer in s.backgrounds.iter().rev() {
+                    draw_background(renderer, s, layer, bounds, corners, opacity);
+                }
+            });
+        }
         renderer.with_layer(viewport, |renderer| {
             // TEMPORARY, until iced draws a layer's images in order:
             // a layer that starts with images is merged into the one

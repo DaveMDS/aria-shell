@@ -446,6 +446,35 @@ fn cell_drawn(css: &str, size: Size) -> crate::testing::Pixels {
 }
 
 #[test]
+fn a_background_scrolled_out_of_sight_isnt_drawn() {
+    // Five cells of 20px with a picture behind, in a scroll 40px tall:
+    // the three below show nothing under the scroll.
+    let dir = pictures();
+    let css = "surface { background: none; } scroll { width: 40px; max-height: 40px; } \
+               line { gap: 0; } cell { width: 40px; height: 20px; background: url(red.png); }";
+    let (sheet, warnings) = Sheet::load(
+        &[Source {
+            name: "t.css",
+            text: css,
+            dir: Some(&dir),
+        }],
+        Scheme::Light,
+    )
+    .expect("loads");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let root = sheet.root("root", 1.0);
+    let cells = (0..5).map(|_| crate::row([]).kind("cell").into());
+    let view = crate::column![crate::scroll(crate::column(cells).kind("line"))].at(root);
+    let mut ui = Harness::<Message>::new(view, Size::new(40.0, 100.0), 1.0);
+    ui.frame(Instant::now());
+    let pixels = ui.pixels(Color::WHITE);
+    assert_eq!(
+        [10, 30, 50, 70, 90].map(|y| pixels.at(10, y)),
+        [RED, RED, WHITE, WHITE, WHITE]
+    );
+}
+
+#[test]
 fn a_background_sized_in_percentages_follows_its_box() {
     // A 4x2 image: `auto 100%` as tall as the box, tiled across it;
     // `50% 50%` a quarter of it, tiled across the top half only.

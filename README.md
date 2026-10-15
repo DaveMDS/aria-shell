@@ -111,7 +111,8 @@ A session management dialog for locking, suspending, hibernating, logging out, r
 - ✅ Auto-expiring confirmation dialogs for dangerous actions
 - ✅ Custom buttons with icon, label and confirmation support
 - ✅ `logout = auto` asks the compositor itself (Hyprland, Sway)
-- ✅ Keyboard navigation
+- ✅ Keyboard navigation (Tab, then the arrows)
+- 🔲 A default button, focused on open (config)
 - 🔲 Per-button hotkeys
 
 

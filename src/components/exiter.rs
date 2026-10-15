@@ -192,7 +192,6 @@ impl ExiterConfig {
 
 pub struct Exiter {
     config: ExiterConfig,
-    selected: usize,
     confirm: Option<Confirm>,
 }
 
@@ -205,12 +204,9 @@ struct Confirm {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    /// A click on that button.
+    /// A click on that button, or Enter on it.
     Activate(usize),
-    Left,
-    Right,
-    Up,
-    Down,
+    /// Enter, where no button took it: the confirmation's.
     Enter,
     /// Esc: back to the grid, or close.
     Escape,
@@ -234,7 +230,6 @@ impl Exiter {
     pub fn new(config: ExiterConfig) -> Self {
         Self {
             config,
-            selected: 0,
             confirm: None,
         }
     }
@@ -244,7 +239,6 @@ impl Exiter {
     pub fn confirming(config: ExiterConfig, name: &str) -> Option<Self> {
         let i = config.buttons.iter().position(|b| b.name == name)?;
         let mut exiter = Self::new(config);
-        exiter.selected = i;
         exiter.confirm = Some(exiter.pending(i));
         Some(exiter)
     }
@@ -269,7 +263,6 @@ impl Exiter {
         let Some(button) = self.config.buttons.get(i) else {
             return Action::Run(Task::none());
         };
-        self.selected = i;
         if button.confirm && self.config.ask_confirm {
             self.confirm = Some(self.pending(i));
             Action::Run(Task::none())
@@ -289,28 +282,11 @@ impl Exiter {
         }
     }
 
-    fn step(&mut self, delta: isize) -> Action {
-        let n = self.config.buttons.len() as isize;
-        if n > 0 && self.confirm.is_none() {
-            self.selected = (self.selected as isize + delta).rem_euclid(n) as usize;
-        }
-        Action::Run(Task::none())
-    }
-
     pub fn update(&mut self, message: Message) -> Action {
         match message {
             Message::Activate(i) => self.activate(i),
-            Message::Left => self.step(-1),
-            Message::Right => self.step(1),
-            Message::Up => self.step(-(self.config.columns as isize)),
-            Message::Down => self.step(self.config.columns as isize),
-            Message::Enter => {
-                if self.confirm.is_some() {
-                    self.perform_confirmed()
-                } else {
-                    self.activate(self.selected)
-                }
-            }
+            Message::Enter if self.confirm.is_some() => self.perform_confirmed(),
+            Message::Enter => Action::Run(Task::none()),
             Message::Ok => self.perform_confirmed(),
             Message::Cancel => {
                 self.confirm = None;
@@ -379,7 +355,8 @@ impl Exiter {
                 .kind("buttons")
                 .into(),
             );
-            return icssed::column![icssed::column(items).kind("confirm")].into();
+            return icssed::focus_scope(icssed::column![icssed::column(items).kind("confirm")])
+                .into();
         }
         let icons: &'a dyn icssed::Icons = shared.icons;
         let cols = self.config.columns.max(1);
@@ -398,24 +375,24 @@ impl Exiter {
                     icssed::button![icon, icssed::text(button.label.text(locale))]
                         .class(&button.name)
                         .class("flat")
-                        .class_if("selected", i == self.selected)
                         .on_press(Message::Activate(i))
                         .into()
                 });
                 icssed::row(cells).into()
             });
-        icssed::column(rows).into()
+        // Tab gives the focus to the first, the arrows move it round
+        // the grid, Enter presses it.
+        icssed::focus_scope(icssed::focus_scope(icssed::column(rows)).arrows()).into()
     }
 
     pub fn subscription(&self) -> Subscription<(Option<window::Id>, Message)> {
-        let keys = iced::event::listen_with(|event, _status, window| {
+        let keys = iced::event::listen_with(|event, status, window| {
             let message = match event {
                 Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => match key.as_ref() {
-                    Key::Named(Named::ArrowLeft) => Message::Left,
-                    Key::Named(Named::ArrowRight) => Message::Right,
-                    Key::Named(Named::ArrowUp) => Message::Up,
-                    Key::Named(Named::ArrowDown) => Message::Down,
-                    Key::Named(Named::Enter) => Message::Enter,
+                    // A focused button presses itself.
+                    Key::Named(Named::Enter) if status == iced::event::Status::Ignored => {
+                        Message::Enter
+                    }
                     Key::Named(Named::Escape) => Message::Escape,
                     _ => return None,
                 },
@@ -515,13 +492,10 @@ mod tests {
         e.update(Message::Activate(reboot));
         assert!(matches!(e.update(Message::Tick), Action::Run(_)));
         assert!(matches!(e.update(Message::Tick), Action::Perform(_)));
-        // Escape on the grid closes; arrows wrap.
+        // Escape on the grid closes; Enter there is a button's.
         let mut e = Exiter::new(cfg.clone());
+        assert!(matches!(e.update(Message::Enter), Action::Run(_)));
         assert!(matches!(e.update(Message::Escape), Action::Close));
-        e.update(Message::Left);
-        assert_eq!(e.selected, 5);
-        e.update(Message::Down);
-        assert_eq!(e.selected, 2);
         // Straight on a confirmation.
         let e = Exiter::confirming(cfg.clone(), "shutdown").unwrap();
         assert_eq!(e.confirm.as_ref().unwrap().left, Some(2));

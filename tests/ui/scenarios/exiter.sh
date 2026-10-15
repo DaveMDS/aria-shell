@@ -10,7 +10,6 @@ aria exiter show; wait_keyboard exiter
 assert_surface exiter
 assert_eq "$(surfaces | tr ';' '\n' | grep -c grab)" 2 "one grab per output"
 wait_for 'surface.exiter > row > button' 6 "six buttons"
-wait_for 'surface.exiter > row > button.lock.selected' 1 "the first is selected"
 shot_surface exiter exiter
 
 # A click runs a plain action and closes.
@@ -18,10 +17,15 @@ click_widget 'surface.exiter > row > button.suspend'
 assert_no_surface exiter
 assert_eq "$(cat "$exits")" "suspend"
 
-# The keyboard: Right Right Enter is the third button.
+# The keyboard (the query doesn't see :focus: what Enter runs says
+# where it is): nothing focused, Enter does nothing; Tab focuses the
+# first, Right Right is the third button, Down the row below, Down
+# again round to the top.
 aria exiter show; wait_keyboard exiter
-key Right; key Right
-wait_for 'surface.exiter > row > button.hibernate.selected' 1 "selection moved"
+key Return; settle 0.5
+assert_surface exiter
+key Tab; key Right; key Right; key Down; key Down
+shot_surface exiter-focus exiter
 key Return; settle 0.5
 assert_no_surface exiter
 assert_eq "$(tail -n 1 "$exits")" "hibernate"

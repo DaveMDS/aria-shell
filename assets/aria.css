@@ -211,7 +211,8 @@ surface.launcher item.action > icon {
  *
  * surface.exiter
  * ├─ row                                one per `columns` buttons
- * │  ╰─ button.<action>.flat[.selected]
+ * │  ╰─ button.<action>.flat            :focus: Tab gives it to the
+ * │     │                               first, the arrows move it
  * │     ├─ icon
  * │     ╰─ label
  * ╰─ confirm                            while an action waits
@@ -235,7 +236,8 @@ surface.exiter > row > button {
   flex-direction: column;
   border-radius: var(--radius-xl);
 }
-surface.exiter > row > button.selected {
+surface.exiter > row > button:focus {
+  outline: none;
   background: var(--border);
 }
 surface.exiter > row > button > icon {

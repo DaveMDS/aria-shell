@@ -142,10 +142,14 @@ impl<'a, Message: Clone + 'a> From<Menu<'a, Message>> for Element<'a, Message> {
 /// under their items.
 fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Element<'a, Message>> {
     let entries = || items.iter().filter_map(|item| item.entry.as_ref());
-    // A column of marks, or of icons, when one item has one: the labels
-    // line up.
+    // One column before the labels when an item has a mark or an icon:
+    // its mark, else its icon, else an empty room, so the labels line
+    // up. Two only when an item has both: the marks', the icons'.
     let marks = entries().any(|e| e.mark != Mark::None);
     let icons = entries().any(|e| e.icon.is_some());
+    let both = entries().any(|e| e.mark != Mark::None && e.icon.is_some());
+    let empty_check = || row([]).kind_of(name!("check")).into();
+    let empty_icon = || row([]).kind_of(name!("icon")).into();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         let Some(entry) = item.entry else {
@@ -159,18 +163,21 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
         };
         let expanded = matches!(entry.submenu, Some((true, _)));
         let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(5);
-        if marks {
-            parts.push(match entry.mark {
-                Mark::Check(_) => check_part(),
-                Mark::Radio(_) => radio_part(),
-                Mark::None => row([]).kind_of(name!("check")).into(),
-            });
-        }
-        if icons {
-            parts.push(match entry.icon {
-                Some(source) => icon(source).into(),
-                None => row([]).kind_of(name!("icon")).into(),
-            });
+        let lead = match entry.mark {
+            Mark::Check(_) => Some(check_part()),
+            Mark::Radio(_) => Some(radio_part()),
+            Mark::None => None,
+        };
+        let icon = entry.icon.map(|source| icon(source).into());
+        if both {
+            parts.push(lead.unwrap_or_else(empty_check));
+            parts.push(icon.unwrap_or_else(empty_icon));
+        } else if let Some(part) = lead.or(icon) {
+            parts.push(part);
+        } else if marks {
+            parts.push(empty_check());
+        } else if icons {
+            parts.push(empty_icon());
         }
         parts.push(text(entry.label).into());
         if let Some(shortcut) = entry.shortcut {

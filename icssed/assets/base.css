@@ -755,9 +755,12 @@ scrollbar:active > thumb {
  * │  │                  a button; :disabled without a message
  * │  ├─ check > mark    (.check) a check box, a toggle's (see Toggles)
  * │  ├─ radio > dot     (.radio) a radio, a toggle's
- * │  ├─ check           empty on the other items of a level where one
- * │  │                  has either, so labels line up
- * │  ├─ icon            the same: empty on an item without one
+ * │  ├─ icon            in the same column: an item's mark, else its
+ * │  │                  icon; in a column of their own only where an
+ * │  │                  item of the level has both
+ * │  ├─ check | icon    empty, on an item with neither where another
+ * │  │                  has one, so labels line up (check where a mark
+ * │  │                  is, icon otherwise)
  * │  ├─ label
  * │  ├─ shortcut
  * │  ╰─ arrow           a submenu's

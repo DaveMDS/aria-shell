@@ -1124,6 +1124,51 @@ fn a_menu_presses_its_items_and_unfolds_in_place() {
 }
 
 #[test]
+fn a_menus_marks_and_icons_share_a_column() {
+    use crate::MenuItem;
+    let sheet = sheet(MENU);
+    let root = sheet.root("root", 1.0);
+    let square = || {
+        crate::IconFile::Svg {
+        handle: iced::advanced::svg::Handle::from_memory(
+            b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2'><rect width='2' height='2'/></svg>".as_slice(),
+        ),
+        symbolic: true,
+    }
+    };
+    let menu = |both: bool| -> Element<'_, Message> {
+        let mut checked = MenuItem::new("Checked").check(true);
+        if both {
+            checked = checked.icon(square());
+        }
+        crate::column([crate::menu([
+            MenuItem::new("Icon").icon(square()),
+            checked,
+            MenuItem::new("Plain"),
+        ])
+        .into()])
+        .at(root)
+        .into()
+    };
+    let mut ui = Harness::new(menu(false), Size::new(300.0, 300.0), 1.0);
+    let labels = ui.find(&sheet, "menu > item > label");
+    assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
+    // The icon where the check is: one column, the plain item's room a check's.
+    let icon = ui.find(&sheet, "menu > item > icon");
+    let check = ui.find(&sheet, "menu > item > check");
+    assert_eq!((icon.len(), check.len()), (1, 2));
+    assert!(check.iter().all(|c| c.x == icon[0].x), "{icon:?} {check:?}");
+    // An item with both: two columns, every item a room in each.
+    ui.rebuild(menu(true));
+    let labels = ui.find(&sheet, "menu > item > label");
+    assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
+    let icon = ui.find(&sheet, "menu > item > icon");
+    let check = ui.find(&sheet, "menu > item > check");
+    assert_eq!((icon.len(), check.len()), (3, 3));
+    assert!(icon[0].x > check[0].x, "{icon:?} {check:?}");
+}
+
+#[test]
 fn up_and_down_move_the_focus_among_a_menus_items() {
     let sheet = sheet(MENU);
     let root = sheet.root("root", 1.0);

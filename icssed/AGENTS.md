@@ -160,7 +160,7 @@ to choose.
 | `meter(fraction).label(text)` | with a label, a gauge |
 | `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
 | `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
-| `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are a toggle's (`check > mark`, `radio > dot`) |
+| `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are a toggle's (`check > mark`, `radio > dot`); an icon goes in their column, two columns only for an item with both |
 | `tabs([Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
 | `calendar(Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
 | `graph(capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |

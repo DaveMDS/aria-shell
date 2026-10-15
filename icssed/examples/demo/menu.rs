@@ -16,6 +16,9 @@
 //!   controlled widget.
 //! - `.submenu(open, items)` nests items under it, unfolded while `open`
 //!   is true: the app holds that too.
+//! - `.icon(s)` puts an icon before the label, in the column of the
+//!   checks and the radios: an item has one or the other, and the
+//!   labels line up. Only where an item has both are they two columns.
 //! - `.class(c)` styles one item (`.danger` below).
 //! - Up and Down move the focus round the items once one has it; Enter
 //!   picks.

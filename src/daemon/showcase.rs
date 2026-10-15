@@ -8,7 +8,8 @@
 //! side by side on one transparent layer surface over the focused
 //! output, between its bars: what shows through is the desktop, as on
 //! the real ones. Inert: what the parts would do is dropped, their
-//! hover still shows. Escape, a click beside the parts or the command
+//! hover still shows; only the toolkit's widgets, in a box of their
+//! own, work, on a state of their own. Escape, a click beside the parts or the command
 //! again close it; a theme change redraws it like any surface. Its own
 //! layout, the room around the parts and between them, is aria.css's
 //! (`showcase`).
@@ -22,10 +23,11 @@
 //! │     ╰─ icon | label                      their selector in a tooltip
 //! ╰─ columns > column
 //!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
-//!    ├─ launcher
+//!    ├─ launcher, widgets                    the toolkit's widgets, below
 //!    ├─ exiter
 //!    ├─ osd.volume
-//!    ╰─ notification.normal | notification.critical
+//!    ├─ notification.normal | notification.critical
+//!    ╰─ widgets#graph                         a graph, in a box of its own
 //! ```
 
 use iced::widget::mouse_area;
@@ -126,6 +128,13 @@ const BAR: &[(&str, &[SampleGadget])] = &[
     ]),
 ];
 
+/// The icons the widgets' box draws.
+const WIDGET_ICONS: &[&str] = &[
+    "starred-symbolic",
+    "system-search-symbolic",
+    "view-reveal-symbolic",
+];
+
 /// A sample button's selector, `gadget.<kind> > button.<class>...`.
 fn selector(kind: Option<&str>, sample: &Sample) -> String {
     let gadget = match kind {
@@ -144,6 +153,69 @@ fn sample_icons() -> impl Iterator<Item = &'static str> {
         .filter_map(|s| s.icon)
 }
 
+/// The state of the widgets' box, what its widgets change.
+struct Widgets {
+    toggle: bool,
+    check: bool,
+    radio: usize,
+    switch: bool,
+    value: f32,
+    input: String,
+    password: String,
+    peek: bool,
+    choice: Option<usize>,
+    tab: usize,
+}
+
+impl Default for Widgets {
+    fn default() -> Self {
+        Self {
+            toggle: true,
+            check: true,
+            radio: 0,
+            switch: true,
+            value: 40.0,
+            input: String::new(),
+            password: "password".to_owned(),
+            peek: false,
+            choice: None,
+            tab: 0,
+        }
+    }
+}
+
+/// What the widgets' box's widgets do.
+#[derive(Debug, Clone)]
+pub(crate) enum Widget {
+    Toggle(bool),
+    Check(bool),
+    Radio(usize),
+    Switch(bool),
+    Value(f32),
+    Input(String),
+    Password(String),
+    Peek,
+    Choose(usize),
+    Tab(usize),
+}
+
+impl Widgets {
+    fn update(&mut self, widget: Widget) {
+        match widget {
+            Widget::Toggle(on) => self.toggle = on,
+            Widget::Check(on) => self.check = on,
+            Widget::Radio(i) => self.radio = i,
+            Widget::Switch(on) => self.switch = on,
+            Widget::Value(value) => self.value = value,
+            Widget::Input(text) => self.input = text,
+            Widget::Password(text) => self.password = text,
+            Widget::Peek => self.peek = !self.peek,
+            Widget::Choose(choice) => self.choice = Some(choice),
+            Widget::Tab(tab) => self.tab = tab,
+        }
+    }
+}
+
 pub(crate) struct Showcase {
     pub window: Id,
     pub output: OutputId,
@@ -153,6 +225,7 @@ pub(crate) struct Showcase {
     gadgets: Vec<AnyGadget>,
     notifications: Vec<Notification>,
     osd: osd::Content,
+    widgets: Widgets,
     /// A press landed beside the parts: the release closes.
     pressed_outside: bool,
 }
@@ -166,6 +239,7 @@ pub(crate) enum Message {
     Released,
     /// Escape, on window `Id`.
     Escape(Id),
+    Widget(Widget),
 }
 
 impl Showcase {
@@ -183,6 +257,7 @@ impl Showcase {
             .chain(notifications)
             .chain(self.gadgets.iter().flat_map(AnyGadget::icon_names))
             .chain(sample_icons().map(str::to_owned))
+            .chain(WIDGET_ICONS.iter().map(|&name| name.to_owned()))
     }
 
     /// Desktop ids of the launcher's results, for icon resolution.
@@ -292,6 +367,7 @@ impl AriaShell {
                 muted: false,
                 outputs: None,
             },
+            widgets: Widgets::default(),
             pressed_outside: false,
         });
         self.resolve_icons();
@@ -333,6 +409,10 @@ impl AriaShell {
         };
         match message {
             Message::Nothing => Task::none(),
+            Message::Widget(widget) => {
+                showcase.widgets.update(widget);
+                Task::none()
+            }
             Message::PressedOutside => {
                 showcase.pressed_outside = true;
                 Task::none()
@@ -383,14 +463,122 @@ impl AriaShell {
         let column = |children: Vec<Element<'a, Shell>>| icssed::column(children).kind("column");
         let columns = icssed::row![
             column(popups.collect()),
-            column(vec![launcher]),
-            column([exiter, osd].into_iter().chain(toasts).collect()),
+            column(vec![
+                launcher,
+                inert(self.widgets_view(&showcase.widgets, scale))
+            ]),
+            column(
+                [exiter, osd]
+                    .into_iter()
+                    .chain(toasts)
+                    .chain([inert(self.graph_view(scale))])
+                    .collect()
+            ),
         ]
         .kind("columns");
         let parts = icssed::column![inert(self.bar_view(scale)), columns].kind("parts");
         mouse_area(icssed::column![parts].at(theme.root("showcase", scale)))
             .on_press(Shell::Showcase(Message::PressedOutside))
             .on_release(Shell::Showcase(Message::Released))
+            .into()
+    }
+
+    /// The toolkit's widgets, each family on a line, in their states:
+    /// what the gadgets' popups are made of. Their labels are what
+    /// they show, the theme's names. They work, but for the disabled
+    /// ones: the slider moves the meter.
+    fn widgets_view<'a>(&'a self, state: &'a Widgets, scale: f32) -> Element<'a, Shell> {
+        let icons: &dyn icssed::Icons = &self.icons;
+        let star = || icssed::icon((icons, "starred-symbolic"));
+        let on = |widget| Shell::Showcase(Message::Widget(widget));
+        let buttons = icssed::row![
+            icssed::button![star(), icssed::text("button")].on_press(nothing(())),
+            icssed::button![icssed::text("flat")]
+                .class("flat")
+                .on_press(nothing(())),
+            icssed::button![icssed::text("primary")]
+                .class("primary")
+                .on_press(nothing(())),
+            icssed::button![icssed::text("danger")]
+                .class("danger")
+                .on_press(nothing(())),
+            icssed::tooltip(icssed::button![star()].on_press(nothing(())), "tooltip"),
+        ];
+        let radios = (0..2).map(|i| {
+            let radio = icssed::toggle(state.radio == i, move |_| on(Widget::Radio(i))).radio();
+            if i == 0 { radio.label("radio") } else { radio }.into()
+        });
+        let toggle = icssed::toggle(state.toggle, move |c| on(Widget::Toggle(c)))
+            .icon((icons, "starred-symbolic"))
+            .label("toggle");
+        let check = icssed::toggle(state.check, move |c| on(Widget::Check(c)))
+            .check()
+            .label("check");
+        let switch = icssed::toggle(state.switch, move |c| on(Widget::Switch(c))).switch();
+        let toggles = icssed::row(
+            [toggle.into(), check.into()]
+                .into_iter()
+                .chain(radios)
+                .chain([switch.into()]),
+        );
+        let values = icssed::row![
+            icssed::slider(0.0..=100.0, state.value, move |v| on(Widget::Value(v))).step(1.0),
+            icssed::meter(state.value / 100.0),
+        ];
+        let fields = icssed::row![
+            icssed::input("input", &state.input)
+                .on_input(move |t| on(Widget::Input(t)))
+                .leading(icssed::icon((icons, "system-search-symbolic"))),
+            icssed::input("password", &state.password)
+                .on_input(move |t| on(Widget::Password(t)))
+                .secure(!state.peek)
+                .trailing(
+                    icssed::toggle(state.peek, move |_| on(Widget::Peek))
+                        .class("peek")
+                        .icon((icons, "view-reveal-symbolic")),
+                ),
+            icssed::select(["one", "two", "three"], state.choice, move |c| {
+                on(Widget::Choose(c))
+            })
+            .placeholder("select"),
+        ];
+        let disabled = icssed::row![
+            icssed::button![icssed::text("button")].disabled_if(true),
+            icssed::toggle(true, nothing).check().disabled_if(true),
+            icssed::toggle(true, nothing).radio().disabled_if(true),
+            icssed::toggle(true, nothing).switch().disabled_if(true),
+            icssed::slider(0.0..=1.0, 0.3, nothing).disabled_if(true),
+            icssed::select(["select"], Some(0), nothing).disabled_if(true),
+        ];
+        let tabs = icssed::tabs(
+            ["tab", "tab", "tab"]
+                .into_iter()
+                .enumerate()
+                .map(|(i, title)| {
+                    icssed::Tab::new(title, on(Widget::Tab(i))).active(i == state.tab)
+                }),
+        );
+        icssed::column![
+            buttons.kind("line"),
+            toggles.kind("line"),
+            values.kind("line"),
+            fields.kind("line"),
+            disabled.kind("line"),
+            tabs,
+        ]
+        .at(self.theme.root("widgets", scale))
+        .into()
+    }
+
+    /// A graph, in a box of its own: `surface.widgets#graph`.
+    fn graph_view(&self, scale: f32) -> Element<'_, Shell> {
+        let load = (0..60).map(|i| {
+            let t = i as f32 / 6.0;
+            50.0 + 30.0 * t.sin() + 10.0 * (t * 3.1).cos()
+        });
+        let graph = icssed::graph(60).series(load).max(100.0).label("graph");
+        icssed::column![graph]
+            .at(self.theme.root("widgets", scale).id("graph"))
             .into()
     }
 

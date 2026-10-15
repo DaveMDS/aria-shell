@@ -559,6 +559,13 @@ notification actions {
  *    │                        as the columns, over them
  *    ╰─ columns               a row
  *       ╰─ column             parts, one under the other
+ *
+ * surface.widgets             the toolkit's widgets, under the launcher:
+ * ├─ line                     a family on each: buttons, toggles, a
+ * │                           slider and a meter, fields, disabled ones
+ * ╰─ tabs
+ * surface.widgets#graph       a graph, under the notifications
+ * ╰─ graph
  */
 surface.showcase {
   width: fill;
@@ -574,6 +581,14 @@ surface.showcase > parts > columns,
 surface.showcase > parts > columns > column {
   gap: 24px;
   align-items: start;
+}
+surface.widgets {
+  padding: 12px;
+  gap: 12px;
+}
+surface.widgets > line {
+  gap: 8px;
+  align-items: center;
 }
 
 /*

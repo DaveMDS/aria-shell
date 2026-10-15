@@ -15,7 +15,7 @@ use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
 use iced::{Event, Length, Point, Rectangle, Size, Vector, touch};
 
-use super::boxed::{BoxState, Boxed};
+use super::boxed::{self, BoxState, Boxed};
 use super::flex::row;
 use super::meter::meter;
 use super::place::{self, placed};
@@ -267,6 +267,9 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Slider<'_, Message> {
         let over = cursor.is_over(self.boxed.border_box(layout.bounds()));
         let dragged = state.boxed.states.contains(States::ACTIVE);
         let free = !shell.is_event_captured();
+        if enabled && let Some(primary) = boxed::press(event) {
+            state.boxed.pressed(primary && over && free);
+        }
 
         let value = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))

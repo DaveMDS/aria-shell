@@ -18,7 +18,7 @@ use iced::advanced::Renderer as _;
 use iced::advanced::renderer;
 use iced::advanced::widget::operation::Focusable;
 use iced::advanced::{Shell, mouse};
-use iced::{Length, Rectangle, Size, Transformation, Vector};
+use iced::{Event, Length, Rectangle, Size, Transformation, Vector, touch};
 
 use super::place::Place;
 use crate::anim::Animated;
@@ -61,23 +61,48 @@ impl BoxState {
     }
 }
 
+impl BoxState {
+    fn set_focus(&mut self, states: States) {
+        let after = self
+            .states
+            .with(States::FOCUS | States::FOCUS_VISIBLE, false)
+            .with(states, true);
+        if after != self.states {
+            self.states = after;
+            self.animated.changed();
+        }
+    }
+
+    /// A press of the pointer, `here` on the box: it takes the focus
+    /// without showing it (`:focus`, not `:focus-visible`), as a click
+    /// does in a page; anywhere else it loses it.
+    pub fn pressed(&mut self, here: bool) {
+        self.set_focus(if here { States::FOCUS } else { States::NONE });
+    }
+}
+
+/// The keyboard's focus and the app's (iced's operations): shown.
 impl Focusable for BoxState {
     fn is_focused(&self) -> bool {
         self.states.contains(States::FOCUS)
     }
 
     fn focus(&mut self) {
-        if !self.is_focused() {
-            self.states = self.states.with(States::FOCUS, true);
-            self.animated.changed();
-        }
+        self.set_focus(States::FOCUS | States::FOCUS_VISIBLE);
     }
 
     fn unfocus(&mut self) {
-        if self.is_focused() {
-            self.states = self.states.with(States::FOCUS, false);
-            self.animated.changed();
-        }
+        self.set_focus(States::NONE);
+    }
+}
+
+/// Whether `event` is a press of the pointer, and then whether of its
+/// primary button (the one that focuses).
+pub(crate) fn press(event: &Event) -> Option<bool> {
+    match event {
+        Event::Mouse(mouse::Event::ButtonPressed(button)) => Some(*button == mouse::Button::Left),
+        Event::Touch(touch::Event::FingerPressed { .. }) => Some(true),
+        _ => None,
     }
 }
 

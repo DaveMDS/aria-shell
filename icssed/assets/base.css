@@ -10,8 +10,8 @@
  *     list with one bad selector skips the whole rule, as in CSS
  *   - selectors: type, .class, #id, [attr], [attr="value"], *,
  *     descendant (a space), child (>); the pseudo-classes :hover :active
- *     :focus :disabled :root :first-child :last-child :nth-child(an+b)
- *     :nth-last-child(an+b)
+ *     :focus :focus-visible :disabled :root :first-child :last-child
+ *     :nth-child(an+b) :nth-last-child(an+b)
  *   - `:root` matches the root element of every surface, a `surface`
  *     with the name the app gave it as a class (`surface.popup`)
  *   - variables: `--name: value` in `:root`, used as
@@ -200,7 +200,11 @@
  *
  * States: :hover, :active and :focus follow the pointer and the
  * keyboard; :disabled is set where a widget is built. Unlike CSS, a
- * disabled element is never :hover or :active. A state may change any
+ * disabled element is never :hover or :active. As in CSS, :focus is
+ * the focus however it came, a press of the pointer too (a press
+ * elsewhere takes it away); :focus-visible only when it should show:
+ * given by the keyboard (Tab, the arrows) or by the app, and always on
+ * an input. The base shows the focus on :focus-visible. A state may change any
  * property of its own element and of its descendants, except the
  * descendants' sizes (width, padding, font, ...): those follow only an
  * element's own states.
@@ -332,7 +336,7 @@ button:hover {
 button:active {
   background: var(--border);
 }
-button:focus {
+button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -402,7 +406,7 @@ toggle {
 toggle:hover {
   border-color: var(--accent);
 }
-toggle:focus {
+toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -446,14 +450,14 @@ toggle.switch:disabled {
   opacity: 0.5;
 }
 /* The focus is shown on the toolkit's part, around its own shape. */
-toggle.check:focus,
-toggle.radio:focus,
-toggle.switch:focus {
+toggle.check:focus-visible,
+toggle.radio:focus-visible,
+toggle.switch:focus-visible {
   outline: none;
 }
-toggle.check:focus > check,
-toggle.radio:focus > radio,
-toggle.switch:focus > switch {
+toggle.check:focus-visible > check,
+toggle.radio:focus-visible > radio,
+toggle.switch:focus-visible > switch {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -589,7 +593,7 @@ slider:hover > knob {
 slider:active > knob {
   background: var(--accent);
 }
-slider:focus > knob {
+slider:focus-visible > knob {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -634,8 +638,9 @@ meter > label {
  *
  * A line of text to edit (`icssed::input`): iced's text input in a box, with
  * the app's children before and after it (an icon, a toggle to peek at
- * a password). The box is `:focus` while its field has the focus (CSS's
- * `:focus-within`); a press on it puts the focus in the field. The
+ * a password). The box is `:focus` and `:focus-visible` while its field
+ * has the focus (CSS's `:focus-within`); a press on it puts the focus in
+ * the field. The
  * field takes the free room, its text centred on its letters as a
  * label's is; iced draws it, so its colours don't transition.
  *
@@ -780,7 +785,7 @@ menu item {
   transition: background-color 80ms;
 }
 menu item:hover,
-menu item:focus {
+menu item:focus-visible {
   background: var(--border);
 }
 menu item:disabled {
@@ -852,7 +857,7 @@ tabs > tab.active {
   border-bottom-color: var(--accent);
   color: var(--fg);
 }
-tabs > tab:focus {
+tabs > tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -926,7 +931,7 @@ calendar day {
 calendar day:hover {
   background: var(--border);
 }
-calendar day:focus {
+calendar day:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -1051,7 +1056,7 @@ select:hover,
 select:active {
   border-color: var(--accent);
 }
-select:focus {
+select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

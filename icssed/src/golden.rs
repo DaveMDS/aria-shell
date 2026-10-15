@@ -402,13 +402,12 @@ fn golden_controls_focused_and_dragged() {
         Size::new(360.0, 90.0),
         controls,
         |ui, sheet| {
-            // The slider's knob pressed, then the focus on the second
-            // toggle (a press takes the focus away, a key brings it).
+            // The slider's knob pressed (its focus, not shown), then
+            // Shift+Tab back to the second toggle: its focus shown.
             let knob = ui.find(sheet, "slider > knob")[0];
             ui.move_to(knob.center());
             ui.press();
-            ui.key(Named::Tab);
-            ui.key(Named::Tab);
+            ui.key_with(Named::Tab, iced::keyboard::Modifiers::SHIFT);
         },
     );
 }

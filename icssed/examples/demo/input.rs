@@ -15,7 +15,7 @@
 //! - `.id(id)` names it for iced's focus operations: an app focuses it
 //!   when its surface opens.
 //!
-//! The box is `:focus` while its text has the focus (CSS's
+//! The box is `:focus` and `:focus-visible` while its text has the focus (CSS's
 //! `:focus-within`), and a press anywhere on it puts the focus there.
 //! The text itself is `input > field`, with its `placeholder` and its
 //! `selection`: iced draws them, so their colours don't transition.

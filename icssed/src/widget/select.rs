@@ -22,7 +22,7 @@ use iced::advanced::{Clipboard, Shell, mouse};
 use iced::keyboard::{self, key};
 use iced::{Event, Length, Point, Rectangle, Size, Vector, touch};
 
-use super::boxed::{BoxState, Boxed};
+use super::boxed::{self, BoxState, Boxed};
 use super::menu::{MenuItem, menu};
 use super::place::{self, placed};
 use super::text::{mark, text};
@@ -243,6 +243,13 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Select<'_, Message> {
         let bounds = self.boxed.border_box(layout.bounds());
         let over = cursor.is_over(bounds);
         let free = enabled && !shell.is_event_captured();
+        // Open, a press is its options' (an overlay's): the focus stays.
+        if enabled
+            && !state.open()
+            && let Some(primary) = boxed::press(event)
+        {
+            state.boxed.pressed(primary && over && free);
+        }
         let toggle = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => free && over,

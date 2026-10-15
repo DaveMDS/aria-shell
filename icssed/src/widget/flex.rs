@@ -15,7 +15,7 @@ use iced::advanced::{Clipboard, Shell, mouse, overlay};
 use iced::keyboard::{self, key};
 use iced::{Event, Length, Rectangle, Size, Vector, touch};
 
-use super::boxed::{BoxState, Boxed};
+use super::boxed::{self, BoxState, Boxed};
 use super::place::{self, Place, placed};
 use crate::layout::flex;
 use crate::query::Reported;
@@ -263,6 +263,9 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         }
         let before = state.states;
         let over = cursor.is_over(self.boxed.border_box(layout.bounds()));
+        if pressable && let Some(primary) = boxed::press(event) {
+            state.pressed(primary && over && !shell.is_event_captured());
+        }
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))

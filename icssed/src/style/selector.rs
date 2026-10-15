@@ -2,7 +2,7 @@
 //! of a node's path.
 //!
 //! Type, `.class`, `#id`, `[attr]`, `[attr="value"]`, `*`, descendant
-//! and child (`>`) combinators; `:hover :active :focus :disabled :root
+//! and child (`>`) combinators; `:hover :active :focus :focus-visible :disabled :root
 //! :first-child :last-child :nth-child() :nth-last-child()`.
 
 use cssparser::{ParseError, Parser, ToCss, Token};
@@ -341,6 +341,7 @@ fn pseudo_class(p: &mut Parser, ctx: &mut Ctx, c: &mut Compound) -> Result<(), E
             "hover" => c.states |= States::HOVER,
             "active" => c.states |= States::ACTIVE,
             "focus" => c.states |= States::FOCUS,
+            "focus-visible" => c.states |= States::FOCUS_VISIBLE,
             "disabled" => c.disabled = true,
             "root" => c.root = true,
             "first-child" => {

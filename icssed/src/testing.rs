@@ -168,6 +168,15 @@ impl<'a, Message> Harness<'a, Message> {
 
     /// A named key, pressed and released.
     pub fn key(&mut self, named: key::Named) -> window::RedrawRequest {
+        self.key_with(named, keyboard::Modifiers::default())
+    }
+
+    /// A named key pressed and released with `modifiers` held (Shift+Tab).
+    pub fn key_with(
+        &mut self,
+        named: key::Named,
+        modifiers: keyboard::Modifiers,
+    ) -> window::RedrawRequest {
         let key = keyboard::Key::Named(named);
         let physical = key::Physical::Unidentified(key::NativeCode::Unidentified);
         self.send(&[Event::Keyboard(keyboard::Event::KeyPressed {
@@ -175,7 +184,7 @@ impl<'a, Message> Harness<'a, Message> {
             modified_key: key.clone(),
             physical_key: physical,
             location: keyboard::Location::Standard,
-            modifiers: keyboard::Modifiers::default(),
+            modifiers,
             text: None,
             repeat: false,
         })]);
@@ -184,7 +193,7 @@ impl<'a, Message> Harness<'a, Message> {
             modified_key: key,
             physical_key: physical,
             location: keyboard::Location::Standard,
-            modifiers: keyboard::Modifiers::default(),
+            modifiers,
         })])
     }
 

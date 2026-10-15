@@ -1,7 +1,7 @@
 //! Keyboard focus within a scope: Tab and Shift+Tab move it among the
-//! buttons, sliders and inputs inside; a press of the pointer takes it
-//! away before what it presses sees it (`:focus` shows for the
-//! keyboard's sake, but a text field pressed takes it back). Per scope,
+//! buttons, sliders and inputs inside, shown (`:focus-visible`). A
+//! press of the pointer is the widgets' own: the one pressed takes the
+//! focus, not shown (`:focus` alone), the others lose it. Per scope,
 //! so per surface: an iced task would operate on every window an app
 //! has. A scope of the arrows moves it with Up and Down (a menu's) or
 //! Left and Right (tabs') instead, among its own, once one of them has
@@ -157,13 +157,6 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Event::Mouse(mouse::Event::ButtonPressed(_)) = event
-            && self.keys == Keys::Tab
-            && self.focused(tree, layout, renderer)
-        {
-            self.run(tree, layout, renderer, focusable::unfocus());
-            shell.request_redraw();
-        }
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,

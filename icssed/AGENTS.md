@@ -217,6 +217,10 @@ surface closes.
   (`lanes > track`), or choose names the base doesn't use. The
   old gallery's `track` once took a slider's fill height away, and test
   fixtures named `menu`/`item` got the menu's padding.
+- **`:focus` is CSS's**: a click gives it too; `:focus-visible` only
+  the keyboard (Tab, the arrows) and the app (a focus operation), and
+  an input always. Style the focus ring on `:focus-visible`, as the base
+  does; `:focus` alone also shows after a click.
 - **States**: `:hover`, `:active` and `:focus` are tracked only on
   nodes some rule can see them on, so a moving pointer over unthemed UI
   asks no frame. `:disabled` is part of the path (`disabled_if`), and
@@ -368,9 +372,11 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
 - `focus_next`/`focus_previous` stop at the ends: the focus leaves.
   That's right for Tab; an arrows scope (a menu's, tabs', a grid's)
   moves it round with an operation of ours (`Round` in `focus.rs`); a
-  grid's picks its target from the focusables' bounds (`Places`). The focus scope
-  drops the focus *before* a press reaches the content, so a pressed
-  text field takes it back.
+  grid's picks its target from the focusables' bounds (`Places`).
+- iced's `Focusable` has `focus`/`unfocus` and nothing of how: its
+  `focus` is the keyboard's and the app's (shown, `:focus-visible`); a
+  press is the widget's own (`BoxState::pressed`, `:focus` alone), and
+  takes the focus from every other widget, which all see it.
 - `Scrollable::operate` doesn't move its content's layout; it calls
   `operation.scrollable(.., translation, ..)` and lets each operation
   apply it. The query does (`Report`). A widget learns where it's shown
@@ -441,7 +447,8 @@ let root = sheet.root("root", 1.5);                   // the harness's scale
 let mut ui = Harness::new(view(root), Size::new(300.0, 200.0), 1.5);
 ui.move_to(point); ui.press(); ui.release(); ui.click(point);
 ui.click_on(&sheet, "menu > item:nth-child(2)");     // by selector
-ui.key(Named::Tab); ui.type_text("hi"); ui.send(&[event]);
+ui.key(Named::Tab); ui.key_with(Named::Tab, Modifiers::SHIFT);
+ui.type_text("hi"); ui.send(&[event]);
 let found = ui.find(&sheet, "slider > knob");         // border boxes, as shown
 let all = ui.report();                                // every widget: sheet.matching(..), found.path(&sheet)
 ui.operate(&mut operation);                           // any iced operation, its outcome

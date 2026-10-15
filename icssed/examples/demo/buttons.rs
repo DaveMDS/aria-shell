@@ -11,7 +11,8 @@
 //! `.danger`; an app adds its own classes and rules.
 //!
 //! - `:hover`, `:active` and `:focus` follow the pointer and the
-//!   keyboard: Tab moves the focus, Enter and Space press.
+//!   keyboard: a click or Tab gives the focus, Enter and Space press;
+//!   the base's ring is on `:focus-visible`, the keyboard's only.
 //! - A grid of buttons in `focus_scope(grid).arrows()` takes the four
 //!   arrows instead, once one of them has the focus: each moves it to
 //!   the nearest button that way, round to the other end of the row or

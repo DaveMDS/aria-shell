@@ -46,7 +46,8 @@ crate itself (AGENTS.md, "What things cost").
   not taffy (25× slower nested in iced's per-widget layout, and its
   `fill` semantics differ).
 - **States live in the widget tree** (`Tree::state`), which survives
-  the rebuilds: hover on any element, `:active`, `:focus`, `:disabled`,
+  the rebuilds: hover on any element, `:active`, `:focus`,
+  `:focus-visible`, `:disabled`,
   tracked only by the nodes some rule can make depend on them.
 - **Animations ask frames only while they run**, from the tree state,
   for their own surface (no view rebuild per frame).
@@ -132,7 +133,7 @@ every node was 46% of Aria's CPU with the pointer moving (Aria's
 ARCHITECTURE.md).
 
 Selectors: type, `.class`, `#id`, `[attr="value"]`, `*`, descendant,
-child (`>`), `:hover :active :focus :disabled :first-child :last-child
+child (`>`), `:hover :active :focus :focus-visible :disabled :first-child :last-child
 :nth-child() :nth-last-child() :root`. Specificity then source order.
 No `!important`, no `@media`; `@keyframes` yes (see Animation).
 
@@ -521,9 +522,12 @@ root node's, and what was measured is what the window lays out.
   itself through `operate`; a `focus_scope` widget takes Tab and
   Shift+Tab and runs the operation on its own subtree from `update`, so
   focus stays per surface (an app `Task` would run on every window
-  under `iced_exwlshell`). Enter/Space press the focused box; `:focus`
-  and `outline` show it. A press of the pointer drops the focus before
-  the content sees it, so a pressed text field takes it back. Tab
+  under `iced_exwlshell`). Enter/Space press the focused box. As in
+  CSS, a press of the pointer focuses what it presses and takes the
+  focus from everything else (each widget sees the press: no scope
+  needed), `:focus` without `:focus-visible`; the keyboard's focus and
+  the app's (iced's operations, `Focusable::focus`) are both, and an
+  input's always: the base's outlines are on `:focus-visible`. Tab
   leaves the scope at its ends, as iced's operations have it; a menu's
   and tabs' scopes move it with the arrows instead, round from one end
   to the other (an operation of ours), once one of theirs has it; a

@@ -47,6 +47,9 @@ demo#states tile.press:active {
 }
 
 demo#states tile.focus:focus {
+  background: var(--accent-soft);
+}
+demo#states tile.focus:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

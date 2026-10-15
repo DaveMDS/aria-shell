@@ -73,8 +73,8 @@ impl Name {
     }
 }
 
-/// The interaction states of an element, as `:hover`, `:active` and
-/// `:focus` match them.
+/// The interaction states of an element, as `:hover`, `:active`,
+/// `:focus` and `:focus-visible` match them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct States(u8);
 
@@ -83,6 +83,9 @@ impl States {
     pub const HOVER: Self = Self(1);
     pub const ACTIVE: Self = Self(2);
     pub const FOCUS: Self = Self(4);
+    /// The focus, shown: given by the keyboard or the app, not by a
+    /// press of the pointer.
+    pub const FOCUS_VISIBLE: Self = Self(8);
 
     pub fn is_empty(self) -> bool {
         self.0 == 0

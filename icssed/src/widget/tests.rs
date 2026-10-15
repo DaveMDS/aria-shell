@@ -134,6 +134,41 @@ fn tab_moves_the_focus_and_enter_presses() {
 }
 
 #[test]
+fn a_press_focuses_without_showing_it_the_keyboard_shows_it() {
+    let sheet = sheet(
+        "button { width: 40px; height: 20px; background: rgb(255 0 0); transition: none; } \
+         button:focus { background: rgb(0 255 0); } \
+         button:focus-visible { background: rgb(0 0 255); }",
+    );
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(
+        crate::focus_scope(buttons(root, &["a", "b", "c"])),
+        Size::new(120.0, 40.0),
+        1.0,
+    );
+    let colours = |ui: &mut Harness<Message>| {
+        ui.frame(Instant::now());
+        let pixels = ui.pixels(Color::WHITE);
+        [10, 50, 90].map(|x| pixels.at(x, 10))
+    };
+    const RED: [u8; 4] = [255, 0, 0, 255];
+    const GREEN: [u8; 4] = [0, 255, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 255, 255];
+    // A click: `:focus`, not `:focus-visible`; Enter presses it.
+    ui.click(Point::new(50.0, 10.0));
+    ui.move_to(Point::new(200.0, 200.0));
+    assert_eq!(colours(&mut ui), [RED, GREEN, RED]);
+    ui.key(Named::Enter);
+    // Tab on from it: shown.
+    ui.key(Named::Tab);
+    assert_eq!(colours(&mut ui), [RED, RED, BLUE]);
+    // A press elsewhere takes it away.
+    ui.press();
+    assert_eq!(colours(&mut ui), [RED, RED, RED]);
+    assert_eq!(ui.messages, [Message::Pressed("b"), Message::Pressed("b")]);
+}
+
+#[test]
 fn the_pointer_follows_a_transform() {
     let sheet = sheet(
         ".root { padding: 20px; } button { width: 40px; height: 20px; } \
@@ -754,8 +789,7 @@ fn a_toggle_asks_for_the_other_state() {
     assert_eq!(ui.messages, [Message::Toggled(true)]);
     ui.rebuild(view(true));
     assert_eq!(ui.find(&sheet, "toggle.checked > switch > knob").len(), 1);
-    // From the keyboard: Tab to it, then Space.
-    ui.key(Named::Tab);
+    // The click gave it the focus: Space presses it.
     ui.key(Named::Space);
     assert_eq!(
         ui.messages,
@@ -1285,10 +1319,9 @@ fn tabs_press_and_take_the_arrows() {
         ui.find(&sheet, "tab.active")[0],
         ui.find(&sheet, "tab:nth-child(2)")[0]
     );
+    // The click gives the third the focus: Right round to the first,
+    // Left and Left again back to the second.
     ui.click_on(&sheet, "tab:nth-child(3)");
-    // Tab to the first, Right to the second, Left and Left again: back
-    // round to the third.
-    ui.key(Named::Tab);
     ui.key(Named::ArrowRight);
     ui.key(Named::Enter);
     ui.key(Named::ArrowLeft);
@@ -1298,8 +1331,8 @@ fn tabs_press_and_take_the_arrows() {
         ui.messages,
         [
             Message::Pressed("three"),
-            Message::Pressed("two"),
-            Message::Pressed("three")
+            Message::Pressed("one"),
+            Message::Pressed("two")
         ]
     );
 }

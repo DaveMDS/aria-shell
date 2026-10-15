@@ -236,10 +236,6 @@ surface.exiter > row > button {
   flex-direction: column;
   border-radius: var(--radius-xl);
 }
-surface.exiter > row > button:focus-visible {
-  outline: none;
-  background: var(--border);
-}
 surface.exiter > row > button > icon {
   height: 40px;
 }

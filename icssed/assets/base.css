@@ -314,7 +314,7 @@ surface {
  * ╰─ label
  *
  * button            bordered
- * button.flat       no border, a background on hover
+ * button.flat       no border, a background on hover and on :focus-visible
  * button.primary    the action a dialog suggests
  * button.danger     an action not to take lightly
  *
@@ -350,8 +350,9 @@ button.flat {
   border-color: transparent;
   background: transparent;
 }
-button.flat:hover {
-  background: var(--border);
+button.flat:hover,
+button.flat:focus-visible {
+  background: var(--accent-soft);
 }
 button.primary {
   border-color: var(--accent);

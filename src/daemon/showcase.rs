@@ -24,7 +24,7 @@
 //! ╰─ columns > column
 //!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
 //!    ├─ launcher, widgets                     the toolkit's widgets, below
-//!    ├─ exiter
+//!    ├─ exiter                                its default button focused
 //!    ├─ osd.volume
 //!    ├─ notification.normal | notification.critical
 //!    ╰─ widgets#graph                         a graph, in a box of its own
@@ -258,6 +258,12 @@ impl Showcase {
             .chain(self.gadgets.iter().flat_map(AnyGadget::icon_names))
             .chain(sample_icons().map(str::to_owned))
             .chain(WIDGET_ICONS.iter().map(|&name| name.to_owned()))
+    }
+
+    /// The exit menu's default button focused, as on its own surface,
+    /// once the showcase's exists.
+    pub fn focus(&self) -> Task<Message> {
+        self.exiter.focus().map(|_| Message::Nothing)
     }
 
     /// Desktop ids of the launcher's results, for icon resolution.

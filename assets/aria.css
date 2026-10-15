@@ -211,8 +211,8 @@ surface.launcher item.action > icon {
  *
  * surface.exiter
  * ├─ row                                one per `columns` buttons
- * │  ╰─ button.<action>.flat            :focus: default_button on open,
- * │     │                               the arrows move it
+ * │  ╰─ button.<action>.flat            :focus-visible: default_button
+ * │     │                               on open, the arrows move it
  * │     ├─ icon
  * │     ╰─ label
  * ╰─ confirm                            while an action waits
@@ -236,7 +236,7 @@ surface.exiter > row > button {
   flex-direction: column;
   border-radius: var(--radius-xl);
 }
-surface.exiter > row > button:focus {
+surface.exiter > row > button:focus-visible {
   outline: none;
   background: var(--border);
 }

@@ -146,7 +146,7 @@ impl Show {
 /// (by name).
 fn scan(source: &Source) -> (Option<PathBuf>, Vec<PathBuf>, Vec<PathBuf>) {
     let roots = match source {
-        Source::None => Vec::new(),
+        Source::None | Source::Theme => Vec::new(),
         Source::Auto => config::xdg_data_dirs()
             .into_iter()
             .map(|dir| dir.join("backgrounds"))

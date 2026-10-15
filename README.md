@@ -154,19 +154,21 @@ names the connectors):
   pictures already there.
 - **a folder**: every image in it and in its sub-folders.
 - **a file**: that image (decoded by content, its name doesn't matter).
+- **`theme`**: no image, the theme's: the `surface.wallpaper` background of its
+  CSS, colours and images in layers (`background: url(glow.png) no-repeat,
+  url(stripes.png) black`).
 - **`none`**: no wallpaper from Aria Shell, for those who run another one
   (`swaybg`, `hyprpaper`, ...); without this, `auto` puts one on top of theirs.
 
 In a folder only `png`, `jpg`, `jpeg` and `webp` files count (other files live
 there too: GNOME's slideshow `.xml`), hidden files and folders are skipped. With
-no image found the monitor gets no wallpaper surface at all, and the
-compositor's background shows. Folders are watched: the first image put in a
+no image found the theme's background shows. Folders are watched: the first image put in a
 folder (even one that didn't exist yet) shows up at once. Paths take `~/...`, or
 are relative to `aria.conf`'s directory.
 
 ```ini
 [wallpaper]
-# auto | none | a folder | a file
+# auto | theme | none | a folder | a file
 source = auto
 # cover | contain | fill | none | scale-down
 fit = cover
@@ -189,6 +191,7 @@ on screen.
 - ✅ Fit modes: cover, contain, fill, none, scale-down (CSS `object-fit`)
 - ✅ Static images (reloaded when the file changes)
 - ✅ A default with no config: the user's backgrounds folder, else the system's
+- ✅ The theme's background, in CSS (`source = theme`, or no image found)
 - ✅ Cycle through the images of a folder (by name or random, every `interval`; `aria-shell wallpaper next`)
 - 🔲 Animated GIFs, videos
 - 🔲 `tile` fit mode

@@ -1,7 +1,8 @@
 # The wallpaper from a folder: its images in turn (by hand with
 # `aria-shell wallpaper next`, and every `interval`), images coming and
 # going while it's shown; `source = auto`, the user's backgrounds folder
-# winning over the system's as soon as it has an image; `none`. One
+# winning over the system's as soon as it has an image; `theme`, the
+# theme's background drawn alone; `none`. One
 # section for both outputs: they show the same image. The images are
 # gradients, horizontal (a) or vertical (b), told apart by sampling.
 
@@ -101,12 +102,15 @@ wait_wallpaper "images=3"
 echo "<background/>" > "$walls/slides.xml"
 settle 0.5
 assert_contains "$(aria debug wallpaper)" "images=3"
-# Every image gone: no wallpaper; one back: the wallpaper back.
+# Every image gone: the theme's background, on the surfaces still
+# there; one back: shown on them.
 rm -r "$walls"/*
-wait_count wallpaper "" 0 "no image, no wallpaper"
+wait_wallpaper "images=0"
+assert_contains "$(aria debug wallpaper)" "shown=- "
+assert_eq "$(count wallpaper)" 2 "no image, the theme's background on each output"
 cp "$ARIA_UI_ROOT/tests/ui/config/aria-shell/wallpapers/b.png" "$walls/9.png"
-wait_count wallpaper "" 2 "an image again, a wallpaper per output again"
 wait_wallpaper "shown=$walls/9.png"
+assert_eq "$(count wallpaper)" 2 "an image again, on the same surfaces"
 
 # --- every interval ------------------------------------------------------
 cp "$walls/9.png" "$walls/8.png"
@@ -148,6 +152,40 @@ assert_contains "$(aria debug wallpaper)" "root=$system/backgrounds "
 cp "$ARIA_UI_ROOT/tests/ui/config/aria-shell/wallpapers/b.png" "$data/backgrounds/mine.png"
 wait_wallpaper "shown=$data/backgrounds/mine.png"
 assert_contains "$(aria debug wallpaper)" "root=$data/backgrounds "
+
+# --- theme ---------------------------------------------------------------
+# No image looked for: the theme's background alone, its layers drawn (a
+# red picture over the top half, green under it).
+dir=$(config_with theme << EOF
+[wallpaper]
+source = theme
+EOF
+)
+python3 - "$dir/aria-shell/red.png" << 'PY'
+import struct, sys, zlib
+w = h = 2
+row = b"\0" + bytes((255, 0, 0) * w)
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+png += chunk(b"IDAT", zlib.compress(row * h)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PY
+cat > "$dir/aria-shell/theme-override.css" << 'CSS'
+surface.wallpaper {
+  background: url(red.png) no-repeat, rgb(0 255 0);
+  background-size: 100% 50%;
+}
+CSS
+restart_shell "$dir"
+wait_count wallpaper "" 2 "source = theme: a wallpaper per output"
+assert_contains "$(aria debug wallpaper)" "source=theme root=- images=0"
+settle 0.5
+for x in 10 1930; do
+    assert_eq "$(sample $x 300)" " 255 0 0" "the picture's layer on the top half ($x)"
+    assert_eq "$(sample $x 900)" " 0 255 0" "the colour under it ($x)"
+done
+shot theme "0,0 3840x1080"
 
 # --- none ----------------------------------------------------------------
 restart_shell "$(config_with none << EOF

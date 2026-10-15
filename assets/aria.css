@@ -330,7 +330,9 @@ surface.screenshot toolbar > button {
  * =========
  *
  * The desktop background, one surface per output; its `background` shows
- * without an image or around a `contain`ed one.
+ * without an image ([wallpaper] source = theme, or none found) or around
+ * a `contain`ed one. Images in it are decoded with the theme, at every
+ * load: a big photo is better as the source, under them.
  *
  * surface.wallpaper[output="<connector>"]
  */
@@ -338,6 +340,7 @@ surface.wallpaper {
   width: fill;
   height: fill;
   border: none;
+  background: var(--bg);
 }
 
 /*

@@ -2,16 +2,17 @@
 //! `background` layer showing an image, sized by CSS `object-fit`
 //! words. `[wallpaper]` for every output, `[wallpaper:<connector>]`
 //! for one. The source is a file, a folder (its images in turn, every
-//! `interval`) or `auto` (the `backgrounds` folder of the XDG data
-//! dirs: the user's, else the system's); each section is a [`Show`],
-//! shared by the outputs it covers.
+//! `interval`), `auto` (the `backgrounds` folder of the XDG data
+//! dirs: the user's, else the system's) or `theme` (no image); each
+//! section is a [`Show`], shared by the outputs it covers.
 //!
 //! [`Wallpapers`] knows the outputs and keeps a surface on each one
-//! whose show has an image ([`Surfaces`], which the daemon carries
-//! out). Images are decoded off-thread once per path and shared by the
-//! outputs showing the same file; only those on screen or about to be
-//! are kept. The folders are watched: an image coming or going is
-//! picked up, a surface opens when the first one comes.
+//! whose source isn't `none` ([`Surfaces`], which the daemon carries
+//! out): without an image, the theme's `wallpaper` background shows
+//! (its CSS backgrounds, layers and all). Images are decoded off-thread
+//! once per path and shared by the outputs showing the same file; only
+//! those on screen or about to be are kept. The folders are watched: an
+//! image coming or going is picked up.
 //!
 //! Still images only (what the `image` crate decodes: png, jpeg,
 //! webp); the Python version also played gifs, videos and shadertoy
@@ -59,6 +60,8 @@ pub enum Source {
     Auto,
     /// `none`: no wallpaper.
     None,
+    /// `theme`: no image, the theme's `wallpaper` background alone.
+    Theme,
     /// An image, or a folder of them; resolved against the config
     /// file's directory (or `~`) by [`WallpaperConfig::for_output`].
     Path(PathBuf),
@@ -125,6 +128,7 @@ impl Section for WallpaperConfig {
         let source = match raw.get("source") {
             None | Some("auto") => Source::Auto,
             Some("none") => Source::None,
+            Some("theme") => Source::Theme,
             Some(path) => Source::Path(PathBuf::from(path)),
         };
         let interval = raw.get("interval").and_then(|v| {
@@ -176,7 +180,7 @@ pub struct Wallpapers {
     outputs: BTreeMap<OutputId, Output>,
     /// One per section some output shows.
     shows: BTreeMap<String, Show>,
-    /// One surface per output whose show has an image.
+    /// One surface per output with a show.
     surfaces: BTreeMap<Id, OutputId>,
     /// One per file on screen or about to be, for however many outputs
     /// show it.
@@ -209,7 +213,8 @@ pub enum Event {
 }
 
 impl Wallpapers {
-    /// A new output: its wallpaper, if its section has an image.
+    /// A new output: its wallpaper, unless its section's source is
+    /// `none`.
     pub fn add_output(&mut self, config: &Config, output: &OutputInfo) -> (Surfaces, Task<Event>) {
         let id = OutputId::from(output);
         if self.outputs.contains_key(&id) {
@@ -267,7 +272,10 @@ impl Wallpapers {
                             show.files.len(),
                             root.display()
                         ),
-                        None => log::info!("wallpaper [{section}]: no image"),
+                        None if show.config.source == Source::Theme => {
+                            log::info!("wallpaper [{section}]: the theme's")
+                        }
+                        None => log::info!("wallpaper [{section}]: no image, the theme's"),
                     }
                     show
                 }
@@ -377,23 +385,19 @@ impl Wallpapers {
         }
         let tasks: Vec<Task<Event>> = loads.into_iter().map(load).collect();
 
+        // A surface for every output with a show, an image or not: the
+        // theme's background shows where there's none.
         let mut surfaces = Surfaces::default();
-        let has_image = |output: &Output| {
-            output
-                .show
-                .as_ref()
-                .and_then(|name| self.shows.get(name))
-                .is_some_and(|show| !show.files.is_empty())
-        };
+        let shown = |output: &Output| output.show.is_some();
         self.surfaces.retain(|&id, output| {
-            let keep = self.outputs.get(output).is_some_and(has_image);
+            let keep = self.outputs.get(output).is_some_and(shown);
             if !keep {
                 surfaces.close.push(id);
             }
             keep
         });
         for (&id, output) in &self.outputs {
-            if has_image(output) && !self.surfaces.values().any(|o| *o == id) {
+            if shown(output) && !self.surfaces.values().any(|o| *o == id) {
                 let window = Id::unique();
                 surfaces.open.push((window, layer_settings(&output.info)));
                 self.surfaces.insert(window, id);
@@ -516,6 +520,7 @@ impl Wallpapers {
                 let source = match &show.config.source {
                     Source::Auto => "auto".to_owned(),
                     Source::None => "none".to_owned(),
+                    Source::Theme => "theme".to_owned(),
                     Source::Path(p) => p.display().to_string(),
                 };
                 let position = show

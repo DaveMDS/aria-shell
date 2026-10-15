@@ -75,6 +75,7 @@ impl Gadget for Clock {
         let time = ctx.locale.date(&self.now, &self.config.format);
         icssed::row![
             icssed::button![icssed::text(time)]
+                .kind("indicator")
                 .on_press(Message::Toggle)
                 .id(self.popup.anchor())
         ]

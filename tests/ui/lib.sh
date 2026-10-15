@@ -6,7 +6,7 @@
 # coordinates in the nested Sway, where nothing else reserves space so
 # they are exact. Widgets are picked with theme selectors
 # (`launcher item:nth-child(3)`, `panel[output="HEADLESS-2"] gadget.clock
-# > button`): `widget <selector>` prints the first match as `x y w h`,
+# > indicator`): `widget <selector>` prints the first match as `x y w h`,
 # `click_widget <selector>` clicks its centre.
 
 aria() {

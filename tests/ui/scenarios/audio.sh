@@ -6,11 +6,11 @@
 
 mpris_start
 
-button='surface.panel[output="HEADLESS-1"] gadget.audio > button.output'
+button='surface.panel[output="HEADLESS-1"] gadget.audio > indicator.output'
 player='surface.popup player'
-wait_for 'gadget.audio > button.output' 2 "a volume button per bar"
-wait_for 'gadget.audio > button.input' 2 "a microphone button per bar (show_microphone)"
-wait_for 'gadget.audio > button > label' 4 "the percent after each icon (show_percent)"
+wait_for 'gadget.audio > indicator.output' 2 "a volume button per bar"
+wait_for 'gadget.audio > indicator.input' 2 "a microphone button per bar (show_microphone)"
+wait_for 'gadget.audio > indicator > label' 4 "the percent after each icon (show_percent)"
 
 click_widget "$button"
 assert_surface popup
@@ -48,9 +48,9 @@ click 600 600
 assert_no_surface popup
 
 # The microphone button opens the same popup, under itself.
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.audio > button.input'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.audio > indicator.input'
 assert_surface popup
-set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.audio > button.input')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.audio > indicator.input')
 mic_cx=$(($1 + $3 / 2))
 set -- $(surfaces | tr ';' '\n' | grep ' popup ' | head -n 1 | sed 's/.* \([0-9-]*\),\([0-9-]*\) \([0-9]*\)x\([0-9]*\)$/\1 \2 \3 \4/')
 popup_cx=$(($1 + $3 / 2))

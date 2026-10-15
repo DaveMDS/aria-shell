@@ -93,6 +93,7 @@ impl Gadget for PlacesGadget {
         }
         icssed::row![
             icssed::button(content)
+                .kind("indicator")
                 .on_press(Message::TogglePopup)
                 .id(self.popup.anchor())
         ]

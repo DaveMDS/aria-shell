@@ -49,7 +49,7 @@ assert_hidden "still shown after the pointer left"
 # With a popup open it stays, and goes once the popup closes.
 pointer 960 0
 settle 0.5
-click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > indicator'
 assert_surface popup
 pointer 300 900
 settle 1

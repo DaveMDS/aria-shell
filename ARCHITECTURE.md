@@ -1021,9 +1021,10 @@ Two things flow between the daemon and the gadgets besides messages:
   `Lines` (the same click); `-0.0.signum()` is `-1.0`, so a zero delta
   must be filtered before taking its sign.
 - Theme selectors are global: `gadget.tray button` would match a
-  button anywhere under a tray gadget, its popup's too; aria.css
-  styles the bar's buttons with `gadget > button` (the child
-  combinator), which a popup's content never is.
+  button anywhere under a tray gadget, its popup's too, and `button`
+  every button of every surface. The bar's buttons are therefore of
+  their own kind, `indicator` (`.kind("indicator")`): `button { }`
+  styles the popups' and the dialogs' buttons, never the bar's.
 - `Message::SetInputRegion { id, callback }` (`ActionCallback::new(|region|
   region.add(..))`): the runtime has **one** `wl_region` for every
   surface, emptied (`subtract` of the surface's size) before the

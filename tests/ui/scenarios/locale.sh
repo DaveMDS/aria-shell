@@ -10,19 +10,19 @@ restart_shell "$ARIA_UI_ROOT/tests/ui/config-locale"
 assert_eq "$(aria debug locale)" "lang=it dates=it_IT" "the second shell is Italian"
 
 # The calendar: month and weekday names.
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.clock > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.clock > indicator'
 assert_surface popup
 shot_surface locale-calendar popup
 click 300 700
 
 # The notifications popup: title, buttons, "no notifications".
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.notifications > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.notifications > indicator'
 assert_surface popup
 shot_surface locale-notifications popup
 click 300 700
 
 # The system monitor: tabs and details.
-click_widget 'surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > indicator'
 assert_surface popup
 shot_surface locale-sysmon popup
 click 300 700

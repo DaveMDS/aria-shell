@@ -48,10 +48,10 @@ surface.panel icon {
 
 /* Gadgets */
 
-gadget > button {
+gadget > indicator {
   min-width: 30px;
 }
-gadget > button:hover {
+gadget > indicator:hover {
   background: rgba(0, 0, 0, 0.15);
 }
 
@@ -60,21 +60,21 @@ gadget.workspaces {
   padding: 0;
   gap: 0;
 }
-gadget.workspaces > button.workspace {
+gadget.workspaces > indicator.workspace {
   padding: 0 5px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #eff1f5;
 }
-gadget.workspaces > button.workspace:hover {
+gadget.workspaces > indicator.workspace:hover {
   background: rgba(255, 255, 255, 0.1);
 }
-gadget.workspaces > button.workspace.active {
+gadget.workspaces > indicator.workspace.active {
   background: #64727d;
   box-shadow: inset 0 -3px #ffffff;
 }
-gadget.workspaces > button.workspace.danger {
+gadget.workspaces > indicator.workspace.danger {
   background: var(--danger);
 }
 
@@ -84,7 +84,7 @@ gadget.tray icon {
 }
 
 /* clock */
-gadget.clock > button > label {
+gadget.clock > indicator > label {
   font-weight: normal;
 }
 

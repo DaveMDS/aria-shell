@@ -55,7 +55,7 @@ wait_count launcher "" 0 "the launcher closed with its output"
 assert_eq "$(count grab)" 0 "its grabs closed"
 # The pointer's space is HEADLESS-1 alone now.
 inject "layout 1920 1080"
-click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+click_widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > indicator'
 assert_surface popup "a click reaches the other output's bar"
 swaymsg output HEADLESS-2 enable > /dev/null
 inject "layout 3840 1080"

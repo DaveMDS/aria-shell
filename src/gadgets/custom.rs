@@ -158,7 +158,9 @@ impl Gadget for Custom {
         let classes = output.map(|o| o.classes.as_slice()).unwrap_or_default();
         let button = classes
             .iter()
-            .fold(icssed::button(parts), |button, class| button.class(class))
+            .fold(icssed::button(parts).kind("indicator"), |button, class| {
+                button.class(class)
+            })
             .on_press(Message::Left);
         let button = mouse_area(button)
             .on_right_press(Message::Right)

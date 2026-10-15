@@ -17,7 +17,7 @@ surface.panel {
   border-top: 2px solid #0000ff;
   box-shadow: inset 0 -2px #00ffff;
 }
-gadget.screenshot > button {
+gadget.screenshot > indicator {
   height: fill;
   background: #000000;
   box-shadow: inset 0 -3px #ff00ff;
@@ -25,13 +25,13 @@ gadget.screenshot > button {
 gadget.themes {
   align-items: center;
 }
-gadget.themes > button {
+gadget.themes > indicator {
   background: #000000;
   padding: 0 4px;
   border-bottom: 4px solid #ff0000;
   border-left: 2px solid transparent;
 }
-gadget.themes > button:hover {
+gadget.themes > indicator:hover {
   background: #ffffff;
   border-bottom: 4px solid #00ff00;
   border-left: 2px solid #ffff00;
@@ -47,7 +47,7 @@ cyan="0 255 255"; magenta="255 0 255"
 
 # The button's border box: its bottom border is its last 4 px, its left
 # one its first 2.
-set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator')
 x=$1; y=$2; w=$3; h=$4
 cx=$((x + w / 2))
 shot bar "$((x - 60)),0 $((w + 120))x$((y + h + 10))"
@@ -67,7 +67,7 @@ assert_eq "$(sample "$x" $((y + h / 2)))" "$black" "a transparent left side"
 pointer "$cx" $((y + h / 2))
 settle 0.5
 shot bar-hover "$((x - 60)),0 $((w + 120))x$((y + h + 10))"
-assert_eq "$(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')" "$x $y $w $h" "nothing moves"
+assert_eq "$(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator')" "$x $y $w $h" "nothing moves"
 assert_eq "$(sample "$cx" $((y + h - 1)))" "$green" "hover: the bottom border"
 row=""; left=""
 for i in -3 -2 -1 0 1 2 3 4; do
@@ -94,7 +94,7 @@ bar_h=${4#*x}
 assert_eq "$(sample "$cx" $((bar_h - 1)))" "$cyan" "the bar's inset shadow"
 assert_eq "$(sample "$cx" $((bar_h - 2)))" "$cyan" "2 px of it"
 assert_eq "$(sample "$cx" $((bar_h - 3)))" "$black" "no more"
-set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.screenshot > button')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.screenshot > indicator')
 sx=$(($1 + $3 / 2))
 shot bar-inset "$(($1 - 40)),0 $(($3 + 80))x$bar_h"
 assert_eq "$(($2 + $4))" "$bar_h" "the button down to the bar's bottom"

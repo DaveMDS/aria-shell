@@ -136,6 +136,7 @@ impl Gadget for TrayGadget {
                 Message::ContextMenu(key.clone())
             };
             let button = icssed::button![icon]
+                .kind("indicator")
                 .class_if("muted", item.props.status == Status::Passive)
                 .class_if("warning", item.props.status == Status::NeedsAttention)
                 .on_press(left)

@@ -6,7 +6,7 @@
 # offers Terminate/Kill, and Terminate ends the process we started; a
 # right click on the bar runs `command`, or the terminal monitor.
 
-bell='surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > button.cpu'
+bell='surface.panel[output="HEADLESS-1"] gadget#cpu.system-monitor > indicator.cpu'
 first_pid() {
     aria debug widgets 'table row' | tr ';' '\n' | head -n 1 | sed 's/.*row\[pid="\([0-9]*\)".*/\1/'
 }
@@ -15,11 +15,11 @@ row_pids() {
 }
 
 # The instances, and what the sampler read.
-wait_for 'gadget.system-monitor > button' 8 "four instances per bar"
-wait_for 'gadget#cpu.system-monitor > button.cpu' 2 "the instance id is the node's"
-wait_for 'gadget#mem.system-monitor > button.mem' 2 "show = mem"
-wait_for 'gadget#net.system-monitor > button.net' 2
-wait_for 'gadget#disk.system-monitor > button.disk' 2
+wait_for 'gadget.system-monitor > indicator' 8 "four instances per bar"
+wait_for 'gadget#cpu.system-monitor > indicator.cpu' 2 "the instance id is the node's"
+wait_for 'gadget#mem.system-monitor > indicator.mem' 2 "show = mem"
+wait_for 'gadget#net.system-monitor > indicator.net' 2
+wait_for 'gadget#disk.system-monitor > indicator.disk' 2
 settle 2.5
 info=$(aria debug sysmon)
 assert_contains "$info" "cores=$(nproc) " "every core read"
@@ -29,19 +29,19 @@ assert_not_contains "$info" "disks= " "at least one disk"
 case "$info" in
     *"samples=1 "*|*"samples=0 "*) echo "too few samples: $info"; exit 1 ;;
 esac
-set -- $(widget 'gadget.system-monitor > button.cpu graph')
+set -- $(widget 'gadget.system-monitor > indicator.cpu graph')
 assert_eq "$3 $4" "40 14" "the sparkline sized by the theme (the text 'cpu' fits)"
-set -- $(widget 'gadget#mem.system-monitor > button.mem meter')
+set -- $(widget 'gadget#mem.system-monitor > indicator.mem meter')
 [ "$3" -ge 80 ] && [ "$4" = 14 ] || { echo "meter ${3}x$4: a long format widens it"; exit 1; }
-wait_for 'gadget#net.system-monitor > button.net label' 2 "mode text: a label"
-wait_for 'gadget#net.system-monitor > button.net graph' 0 "and no graph"
-wait_for 'gadget#mem.system-monitor > button.mem > label' 0 "the meter holds the text"
+wait_for 'gadget#net.system-monitor > indicator.net label' 2 "mode text: a label"
+wait_for 'gadget#net.system-monitor > indicator.net graph' 0 "and no graph"
+wait_for 'gadget#mem.system-monitor > indicator.mem > label' 0 "the meter holds the text"
 # Thresholds: the net instance is critical from 0, the disk one a
 # warning from 0, the cpu one only from the percentage defaults.
-wait_for 'gadget#net.system-monitor > button.net.danger' 2 "critical = 0"
-wait_for 'gadget#disk.system-monitor > button.disk.warning' 2 "warning = 0"
-wait_for 'gadget#disk.system-monitor > button.disk.danger' 0
-wait_for 'gadget#cpu.system-monitor > button.cpu.danger' 0 "an idle cpu"
+wait_for 'gadget#net.system-monitor > indicator.net.danger' 2 "critical = 0"
+wait_for 'gadget#disk.system-monitor > indicator.disk.warning' 2 "warning = 0"
+wait_for 'gadget#disk.system-monitor > indicator.disk.danger' 0
+wait_for 'gadget#cpu.system-monitor > indicator.cpu.danger' 0 "an idle cpu"
 shot bar "$(($(widget "$bell" | cut -d' ' -f1) - 20)),0 520x32"
 
 # The popup: the tabs, opened on the value's; one section at a time.
@@ -168,7 +168,7 @@ wait_for 'monitor > actions.none' 1 "back to the help once the process is gone"
 click 300 900
 assert_no_surface popup
 wait_for 'monitor' 0
-click_widget 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > indicator.mem'
 assert_surface popup
 wait_for 'monitor tabs tab.mem.active' 1 "the mem instance opens on the mem tab"
 wait_for 'section.mem' 1
@@ -180,7 +180,7 @@ assert_no_surface popup
 click_widget_with right "$bell"
 settle 0.5
 assert_eq "$(cat "$ARIA_UI_OUT/sysmon")" run "command ran"
-click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > button.mem'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget#mem.system-monitor > indicator.mem'
 settle 0.5
 monitor=$(command -v btop || command -v htop || command -v top)
 assert_logged "ran [\"true\", \"-e\", \"$(basename "$monitor")\"]"

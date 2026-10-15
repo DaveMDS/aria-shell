@@ -6,11 +6,11 @@ restart_shell "$ARIA_UI_ROOT/tests/ui/config-bottom"
 
 for output in HEADLESS-1 HEADLESS-2; do
     assert_no_surface popup
-    click_widget "surface.panel[output=\"$output\"] gadget.clock > button"
+    click_widget "surface.panel[output=\"$output\"] gadget.clock > indicator"
     assert_surface popup
     shot_surface "popup-$output" popup
 
-    set -- $(widget "surface.panel[output=\"$output\"] gadget.clock > button")
+    set -- $(widget "surface.panel[output=\"$output\"] gadget.clock > indicator")
     clock_cx=$(($1 + $3 / 2))
     set -- $(widget "surface.popup[output=\"$output\"] calendar")
     popup_cx=$(($1 + $3 / 2))

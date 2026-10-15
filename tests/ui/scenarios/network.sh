@@ -3,7 +3,7 @@
 # profiles, driven against the fake NetworkManager (tests/ui/nm) on the
 # scenario's bus, which the shell takes for the system bus.
 
-bar='surface.panel[output="HEADLESS-1"] gadget.network > button'
+bar='surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 list='surface.popup gadget.network'
 
 # Nothing but scans for a moment.
@@ -15,7 +15,7 @@ nm_idle() {
 }
 
 # --- no NetworkManager yet ---------------------------------------------------
-wait_for 'gadget.network > button.disconnected.muted' 2 "offline on both bars, nobody on the bus"
+wait_for 'gadget.network > indicator.disconnected.muted' 2 "offline on both bars, nobody on the bus"
 click_widget "$bar"
 assert_surface popup
 wait_for "$list empty" 1 "the popup says NetworkManager isn't running"
@@ -25,7 +25,7 @@ assert_no_surface popup
 
 # --- it comes up: nothing connected ------------------------------------------
 nm_start
-wait_for 'gadget.network > button.wifi.disconnected.muted' 2 "a Wi‑Fi device, disconnected, on both bars"
+wait_for 'gadget.network > indicator.wifi.disconnected.muted' 2 "a Wi‑Fi device, disconnected, on both bars"
 
 # --- the networks around -----------------------------------------------------
 nm_send "ap Darma6 80 psk"
@@ -49,7 +49,7 @@ wait_for "$list device.wired.unplugged" 1 "eth0 unplugged"
 wait_for "$list header.vpn" 0 "no VPN section without profiles"
 # The other bar's popup lists the same.
 click 600 600
-click_widget 'surface.panel[output="HEADLESS-2"] gadget.network > button'
+click_widget 'surface.panel[output="HEADLESS-2"] gadget.network > indicator'
 assert_eq "$(nm_event)" scan "the other bar scans too"
 wait_for "$list ap" 4 "the same four on the other output"
 shot_surface network-list popup
@@ -63,13 +63,13 @@ wait_for "$list ap" 4
 click_widget "$list ap[ssid=\"Casa\"] > button"
 assert_eq "$(nm_action)" "activate Casa" "the saved profile activated"
 wait_for "$list ap[ssid=\"Casa\"].connecting" 1 "Casa connecting"
-wait_for 'gadget.network > button.wifi.connecting' 2 "the bars show it connecting"
+wait_for 'gadget.network > indicator.wifi.connecting' 2 "the bars show it connecting"
 nm_send finish
 wait_for "$list ap[ssid=\"Casa\"].active" 1 "Casa connected"
 wait_for "$list ap:nth-child(2)[ssid=\"Casa\"]" 1 "the active one stays first"
 wait_for "$list ap.active > button > status" 1 "with its status"
-wait_for 'gadget.network > button.wifi.connected' 2 "connected on both bars"
-wait_for 'gadget.network > button.wifi.connected > label' 2 "the SSID on the bars (show_label)"
+wait_for 'gadget.network > indicator.wifi.connected' 2 "connected on both bars"
+wait_for 'gadget.network > indicator.wifi.connected > label' 2 "the SSID on the bars (show_label)"
 # Its details unfold on a click.
 click_widget "$list ap[ssid=\"Casa\"] > button"
 wait_for "$list ap.active.expanded details" 1 "the details unfolded"
@@ -124,7 +124,7 @@ click_widget "$list ap.expanded actions button.disconnect"
 assert_eq "$(nm_action)" "disconnect wlan0" "disconnected"
 wait_for "$list ap.active" 0 "nothing active"
 wait_for "$list ap[ssid=\"Guest\"].known" 1 "Guest is known now"
-wait_for 'gadget.network > button.wifi.disconnected' 2 "the bars offline"
+wait_for 'gadget.network > indicator.wifi.disconnected' 2 "the bars offline"
 # A known one that's not connected: its chevron unfolds Connect / Forget
 # (a click on the row itself would join it).
 click_widget "$list ap[ssid=\"Casa\"] > button button.chevron"
@@ -152,7 +152,7 @@ assert_eq "$(nm_action)" "wireless true" "a middle click turns it back on"
 # --- the wired device --------------------------------------------------------------
 nm_send "wired eth0-profile"
 nm_send "wired-up"
-wait_for 'gadget.network > button.wired.connected' 2 "wired is the primary connection now"
+wait_for 'gadget.network > indicator.wired.connected' 2 "wired is the primary connection now"
 click_widget "$bar"
 assert_eq "$(nm_event)" scan
 wait_for "$list device.wired.active" 1 "eth0 connected"
@@ -179,7 +179,7 @@ assert_eq "$(nm_action)" "activate Office"
 nm_send finish
 wait_for "$list vpn.active" 1 "the VPN up"
 wait_for "$list vpn.failed" 0 "the failure gone"
-wait_for 'gadget.network > button > icon.vpn' 2 "the VPN badge on the bars"
+wait_for 'gadget.network > indicator > icon.vpn' 2 "the VPN badge on the bars"
 click_widget "$list vpn[name=\"Office\"] toggle"
 assert_eq "$(nm_action)" "deactivate Office"
 wait_for "$list vpn.active" 0 "the VPN down"
@@ -188,7 +188,7 @@ wait_for "$list vpn.active" 0 "the VPN down"
 click_widget "$list ap[ssid=\"Guest\"] > button"
 assert_eq "$(nm_action)" "activate Guest"
 nm_send finish
-wait_for 'gadget.network > button.wifi.connected' 2
+wait_for 'gadget.network > indicator.wifi.connected' 2
 nm_send "strength Guest 10"
 settle 0.5
 wait_for "$list ap[ssid=\"Guest\"].active" 1 "still connected at 10%"
@@ -197,5 +197,5 @@ assert_no_surface popup
 i=0; while ! [ -f "$ARIA_UI_OUT/clicks" ] && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
 assert_eq "$(cat "$ARIA_UI_OUT/clicks")" settings "settings_command ran"
 nm_stop
-wait_for 'gadget.network > button.disconnected.muted' 2 "offline again once NetworkManager is gone"
-wait_for 'gadget.network > button.wifi' 0 "no device"
+wait_for 'gadget.network > indicator.disconnected.muted' 2 "offline again once NetworkManager is gone"
+wait_for 'gadget.network > indicator.wifi' 0 "no device"

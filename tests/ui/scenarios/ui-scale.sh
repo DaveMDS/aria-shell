@@ -12,7 +12,7 @@ assert_times() {
     [ $(($1 - want)) -le 1 ] && [ $((want - $1)) -le 1 ] ||
         { echo "$4: $1, not $2 x $3 = $want"; return 1; }
 }
-clock='surface.panel[output="HEADLESS-1"] slot.center gadget.clock > button'
+clock='surface.panel[output="HEADLESS-1"] slot.center gadget.clock > indicator'
 
 # At 1: what the theme says.
 set -- $(size_of panel)

@@ -305,6 +305,7 @@ impl Gadget for SystemMonitor {
             }
         });
         let button = icssed::button(parts)
+            .kind("indicator")
             .class(value.name())
             .class_if("warning", level == Some("warning"))
             .class_if("danger", level == Some("danger"))

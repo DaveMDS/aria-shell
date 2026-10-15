@@ -64,6 +64,7 @@ impl Gadget for ScreenshotGadget {
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let button = mouse_area(
             icssed::button![ctx.icon(self.icon.as_str())]
+                .kind("indicator")
                 .on_press(Message::Pick)
                 .id(self.popup.anchor()),
         )

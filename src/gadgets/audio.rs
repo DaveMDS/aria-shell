@@ -222,6 +222,7 @@ impl AudioGadget {
             content.push(icssed::text(percent(value)).into());
         }
         let button = icssed::button(content)
+            .kind("indicator")
             .class(kind_class(kind))
             .class_if("muted", muted)
             .on_press(Message::TogglePopup(kind))

@@ -64,7 +64,7 @@ assert_eq "$(count_osd)" 0
 
 # --- the network -----------------------------------------------------------------
 nm_start
-wait_for 'gadget.network > button.disconnected' 2 "NetworkManager known, nothing connected"
+wait_for 'gadget.network > indicator.disconnected' 2 "NetworkManager known, nothing connected"
 settle 0.5
 assert_eq "$(count_osd)" 0 "its first reading shows nothing"
 nm_send "wired Office"
@@ -76,7 +76,7 @@ shot_surface osd-network osd
 wait_osd 0
 
 # Down, from the gadget's popup: the OSD doesn't care who did it.
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.network > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 wait_for 'surface.popup gadget.network device.wired.active' 1 "eth0 connected"
 click_widget 'surface.popup gadget.network device.wired > button'
 wait_for 'surface.popup gadget.network device.expanded actions button.disconnect' 1
@@ -89,19 +89,19 @@ click 600 600
 wait_osd 0
 
 # Wi‑Fi off and on again, from the gadget's middle click.
-click_widget_with middle 'surface.panel[output="HEADLESS-1"] gadget.network > button'
+click_widget_with middle 'surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 assert_eq "$(nm_action)" "wireless false"
 wait_for 'surface.osd.wifi label' 2 "Wi‑Fi off: the OSD"
 shot_surface osd-wifi osd
 wait_osd 0
-click_widget_with middle 'surface.panel[output="HEADLESS-1"] gadget.network > button'
+click_widget_with middle 'surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 assert_eq "$(nm_action)" "wireless true"
 wait_for 'surface.osd.wifi label' 2 "Wi‑Fi on: the OSD"
 wait_osd 0
 
 # A VPN up, from the popup's toggle.
 nm_send "vpn Office"
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.network > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 wait_for 'surface.popup gadget.network vpn[name="Office"]' 1 "the VPN row"
 click_widget 'surface.popup gadget.network vpn[name="Office"] toggle'
 assert_eq "$(nm_action)" "activate Office"

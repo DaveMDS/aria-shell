@@ -119,6 +119,7 @@ impl Workspaces {
             );
         }
         icssed::button(children)
+            .kind("indicator")
             .class("workspace")
             .class_if("active", ws.active)
             .class_if("danger", ws.urgent)

@@ -10,7 +10,7 @@
 
 restart_shell "$ARIA_UI_ROOT/tests/ui/config-idle"
 mpris_start
-button='surface.panel[output="HEADLESS-1"] gadget.power > button.idle'
+button='surface.panel[output="HEADLESS-1"] gadget.power > indicator.idle'
 outputs_on() {
     swaymsg -t get_outputs | grep -c '"power": true'
 }
@@ -34,7 +34,7 @@ wait_idle() {
     assert_contains "$(aria debug idle)" "$1"
 }
 assert_contains "$(aria debug idle)" "armed=dim=1s,lock=4s,screen_off=2s"
-wait_for 'gadget.power > button.idle' 2 "an idle button per bar"
+wait_for 'gadget.power > indicator.idle' 2 "an idle button per bar"
 
 # The monitors read (70% and 30%), then an input: the timers count
 # from it.
@@ -76,7 +76,7 @@ assert_no_surface locker
 click_widget "$button"
 assert_contains "$(aria debug idle)" "inhibited=true"
 assert_contains "$(aria debug idle)" "armed=none"
-wait_for 'gadget.power > button.idle.active' 2 "held, on both bars"
+wait_for 'gadget.power > indicator.idle.active' 2 "held, on both bars"
 shot_surface held panel
 sleep 4.5
 assert_contains "$(aria debug idle)" "screens=on"
@@ -84,7 +84,7 @@ assert_no_surface locker
 click_widget "$button"
 assert_contains "$(aria debug idle)" "inhibited=false"
 assert_contains "$(aria debug idle)" "armed=dim=1s,lock=4s,screen_off=2s"
-wait_for 'gadget.power > button.idle.active' 0 "let go"
+wait_for 'gadget.power > indicator.idle.active' 0 "let go"
 
 # The same from the command line.
 aria idle inhibit on; settle
@@ -104,7 +104,7 @@ esac
 mpris_send "status Playing"
 assert_contains "$(aria debug idle)" "playing=true"
 assert_contains "$(aria debug idle)" "armed=none"
-wait_for 'gadget.power > button.idle.active' 0 "the eye is the user's alone"
+wait_for 'gadget.power > indicator.idle.active' 0 "the eye is the user's alone"
 mpris_send "status Paused"
 assert_contains "$(aria debug idle)" "armed=dim=1s,lock=4s,screen_off=2s"
 mpris_stop

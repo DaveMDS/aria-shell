@@ -90,6 +90,7 @@ impl Gadget for PowerGadget {
             }
             parts.push(
                 icssed::button(content)
+                    .kind("indicator")
                     .class("battery")
                     .class_if("warning", b.warning == Warning::Low)
                     .class_if("danger", b.warning == Warning::Critical)
@@ -101,6 +102,7 @@ impl Gadget for PowerGadget {
         if let Some(p) = profile {
             parts.push(
                 icssed::button![ctx.icon(profile_icon(p))]
+                    .kind("indicator")
                     .class("profile")
                     .on_press(Message::TogglePopup(1))
                     .id(self.popup.anchor_nth(1))
@@ -116,6 +118,7 @@ impl Gadget for PowerGadget {
             };
             parts.push(
                 icssed::button![ctx.icon(name.as_str())]
+                    .kind("indicator")
                     .class("idle")
                     .class_if("active", inhibited)
                     .on_press(Message::ToggleIdle)

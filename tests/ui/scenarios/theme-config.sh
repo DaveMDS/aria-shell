@@ -36,13 +36,13 @@ assert_eq "$(aria debug theme)" "theme=shelf scheme=dark config=$theme/shelf.con
     "the theme's config read, its scheme"
 assert_contains "$(surfaces)" "panel HEADLESS-1 0,1052 1920x28" "its panel, at the bottom"
 wait_for 'gadget' 4 "its two gadgets on each output, nothing of the user's"
-wait_for 'gadget.clock > button > label' 2
+wait_for 'gadget.clock > indicator > label' 2
 assert_eq "$(aria debug wallpaper | grep -o "\[wallpaper[^]]*\]" | wc -l)" 1 "one wallpaper section, the user's HEADLESS-2 one left out"
 assert_contains "$(aria debug wallpaper)" "outputs=HEADLESS-1,HEADLESS-2 source=$theme/bg.png" "./ in the theme's folder"
 assert_contains "$(aria debug locale)" "lang=en" "the user's language kept"
 
 # The menu's last item: stop reading it.
-click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
 wait_for 'menu > item.checked' 3 "Dark, shelf, the theme's settings"
 shot_surface menu popup
@@ -54,12 +54,12 @@ assert_contains "$(surfaces)" "panel HEADLESS-1 0,0 1920x28" "the user's panel, 
 assert_eq "$(aria debug wallpaper | grep -o "\[wallpaper[^]]*\]" | wc -l)" 2 "the user's two wallpapers"
 
 # And back on, then another theme: the user's config again.
-click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
 click_widget 'menu > item:last-child'
 settle 1
 assert_eq "$(aria debug theme)" "theme=shelf scheme=dark config=$theme/shelf.conf" "read again"
-click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
 click_widget 'menu > item:nth-child(4)'
 settle 1

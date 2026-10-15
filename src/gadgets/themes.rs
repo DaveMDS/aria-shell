@@ -115,6 +115,7 @@ impl Gadget for Themes {
         };
         let button = mouse_area(
             icssed::button![ctx.icon(name.as_str())]
+                .kind("indicator")
                 .on_press(Message::Toggle)
                 .id(self.popup.anchor()),
         )

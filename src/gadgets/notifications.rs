@@ -108,6 +108,7 @@ impl Gadget for NotificationsGadget {
             .map(|e| e.notification.id)
             .collect();
         let button = icssed::button(content)
+            .kind("indicator")
             // Quiet over new: the count still shows.
             .class_if("muted", ctx.notifications.dnd())
             .class_if("active", unseen > 0 && !ctx.notifications.dnd())

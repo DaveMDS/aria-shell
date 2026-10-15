@@ -51,18 +51,18 @@ slot.start > gadget.workspaces:first-child {
   background: transparent;
 }
 
-gadget.workspaces > button.workspace {
+gadget.workspaces > indicator.workspace {
   padding: 0 6px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--accent);
 }
-gadget.workspaces > button.workspace.active {
+gadget.workspaces > indicator.workspace.active {
   background: var(--accent);
   color: var(--bg);
 }
-gadget.workspaces > button.workspace.danger {
+gadget.workspaces > indicator.workspace.danger {
   background: var(--danger);
   color: var(--on-accent);
 }

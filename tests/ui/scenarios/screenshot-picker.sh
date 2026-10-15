@@ -121,11 +121,11 @@ wait_picker 0
 assert_eq "$(wait_picture "$before")" 3840x1080 "every output"
 
 # --- the gadget ------------------------------------------------------------------
-click_widget 'surface.panel[output="HEADLESS-2"] gadget.screenshot > button'
+click_widget 'surface.panel[output="HEADLESS-2"] gadget.screenshot > indicator'
 wait_picker 2 "a left click opens the picker"
 key Escape
 wait_picker 0
-click_widget_with right 'surface.panel[output="HEADLESS-2"] gadget.screenshot > button'
+click_widget_with right 'surface.panel[output="HEADLESS-2"] gadget.screenshot > indicator'
 wait_for 'menu > item' 3 "window, screen, all"
 before=$(last)
 click_widget 'menu > item:nth-child(2)'

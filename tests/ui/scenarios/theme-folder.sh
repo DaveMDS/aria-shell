@@ -9,7 +9,7 @@ cp -r "$XDG_CONFIG_HOME/." "$conf"
 theme="$conf/aria-shell/themes/tile"
 mkdir -p "$theme"
 cat > "$theme/tile.css" << 'EOF'
-gadget.themes > button {
+gadget.themes > indicator {
   background: url(tile.png);
 }
 EOF
@@ -36,13 +36,13 @@ settle 1
 
 assert_eq "$(aria debug theme)" "theme=tile scheme=light" "found by its name"
 sample() {
-    set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')
+    set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator')
     grim -g "$(($1 + 1)),$(($2 + 1)) 1x1" -t ppm - | tail -c 3 | od -An -tu1 | tr -s ' ' | sed 's/^ //'
 }
 assert_eq "$(sample)" "255 0 0" "its image, beside it"
 
 # The menu: Light, Dark, Base, then the themes, tile (ours) among them.
-click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
 wait_for 'menu > item.checked' 2 "Light and tile checked"
 shot_surface menu popup

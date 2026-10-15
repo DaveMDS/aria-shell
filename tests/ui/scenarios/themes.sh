@@ -8,7 +8,7 @@
 # its widgets once the compositor has mapped it (up to ~1s here, longer
 # while a theme loads).
 open_menu() {
-    click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+    click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
     i=0
     while [ "$(count_widgets 'menu > item')" != 7 ] && [ $i -lt 30 ]; do
         sleep 0.1
@@ -18,20 +18,20 @@ open_menu() {
 }
 
 assert_eq "$(aria debug theme)" "theme=- scheme=light" "starts light, base only"
-wait_for 'gadget.themes > button' 2 "one per bar"
-set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button')
+wait_for 'gadget.themes > indicator' 2 "one per bar"
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator')
 shot bar-light "$(($1 - 60)),0 160x32"
 
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_eq "$(aria debug theme)" "theme=- scheme=dark" "left click toggles"
 shot bar-dark "$(($1 - 60)),0 160x32"
 # The last gadget's top left corner: the bar's background in the base.
 sample() {
-    set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.screenshot > button')
+    set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.screenshot > indicator')
     grim -g "$1,$2 1x1" -t ppm - | tail -c 3 | od -An -tu1 | tr -s ' '
 }
 base_dark=$(sample)
-click_widget 'surface.panel[output="HEADLESS-2"] gadget.themes > button'
+click_widget 'surface.panel[output="HEADLESS-2"] gadget.themes > indicator'
 assert_eq "$(aria debug theme)" "theme=- scheme=light" "and back, from either bar"
 base_light=$(sample)
 

@@ -37,7 +37,7 @@ wait_osd() {
 }
 
 # --- found and read ------------------------------------------------------
-wait_for 'gadget.brightness > button > label' 2 "the percent on both bars"
+wait_for 'gadget.brightness > indicator > label' 2 "the percent on both bars"
 b=$(aria debug brightness)
 assert_contains "$b" 'ddc:3 output=HEADLESS-1 model="Fake Monitor" 70%'
 assert_contains "$b" 'ddc:4 output=HEADLESS-2 model="Fake Monitor" 30%'
@@ -81,7 +81,7 @@ fi
 wait_osd 0
 
 # --- the wheel ---------------------------------------------------------------
-geo=$(widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > button')
+geo=$(widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > indicator')
 set -- $geo
 pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
 scroll -2
@@ -97,7 +97,7 @@ wait_osd 0
 echo 20 > "$ARIA_UI_OUT/ddc/3"
 settle
 assert_contains "$(aria debug brightness)" "ddc:3 output=HEADLESS-1 model=\"Fake Monitor\" 80%"
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.brightness > indicator'
 assert_surface popup
 wait_for 'surface.popup gadget.brightness screen.ddc' 2 "a row per monitor"
 wait_for 'surface.popup gadget.brightness screen slider' 2 "a slider each"

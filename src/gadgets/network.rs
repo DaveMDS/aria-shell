@@ -231,6 +231,7 @@ impl Gadget for NetworkGadget {
         }
         let kind = summary.kind.filter(|_| running);
         let button = icssed::button(parts)
+            .kind("indicator")
             .class_if("wifi", kind == Some(DeviceKind::Wifi))
             .class_if("wired", kind == Some(DeviceKind::Wired))
             .class(if summary.connected {

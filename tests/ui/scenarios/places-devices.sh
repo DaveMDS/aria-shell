@@ -31,7 +31,7 @@ EOF
 
 udisks_start
 restart_shell "$config"
-button='surface.panel[output="HEADLESS-1"] gadget.places > button'
+button='surface.panel[output="HEADLESS-1"] gadget.places > indicator'
 
 # No device yet.
 click_widget "$button"

@@ -58,7 +58,7 @@ want = {"green": (0, 255, 0), "red": (255, 0, 0)}[sys.argv[1]]
 print(sum(1 for i in range(0, len(px), 3)
           if all(abs(px[i + k] - want[k]) < 60 for k in range(3))))' "$2"
 }
-set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.custom > button > icon')
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.custom > indicator > icon')
 icon="$1,$2 ${3}x$4"
 shot_surface bar panel
 [ "$(count "$icon" red)" -gt 0 ] || { echo "no picture under the icon"; exit 1; }

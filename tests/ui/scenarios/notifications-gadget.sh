@@ -13,16 +13,16 @@ nsend() {
 toasts() {
     surfaces | tr ';' '\n' | grep -c ' notification '
 }
-bell='surface.panel[output="HEADLESS-1"] gadget.notifications > button'
+bell='surface.panel[output="HEADLESS-1"] gadget.notifications > indicator'
 
-wait_for 'gadget.notifications > button' 2 "a bell per bar"
-wait_for 'gadget.notifications > button label' 0 "no count at rest"
+wait_for 'gadget.notifications > indicator' 2 "a bell per bar"
+wait_for 'gadget.notifications > indicator label' 0 "no count at rest"
 
 # Two notifications: the count on both bars, the button marked new.
 id1=$(nsend -p -t 0 -i dialog-information "First" "with a body")
 id2=$(nsend -p -t 0 "Second" "another one")
 settle
-wait_for 'gadget.notifications > button.active label' 2 "count on both bars"
+wait_for 'gadget.notifications > indicator.active label' 2 "count on both bars"
 assert_eq "$(toasts)" 2
 shot bell "$(($(widget "$bell" | cut -d' ' -f1) - 60)),0 140x32"
 
@@ -31,8 +31,8 @@ click_widget "$bell"
 assert_surface popup
 wait_for 'surface.popup gadget.notifications list > notification' 2 "two rows"
 wait_for 'surface.popup gadget.notifications list > notification.unseen' 2
-wait_for 'gadget.notifications > button label' 0 "count cleared"
-wait_for 'gadget.notifications > button.active' 0
+wait_for 'gadget.notifications > indicator label' 0 "count cleared"
+wait_for 'gadget.notifications > indicator.active' 0
 wait_for 'surface.popup notification time' 2 "ages shown"
 shot_surface popup popup
 
@@ -63,7 +63,7 @@ wait_for 'surface.popup notification[id="'"$id2"'"]' 1 "the other stays"
 # shown; a critical one shows anyway.
 click_widget 'surface.popup gadget.notifications header toggle.dnd'
 wait_for 'surface.popup gadget.notifications header toggle.dnd.checked' 1
-wait_for 'gadget.notifications > button.muted' 2 "quiet on both bars"
+wait_for 'gadget.notifications > indicator.muted' 2 "quiet on both bars"
 nsend -t 0 "Quiet" "not on screen" > /dev/null
 settle
 assert_eq "$(toasts)" 1 "no new toast"
@@ -78,12 +78,12 @@ shot_surface popup-dnd popup
 # still quiet.
 click 600 600
 assert_no_surface popup
-wait_for 'gadget.notifications > button.muted > label' 2
+wait_for 'gadget.notifications > indicator.muted > label' 2
 
 # Right click: quiet off. Middle click: the toasts go, the history stays.
 click_widget_with right "$bell"
-wait_for 'gadget.notifications > button.muted' 0
-wait_for 'gadget.notifications > button.active' 2 "new again, not quiet"
+wait_for 'gadget.notifications > indicator.muted' 0
+wait_for 'gadget.notifications > indicator.active' 2 "new again, not quiet"
 click_widget_with middle "$bell"
 assert_eq "$(toasts)" 0 "all toasts dismissed"
 click_widget "$bell"

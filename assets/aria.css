@@ -663,14 +663,16 @@ surface.panel#dock icon {
  * Gadgets
  * =======
  *
- * What every gadget shares. A gadget's buttons in the bar (`gadget >
- * button`) are flat, as high as the bar, in one of four states at most,
- * the same for every gadget: .active (on, chosen, to look at),
+ * What every gadget shares. A gadget's buttons in the bar are
+ * indicators (`gadget > indicator`), not buttons: `button { }` never
+ * reaches the bar, the base styles none of them. They are flat, as
+ * high as the bar, in one of four states at most, the same for every
+ * gadget: .active (on, chosen, to look at),
  * .warning, .danger, .muted (off, absent, silent). In the popups, the
  * parts the gadgets share: a `list` (a column), its headers, its items
  * (buttons), the line for an empty one, a message, details.
  *
- * gadget.<kind> > button[.active|.warning|.danger|.muted]   on the bar
+ * gadget.<kind> > indicator[.active|.warning|.danger|.muted]   on the bar
  * ╰─ meter > fill | graph > series   coloured by .warning / .danger
  * surface.popup > gadget.<kind>
  * ╰─ list                           a column (`gap`)
@@ -685,42 +687,45 @@ surface.panel#dock icon {
 gadget {
   gap: 2px;
 }
-gadget > button {
+gadget > indicator {
+  transition: background-color 120ms, color 120ms;
   padding: 6px 6px;
   gap: 4px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+  align-items: center;
+  justify-content: center;
 }
-gadget > button:hover {
+gadget > indicator > label {
+  white-space: nowrap;
+}
+gadget > indicator:hover {
   background: var(--border);
 }
-gadget > button.active {
+gadget > indicator.active {
   color: var(--accent);
 }
-gadget > button.warning {
+gadget > indicator.warning {
   color: var(--warning);
 }
-gadget > button.danger {
+gadget > indicator.danger {
   color: var(--danger);
 }
-gadget > button meter > fill {
+gadget > indicator meter > fill {
   border-radius: var(--radius-xs);
   background: var(--accent-soft);
 }
-gadget > button.warning meter > fill {
+gadget > indicator.warning meter > fill {
   background: var(--warning);
 }
-gadget > button.warning graph > series {
+gadget > indicator.warning graph > series {
   stroke: var(--warning);
 }
-gadget > button.danger meter > fill {
+gadget > indicator.danger meter > fill {
   background: var(--danger);
 }
-gadget > button.danger graph > series {
+gadget > indicator.danger graph > series {
   stroke: var(--danger);
 }
-gadget > button.muted {
+gadget > indicator.muted {
   color: var(--muted);
 }
 surface.popup list {
@@ -779,12 +784,12 @@ surface.popup calendar {
  * ============
  *
  * gadget.clock
- * ╰─ button     the time; click opens the calendar
+ * ╰─ indicator  the time; click opens the calendar
  *    ╰─ label
  * surface.popup > gadget.clock
  * ╰─ calendar   the toolkit's
  */
-gadget.clock > button > label {
+gadget.clock > indicator > label {
   font-weight: bold;
 }
 
@@ -797,7 +802,7 @@ gadget.clock > button > label {
  * (show_title) is cut where the slot ends.
  *
  * gadget.workspaces
- * ├─ button.workspace[.active][.danger][name="<name>"]   one per workspace (.danger: urgent)
+ * ├─ indicator.workspace[.active][.danger][name="<name>"]   one per workspace (.danger: urgent)
  * │  ├─ label                                            its name
  * │  ╰─ window[.active][.danger][class="<app id>"]        one per window
  * │     ├─ icon                                          its app's
@@ -806,11 +811,11 @@ gadget.clock > button > label {
  *    ├─ icon
  *    ╰─ label
  */
-gadget.workspaces > button.active {
+gadget.workspaces > indicator.active {
   background: var(--accent);
   color: var(--on-accent);
 }
-gadget.workspaces > button.danger {
+gadget.workspaces > indicator.danger {
   background: var(--danger);
   color: var(--on-accent);
 }
@@ -839,7 +844,7 @@ gadget.workspaces title > label {
  * ===========
  *
  * gadget.tray
- * ╰─ button[.muted|.warning]        one per status notifier item: passive,
+ * ╰─ indicator[.muted|.warning]     one per status notifier item: passive,
  *    │                              needing attention
  *    ╰─ icon                        (symbolic: `color`)
  * surface.popup > gadget.tray
@@ -852,7 +857,7 @@ gadget.workspaces title > label {
  * =============
  *
  * gadget.themes
- * ╰─ button    left: light/dark, right: the menu
+ * ╰─ indicator  left: light/dark, right: the menu
  *    ╰─ icon   the scheme's
  * surface.popup > gadget.themes
  * ╰─ menu      Light / Dark, then Base and every theme found
@@ -863,7 +868,7 @@ gadget.workspaces title > label {
  * =================
  *
  * gadget.screenshot
- * ╰─ button    left: the picker, right: the menu
+ * ╰─ indicator  left: the picker, right: the menu
  *    ╰─ icon   `[Screenshot] icon`
  * surface.popup > gadget.screenshot
  * ╰─ menu      the active window, this screen, all screens
@@ -878,7 +883,7 @@ gadget.workspaces title > label {
  * `hide_empty` hides it.
  *
  * gadget.custom
- * ╰─ button[.<class>...]
+ * ╰─ indicator[.<class>...]
  *    ├─ icon   (symbolic: `color`)
  *    ╰─ label
  */
@@ -903,7 +908,7 @@ gadget.workspaces title > label {
  * meter.
  *
  * gadget.places
- * ╰─ button
+ * ╰─ indicator
  *    ├─ icon                               `[Places] icon`
  *    ╰─ label                              `[Places] label`, when set
  * surface.popup > gadget.places
@@ -969,12 +974,12 @@ gadget.places info > meter.critical > fill {
  * that a player holds idle.
  *
  * gadget.power
- * ├─ button.battery[.warning|.danger]   left: the popup
- * │  ├─ icon                            UPower's
- * │  ╰─ label                           the percent (show_percent)
- * ├─ button.profile > icon              left: the popup; the active profile's
- * ╰─ button.idle[.active]               left: holds idle / lets it go
- *    ╰─ icon                            the eye
+ * ├─ indicator.battery[.warning|.danger]   left: the popup
+ * │  ├─ icon                               UPower's
+ * │  ╰─ label                              the percent (show_percent)
+ * ├─ indicator.profile > icon              left: the popup; the active profile's
+ * ╰─ indicator.idle[.active]               left: holds idle / lets it go
+ *    ╰─ icon                               the eye
  * surface.popup.power
  * ╰─ list
  *    ├─ battery[.warning|.danger]
@@ -1067,7 +1072,7 @@ surface.popup.power idle.active > icon {
  * level couldn't be read.
  *
  * gadget.brightness
- * ╰─ button[.muted]
+ * ╰─ indicator[.muted]
  *    ├─ icon
  *    ╰─ label                    the bar's screen's percent (show_percent)
  * surface.popup > gadget.brightness
@@ -1120,7 +1125,7 @@ gadget.brightness screen slider {
  * (see Notifications).
  *
  * gadget.notifications
- * ╰─ button[.muted|.active]     do-not-disturb, else unseen ones
+ * ╰─ indicator[.muted|.active]  do-not-disturb, else unseen ones
  *    ├─ icon
  *    ╰─ label                   the count not looked at (when > 0)
  * surface.popup > gadget.notifications
@@ -1173,7 +1178,7 @@ gadget.notifications list > notification.unseen summary {
  * or (.none) the help and the buttons :disabled.
  *
  * gadget.system-monitor[#<instance>]
- * ╰─ button.<value>[.warning|.danger]
+ * ╰─ indicator.<value>[.warning|.danger]
  *    ├─ icon
  *    ├─ label                   (text)
  *    ├─ graph > series, label   (sparkline)
@@ -1204,8 +1209,8 @@ gadget.notifications list > notification.unseen summary {
  *       ├─ label
  *       ╰─ button.terminate | button.kill.danger > label
  */
-gadget.system-monitor > button > graph,
-gadget.system-monitor > button > meter {
+gadget.system-monitor > indicator > graph,
+gadget.system-monitor > indicator > meter {
   width: auto;
   min-width: 40px;
   height: 14px;
@@ -1216,8 +1221,8 @@ gadget.system-monitor > button > meter {
   border-radius: var(--radius-sm);
   background: transparent;
 }
-gadget.system-monitor > button > graph > label,
-gadget.system-monitor > button > meter > label {
+gadget.system-monitor > indicator > graph > label,
+gadget.system-monitor > indicator > meter > label {
   font-size: var(--font-xs);
   color: var(--fg);
 }
@@ -1392,10 +1397,10 @@ gadget.system-monitor monitor > actions.none > label {
  * :disabled controls are what it can't do.
  *
  * gadget.audio
- * ├─ button.output[.muted]
+ * ├─ indicator.output[.muted]
  * │  ├─ icon
  * │  ╰─ label                    the percent
- * ╰─ button.input[.muted]
+ * ╰─ indicator.input[.muted]
  * surface.popup > gadget.audio
  * ╰─ scroll                      `max-height` caps it (then it scrolls)
  *    ╰─ list
@@ -1525,7 +1530,7 @@ gadget.audio player > controls > button > icon {
  * activates / deactivates it.
  *
  * gadget.network
- * ╰─ button[.wifi|.wired].<state>[.muted|.warning]
+ * ╰─ indicator[.wifi|.wired].<state>[.muted|.warning]
  *    ├─ icon                                     its state
  *    ├─ icon.vpn                                 the VPN badge (show_vpn)
  *    ╰─ label                                    the connection's name (show_label)

@@ -15,15 +15,15 @@
 //! (`showcase`).
 //!
 //! ```text
-//! showcase > parts                           its own boxes; in them, the parts' roots
-//! ├─ panel#showcase > slot                   a bar over the columns, of samples:
-//! │  ├─ gadget#showcase > button[.<state>]   of no kind, only what every gadget gets:
-//! │  │                                       the states, .active .warning .danger .muted
-//! │  ╰─ gadget.<kind> > button.<state>       a gadget's states, as it shows them
-//! │     ╰─ icon | label                      their selector in a tooltip
+//! showcase > parts                            its own boxes; in them, the parts' roots
+//! ├─ panel#showcase > slot                    a bar over the columns, of samples:
+//! │  ├─ gadget#showcase > indicator[.<state>] of no kind, only what every gadget gets:
+//! │  │                                        the states, .active .warning .danger .muted
+//! │  ╰─ gadget.<kind> > indicator.<state>     a gadget's states, as it shows them
+//! │     ╰─ icon | label                       their selector in a tooltip
 //! ╰─ columns > column
 //!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
-//!    ├─ launcher, widgets                    the toolkit's widgets, below
+//!    ├─ launcher, widgets                     the toolkit's widgets, below
 //!    ├─ exiter
 //!    ├─ osd.volume
 //!    ├─ notification.normal | notification.critical
@@ -54,7 +54,7 @@ const GADGETS: &[&str] = &["Clock", "Themes"];
 
 /// A sample button on the bar: its classes, its icon, its label. Not a
 /// gadget's view: only what the theme's rules meet, `gadget.<kind> >
-/// button.<state> > icon | label`.
+/// indicator.<state> > icon | label`.
 struct Sample {
     classes: &'static [&'static str],
     icon: Option<&'static str>,
@@ -135,14 +135,14 @@ const WIDGET_ICONS: &[&str] = &[
     "view-reveal-symbolic",
 ];
 
-/// A sample button's selector, `gadget.<kind> > button.<class>...`.
+/// A sample button's selector, `gadget.<kind> > indicator.<class>...`.
 fn selector(kind: Option<&str>, sample: &Sample) -> String {
     let gadget = match kind {
         Some(kind) => format!("gadget.{kind}"),
         None => "gadget#showcase".to_owned(),
     };
     let classes: String = sample.classes.iter().map(|c| format!(".{c}")).collect();
-    format!("{gadget} > button{classes}")
+    format!("{gadget} > indicator{classes}")
 }
 
 /// The samples' icons.
@@ -615,7 +615,10 @@ impl AriaShell {
         let button = sample
             .classes
             .iter()
-            .fold(icssed::button(content), |button, class| button.class(class))
+            .fold(
+                icssed::button(content).kind("indicator"),
+                |button, class| button.class(class),
+            )
             .on_press(nothing(()));
         icssed::tooltip(button, selector(kind, sample)).into()
     }

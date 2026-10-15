@@ -18,25 +18,25 @@ wait_for 'surface.widgets#graph > graph' 1 "a graph, in its box"
 wait_for 'surface.osd.volume' 1 "the OSD"
 wait_for 'notification.normal' 1 "a notification"
 wait_for 'notification.critical' 1 "a critical one"
-wait_for 'gadget#showcase > button' 5 "the bar's buttons"
-wait_for 'gadget.workspaces > button.danger' 1 "a gadget's state"
-wait_for 'gadget.power > button.battery.danger' 1 "another"
+wait_for 'gadget#showcase > indicator' 5 "the bar's buttons"
+wait_for 'gadget.workspaces > indicator.danger' 1 "a gadget's state"
+wait_for 'gadget.power > indicator.battery.danger' 1 "another"
 assert_no_surface launcher
 assert_no_surface exiter
 shot_surface showcase-light showcase
 
 # A sample's selector, in its tooltip.
-set -- $(widget 'gadget.power > button.battery.danger')
+set -- $(widget 'gadget.power > indicator.battery.danger')
 pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
 wait_for 'surface.panel#showcase gadget.power > tooltip' 1 "the tooltip"
 shot_surface showcase-tooltip showcase
 
 # The scheme from a bar: the showcase follows.
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_eq "$(aria debug theme)" "theme=- scheme=dark" "dark"
 settle 0.5
 shot_surface showcase-dark showcase
-click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > button'
+click_widget 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_eq "$(aria debug theme)" "theme=- scheme=light" "light again"
 
 # Inert: a click on a part does nothing, the showcase stays.

@@ -57,6 +57,21 @@ impl Menu {
         &self.root.children
     }
 
+    /// The icon names of its items, submenus' too.
+    pub fn icon_names(&self) -> Vec<&str> {
+        fn walk<'a>(items: &'a [Item], names: &mut Vec<&'a str>) {
+            for item in items {
+                if !item.icon_name.is_empty() {
+                    names.push(&item.icon_name);
+                }
+                walk(&item.children, names);
+            }
+        }
+        let mut names = Vec::new();
+        walk(self.items(), &mut names);
+        names
+    }
+
     #[cfg(test)]
     pub fn find(&self, id: i32) -> Option<&Item> {
         fn walk(item: &Item, id: i32) -> Option<&Item> {

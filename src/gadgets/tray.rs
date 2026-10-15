@@ -162,7 +162,10 @@ impl Gadget for TrayGadget {
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         match self.menu_for.as_deref().and_then(|key| ctx.tray.menu(key)) {
-            Some(menu) => self.menu.view(menu.items().to_vec()).map(Message::Menu),
+            Some(menu) => self
+                .menu
+                .view(menu.items().to_vec(), ctx.icons)
+                .map(Message::Menu),
             None => icssed::column![icssed::text(LOADING)].kind("menu").into(),
         }
     }

@@ -1,7 +1,8 @@
 # The Themes gadget: a left click toggles light/dark (the palette
 # changes, the tray menu rules follow), a right click lists the schemes
 # and the themes found; picking a theme restyles live (manjaro's last
-# gadget is in the accent), picking Base goes back.
+# gadget is in the accent), picking Base goes back; the button under
+# the menu runs picker_command, once the menu is gone.
 
 # A right click on the first bar's button, until the menu's seven items
 # are there (3s): the popup is the shell's as soon as it's asked for,
@@ -36,10 +37,11 @@ assert_eq "$(aria debug theme)" "theme=- scheme=light" "and back, from either ba
 base_light=$(sample)
 
 # The menu: schemes, then the base and every theme in assets/themes,
-# a folder (e17) or a file, then the theme's settings.
+# a folder (e17) or a file, then the theme's settings; the picker under it.
 open_menu
 wait_for 'menu > item' 7 "Light, Dark, Base, e17, manjaro, sway, the theme's settings"
 wait_for 'menu > separator' 2
+wait_for 'surface.popup gadget.themes > column > button.picker' 1 "the picker"
 wait_for 'menu > item.checked:nth-child(1)' 1 "Light checked"
 wait_for 'menu > item.checked:nth-child(4)' 1 "Base checked"
 shot_surface menu popup
@@ -59,3 +61,13 @@ open_menu
 click_widget 'menu > item:nth-child(4)'
 assert_eq "$(aria debug theme)" "theme=- scheme=dark" "Base picked"
 assert_eq "$(sample)" "$base_dark" "back to the base bar"
+
+# The picker: the menu closes, then picker_command runs.
+open_menu
+click_widget 'surface.popup gadget.themes button.picker'
+assert_no_surface popup
+i=0
+while [ ! -s "$ARIA_UI_OUT/picker" ] && [ $i -lt 30 ]; do
+    sleep 0.1; i=$((i + 1))
+done
+assert_eq "$(cat "$ARIA_UI_OUT/picker")" "picked" "picker_command ran"

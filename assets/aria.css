@@ -860,8 +860,17 @@ gadget.workspaces title > label {
  * ╰─ indicator  left: light/dark, right: the menu
  *    ╰─ icon   the scheme's
  * surface.popup > gadget.themes
- * ╰─ menu      Light / Dark, then Base and every theme found
+ * ├─ menu      Light / Dark, then Base and every theme found
+ * ╰─ column    with `picker_command`, the menu and under it:
+ *    ├─ menu
+ *    ╰─ button.picker > icon, label   runs it
  */
+gadget.themes > column {
+  padding-bottom: 4px;
+}
+gadget.themes > column > button.picker {
+  margin: 0 4px;
+}
 
 /*
  * Screenshot gadget

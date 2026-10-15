@@ -81,7 +81,9 @@ impl Gadget for ScreenshotGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        self.menu.view(items(ctx.locale)).map(Message::Menu)
+        self.menu
+            .view(items(ctx.locale), ctx.icons)
+            .map(Message::Menu)
     }
 }
 

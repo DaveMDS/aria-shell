@@ -385,6 +385,9 @@ impl AriaShell {
                 self.icons.resolve_name(name, item.icon_theme_path());
             }
         }
+        for name in self.tray.menu_icon_names() {
+            self.icons.resolve_name(name, None);
+        }
         let classes: Vec<String> = self.audio.app_classes().map(str::to_owned).collect();
         for class in classes {
             self.icons.resolve(&class);

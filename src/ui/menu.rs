@@ -1,5 +1,5 @@
-//! A menu of the host's items (labels, toggles, separators, submenus
-//! that unfold in place), for a popup: what the toolkit's menu shows,
+//! A menu of the host's items (labels, toggles, icons, separators,
+//! submenus that unfold in place), for a popup: what the toolkit's menu shows,
 //! and which submenus are unfolded, which the toolkit leaves to its
 //! host. A reusable component, not a gadget: the host keeps a [`Menu`],
 //! builds the [`Item`]s from its own state (the tray service builds
@@ -7,7 +7,8 @@
 //! [`Message`] and `.map()`s [`Menu::view`].
 //!
 //! Element tree: the toolkit's (`menu > item[.check|.radio][.checked]
-//! [.submenu][.expanded] > (check > mark | radio > dot | label | arrow)`,
+//! [.submenu][.expanded] > (check > mark | radio > dot | icon | label |
+//! arrow)`,
 //! `menu > separator`, `menu > submenu > item …`).
 
 use std::collections::BTreeSet;
@@ -31,6 +32,8 @@ pub struct Item {
     pub toggle: Option<Toggle>,
     /// The toggle state; `None` for "indeterminate" (or no toggle).
     pub checked: Option<bool>,
+    /// An icon theme's name, drawn before the label; empty: none. The
+    /// host has it resolved (its `icon_names`).
     pub icon_name: String,
     /// Has (or may have, once opened) children.
     pub submenu: bool,
@@ -119,14 +122,18 @@ impl Menu {
         }
     }
 
-    /// The menu, a `menu`. Items are taken by value: hosts
-    /// build them from their state in `view`.
-    pub fn view<'a>(&self, items: Vec<Item>) -> Element<'a, Message> {
-        icssed::menu(self.entries(items)).into()
+    /// The menu, a `menu`, its items' icons from `icons`. Items are
+    /// taken by value: hosts build them from their state in `view`.
+    pub fn view<'a>(&self, items: Vec<Item>, icons: &'a dyn icssed::Icons) -> Element<'a, Message> {
+        icssed::menu(self.entries(items, icons)).into()
     }
 
     /// One level's entries, an unfolded submenu's under its item.
-    fn entries<'a>(&self, items: Vec<Item>) -> Vec<MenuItem<'a, Message>> {
+    fn entries<'a>(
+        &self,
+        items: Vec<Item>,
+        icons: &'a dyn icssed::Icons,
+    ) -> Vec<MenuItem<'a, Message>> {
         items
             .into_iter()
             .map(|item| {
@@ -139,9 +146,12 @@ impl Menu {
                     (Some(Toggle::Radio), checked) => entry.radio(checked == Some(true)),
                     (None, _) => entry,
                 };
+                if !item.icon_name.is_empty() {
+                    entry = entry.icon((icons, item.icon_name));
+                }
                 if item.submenu {
                     let expanded = self.expanded.contains(&item.id);
-                    entry = entry.submenu(expanded, self.entries(item.children));
+                    entry = entry.submenu(expanded, self.entries(item.children, icons));
                 }
                 if item.enabled {
                     entry = entry.on_press(if item.submenu {

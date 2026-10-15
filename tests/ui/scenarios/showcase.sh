@@ -10,6 +10,7 @@ assert_surface showcase
 assert_eq "$(surfaces | tr ';' '\n' | grep -c showcase)" 1 "on one output"
 wait_for 'surface.popup gadget.clock calendar' 1 "the calendar"
 wait_for 'surface.popup gadget.themes menu > item' 4 "a menu: light, dark, base, the theme's settings"
+wait_for 'surface.popup gadget.themes button.picker' 1 "the picker under it"
 [ "$(count_widgets 'surface.launcher item')" -gt 0 ] || { echo "no launcher with results"; false; }
 wait_for 'surface.exiter > row > button' 6 "the exit menu"
 wait_for 'surface.widgets > line' 5 "the toolkit's widgets"

@@ -34,7 +34,7 @@ bar per monitor (or per `[panel:*]` section):
 | `WorkSpaces`    | ✅ | Workspaces and windows overview (Hyprland & Sway)                               |
 | `Audio`         | ✅ | Volume control, multichannel mixer (PipeWire/PulseAudio) and MPRIS2 media controls |
 | `Tray`          | ✅ | System tray via (K)StatusNotifierItem + DBusMenu                                |
-| `Themes`        | ✅ | Shell theme selector with light/dark mode support                               |
+| `Themes`        | ✅ | Shell theme selector with light/dark mode support, and a colour picker          |
 | `Themes`        | 🔲 | Icon theme selector (icon theme is set in the config for now)                   |
 | `Notifications` | ✅ | Notification bell with unseen count, history popup and do-not-disturb           |
 | `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |

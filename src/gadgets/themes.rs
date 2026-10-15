@@ -3,12 +3,14 @@
 //! schemes and every theme found in the theme directories (the base
 //! alone first); picking one restyles the shell live. Last, a check:
 //! the theme's own config read over the user's (only for a theme that
-//! has one). Nothing is persisted: `[general] theme` / `color_scheme` /
+//! has one). Under the menu, with `picker_command` set, a button
+//! running it: a colour picker, for the theme's work. Nothing is persisted: `[general] theme` / `color_scheme` /
 //! `theme_config` rule again at the next start.
 //!
 //! Holds no theme state: the current scheme and theme name come from
 //! `ctx.theme`; the list is rescanned when the menu opens.
 
+use iced::Task;
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
 use icssed::Element;
@@ -16,6 +18,7 @@ use icssed::Element;
 use crate::config::{RawSection, Section};
 use crate::gadgets::{Action, Context, Gadget, Popup};
 use crate::locale::Locale;
+use crate::process;
 use crate::ui::menu::{self, Item, Menu};
 use crate::ui::theme::{self, Command, Scheme};
 
@@ -25,6 +28,10 @@ pub struct ThemesConfig {
     /// Icon names (from the icon theme) shown while each scheme is on.
     pub light_icon: String,
     pub dark_icon: String,
+    /// The colour picker the button under the menu runs; empty: no
+    /// button.
+    pub picker_command: String,
+    pub picker_icon: String,
 }
 
 impl Section for ThemesConfig {
@@ -34,6 +41,8 @@ impl Section for ThemesConfig {
         Self {
             light_icon: raw.str_or("light_icon", "weather-clear-symbolic"),
             dark_icon: raw.str_or("dark_icon", "weather-clear-night-symbolic"),
+            picker_command: raw.str_or("picker_command", ""),
+            picker_icon: raw.str_or("picker_icon", "color-select-symbolic"),
         }
     }
 }
@@ -60,6 +69,9 @@ pub enum Message {
     Toggle,
     OpenMenu,
     Menu(menu::Message),
+    Picker,
+    /// The menu is gone from the screen: the picker sees what's under it.
+    RunPicker,
 }
 
 impl Gadget for Themes {
@@ -98,6 +110,19 @@ impl Gadget for Themes {
                 },
                 menu::Event::None | menu::Event::Unfolded(_) => Action::None,
             },
+            // After the menu is gone, as for a screenshot (see
+            // `Action::Screenshot`).
+            Message::Picker => Action::Many(vec![
+                self.popup.close(),
+                Action::Run(Task::perform(
+                    tokio::time::sleep(std::time::Duration::from_millis(150)),
+                    |_| Message::RunPicker,
+                )),
+            ]),
+            Message::RunPicker => {
+                process::run(&self.config.picker_command);
+                Action::None
+            }
         }
     }
 
@@ -105,6 +130,7 @@ impl Gadget for Themes {
         vec![
             self.config.light_icon.clone(),
             self.config.dark_icon.clone(),
+            self.config.picker_icon.clone(),
         ]
     }
 
@@ -132,9 +158,20 @@ impl Gadget for Themes {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        self.menu
-            .view(self.items(ctx.theme, ctx.locale))
-            .map(Message::Menu)
+        let menu = self
+            .menu
+            .view(self.items(ctx.theme, ctx.locale), ctx.icons)
+            .map(Message::Menu);
+        if self.config.picker_command.is_empty() {
+            return menu;
+        }
+        let picker = icssed::button![
+            ctx.icon(self.config.picker_icon.as_str()),
+            icssed::text(ctx.locale.tr("themes.picker")),
+        ]
+        .class("picker")
+        .on_press(Message::Picker);
+        icssed::column![menu, picker].into()
     }
 }
 

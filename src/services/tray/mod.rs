@@ -223,6 +223,12 @@ impl Tray {
         self.menus.get(key)
     }
 
+    /// The icons the loaded menus draw, by name: the icon theme's (an
+    /// item's own theme path is for its icon on the bar).
+    pub fn menu_icon_names(&self) -> impl Iterator<Item = &str> {
+        self.menus.values().flat_map(|menu| menu.icon_names())
+    }
+
     /// Send a command; `cursor` is where the pointer is, in global
     /// coordinates, for the click methods.
     pub fn run(&self, command: Command, cursor: (i32, i32)) -> Task<Event> {

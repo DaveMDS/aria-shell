@@ -12,6 +12,10 @@
 //!
 //! - `:hover`, `:active` and `:focus` follow the pointer and the
 //!   keyboard: Tab moves the focus, Enter and Space press.
+//! - A grid of buttons in `focus_scope(grid).arrows()` takes the four
+//!   arrows instead, once one of them has the focus: each moves it to
+//!   the nearest button that way, round to the other end of the row or
+//!   the column (Tab into the grid below, then the arrows).
 //! - `disabled_if(true)` makes it `:disabled`: it sends
 //!   nothing and takes no focus.
 //! - What a state changes, the children inherit: `button:hover { color }`
@@ -23,11 +27,14 @@
 //! `:hover` rule changes its background and its children's colour, with
 //! a transition.
 
-use icssed::{Element, button, column, icon, row, text};
+use icssed::{Element, button, column, focus_scope, icon, row, text};
 
 use crate::Assets;
 
 pub const TITLE: &str = "Buttons";
+
+/// The grid's buttons, by row.
+const GRID: [[&str; 3]; 2] = [["1", "2", "3"], ["4", "5", "6"]];
 
 #[derive(Default)]
 pub struct State {
@@ -67,6 +74,14 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             button("Grows").class("grow"),
         ],
         text(pressed).kind("status"),
+        focus_scope(
+            column(GRID.map(|line| {
+                row(line.map(|name| button![text(name)].on_press(Message::Pressed(name)).into()))
+                    .into()
+            }))
+            .kind("grid"),
+        )
+        .arrows(),
         row![icon(assets.star.clone()), text("Hover the card")].kind("card"),
     ]
     .into()

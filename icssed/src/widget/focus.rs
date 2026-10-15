@@ -6,7 +6,9 @@
 //! has. A scope of the arrows moves it with Up and Down (a menu's) or
 //! Left and Right (tabs') instead, among its own, once one of them has
 //! it, round from one end to the other (Tab leaves the scope at its
-//! ends, as iced has it).
+//! ends, as iced has it). A scope of the four arrows (`.arrows()`, a
+//! grid's) moves it to the nearest one that way in the focused one's
+//! row or column, round to the other end of it.
 
 use iced::advanced::layout::{self, Layout, Limits};
 use iced::advanced::renderer;
@@ -33,6 +35,8 @@ pub(crate) enum Keys {
     Tab,
     UpDown,
     LeftRight,
+    /// All four, by where things are.
+    Arrows,
 }
 
 pub fn focus_scope<'a, Message>(
@@ -57,6 +61,15 @@ pub(crate) fn arrow_scope<'a, Message>(
 }
 
 impl<Message> FocusScope<'_, Message> {
+    /// The four arrows move the focus instead of Tab, once something
+    /// inside has it: to the nearest focusable that way in the focused
+    /// one's row (Left, Right) or column (Up, Down), round to the other
+    /// end of it. A grid's: a dialog's buttons, a palette's swatches.
+    pub fn arrows(mut self) -> Self {
+        self.keys = Keys::Arrows;
+        self
+    }
+
     /// Whether something inside has the focus.
     fn focused(&mut self, tree: &mut Tree, layout: Layout<'_>, renderer: &Renderer) -> bool {
         let mut count = focusable::count();
@@ -169,33 +182,68 @@ impl<Message> Widget<Message, Theme, Renderer> for FocusScope<'_, Message> {
         else {
             return;
         };
-        let back = match (self.keys, named) {
-            (Keys::Tab, key::Named::Tab) => modifiers.shift(),
-            (Keys::UpDown, key::Named::ArrowUp) | (Keys::LeftRight, key::Named::ArrowLeft) => true,
-            (Keys::UpDown, key::Named::ArrowDown) | (Keys::LeftRight, key::Named::ArrowRight) => {
-                false
+        let step = match (self.keys, named) {
+            (Keys::Tab, key::Named::Tab) => Step::Tab {
+                back: modifiers.shift(),
+            },
+            (Keys::UpDown, key::Named::ArrowUp) | (Keys::LeftRight, key::Named::ArrowLeft) => {
+                Step::Round { back: true }
             }
+            (Keys::UpDown, key::Named::ArrowDown) | (Keys::LeftRight, key::Named::ArrowRight) => {
+                Step::Round { back: false }
+            }
+            (Keys::Arrows, key::Named::ArrowLeft) => Step::Toward(Way::Left),
+            (Keys::Arrows, key::Named::ArrowRight) => Step::Toward(Way::Right),
+            (Keys::Arrows, key::Named::ArrowUp) => Step::Toward(Way::Up),
+            (Keys::Arrows, key::Named::ArrowDown) => Step::Toward(Way::Down),
             _ => return,
         };
         let arrows = self.keys != Keys::Tab;
         if shell.is_event_captured() || (arrows && !self.focused(tree, layout, renderer)) {
             return;
         }
-        match (arrows, back) {
-            (false, true) => self.run(tree, layout, renderer, focusable::focus_previous()),
-            (false, false) => self.run(tree, layout, renderer, focusable::focus_next()),
-            (true, true) => self.run(
+        match step {
+            Step::Tab { back: true } => {
+                self.run(tree, layout, renderer, focusable::focus_previous());
+            }
+            Step::Tab { back: false } => self.run(tree, layout, renderer, focusable::focus_next()),
+            Step::Round { back: true } => self.run(
                 tree,
                 layout,
                 renderer,
                 operation::then(focusable::count(), Round::back),
             ),
-            (true, false) => self.run(
+            Step::Round { back: false } => self.run(
                 tree,
                 layout,
                 renderer,
                 operation::then(focusable::count(), Round::on),
             ),
+            Step::Toward(way) => {
+                let mut places = Places::default();
+                self.content.as_widget_mut().operate(
+                    &mut tree.children[0],
+                    layout,
+                    renderer,
+                    &mut places,
+                );
+                let Some(from) = places.focused else {
+                    return;
+                };
+                let Some(target) = toward(&places.bounds, from, way) else {
+                    return;
+                };
+                self.run(
+                    tree,
+                    layout,
+                    renderer,
+                    Round {
+                        focused: Some(from),
+                        target: Some(target),
+                        current: 0,
+                    },
+                );
+            }
         }
         shell.capture_event();
         shell.request_redraw();
@@ -252,6 +300,78 @@ impl<'a, Message: 'a> From<FocusScope<'a, Message>> for Element<'a, Message> {
     fn from(scope: FocusScope<'a, Message>) -> Self {
         Element::new(scope)
     }
+}
+
+/// What a key does in a scope.
+enum Step {
+    Tab { back: bool },
+    Round { back: bool },
+    Toward(Way),
+}
+
+/// An arrow's way.
+#[derive(Clone, Copy)]
+enum Way {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+/// Where the focusables are, in their order, and which has the focus.
+#[derive(Default)]
+struct Places {
+    bounds: Vec<Rectangle>,
+    focused: Option<usize>,
+}
+
+impl Operation<()> for Places {
+    fn focusable(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        if state.is_focused() {
+            self.focused = Some(self.bounds.len());
+        }
+        self.bounds.push(bounds);
+    }
+
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
+        operate(self);
+    }
+}
+
+/// The focusable `way` from `from`: of those whose centre is in its row
+/// (Left, Right) or its column (Up, Down), the nearest ahead, else,
+/// round, the farthest behind.
+fn toward(bounds: &[Rectangle], from: usize, way: Way) -> Option<usize> {
+    let here = bounds[from];
+    let across = matches!(way, Way::Left | Way::Right);
+    let in_line = |r: &Rectangle| {
+        if across {
+            (here.y..=here.y + here.height).contains(&r.center_y())
+        } else {
+            (here.x..=here.x + here.width).contains(&r.center_x())
+        }
+    };
+    let along = |r: &Rectangle| if across { r.center_x() } else { r.center_y() };
+    let start = along(&here);
+    let on = matches!(way, Way::Right | Way::Down);
+    let distance = |r: &Rectangle| (along(r) - start).abs();
+    let line = || {
+        bounds
+            .iter()
+            .enumerate()
+            .filter(move |&(i, r)| i != from && in_line(r))
+    };
+    line()
+        .filter(|&(_, r)| {
+            if on {
+                along(r) > start
+            } else {
+                along(r) < start
+            }
+        })
+        .min_by(|a, b| distance(a.1).total_cmp(&distance(b.1)))
+        .or_else(|| line().max_by(|a, b| distance(a.1).total_cmp(&distance(b.1))))
+        .map(|(i, _)| i)
 }
 
 /// The focus a step on or back, round from one end to the other.

@@ -526,7 +526,9 @@ root node's, and what was measured is what the window lays out.
   the content sees it, so a pressed text field takes it back. Tab
   leaves the scope at its ends, as iced's operations have it; a menu's
   and tabs' scopes move it with the arrows instead, round from one end
-  to the other (an operation of ours), once one of theirs has it.
+  to the other (an operation of ours), once one of theirs has it; a
+  grid's (`.arrows()`) with all four, to the nearest that way in the
+  focused one's row or column, found from where the focusables are.
 - **Accessibility**: none in iced 0.14 (no AccessKit). A limit.
 - **Tooltips, menus, selects**: the toolkit draws them; where they
   appear may be the app's. A tooltip shows its tip after the pointer

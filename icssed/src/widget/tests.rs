@@ -1219,6 +1219,49 @@ fn up_and_down_move_the_focus_among_a_menus_items() {
     );
 }
 
+/// Five buttons in rows of three, the four arrows moving the focus
+/// among them; in a scope of Tab, which gives it to the first.
+fn grid(root: Node<'_>) -> Element<'_, Message> {
+    let names = ["a", "b", "c", "d", "e"];
+    let rows = names.chunks(3).map(|chunk| {
+        crate::row(chunk.iter().map(|&name| {
+            crate::button([crate::text(name).into()])
+                .on_press(Message::Pressed(name))
+                .into()
+        }))
+        .into()
+    });
+    crate::focus_scope(crate::column![crate::focus_scope(crate::column(rows)).arrows()].at(root))
+        .into()
+}
+
+#[test]
+fn a_grids_arrows_move_the_focus_by_where_things_are() {
+    let sheet = sheet("row, column { gap: 0; } button { width: 40px; height: 20px; }");
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(grid(root), Size::new(200.0, 100.0), 1.0);
+    // Nothing focused: the arrows wait.
+    ui.key(Named::ArrowRight);
+    ui.key(Named::Enter);
+    assert!(ui.messages.is_empty());
+    let press = |ui: &mut Harness<Message>, keys: &[Named]| {
+        for &key in keys {
+            ui.key(key);
+        }
+        ui.key(Named::Enter);
+    };
+    ui.key(Named::Tab);
+    // Right, Down; Down again round to the top of the column; Left from
+    // the first round to the end of its row.
+    press(&mut ui, &[Named::ArrowRight]);
+    press(&mut ui, &[Named::ArrowDown]);
+    press(&mut ui, &[Named::ArrowDown]);
+    press(&mut ui, &[Named::ArrowLeft, Named::ArrowLeft]);
+    // The last column has no one below: Down stays.
+    press(&mut ui, &[Named::ArrowDown]);
+    assert_eq!(ui.messages, ["b", "e", "b", "c", "c"].map(Message::Pressed));
+}
+
 /// Three tabs, the second shown.
 fn pages(root: Node<'_>) -> Element<'_, Message> {
     crate::focus_scope(

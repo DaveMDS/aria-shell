@@ -154,7 +154,7 @@ to choose.
 | `image(handle)` | `object-fit`, `border-radius`; a box as an icon is |
 | `surface(content).at(root)` | a surface's root: `content` is its box, and it adds the room the box's shadow needs, so a popup's size includes it; `Surface::room(root)` is that room, for placing the surface |
 | `slot(view).kind(k).class(c)` | nothing of its own: `view`'s top widget is the slot's element, with its own classes too; a frame says what a page is, a bar what a gadget is |
-| `focus_scope(content)` | Tab and Shift+Tab among what's inside, one per surface |
+| `focus_scope(content)`, `.arrows()` | Tab and Shift+Tab among what's inside, one per surface; `.arrows()`: the four arrows instead (a grid's), to the nearest that way in the row or column, round, once one inside has the focus |
 | `toggle(on, Message::Wifi).icon(s).label(t)`, `.check()`, `.radio()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a radio (`radio > dot`), a switch (`switch > knob`); a radio, or a group of pressed buttons, is `toggle(p == chosen, move \|_\| Choose(p))` |
 | `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
 | `meter(fraction).label(text)` | with a label, a gauge |
@@ -366,8 +366,9 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
 ### Facts about iced 0.14 that shaped the code
 
 - `focus_next`/`focus_previous` stop at the ends: the focus leaves.
-  That's right for Tab; an arrows scope (a menu's, tabs') moves it round
-  with an operation of ours (`Round` in `focus.rs`). The focus scope
+  That's right for Tab; an arrows scope (a menu's, tabs', a grid's)
+  moves it round with an operation of ours (`Round` in `focus.rs`); a
+  grid's picks its target from the focusables' bounds (`Places`). The focus scope
   drops the focus *before* a press reaches the content, so a pressed
   text field takes it back.
 - `Scrollable::operate` doesn't move its content's layout; it calls

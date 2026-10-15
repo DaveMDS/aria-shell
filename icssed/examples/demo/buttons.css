@@ -2,6 +2,7 @@
  * demo#buttons
  * ├─ row > button[.flat|.primary|.danger|.grow] > icon, label
  * ├─ status                 the last button pressed
+ * ├─ grid > row > button    the four arrows move the focus in it
  * ╰─ card > icon, label     a box that follows the pointer
  */
 
@@ -15,6 +16,13 @@ demo#buttons > row {
 }
 demo#buttons > status {
   color: var(--muted);
+}
+demo#buttons > grid,
+demo#buttons > grid > row {
+  gap: 4px;
+}
+demo#buttons > grid button {
+  width: 40px;
 }
 
 /* A state may change the box's own size: padding grows, the row

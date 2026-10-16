@@ -8,7 +8,7 @@
  * ├─ line                   one per family of widgets, then their
  * │                         disabled states
  * │  ╰─ button[.flat|.primary|.danger|.peek], toggle[.check|.radio|.switch],
- * │     slider, meter, input, select   the toolkit's
+ * │     slider, meter[.thin], input, select   the toolkit's
  * ├─ tabs
  * ╰─ panels > menu, calendar, graph
  */

@@ -16,7 +16,8 @@
 //!   one with an icon alone and a tip;
 //! - toggles: a button that stays pressed, check boxes, radios and
 //!   switches, on and off;
-//! - a slider and a meter; a text field, a password, a select;
+//! - a slider, a meter and a `.thin` one; a text field, a password, a
+//!   select;
 //! - tabs; then a menu, a calendar and a graph side by side.
 //!
 //! Light and dark: the switch at the top right.
@@ -183,6 +184,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let values = row![
         icssed::slider(0.0..=100.0, state.volume, Message::Volume).step(1.0),
         icssed::meter(state.volume / 100.0),
+        icssed::meter(state.volume / 100.0).class("thin"),
     ];
     let fields = row![
         icssed::input("Search", &state.search)

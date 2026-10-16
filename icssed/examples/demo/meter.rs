@@ -11,6 +11,8 @@
 //!   `align-items` on the meter place it.
 //! - Its states are the app's to give, as classes: `.warning` below is
 //!   this demo's, coloured with the palette's `--warning`.
+//! - `.thin` is the base's: a line, under a text (a disk's use, a
+//!   core's load among many).
 //!
 //! The slider moves the first one: the meter itself takes no input.
 
@@ -55,6 +57,7 @@ pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
             meter(0.85).class("warning"),
         ]
         .kind("line"),
+        column![text("Disk, 62% used"), meter(0.62).class("thin")].kind("disk"),
     ]
     .into()
 }

@@ -372,6 +372,7 @@ fn controls(root: Node<'_>) -> Element<'_, ()> {
             crate::row![
                 crate::meter(0.6),
                 crate::meter(0.42).class("gauge").label("CPU 42%"),
+                crate::meter(0.3).class("thin"),
             ]
             .kind("line"),
         ]

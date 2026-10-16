@@ -1,6 +1,7 @@
 /*
  * demo#meter
- * ╰─ line > meter[.warning|.gauge], slider, label
+ * ├─ line > meter[.warning|.gauge], slider, label
+ * ╰─ disk > label, meter.thin
  */
 
 demo#meter {
@@ -18,4 +19,7 @@ demo#meter meter.warning > fill {
 }
 demo#meter meter.gauge {
   height: 18px;
+}
+demo#meter > disk {
+  gap: 4px;
 }

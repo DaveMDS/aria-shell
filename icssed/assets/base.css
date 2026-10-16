@@ -596,9 +596,10 @@ slider:disabled > track > fill {
  * use; with a label over it, a gauge. The fill is the fraction of the
  * meter's content box wide, as tall as it; the label is placed as in a
  * row. Its states are the app's to give, as classes (`.warning`,
- * `.critical`).
+ * `.critical`); `.thin` is a line, under a text (a disk's use, a core's
+ * load among many).
  *
- * meter
+ * meter[.thin]
  * ├─ fill
  * ╰─ label          a gauge's
  */
@@ -617,6 +618,13 @@ meter > fill {
 meter > label {
   font-size: var(--font-xs);
   white-space: nowrap;
+}
+meter.thin {
+  min-height: 3px;
+  border-radius: var(--radius-xs);
+}
+meter.thin > fill {
+  border-radius: var(--radius-xs);
 }
 
 /*

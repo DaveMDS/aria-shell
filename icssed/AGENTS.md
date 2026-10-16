@@ -157,7 +157,7 @@ to choose.
 | `focus_scope(content)`, `.arrows()` | Tab and Shift+Tab among what's inside, one per surface; `.arrows()`: the four arrows instead (a grid's), to the nearest that way in the row or column, round, once one inside has the focus |
 | `toggle(on).on_toggle(Message::Wifi).icon(s).label(t)`, `.checkbox()`, `.radio()`, `.switch()` | a value on or off, `:checked` when on: a `toggle` (a button that stays pressed), a `checkbox`, a `radio`, a `switch`, each the same tree (`indicator > mark`, `icon`, `label`), the look the theme's; a radio, or a group of pressed buttons, is `toggle(p == chosen).on_toggle(move \|_\| Choose(p))` |
 | `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
-| `meter(fraction).label(text)` | with a label, a gauge |
+| `meter(fraction).label(text)` | with a label, a gauge; `.class("thin")`: a line, under a text |
 | `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
 | `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
 | `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are a toggle's tree (`item > checkbox > indicator > mark`, `radio`, `:checked` the item too), drawn by the toggles' rules; an icon goes in their column, two columns only for an item with both |

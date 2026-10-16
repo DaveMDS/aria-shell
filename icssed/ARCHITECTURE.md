@@ -133,7 +133,7 @@ every node was 46% of Aria's CPU with the pointer moving (Aria's
 ARCHITECTURE.md).
 
 Selectors: type, `.class`, `#id`, `[attr="value"]`, `*`, descendant,
-child (`>`), `:hover :active :focus :focus-visible :disabled :first-child :last-child
+child (`>`), `:hover :active :focus :focus-visible :disabled :checked :first-child :last-child
 :nth-child() :nth-last-child() :root`. Specificity then source order.
 No `!important`, no `@media`; `@keyframes` yes (see Animation).
 
@@ -197,7 +197,7 @@ type.
 Why found and not passed: a view written with nodes threaded through
 every call (`row.child("button")`, then `button.child("label")` for each
 part) was long, and a widget adding a class to itself after its
-children were built (a toggle's `.checked`) couldn't reach them. A tree
+children were built (a toggle's `:checked`) couldn't reach them. A tree
 of descriptions mounted in a second pass cost 13–50% of a rebuild; this
 costs about 5% (`benches/costs.rs`), the node steps the same, moved from
 the view to the first diff.
@@ -353,6 +353,18 @@ The room left on the main axis when no child is `fill` goes where
 `justify-content` says: `start`, `center`, `end` (no `space-*`, no
 `align-self` but `fill`'s). Margins are lengths, never `auto` (CSS's way
 to push an item over: `fill` does that here).
+
+`display` is `flex` (the initial value: every box is a flexbox) or
+`none`: the child is left out of its box, no room, no gap beside it,
+not drawn, given no events, not found by an operation (Tab, the
+query). A widget says so through its size, a fill of no portion on
+both axes (`layout::HIDDEN`), which no other widget asks for: through
+iced's `Widget` a box knows nothing else of its children. It follows
+the element's structure, its style at rest (classes, `:checked`,
+`:disabled`), never a state: a `:hover` making something appear would
+be a layout under an ancestor's state. Only the box (`row`, `column`,
+the widgets made of them) leaves a child out; iced's own containers
+lay it out as any other.
 
 A child's **minimum** on the main axis is CSS's automatic minimum
 (`min-width: auto`, the initial value) unless a length sets it: a

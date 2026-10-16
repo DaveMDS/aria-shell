@@ -155,12 +155,12 @@ to choose.
 | `surface(content).at(root)` | a surface's root: `content` is its box, and it adds the room the box's shadow needs, so a popup's size includes it; `Surface::room(root)` is that room, for placing the surface |
 | `slot(view).kind(k).class(c)` | nothing of its own: `view`'s top widget is the slot's element, with its own classes too; a frame says what a page is, a bar what a gadget is |
 | `focus_scope(content)`, `.arrows()` | Tab and Shift+Tab among what's inside, one per surface; `.arrows()`: the four arrows instead (a grid's), to the nearest that way in the row or column, round, once one inside has the focus |
-| `toggle(on, Message::Wifi).icon(s).label(t)`, `.check()`, `.radio()`, `.switch()` | a value on or off, `.checked` when on: a button that stays pressed, a check box (`check > mark`), a radio (`radio > dot`), a switch (`switch > knob`); a radio, or a group of pressed buttons, is `toggle(p == chosen, move \|_\| Choose(p))` |
+| `toggle(on, Message::Wifi).icon(s).label(t)`, `.checkbox()`, `.radio()`, `.switch()` | a value on or off, `:checked` when on: a `toggle` (a button that stays pressed), a `checkbox`, a `radio`, a `switch`, each the same tree (`indicator > mark`, `icon`, `label`), the look the theme's; a radio, or a group of pressed buttons, is `toggle(p == chosen, move \|_\| Choose(p))` |
 | `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
 | `meter(fraction).label(text)` | with a label, a gauge |
 | `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
 | `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
-| `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are a toggle's (`check > mark`, `radio > dot`); an icon goes in their column, two columns only for an item with both |
+| `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are the menu's own (`item.check > check > mark`, `item.radio > radio > dot`); an icon goes in their column, two columns only for an item with both |
 | `tabs([Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
 | `calendar(Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
 | `graph(capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |
@@ -223,13 +223,18 @@ surface closes.
   does; `:focus` alone also shows after a click.
 - **States**: `:hover`, `:active` and `:focus` are tracked only on
   nodes some rule can see them on, so a moving pointer over unthemed UI
-  asks no frame. `:disabled` is part of the path (`disabled_if`), and
-  only the marked element is disabled, not the nodes under it. Paint
+  asks no frame. `:disabled` and `:checked` are part of the path
+  (`disabled_if`, a toggle's value), and only the marked element is
+  disabled or checked, not the nodes under it. Paint
   may follow any state, own or an ancestor's. Layout (sizes, padding,
   font) follows only the element's own states: under an ancestor's
   state it isn't applied. The sheet doesn't warn about it yet, though
   it should (ARCHITECTURE.md, "Not done yet"). What a state changes, the descendants
   inherit (`button:hover { color }` reaches its label).
+- **`display: none`** leaves an element out of the box it's in (no
+  room, no gap, not drawn, no events): the base hides a toggle's
+  indicator so. It follows the structure (classes, `:checked`,
+  `:disabled`), never a state: `:hover` can't make a part appear.
 - **Classes are the view's, states the widget's.** State a widget owns
   at runtime shows as a pseudo-class: an open select is `:active`.
   `content` (the marks: a menu item's check, an arrow) is read from the

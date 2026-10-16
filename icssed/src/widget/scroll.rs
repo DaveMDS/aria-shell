@@ -168,6 +168,9 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
 
 impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
     fn size(&self) -> Size<Length> {
+        if self.place.hidden() {
+            return crate::layout::HIDDEN;
+        }
         Widget::<Message, Theme, Renderer>::size(&*self.scrollable())
     }
 

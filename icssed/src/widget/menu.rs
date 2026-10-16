@@ -17,7 +17,7 @@ use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
 use super::place::placed;
 use super::text::{mark, text};
-use super::toggle::{check_part, radio_part};
+use super::toggle::tick;
 use crate::Element;
 use crate::style::name;
 
@@ -207,4 +207,18 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
         }
     }
     out
+}
+
+/// A check item's part: `check > mark`, the mark the toolkit's tick.
+fn check_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
+    row([icon(tick()).kind_of(name!("mark")).into()])
+        .kind_of(name!("check"))
+        .into()
+}
+
+/// A radio item's part: `radio > dot`.
+fn radio_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
+    row([row([]).kind_of(name!("dot")).into()])
+        .kind_of(name!("radio"))
+        .into()
 }

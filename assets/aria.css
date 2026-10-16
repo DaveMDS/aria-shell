@@ -359,7 +359,7 @@ surface.wallpaper {
  *    ├─ date
  *    ╰─ auth[.error][.busy]     the password block
  *       ├─ input                the toolkit's, the password (:focus)
- *       │  ╰─ toggle.peek[.checked] > icon   the eye (.checked: the password shows);
+ *       │  ╰─ toggle.peek[:checked] > icon   the eye (:checked: the password shows);
  *       │                                 a `label`, show / hide, without one in the icon theme
  *       ├─ message              what PAM said, "Unlocking…"
  *       ╰─ button.primary > label   Unlock (:disabled while checking)
@@ -1001,13 +1001,13 @@ gadget.places info > meter.critical > fill {
  *    │  ├─ name
  *    │  ╰─ percent
  *    ├─ profiles                         a row
- *    │  ╰─ toggle.<profile>[.checked]    .checked: the one in use
+ *    │  ╰─ toggle.<profile>[:checked]    :checked: the one in use
  *    │     ├─ icon
  *    │     ╰─ label
  *    ├─ idle[.active]                    "Keep awake"
  *    │  ├─ icon
  *    │  ├─ title
- *    │  ╰─ toggle.switch                 the toolkit's
+ *    │  ╰─ switch                        the toolkit's
  *    ├─ message > label
  *    ╰─ button.settings > label          runs `settings_command`
  */
@@ -1141,7 +1141,7 @@ gadget.brightness screen slider {
  *    ╰─ list                    `width` sizes it
  *       ├─ header
  *       │  ├─ title
- *       │  ├─ toggle.dnd[.checked] do-not-disturb, on or off
+ *       │  ├─ toggle.dnd[:checked] do-not-disturb, on or off
  *       │  ╰─ button.clear         empties the history
  *       ├─ empty > label        "No notifications"
  *       ╰─ notification[.unseen]   one per notification kept
@@ -1414,11 +1414,11 @@ gadget.system-monitor monitor > actions.none > label {
  *    ╰─ list
  *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
  *       ├─ channel.output|.input|.stream[.muted][.default][name="..."]
- *       │  ├─ toggle.mute[.checked] > icon  mute, on or off: the device's / app's icon
+ *       │  ├─ toggle.mute[:checked] > icon  mute, on or off: the device's / app's icon
  *       │  ╰─ info                         a column
  *       │     ├─ head                      a row
- *       │     │  ├─ toggle.radio[.checked]  a device's name: .checked the default,
- *       │     │  │  ├─ radio > dot         a click on another makes it so
+ *       │     │  ├─ radio[:checked]        a device's name: :checked the default,
+ *       │     │  │  ├─ indicator > mark    a click on another makes it so
  *       │     │  │  ╰─ label
  *       │     │  ├─ name                   a stream's name
  *       │     │  ╰─ value                  the percent
@@ -1461,7 +1461,7 @@ gadget.audio channel head {
   gap: 8px;
   align-items: center;
 }
-gadget.audio channel head > toggle.radio > label,
+gadget.audio channel head > radio > label,
 gadget.audio channel head > name {
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1469,10 +1469,10 @@ gadget.audio channel head > name {
 gadget.audio channel head > name {
   width: fill;
 }
-gadget.audio channel head > toggle.radio {
+gadget.audio channel head > radio {
   width: fill;
 }
-gadget.audio channel.default head > toggle.radio > label {
+gadget.audio channel.default head > radio > label {
   font-weight: bold;
 }
 gadget.audio channel head > value {
@@ -1548,7 +1548,7 @@ gadget.audio player > controls > button > icon {
  *       ├─ header.wifi[.off] | header.wired | header.vpn
  *       │  ├─ title                              "Wi‑Fi networks", "Ethernet network", ...
  *       │  ├─ button.scan > icon                 (wifi) asks for a scan
- *       │  ╰─ toggle.switch                      (wifi) on/off, the toolkit's
+ *       │  ╰─ switch                             (wifi) on/off, the toolkit's
  *       ├─ ap[.active][.connecting][.known][.secured][.enterprise][.expanded][.failed][ssid="..."]
  *       │  ├─ button.flat                        the row
  *       │  │  ├─ icon                            the strength
@@ -1563,7 +1563,7 @@ gadget.audio player > controls > button > icon {
  *       │  ├─ auth[.busy]                        the password
  *       │  │  ├─ input                           the toolkit's (:focus)
  *       │  │  │  ├─ field
- *       │  │  │  ╰─ toggle.peek[.checked] > icon   the eye (.checked: shown)
+ *       │  │  │  ╰─ toggle.peek[:checked] > icon   the eye (:checked: shown)
  *       │  │  ╰─ button.connect > label          :disabled: nothing typed yet
  *       │  ╰─ message > label                    "Wrong password", the enterprise hint
  *       ├─ device.wired[.active][.connecting][.unplugged][.expanded][name="eth0"]
@@ -1575,7 +1575,7 @@ gadget.audio player > controls > button > icon {
  *       │  │  ├─ icon
  *       │  │  ├─ name
  *       │  │  ├─ status
- *       │  │  ╰─ toggle.switch
+ *       │  │  ╰─ switch
  *       │  ╰─ message > label                    "Needs a password: open the settings"
  *       ├─ empty > label                         "Wi‑Fi is off", "No networks found", ...
  *       ╰─ button.settings > label               runs `settings_command`

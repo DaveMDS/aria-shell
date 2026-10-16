@@ -103,7 +103,7 @@ wait_osd 0
 nm_send "vpn Office"
 click_widget 'surface.panel[output="HEADLESS-1"] gadget.network > indicator'
 wait_for 'surface.popup gadget.network vpn[name="Office"]' 1 "the VPN row"
-click_widget 'surface.popup gadget.network vpn[name="Office"] toggle'
+click_widget 'surface.popup gadget.network vpn[name="Office"] switch'
 assert_eq "$(nm_action)" "activate Office"
 nm_send finish
 wait_for 'surface.osd.vpn label' 2 "VPN connected: the OSD"

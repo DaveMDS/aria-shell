@@ -157,6 +157,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Icon<'_> {
     }
 
     fn size(&self) -> Size<Length> {
+        if self.boxed.place.hidden() {
+            return crate::layout::HIDDEN;
+        }
         let s = self.boxed.style();
         let natural = self.natural(s);
         let m = s.margin;

@@ -11,10 +11,10 @@ use super::images::{Nine, Picture};
 use super::keyframes::Keyframes;
 use super::value::{
     Align, AnimationDirection, BackgroundOrigin, BackgroundSize, ColorValue, Decl, Direction,
-    Easing, FULL_SLICE, FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight,
-    LineStyle, MinSize, Moving, ObjectFit, Prop, Repeat, Shadows, Side, Size, Slice, TextAlign,
-    TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WeightValue, WhiteSpace,
-    Wide,
+    Display, Easing, FULL_SLICE, FamilyName, FillMode, FontStyle, Justify, LengthPercentage,
+    LineHeight, LineStyle, MinSize, Moving, ObjectFit, Prop, Repeat, Shadows, Side, Size, Slice,
+    TextAlign, TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WeightValue,
+    WhiteSpace, Wide,
 };
 
 /// Four lengths, one per side.
@@ -174,6 +174,7 @@ pub struct Computed {
     pub flex_direction: Option<Direction>,
     pub align_items: Align,
     pub justify_content: Justify,
+    pub display: Display,
     pub background: Color,
     pub color: Color,
     pub shadow: Option<Shadow>,
@@ -255,6 +256,7 @@ impl Computed {
             flex_direction: None,
             align_items: Align::Stretch,
             justify_content: Justify::Start,
+            display: Display::Flex,
             background: Color::TRANSPARENT,
             color: Color::BLACK,
             shadow: None,
@@ -324,6 +326,7 @@ impl Computed {
             && self.flex_direction == other.flex_direction
             && self.align_items == other.align_items
             && self.justify_content == other.justify_content
+            && self.display == other.display
             && self.font == other.font
             && self.font_size == other.font_size
             && self.line_height_px == other.line_height_px
@@ -431,6 +434,7 @@ impl<'p> Cascade<'p> {
             Decl::FlexDirection(v) => out.flex_direction = Some(*v),
             Decl::AlignItems(v) => out.align_items = *v,
             Decl::JustifyContent(v) => out.justify_content = *v,
+            Decl::Display(v) => out.display = *v,
             Decl::Background(v) => self.background = *v,
             // `color: currentcolor` is `inherit`.
             Decl::Color(ColorValue::Current) => out.color = self.parent.color,
@@ -733,6 +737,7 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::FlexDirection => to.flex_direction = from.flex_direction,
         Prop::AlignItems => to.align_items = from.align_items,
         Prop::JustifyContent => to.justify_content = from.justify_content,
+        Prop::Display => to.display = from.display,
         Prop::Background => to.background = from.background,
         Prop::Color => to.color = from.color,
         Prop::BoxShadow => {

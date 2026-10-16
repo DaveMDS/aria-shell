@@ -39,24 +39,24 @@ wait_for 'surface.popup.power battery' 1 "the battery"
 wait_for 'surface.popup.power details line' 2 "power draw and health"
 wait_for 'surface.popup.power device' 1 "the mouse"
 wait_for 'surface.popup.power profiles toggle' 3 "three profiles"
-wait_for 'surface.popup.power profiles toggle.balanced.checked' 1 "balanced is active"
+wait_for 'surface.popup.power profiles toggle.balanced:checked' 1 "balanced is active"
 
 # A profile picked goes to the daemon; one it picks shows.
 click_widget 'surface.popup.power profiles toggle.performance'
 assert_eq "$(upower_event)" "set-profile performance"
 settle 0.5
-wait_for 'surface.popup.power profiles toggle.performance.checked' 1 "performance is active"
+wait_for 'surface.popup.power profiles toggle.performance:checked' 1 "performance is active"
 upower_send "profile power-saver"
-wait_for 'surface.popup.power profiles toggle.power-saver.checked' 1 "the daemon's pick"
+wait_for 'surface.popup.power profiles toggle.power-saver:checked' 1 "the daemon's pick"
 upower_send "degraded high-operating-temperature"
 wait_for 'surface.popup.power message' 1 "why performance is limited"
 
 # Keep awake, from the popup.
-click_widget 'surface.popup.power idle toggle'
+click_widget 'surface.popup.power idle switch'
 assert_contains "$(aria debug idle)" "inhibited=true"
 wait_for 'gadget.power > indicator.idle.active' 2 "held, on both bars"
 wait_for 'surface.popup.power idle.active' 1 "and in the popup"
-click_widget 'surface.popup.power idle toggle'
+click_widget 'surface.popup.power idle switch'
 assert_contains "$(aria debug idle)" "inhibited=false"
 
 # Settings runs settings_command and closes the popup.

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use iced::advanced::widget::Tree;
 
 use crate::Element;
-use crate::style::{Computed, Name, Node, NodeId, Sheet, Step};
+use crate::style::{Computed, Display, Name, Node, NodeId, Sheet, Step};
 
 /// What a container hands the child it's reaching: where it is, in the
 /// sheet of the container's node.
@@ -141,7 +141,7 @@ pub(crate) fn diff<'b, Message: 'b>(
 /// and its style at rest after.
 pub(crate) struct Place<'a> {
     kind: Name,
-    /// Its classes, id, attributes, `:disabled`: the steps after its
+    /// Its classes, id, attributes, `:disabled`, `:checked`: the steps after its
     /// type.
     extras: Vec<Step>,
     node: Cell<Option<Node<'a>>>,
@@ -189,6 +189,10 @@ impl<'a> Place<'a> {
         self.extra(Step::Disabled);
     }
 
+    pub fn checked(&mut self) {
+        self.extra(Step::Checked);
+    }
+
     fn extra(&mut self, step: Step) {
         match self.node.get_mut() {
             Some(node) => *node = node.step(step),
@@ -233,6 +237,12 @@ impl<'a> Place<'a> {
     #[inline]
     pub fn style(&self) -> &Arc<Computed> {
         self.style.get_or_init(|| self.node().base())
+    }
+
+    /// Whether it's `display: none` at rest: left out of the box it's
+    /// in, its size saying so (`layout::HIDDEN`).
+    pub fn hidden(&self) -> bool {
+        self.style().display == Display::None
     }
 }
 

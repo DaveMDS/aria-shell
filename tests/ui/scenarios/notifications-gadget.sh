@@ -62,7 +62,7 @@ wait_for 'surface.popup notification[id="'"$id2"'"]' 1 "the other stays"
 # Do not disturb from the popup: a new notification is listed, not
 # shown; a critical one shows anyway.
 click_widget 'surface.popup gadget.notifications header toggle.dnd'
-wait_for 'surface.popup gadget.notifications header toggle.dnd.checked' 1
+wait_for 'surface.popup gadget.notifications header toggle.dnd:checked' 1
 wait_for 'gadget.notifications > indicator.muted' 2 "quiet on both bars"
 nsend -t 0 "Quiet" "not on screen" > /dev/null
 settle

@@ -296,7 +296,7 @@ Over any theme, `theme-override.css` beside `aria.conf` holds your own touches
 `surface.panel#dock icon { height: 48px; }` makes the `[panel:dock]` bar thicker
 whatever theme is in use (a bar is as thick as its content).
 
-- ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:focus-visible`/`:disabled`,
+- ✅ Selectors (type, class, id, attributes, `:hover`/`:active`/`:focus`/`:focus-visible`/`:disabled`/`:checked`,
   `:first-child`/`:last-child`, `:nth-child`/`:nth-last-child`), variables, cascade
 - ✅ Light/dark schemes, switched at runtime by the `Themes` gadget
 - ✅ A theme of variables alone: the palette, the font sizes, the corner radii

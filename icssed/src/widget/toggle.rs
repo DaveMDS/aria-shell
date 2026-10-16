@@ -1,13 +1,23 @@
 //! A value on or off: a button whose press, or Enter or Space while it
-//! has the focus, asks for the other value; `.checked` while it's on. It
-//! looks one of four ways: a button that stays pressed, a check box
-//! (`.check`), a radio (`.radio`), a switch (`.switch`), the last three
-//! with the toolkit's part before its icon and its label. Its classes
-//! reach them all, whenever they're given. The switch's knob slides as
-//! the theme says: the base moves it with a transform, by the switch's
-//! width less its padding and the knob's. A check box's mark is the
-//! toolkit's own drawing, a symbolic svg: it takes its `color` and its
-//! size from the sheet, as any icon, and shows as its `opacity` says.
+//! has the focus, asks for the other value; `:checked` while it's on.
+//! One widget, four names for the theme to tell its looks apart: a
+//! `toggle` (a button that stays pressed), a `checkbox`, a `radio`, a
+//! `switch`. Each is the same tree, the look the theme's alone:
+//!
+//! ```text
+//! toggle | checkbox | radio | switch [:checked]
+//! ├─ indicator      the box, the circle, the switch's track
+//! │  ╰─ mark        the tick, the dot, the switch's knob
+//! ├─ icon           if it has one
+//! ╰─ label          if it has one
+//! ```
+//!
+//! A checkbox's mark is an icon, the toolkit's tick, a symbolic svg: it
+//! takes its `color` and its size from the sheet, as any icon (a theme
+//! drawing its own makes it `transparent`). The others' is an empty
+//! box. The base hides a toggle's indicator (`display: none`) and slides
+//! a switch's knob with a transform, by the indicator's width less its
+//! padding and the knob's.
 //!
 //! A radio is a toggle that chooses: one among a few is on, a press on
 //! any asks for it (`toggle(p == chosen, move |_| Choose(p))`), on the
@@ -24,15 +34,26 @@ use super::icon::{IconFile, IconSource, icon};
 use super::place::{Place, placed};
 use super::text::text;
 use crate::Element;
-use crate::style::{Direction, name};
+use crate::style::{Direction, Name, name};
 
 /// How a toggle looks.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Look {
     Button,
-    Check,
+    Checkbox,
     Radio,
     Switch,
+}
+
+impl Look {
+    fn name(self) -> Name {
+        match self {
+            Look::Button => name!("toggle"),
+            Look::Checkbox => name!("checkbox"),
+            Look::Radio => name!("radio"),
+            Look::Switch => name!("switch"),
+        }
+    }
 }
 
 pub struct Toggle<'a, Message> {
@@ -45,9 +66,9 @@ pub struct Toggle<'a, Message> {
     label: Option<Cow<'a, str>>,
 }
 
-/// A `toggle` on or off: a button that stays pressed, unless `check`,
-/// `radio` or `switch` says otherwise. `on_toggle` makes what a press sends from the
-/// value it asks for.
+/// A `toggle` on or off: a button that stays pressed, unless
+/// `checkbox`, `radio` or `switch` says otherwise. `on_toggle` makes
+/// what a press sends from the value it asks for.
 pub fn toggle<'a, Message: Clone + 'a>(
     on: bool,
     on_toggle: impl Fn(bool) -> Message,
@@ -65,21 +86,24 @@ pub fn toggle<'a, Message: Clone + 'a>(
 impl<'a, Message> Toggle<'a, Message> {
     placed!(place);
 
-    /// A check box: `.check`, its `check > mark` first.
-    pub fn check(mut self) -> Self {
-        self.look = Look::Check;
-        self
+    /// A check box: a `checkbox`.
+    pub fn checkbox(self) -> Self {
+        self.look(Look::Checkbox)
     }
 
-    /// A radio: `.radio`, its `radio > dot` first.
-    pub fn radio(mut self) -> Self {
-        self.look = Look::Radio;
-        self
+    /// A radio: a `radio`.
+    pub fn radio(self) -> Self {
+        self.look(Look::Radio)
     }
 
-    /// A switch: `.switch`, its `switch > knob` first.
-    pub fn switch(mut self) -> Self {
-        self.look = Look::Switch;
+    /// A switch: a `switch`.
+    pub fn switch(self) -> Self {
+        self.look(Look::Switch)
+    }
+
+    fn look(mut self, look: Look) -> Self {
+        self.look = look;
+        self.place.kind(look.name());
         self
     }
 
@@ -100,33 +124,19 @@ impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message>
     fn from(toggle: Toggle<'a, Message>) -> Self {
         let mut place = toggle.place;
         if toggle.on {
-            place.class("checked");
+            place.checked();
         }
-        let part: Option<Element<'a, Message>> = match toggle.look {
-            Look::Button => None,
-            Look::Check => {
-                place.class("check");
-                Some(check_part())
-            }
-            Look::Radio => {
-                place.class("radio");
-                Some(radio_part())
-            }
-            Look::Switch => {
-                place.class("switch");
-                Some(
-                    row([row([]).kind_of(name!("knob")).into()])
-                        .kind_of(name!("switch"))
-                        .into(),
-                )
-            }
+        let mark: Element<'a, Message> = match toggle.look {
+            Look::Checkbox => icon(tick()).kind_of(name!("mark")).into(),
+            _ => row([]).kind_of(name!("mark")).into(),
         };
+        let indicator = row([mark]).kind_of(name!("indicator")).into();
         let icon = toggle.icon.map(|source| icon(source).into());
         let label = toggle.label.map(|label| text(label).into());
         Flex::placed(
             place,
             Direction::Row,
-            part.into_iter().chain(icon).chain(label),
+            std::iter::once(indicator).chain(icon).chain(label),
         )
         .on_press(toggle.press)
         .into()
@@ -141,21 +151,10 @@ static TICK: LazyLock<svg::Handle> = LazyLock::new(|| {
     )
 });
 
-/// A check box's part, a toggle's or a menu item's: `check > mark`, the
-/// mark an icon.
-pub(super) fn check_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
-    let tick = IconFile::Svg {
+/// The toolkit's tick, a checkbox's mark or a menu item's.
+pub(super) fn tick() -> IconFile {
+    IconFile::Svg {
         handle: TICK.clone(),
         symbolic: true,
-    };
-    row([icon(tick).kind_of(name!("mark")).into()])
-        .kind_of(name!("check"))
-        .into()
-}
-
-/// A radio's part, a toggle's or a menu item's: `radio > dot`.
-pub(super) fn radio_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
-    row([row([]).kind_of(name!("dot")).into()])
-        .kind_of(name!("radio"))
-        .into()
+    }
 }

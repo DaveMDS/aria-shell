@@ -289,7 +289,7 @@ fn header<'a>(class: &str, title: &'a str) -> Element<'a, Message> {
 }
 
 /// The profile picker: a pressed button per profile, the active one
-/// `.checked`, its icon over its name.
+/// `:checked`, its icon over its name.
 fn profiles<'a>(ctx: Context<'a>, available: &[String], active: &str) -> Element<'a, Message> {
     // Known ones in their order, then whatever else the daemon has.
     let ordered = PROFILES

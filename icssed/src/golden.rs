@@ -376,7 +376,7 @@ fn controls(root: Node<'_>) -> Element<'_, ()> {
     .into()
 }
 
-const CONTROLS: &str = "toggle, toggle > switch, toggle > switch > knob, slider > knob { \
+const CONTROLS: &str = "switch, switch > indicator, switch > indicator > mark, slider > knob { \
                         transition: none; } \
                         line { gap: 10px; align-items: center; } \
                         meter.gauge { width: 100px; height: 16px; }";
@@ -418,8 +418,7 @@ fn golden_controls_focused_and_dragged() {
 fn golden_toggles() {
     scene(
         "toggles",
-        "toggle, toggle > check, toggle > check > mark, toggle > radio, toggle > radio > dot, \
-         toggle > switch, toggle > switch > knob { transition: none; } \
+        "toggle, checkbox, radio, switch, indicator, mark { transition: none; } \
          column { gap: 8px; } line { gap: 10px; align-items: center; }",
         None,
         Size::new(320.0, 140.0),
@@ -440,7 +439,7 @@ fn golden_toggles() {
             crate::focus_scope(
                 crate::column![
                     looks(|t| t),
-                    looks(|t| t.check()),
+                    looks(|t| t.checkbox()),
                     looks(|t| t.radio()),
                     looks(|t| t.switch())
                 ]

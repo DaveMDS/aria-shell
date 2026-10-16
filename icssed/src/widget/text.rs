@@ -204,6 +204,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Text<'_> {
     }
 
     fn size(&self) -> Size<Length> {
+        if self.place.hidden() {
+            return crate::layout::HIDDEN;
+        }
         let length = |len: Len| match len {
             Len::Auto => Length::Shrink,
             Len::Px(v) => Length::Fixed(v),

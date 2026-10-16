@@ -769,8 +769,7 @@ fn a_box_is_found_and_focused_by_its_id() {
 }
 
 /// The base's controls, without their transitions.
-const CONTROLS: &str = "toggle, toggle > check, toggle > radio, toggle > radio > dot, \
-                        toggle > switch, toggle > switch > knob, \
+const CONTROLS: &str = "toggle, checkbox, radio, switch, indicator, mark, \
                         slider > knob { transition: none; }";
 
 #[test]
@@ -784,11 +783,14 @@ fn a_toggle_asks_for_the_other_state() {
         .into()
     };
     let mut ui = Harness::new(view(false), Size::new(100.0, 40.0), 1.0);
-    assert!(ui.find(&sheet, "toggle.checked").is_empty());
-    ui.click_on(&sheet, "toggle");
+    assert!(ui.find(&sheet, "switch:checked").is_empty());
+    ui.click_on(&sheet, "switch");
     assert_eq!(ui.messages, [Message::Toggled(true)]);
     ui.rebuild(view(true));
-    assert_eq!(ui.find(&sheet, "toggle.checked > switch > knob").len(), 1);
+    assert_eq!(
+        ui.find(&sheet, "switch:checked > indicator > mark").len(),
+        1
+    );
     // The click gave it the focus: Space presses it.
     ui.key(Named::Space);
     assert_eq!(
@@ -812,21 +814,18 @@ fn a_radio_asks_for_itself() {
         .into()
     };
     let mut ui = Harness::new(view("a"), Size::new(200.0, 40.0), 1.0);
-    assert_eq!(
-        ui.find(&sheet, "toggle.radio.checked:nth-child(1)").len(),
-        1
-    );
-    ui.click_on(&sheet, "toggle.radio:nth-child(2)");
+    assert_eq!(ui.find(&sheet, "radio:checked:nth-child(1)").len(), 1);
+    ui.click_on(&sheet, "radio:nth-child(2)");
     assert_eq!(ui.messages, [Message::Pressed("b")]);
     ui.rebuild(view("b"));
-    assert_eq!(ui.find(&sheet, "toggle.radio.checked").len(), 1);
+    assert_eq!(ui.find(&sheet, "radio:checked").len(), 1);
     assert_eq!(
-        ui.find(&sheet, "toggle.radio.checked:nth-child(2) > radio > dot")
+        ui.find(&sheet, "radio:checked:nth-child(2) > indicator > mark")
             .len(),
         1
     );
     // The chosen one asks for itself again: nothing changes.
-    ui.click_on(&sheet, "toggle.radio:nth-child(2)");
+    ui.click_on(&sheet, "radio:nth-child(2)");
     assert_eq!(ui.messages, [Message::Pressed("b"), Message::Pressed("b")]);
 }
 

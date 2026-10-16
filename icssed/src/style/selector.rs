@@ -2,7 +2,7 @@
 //! of a node's path.
 //!
 //! Type, `.class`, `#id`, `[attr]`, `[attr="value"]`, `*`, descendant
-//! and child (`>`) combinators; `:hover :active :focus :focus-visible :disabled :root
+//! and child (`>`) combinators; `:hover :active :focus :focus-visible :disabled :checked :root
 //! :first-child :last-child :nth-child() :nth-last-child()`.
 
 use cssparser::{ParseError, Parser, ToCss, Token};
@@ -37,6 +37,7 @@ pub(crate) struct Compound {
     attrs: Vec<Attr>,
     pub states: States,
     disabled: bool,
+    checked: bool,
     root: bool,
     /// Bits of the sheet's positional pseudo-classes it asks for.
     positions: u32,
@@ -55,6 +56,7 @@ impl Compound {
             })
             && (!self.root || depth == 0)
             && (!self.disabled || element.disabled)
+            && (!self.checked || element.checked)
             && self.positions & !element.position == 0
             && states.is_none_or(|s| s.contains(self.states))
     }
@@ -65,6 +67,7 @@ impl Compound {
             + self.attrs.len() as u32
             + self.states.count()
             + self.disabled as u32
+            + self.checked as u32
             + self.root as u32
             + self.positions.count_ones();
         let types = self.kind.is_some() as u32;
@@ -156,6 +159,7 @@ impl Selector {
             && c.attrs.is_empty()
             && c.states.is_empty()
             && !c.disabled
+            && !c.checked
             && c.positions == 0;
         if !plain_root {
             return None;
@@ -343,6 +347,7 @@ fn pseudo_class(p: &mut Parser, ctx: &mut Ctx, c: &mut Compound) -> Result<(), E
             "focus" => c.states |= States::FOCUS,
             "focus-visible" => c.states |= States::FOCUS_VISIBLE,
             "disabled" => c.disabled = true,
+            "checked" => c.checked = true,
             "root" => c.root = true,
             "first-child" => {
                 c.positions |= ctx.nth(Nth {

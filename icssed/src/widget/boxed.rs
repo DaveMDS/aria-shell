@@ -22,7 +22,7 @@ use iced::{Event, Length, Rectangle, Size, Transformation, Vector, touch};
 
 use super::place::Place;
 use crate::anim::Animated;
-use crate::layout::{content_box, length, snap};
+use crate::layout::{HIDDEN, content_box, length, snap};
 use crate::paint::{draw_box, draw_debug, draw_outline, fade};
 use crate::style::{Ancestors, Computed, Node, States};
 use crate::{Renderer, Theme};
@@ -218,8 +218,11 @@ impl<'a> Boxed<'a> {
         }
     }
 
-    /// Its size as iced sees it: its margin box.
+    /// Its size as iced sees it: its margin box, or `HIDDEN`.
     pub fn size(&self) -> Size<Length> {
+        if self.place.hidden() {
+            return HIDDEN;
+        }
         let m = self.style().margin;
         Size::new(
             length(self.style().width, m.horizontal()),

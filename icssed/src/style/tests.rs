@@ -232,6 +232,18 @@ fn disabled_is_part_of_the_path() {
 }
 
 #[test]
+fn checked_is_part_of_the_path() {
+    let (sheet, _) = load("x:checked > y { color: red; } x:checked { color: blue; }");
+    let x = node(&sheet, "x", 1.0).checked_if(true);
+    assert_eq!(x.base().color, rgb(0, 0, 255));
+    assert_eq!(x.child("y").base().color, RED);
+    assert_eq!(
+        node(&sheet, "x", 1.0).child("y").base().color,
+        plain(&sheet)
+    );
+}
+
+#[test]
 fn inheritance_and_the_wide_keywords() {
     let (sheet, _) = load(
         "x { color: red; font-size: 20px; padding: 4px; } \

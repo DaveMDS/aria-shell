@@ -58,12 +58,12 @@ shot locked-password
 # The eye shows the password in clear and hides it again (the field's
 # text isn't readable from outside; the button's state is).
 type_text "not-the-password"
-wait_for 'surface.locker toggle.peek.checked' 0 "hidden at first"
+wait_for 'surface.locker toggle.peek:checked' 0 "hidden at first"
 click_widget 'surface.locker[output="HEADLESS-1"] toggle.peek'
-wait_for 'surface.locker toggle.peek.checked' 2 "shown after a click, on both"
+wait_for 'surface.locker toggle.peek:checked' 2 "shown after a click, on both"
 shot locked-peek
 click_widget 'surface.locker[output="HEADLESS-1"] toggle.peek'
-wait_for 'surface.locker toggle.peek.checked' 0 "hidden again"
+wait_for 'surface.locker toggle.peek:checked' 0 "hidden again"
 
 # The field has the keyboard: a wrong password, checked by PAM, is
 # refused; the field is emptied, the lock stays.

@@ -238,6 +238,7 @@ pub(crate) enum Step {
     /// matches, as bits.
     Position(u32),
     Disabled,
+    Checked,
 }
 
 #[derive(Clone, Copy)]
@@ -262,6 +263,7 @@ pub(crate) struct Element {
     pub attrs: Vec<(Name, Name)>,
     pub position: u32,
     pub disabled: bool,
+    pub checked: bool,
 }
 
 impl Element {
@@ -273,6 +275,7 @@ impl Element {
             attrs: Vec::new(),
             position: 0,
             disabled: false,
+            checked: false,
         }
     }
 }
@@ -362,6 +365,7 @@ impl Nodes {
                         Step::Attr(n, v) => last.attrs.push((n, v)),
                         Step::Position(bits) => last.position = bits,
                         Step::Disabled => last.disabled = true,
+                        Step::Checked => last.checked = true,
                         Step::Root(..) | Step::Kind(_) => unreachable!(),
                     }
                 }
@@ -393,6 +397,7 @@ impl Nodes {
                 }
                 Step::Position(_) => {}
                 Step::Disabled => out.push_str(":disabled"),
+                Step::Checked => out.push_str(":checked"),
             }
         }
         out
@@ -464,6 +469,15 @@ impl<'a> Node<'a> {
     pub fn disabled_if(self, disabled: bool) -> Self {
         if disabled {
             self.step(Step::Disabled)
+        } else {
+            self
+        }
+    }
+
+    /// `:checked`: known where the widget is built, as `:disabled`.
+    pub fn checked_if(self, checked: bool) -> Self {
+        if checked {
+            self.step(Step::Checked)
         } else {
             self
         }

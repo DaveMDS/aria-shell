@@ -26,6 +26,19 @@ pub(crate) fn snap_up(v: f32, scale: f32) -> f32 {
 
 const EPSILON: f32 = 0.01;
 
+/// The size a widget `display: none` gives the box it's in: a fill of
+/// no portion on both axes, which no other widget asks for. The box
+/// leaves it out: no room, no gap beside it, not drawn, no events.
+pub(crate) const HIDDEN: Size<Length> = Size {
+    width: Length::FillPortion(0),
+    height: Length::FillPortion(0),
+};
+
+/// Whether a child's `size` says it's `display: none`.
+pub(crate) fn is_hidden(size: Size<Length>) -> bool {
+    size == HIDDEN
+}
+
 /// One axis of a box: what its style and its parent's limits make of
 /// its border box.
 struct Axis {
@@ -245,15 +258,25 @@ pub(crate) fn flex<M>(
     };
 
     let n = children.len();
+    let hidden: Vec<bool> = children
+        .iter()
+        .map(|c| is_hidden(c.as_widget().size()))
+        .collect();
+    let shown = hidden.iter().filter(|h| !**h).count();
     let gap = sn(s.gap(direction));
-    let gaps = gap * n.saturating_sub(1) as f32;
+    let gaps = gap * shown.saturating_sub(1) as f32;
     let main_room = (main.room() - main.edges).max(0.0);
     let cross_room = (cross.room() - cross.edges).max(0.0);
 
-    // Which children are `fill` on each axis, and which stretch across.
+    // Which children are `fill` on each axis, and which stretch across;
+    // one left out is neither.
     let kinds: Vec<(bool, bool)> = children
         .iter()
-        .map(|c| {
+        .zip(&hidden)
+        .map(|(c, &hidden)| {
+            if hidden {
+                return (false, false);
+            }
             let size = c.as_widget().size();
             let (on_main, across) = if row {
                 (size.width, size.height)
@@ -276,7 +299,7 @@ pub(crate) fn flex<M>(
     let mut widest_fill: f32 = 0.0;
     for (i, (child, tree)) in children.iter_mut().zip(trees.iter_mut()).enumerate() {
         let fill = kinds[i].0;
-        if fill && !main_auto {
+        if hidden[i] || (fill && !main_auto) {
             continue;
         }
         let content = Limits::with_compression(
@@ -312,7 +335,7 @@ pub(crate) fn flex<M>(
     let mut sizes: Vec<f32> = (0..n)
         .map(|i| if kinds[i].0 { 0.0 } else { bases[i] })
         .collect();
-    let mut frozen: Vec<bool> = (0..n).map(|i| grow && !kinds[i].0).collect();
+    let mut frozen: Vec<bool> = (0..n).map(|i| hidden[i] || (grow && !kinds[i].0)).collect();
     loop {
         let open: Vec<usize> = (0..n).filter(|&i| !frozen[i]).collect();
         if open.is_empty() {
@@ -398,7 +421,7 @@ pub(crate) fn flex<M>(
     } else {
         (sizing.origin.y, sizing.origin.x)
     };
-    for node in &mut nodes {
+    for (node, _) in nodes.iter_mut().zip(&hidden).filter(|(_, h)| !**h) {
         let size = cross_of(node.size());
         let offset = match s.align_items {
             Align::Stretch | Align::Start => 0.0,
@@ -512,6 +535,45 @@ mod tests {
                 rect(200.0, 0.0, 100.0, 20.0)
             ]
         );
+    }
+
+    #[test]
+    fn a_child_display_none_is_left_out_with_its_gap() {
+        let gapped = sheet(
+            ".row { gap: 10px; } cell { width: 40px; height: 20px; } \
+             cell.gone { display: none; } cell.fill { width: fill; }",
+        );
+        let row = gapped.root("row", 1.0);
+        let node = lay(
+            crate::row([cell("gone"), cell("a"), cell("gone"), cell("b")])
+                .at(row)
+                .into(),
+            MAX,
+        );
+        assert_eq!(node.size(), Size::new(90.0, 20.0));
+        let shown = rects(&node);
+        assert_eq!(shown[1], rect(0.0, 0.0, 40.0, 20.0));
+        assert_eq!(shown[3], rect(50.0, 0.0, 40.0, 20.0));
+        // Hidden, a `fill` one takes no share either.
+        let filled = sheet(
+            ".row { width: 100px; gap: 10px; } cell { height: 20px; } \
+             cell.fill { width: fill; } cell.gone { display: none; }",
+        );
+        let row = filled.root("row", 1.0);
+        let node = lay(
+            crate::row([
+                cell("fill"),
+                crate::row([])
+                    .kind("cell")
+                    .class("fill")
+                    .class("gone")
+                    .into(),
+            ])
+            .at(row)
+            .into(),
+            MAX,
+        );
+        assert_eq!(rects(&node)[0], rect(0.0, 0.0, 100.0, 20.0));
     }
 
     #[test]

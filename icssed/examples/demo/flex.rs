@@ -62,7 +62,7 @@ pub fn view<'a>(state: &'a State, _assets: &'a Assets) -> Element<'a, Message> {
             select(ALIGN, Some(state.align), Message::Align),
             toggle(state.fill, Message::Fill)
                 .label("The first fills")
-                .check(),
+                .checkbox(),
         ]
         .kind("controls"),
         row![

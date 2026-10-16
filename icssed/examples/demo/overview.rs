@@ -156,7 +156,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     ];
     let checks = (0..2).map(|i| {
         toggle(state.checks[i], move |on| Message::Check(i, on))
-            .check()
+            .checkbox()
             .label(["Check", "Box"][i])
             .into()
     });
@@ -205,7 +205,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             .label("Toggle")
             .disabled_if(true),
         toggle(true, Message::Pressed)
-            .check()
+            .checkbox()
             .label("Check")
             .disabled_if(true),
         toggle(true, Message::Pressed)

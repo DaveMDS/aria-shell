@@ -17,7 +17,7 @@ use iced::{Event, Length, Rectangle, Size, Vector, touch};
 
 use super::boxed::{self, BoxState, Boxed};
 use super::place::{self, Place, placed};
-use crate::layout::flex;
+use crate::layout::{flex, is_hidden};
 use crate::query::Reported;
 use crate::style::{Direction, Name, States, name};
 use crate::{Element, Renderer, Theme};
@@ -147,7 +147,7 @@ impl<'a, Message> Flex<'a, Message> {
 impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
     fn size(&self) -> Size<Length> {
         let size = self.boxed.size();
-        if self.auto_width {
+        if self.auto_width && !is_hidden(size) {
             Size::new(Length::Shrink, size.height)
         } else {
             size
@@ -217,6 +217,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
                     .iter()
                     .zip(&tree.children)
                     .zip(layout.children())
+                    .filter(|((child, _), _)| shown(child))
                 {
                     child
                         .as_widget()
@@ -243,6 +244,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
+            .filter(|((child, _), _)| shown(child))
         {
             child.as_widget_mut().update(
                 tree, event, layout, cursor, renderer, clipboard, shell, viewport,
@@ -313,6 +315,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
+            .filter(|((child, _), _)| shown(child))
             .map(|((child, tree), layout)| {
                 child
                     .as_widget()
@@ -336,14 +339,20 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        overlay::from_children(
-            &mut self.children,
-            tree,
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
+        // iced's `overlay::from_children`, the children left out aside.
+        let overlays: Vec<_> = self
+            .children
+            .iter_mut()
+            .zip(&mut tree.children)
+            .zip(layout.children())
+            .filter(|((child, _), _)| shown(child))
+            .filter_map(|((child, tree), layout)| {
+                child
+                    .as_widget_mut()
+                    .overlay(tree, layout, renderer, viewport, translation)
+            })
+            .collect();
+        (!overlays.is_empty()).then(|| overlay::Group::with_children(overlays).overlay())
     }
 
     fn operate(
@@ -369,6 +378,7 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
                 .iter_mut()
                 .zip(&mut tree.children)
                 .zip(layout.children())
+                .filter(|((child, _), _)| shown(child))
             {
                 child
                     .as_widget_mut()
@@ -376,6 +386,12 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Flex<'_, Message> {
             }
         });
     }
+}
+
+/// Whether a child is laid out, drawn and given events: not
+/// `display: none`.
+fn shown<Message>(child: &Element<'_, Message>) -> bool {
+    !is_hidden(child.as_widget().size())
 }
 
 impl<'a, Message: Clone + 'a> From<Flex<'a, Message>> for Element<'a, Message> {

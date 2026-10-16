@@ -14,7 +14,10 @@ wait_for 'surface.popup gadget.themes button.picker' 1 "the picker under it"
 [ "$(count_widgets 'surface.launcher item')" -gt 0 ] || { echo "no launcher with results"; false; }
 wait_for 'surface.exiter > row > button' 6 "the exit menu"
 wait_for 'surface.widgets > line' 5 "the toolkit's widgets"
-wait_for 'surface.widgets toggle' 9 "its toggles, the password's peek too"
+wait_for 'surface.widgets toggle' 2 "its toggles, the password's peek too"
+wait_for 'surface.widgets checkbox' 2 "its check boxes"
+wait_for 'surface.widgets radio' 3 "its radios"
+wait_for 'surface.widgets switch' 2 "its switches"
 wait_for 'surface.widgets#graph > graph' 1 "a graph, in its box"
 wait_for 'surface.osd.volume' 1 "the OSD"
 wait_for 'notification.normal' 1 "a notification"
@@ -48,13 +51,13 @@ wait_for 'surface.exiter > row > button' 6 "still the grid"
 
 # The widgets' box works: a check, a radio, a tab change; the slider
 # moves the meter; a field takes what's typed.
-checked() { count_widgets "surface.widgets > line:nth-child(2) > toggle.checked.$1"; }
-assert_eq "$(checked check)" 1 "the check on"
-click_widget 'surface.widgets > line:nth-child(2) > toggle.check'
-assert_eq "$(checked check)" 0 "off"
-click_widget 'surface.widgets > line:nth-child(2) > toggle.radio:nth-child(4)'
+checked() { count_widgets "surface.widgets > line:nth-child(2) > $1:checked"; }
+assert_eq "$(checked checkbox)" 1 "the check on"
+click_widget 'surface.widgets > line:nth-child(2) > checkbox'
+assert_eq "$(checked checkbox)" 0 "off"
+click_widget 'surface.widgets > line:nth-child(2) > radio:nth-child(4)'
 assert_eq "$(checked radio)" 1 "one radio on"
-wait_for 'surface.widgets > line:nth-child(2) > toggle.radio.checked:nth-child(4)' 1 "the other one"
+wait_for 'surface.widgets > line:nth-child(2) > radio:checked:nth-child(4)' 1 "the other one"
 click_widget 'surface.widgets tabs > tab:nth-child(3)'
 wait_for 'surface.widgets tabs > tab.active:nth-child(3)' 1 "the third tab"
 before=$(widget 'surface.widgets > line > meter > fill' | awk '{print $3}')

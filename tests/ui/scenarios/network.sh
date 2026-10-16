@@ -43,7 +43,7 @@ wait_for "$list ap:nth-child(3)[ssid=\"Darma6\"].secured" 1 "Darma6 (80%) second
 wait_for "$list ap:nth-child(4)[ssid=\"Corp\"].enterprise" 1 "Corp (60%, 802.1x) third"
 wait_for "$list ap:nth-child(5)[ssid=\"Guest\"]" 1 "Guest (20%, open) last"
 wait_for "$list ap.secured > button > title > icon.badge" 3 "a lock on the secured ones"
-wait_for "$list header.wifi toggle.checked" 1 "the Wi‑Fi toggle on"
+wait_for "$list header.wifi switch:checked" 1 "the Wi‑Fi toggle on"
 wait_for "$list header.wired" 1 "a wired section"
 wait_for "$list device.wired.unplugged" 1 "eth0 unplugged"
 wait_for "$list header.vpn" 0 "no VPN section without profiles"
@@ -88,7 +88,7 @@ wait_for "$list ap.expanded auth button.connect:disabled" 1 "Connect disabled wi
 type_text secret
 wait_for "$list ap.expanded auth button.connect:disabled" 0 "Connect enabled"
 click_widget "$list ap.expanded auth toggle.peek"
-wait_for "$list ap.expanded auth toggle.peek.checked" 1 "the password shown"
+wait_for "$list ap.expanded auth toggle.peek:checked" 1 "the password shown"
 shot_surface network-password popup
 key Return
 assert_eq "$(nm_action)" "add-activate Darma6 psk=secret" "a profile added with the key and activated"
@@ -138,7 +138,7 @@ wait_for "$list ap[ssid=\"Casa\"].known" 0 "no longer known"
 wait_for "$list ap.expanded" 0 "folded"
 
 # --- Wi‑Fi off and on ------------------------------------------------------------
-click_widget "$list header.wifi toggle"
+click_widget "$list header.wifi switch"
 assert_eq "$(nm_action)" "wireless false" "Wi‑Fi turned off"
 wait_for "$list header.wifi.off" 1 "the header says off"
 wait_for "$list ap" 0 "no networks listed"
@@ -168,19 +168,19 @@ wait_for "$list device.wired.unplugged" 1 "cable unplugged"
 # --- a VPN profile with its toggle ---------------------------------------------
 nm_send "vpn Office"
 wait_for "$list vpn[name=\"Office\"]" 1 "the VPN row"
-click_widget "$list vpn[name=\"Office\"] toggle"
+click_widget "$list vpn[name=\"Office\"] switch"
 assert_eq "$(nm_action)" "activate Office" "activated by the toggle"
 wait_for "$list vpn.connecting" 1
 nm_send "fail nosecrets"
 wait_for "$list vpn.failed message" 1 "'Needs a password' under it"
 shot_surface network-vpn popup
-click_widget "$list vpn[name=\"Office\"] toggle"
+click_widget "$list vpn[name=\"Office\"] switch"
 assert_eq "$(nm_action)" "activate Office"
 nm_send finish
 wait_for "$list vpn.active" 1 "the VPN up"
 wait_for "$list vpn.failed" 0 "the failure gone"
 wait_for 'gadget.network > indicator > icon.vpn' 2 "the VPN badge on the bars"
-click_widget "$list vpn[name=\"Office\"] toggle"
+click_widget "$list vpn[name=\"Office\"] switch"
 assert_eq "$(nm_action)" "deactivate Office"
 wait_for "$list vpn.active" 0 "the VPN down"
 

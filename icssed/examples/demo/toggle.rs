@@ -4,23 +4,22 @@
 //! as every widget of the toolkit does.
 //!
 //!     icssed::toggle(self.muted, Message::Mute).icon(speaker).label("Mute")
-//!     icssed::toggle(self.hidden, Message::Hidden).label("Show hidden").check()
+//!     icssed::toggle(self.hidden, Message::Hidden).label("Show hidden").checkbox()
 //!     icssed::toggle(self.wifi, Message::Wifi).switch()
 //!     icssed::toggle(self.sort == By::Name, |_| Message::Sort(By::Name)).radio()
 //!
-//! It looks one of four ways, picked by the call:
+//! It looks one of four ways, picked by the call, each its own name for
+//! the sheet: a `toggle` (a button that stays pressed), a `checkbox`
+//! (`.checkbox()`), a `radio` (`.radio()`), a `switch` (`.switch()`).
+//! The four are the same tree, `indicator > mark` first, then `.icon(..)`
+//! and `.label(..)`, both optional: the indicator is the box, the circle,
+//! the switch's track; the mark the tick, the dot, the knob. The base
+//! hides a toggle's indicator (`display: none`) and slides a switch's
+//! knob with a transform, a transition.
 //!
-//! - As a button that stays pressed.
-//! - `.check()`: a check box, its `check > mark` first; the mark is the
-//!   sheet's `content`.
-//! - `.radio()`: a radio, its `radio > dot` first.
-//! - `.switch()`: a switch, its `switch > knob` first; the knob slides
-//!   with a transform, a transition in the base.
-//!
-//! `.icon(..)` and `.label(..)` follow, both optional. In all four looks
-//! it's `.checked` while it's on: one class for the sheet, whatever the
-//! look, which its parts see: `toggle.checked > label` reaches its
-//! label.
+//! It's `:checked` while it's on, whatever the look, which its parts
+//! see: `checkbox:checked > indicator > mark` is a checked box's tick,
+//! `toggle:checked > label` a pressed button's label.
 //!
 //! A press anywhere on it flips it, its label too; Tab gives it the
 //! focus, Space and Enter flip it; `disabled_if(true)`, and it sends
@@ -86,10 +85,10 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
         row![
             toggle(state.hidden, Message::Hidden)
                 .label("Show hidden files")
-                .check(),
+                .checkbox(),
             toggle(true, Message::Hidden)
                 .label("Disabled")
-                .check()
+                .checkbox()
                 .disabled_if(true),
         ]
         .kind("line"),

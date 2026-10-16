@@ -162,6 +162,14 @@ pub enum LineHeight {
     Length(LengthPercentage),
 }
 
+/// `display`: a box laid out as a flexbox, or not at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Display {
+    Flex,
+    /// Left out: no room, no gap beside it, not drawn, no events.
+    None,
+}
+
 /// `white-space`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WhiteSpace {
@@ -494,6 +502,7 @@ pub(crate) enum Prop {
     FlexDirection,
     AlignItems,
     JustifyContent,
+    Display,
     Background,
     Color,
     BoxShadow,
@@ -593,6 +602,7 @@ pub(crate) enum Decl {
     FlexDirection(Direction),
     AlignItems(Align),
     JustifyContent(Justify),
+    Display(Display),
     Background(ColorValue),
     Color(ColorValue),
     BoxShadow(Shadows),
@@ -692,6 +702,7 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "row-gap" => vec![Prop::RowGap],
         "column-gap" => vec![Prop::ColumnGap],
         "flex-direction" => vec![Prop::FlexDirection],
+        "display" => vec![Prop::Display],
         "align-items" => vec![Prop::AlignItems],
         "justify-content" => vec![Prop::JustifyContent],
         "background" => vec![
@@ -1146,6 +1157,11 @@ fn value_of(
                 ));
             }
         })],
+        "display" => vec![Decl::Display(keyword(
+            p,
+            "a display",
+            &[("flex", Display::Flex), ("none", Display::None)],
+        )?)],
         "white-space" => vec![Decl::WhiteSpace(keyword(
             p,
             "a white-space mode",

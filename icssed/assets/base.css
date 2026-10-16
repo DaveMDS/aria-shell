@@ -377,36 +377,46 @@ button.danger:disabled {
  * =======
  *
  * A value on or off (`icssed::toggle`): a button whose press asks for the
- * other value, `.checked` while it's on. It looks one of four ways,
- * picked by the call: a button that stays pressed, a check box
- * (`.check`), a radio (`.radio`: one chosen among a few), a switch
- * (`.switch`), the last three with the toolkit's part before its icon
- * and its label. Tab moves the focus to it, Enter and Space flip it.
+ * other value, `:checked` while it's on. Tab moves the focus to it, Enter
+ * and Space flip it. One widget, four names, picked by the call: a
+ * `toggle`, a button that stays pressed; a `checkbox`; a `radio`, one
+ * chosen among a few; a `switch`. Each is the same tree:
  *
- * toggle[.check|.radio|.switch][.checked]
- * ├─ check > mark      (.check) the box, and its mark: an icon, the
- * │                    toolkit's tick (`opacity` shows it)
- * ├─ radio > dot       (.radio) the circle, and its dot
- * ├─ switch > knob     (.switch) the track, and its knob
+ * toggle | checkbox | radio | switch [:checked]
+ * ├─ indicator         the box, the circle, the switch's track, etc...
+ * │  ╰─ mark           the tick (an icon), the dot, the switch's knob, etc...
  * ├─ icon              if it has one
  * ╰─ label             if it has one
  *
- * The check box, the radio and the switch are styled by their own name,
- * their state read on their holder (`.checked > check`), so the same
- * rules draw a menu item's.
- *
- * The knob slides with a transform: its travel is the switch's width
+ * The knob slides with a transform: its travel is the indicator's width
  * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
  */
+toggle,
+checkbox,
+radio,
+switch {
+  gap: 8px;
+  align-items: center;
+}
+toggle > label,
+checkbox > label,
+radio > label,
+switch > label {
+  white-space: nowrap;
+}
+
+/* Toggle: a button that stays pressed, no indicator in default style. */
 toggle {
   transition: background-color 120ms, border-color 120ms, color 120ms;
   padding: 5px 10px;
   gap: 6px;
-  align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
+}
+toggle > indicator {
+  display: none;
 }
 toggle:hover {
   border-color: var(--accent);
@@ -418,63 +428,35 @@ toggle:focus-visible {
 toggle:disabled {
   color: var(--muted);
 }
-toggle > label {
-  white-space: nowrap;
-}
-toggle.checked {
+toggle:checked {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
 }
-toggle.checked:hover {
+toggle:checked:hover {
   border-color: var(--fg);
 }
-toggle.checked:disabled {
+toggle:checked:disabled {
   border-color: var(--border);
   background: var(--bg);
   color: var(--muted);
 }
 
-/* A check box, a radio and a switch: no button around them. */
-toggle.check,
-toggle.radio,
-toggle.switch,
-toggle.check.checked,
-toggle.radio.checked,
-toggle.switch.checked {
-  padding: 0;
-  gap: 8px;
-  justify-content: start;
-  border: none;
-  background: transparent;
-  color: inherit;
-}
-toggle.check:disabled,
-toggle.radio:disabled,
-toggle.switch:disabled {
+/* Checkbox, radio and switch */
+checkbox:disabled,
+radio:disabled,
+switch:disabled {
   opacity: 0.5;
 }
-/* The focus is shown on the toolkit's part, around its own shape. */
-toggle.check:focus-visible,
-toggle.radio:focus-visible,
-toggle.switch:focus-visible {
-  outline: none;
-}
-toggle.check:focus-visible > check,
-toggle.radio:focus-visible > radio,
-toggle.switch:focus-visible > switch {
+checkbox:focus-visible > indicator,
+radio:focus-visible > indicator,
+switch:focus-visible > indicator {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-/*
- * A check box, a radio and a switch: the toolkit's parts, a toggle's or
- * a menu item's, styled where they are. Their state is their holder's:
- * `.checked > check`. Its `:hover` names the holder: an untyped
- * `:hover > check` would make every element track its hover, a frame
- * on each the pointer crosses (states are seen by structure alone).
- */
-check {
+/* Checkbox */
+checkbox > indicator {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -484,29 +466,26 @@ check {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-toggle:hover > check,
-toggle:hover > radio,
-menu item:hover > check,
-menu item:hover > radio {
+checkbox:hover > indicator {
   border-color: var(--accent);
 }
-.checked > check {
+checkbox:checked > indicator {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
 }
-/* The mark is an icon, the toolkit's tick: hidden until checked. */
-check > mark {
+checkbox > indicator > mark {
   width: 12px;
   height: 12px;
   opacity: 0;
   transition: opacity 120ms;
 }
-.checked > check > mark {
+checkbox:checked > indicator > mark {
   opacity: 1;
 }
 
-radio {
+/* Radio */
+radio > indicator {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -516,20 +495,22 @@ radio {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-.checked > radio {
+radio:hover > indicator,
+radio:checked > indicator {
   border-color: var(--accent);
 }
-radio > dot {
+radio > indicator > mark {
   width: 10px;
   height: 10px;
   border-radius: 5px;
   transition: background-color 120ms;
 }
-.checked > radio > dot {
+radio:checked > indicator > mark {
   background: var(--accent);
 }
 
-switch {
+/* Switch */
+switch > indicator {
   width: 36px;
   height: 20px;
   padding: 2px;
@@ -537,17 +518,17 @@ switch {
   background: var(--border);
   transition: background-color 120ms;
 }
-.checked > switch {
+switch:checked > indicator {
   background: var(--accent);
 }
-switch > knob {
+switch > indicator > mark {
   width: 16px;
   height: 16px;
   border-radius: 8px;
   background: var(--bg);
   transition: transform 120ms;
 }
-.checked > switch > knob {
+switch:checked > indicator > mark {
   transform: translateX(16px);
 }
 
@@ -753,14 +734,13 @@ scrollbar:active > thumb {
  * A column of items to press (`icssed::menu`), each with a check box or
  * a radio, an icon, a shortcut; separators; submenus unfolded in place,
  * under their item. Up and Down move the focus among the items once one
- * has it. The check box and the radio are a toggle's, drawn by the same
- * rules (see Toggles); a submenu's arrow is text, its `content`.
+ * has it. A submenu's arrow is text, its `content`.
  *
  * menu
  * ├─ item[.check|.radio][.checked][.submenu][.expanded][.<app's>]
  * │  │                  a button; :disabled without a message
- * │  ├─ check > mark    (.check) a check box, a toggle's (see Toggles)
- * │  ├─ radio > dot     (.radio) a radio, a toggle's
+ * │  ├─ check > mark    (.check) a check box, the mark the toolkit's tick
+ * │  ├─ radio > dot     (.radio) a radio
  * │  ├─ icon            in the same column: an item's mark, else its
  * │  │                  icon; in a column of their own only where an
  * │  │                  item of the level has both
@@ -792,6 +772,50 @@ menu item:focus-visible {
 }
 menu item:disabled {
   color: var(--muted);
+}
+menu item > check,
+menu item > radio {
+  width: 16px;
+  height: 16px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--muted);
+  background: var(--bg);
+  transition: background-color 120ms, border-color 120ms;
+}
+menu item > check {
+  border-radius: var(--radius-sm);
+}
+menu item > radio {
+  border-radius: 8px;
+}
+menu item:hover > check,
+menu item:hover > radio,
+menu item.checked > radio {
+  border-color: var(--accent);
+}
+menu item.checked > check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+menu item > check > mark {
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+menu item.checked > check > mark {
+  opacity: 1;
+}
+menu item > radio > dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  transition: background-color 120ms;
+}
+menu item.checked > radio > dot {
+  background: var(--accent);
 }
 menu item.check:disabled > check,
 menu item.radio:disabled > radio {

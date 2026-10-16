@@ -28,8 +28,8 @@ pub(crate) use node::{Name, NodeId, Step, name};
 pub use sheet::{Error, Scheme, Sheet, Source, Stats, Warning};
 pub(crate) use value::Moving;
 pub use value::{
-    Align, AnimationDirection, BackgroundOrigin, BackgroundSize, Corner, Direction, Easing,
-    EdgeOver, EdgeUnder, FamilyName, FillMode, FontStyle, Justify, LengthPercentage, LineHeight,
-    MinSize, ObjectFit, Repeat, Side, Size, Slice, StepPosition, TextAlign, TextBoxEdge,
-    TextBoxTrim, TextOverflow, TextTransform, Transform, WhiteSpace,
+    Align, AnimationDirection, BackgroundOrigin, BackgroundSize, Corner, Direction, Display,
+    Easing, EdgeOver, EdgeUnder, FamilyName, FillMode, FontStyle, Justify, LengthPercentage,
+    LineHeight, MinSize, ObjectFit, Repeat, Side, Size, Slice, StepPosition, TextAlign,
+    TextBoxEdge, TextBoxTrim, TextOverflow, TextTransform, Transform, WhiteSpace,
 };

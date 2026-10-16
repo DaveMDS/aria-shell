@@ -51,7 +51,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
         row![
             toggle(state.deep, Message::Deep)
                 .label("A deeper shadow")
-                .check()
+                .checkbox()
         ]
         .kind("controls"),
         row![

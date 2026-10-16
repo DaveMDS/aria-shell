@@ -518,7 +518,7 @@ impl AriaShell {
             .icon((icons, "starred-symbolic"))
             .label("toggle");
         let check = icssed::toggle(state.check, move |c| on(Widget::Check(c)))
-            .check()
+            .checkbox()
             .label("check");
         let switch = icssed::toggle(state.switch, move |c| on(Widget::Switch(c))).switch();
         let toggles = icssed::row(
@@ -550,7 +550,7 @@ impl AriaShell {
         ];
         let disabled = icssed::row![
             icssed::button![icssed::text("button")].disabled_if(true),
-            icssed::toggle(true, nothing).check().disabled_if(true),
+            icssed::toggle(true, nothing).checkbox().disabled_if(true),
             icssed::toggle(true, nothing).radio().disabled_if(true),
             icssed::toggle(true, nothing).switch().disabled_if(true),
             icssed::slider(0.0..=1.0, 0.3, nothing).disabled_if(true),

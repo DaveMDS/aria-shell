@@ -644,7 +644,7 @@ meter.thin > fill {
  * ├─ field             the text: its colour, its font
  * │  ├─ placeholder    its colour: the text shown while it's empty
  * │  ╰─ selection      its background: the selected text's
- * ╰─ …                 the app's: a button, a toggle (.peek; .checked,
+ * ╰─ …                 the app's: a button, a toggle (.peek; :checked,
  *                      in the accent: the text shows)
  */
 input {
@@ -687,7 +687,7 @@ input > toggle:hover {
   background: transparent;
   color: var(--fg);
 }
-input > toggle.checked {
+input > toggle:checked {
   background: transparent;
   color: var(--accent);
 }

@@ -831,7 +831,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroller<'a, Message>
                 | Event::Touch(touch::Event::FingerPressed { .. })
                     if !shell.is_event_captured() =>
                 {
-                    let Some(p) = p.filter(|p| p.bar) else {
+                    let Some(p) = p.filter(Pointer::over) else {
                         continue;
                     };
                     let Some(from_thumb) = p.from_thumb else {
@@ -875,7 +875,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroller<'a, Message>
         // Then the scrollable, but not where a bar is, nor while a thumb
         // is dragged; the wheel's turns over a bar scroll it, wherever
         // the bar is. Scrolled only sideways, the turns go sideways.
-        let on_a_bar = pointer.iter().flatten().any(|p| p.bar);
+        let on_a_bar = pointer.iter().flatten().any(Pointer::over);
         let turned;
         let event = match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta })
@@ -934,13 +934,20 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroller<'a, Message>
             s.animated.update(event, shell);
             boxed.settle(s, before, boxed.tracked(States::NONE), over, shell);
         };
-        settle(&self.boxed, &mut state.scroller, before[0], over);
+        // Hovered where a part of it is, as CSS has it: a bar over its
+        // thumb, the scroller over a bar moved out of it.
+        settle(
+            &self.boxed,
+            &mut state.scroller,
+            before[0],
+            over || on_a_bar,
+        );
         for (i, bar) in parts.bars.iter().enumerate() {
             let (Some(bar), Some(s)) = (bar, &mut state.bars[i]) else {
                 continue;
             };
             let p = pointer[i].unwrap_or_default();
-            settle(&bar.bar, &mut s.bar, before[1 + 2 * i], p.bar);
+            settle(&bar.bar, &mut s.bar, before[1 + 2 * i], p.over());
             settle(&bar.thumb, &mut s.thumb, before[2 + 2 * i], p.thumb);
         }
         let after = state.snapshot();
@@ -966,9 +973,13 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroller<'a, Message>
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
         let cursor = state.scroller.local(cursor);
-        let on_a_bar = self
-            .shown(state, layout)
-            .any(|(_, bar, s, at)| s.bar.local(cursor).is_over(bar.bar.border_box(at.bar)));
+        let on_a_bar = self.shown(state, layout).any(|(_, bar, s, at)| {
+            let on_bar = s.bar.local(cursor);
+            on_bar.is_over(bar.bar.border_box(at.bar))
+                || s.thumb
+                    .local(on_bar)
+                    .is_over(bar.thumb.border_box(at.thumb))
+        });
         let dragging = state.bars.iter().flatten().any(|s| s.grabbed.is_some());
         if on_a_bar || dragging {
             return mouse::Interaction::Idle;
@@ -1183,6 +1194,13 @@ struct Pointer {
     from_thumb: Option<f32>,
     /// The thumb's length (its border box's).
     length: f32,
+}
+
+impl Pointer {
+    /// Over the bar or its thumb, wherever a transform drew the thumb.
+    fn over(&self) -> bool {
+        self.bar || self.thumb
+    }
 }
 
 impl<'a, Message: 'a> From<Scroller<'a, Message>> for Element<'a, Message> {

@@ -24,8 +24,9 @@
 //!   picks.
 //!
 //! A check item's box and a radio item's circle are a toggle's, drawn by
-//! the same rules: `item.check > check > mark`, `item.radio > radio >
-//! dot`. The submenu's arrow is the sheet's: `content` on `item > arrow`.
+//! the same rules: `check > mark`, `radio > dot`, their state the item's
+//! (`.checked > check`). The submenu's arrow is the sheet's: `content` on
+//! `item > arrow`.
 
 use icssed::{Element, MenuItem, column, menu, text};
 

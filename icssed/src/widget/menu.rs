@@ -148,7 +148,7 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
     let marks = entries().any(|e| e.mark != Mark::None);
     let icons = entries().any(|e| e.icon.is_some());
     let both = entries().any(|e| e.mark != Mark::None && e.icon.is_some());
-    let empty_check = || row([]).kind_of(name!("check")).into();
+    let empty_check = || row([]).kind_of(name!("check")).class("empty").into();
     let empty_icon = || row([]).kind_of(name!("icon")).into();
     let mut out = Vec::with_capacity(items.len());
     for item in items {

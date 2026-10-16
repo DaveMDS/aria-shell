@@ -391,6 +391,10 @@ button.danger:disabled {
  * ├─ icon              if it has one
  * ╰─ label             if it has one
  *
+ * The check box, the radio and the switch are styled by their own name,
+ * their state read on their holder (`.checked > check`), so the same
+ * rules draw a menu item's.
+ *
  * The knob slides with a transform: its travel is the switch's width
  * less its padding and the knob's own width (36 - 2 * 2 - 16 here).
  */
@@ -463,9 +467,14 @@ toggle.switch:focus-visible > switch {
   outline-offset: 1px;
 }
 
-/* A check box and a radio, a toggle's or a menu item's. */
-toggle.check > check,
-menu item.check > check {
+/*
+ * A check box, a radio and a switch: the toolkit's parts, a toggle's or
+ * a menu item's, styled where they are. Their state is their holder's:
+ * `.checked > check`. Its `:hover` names the holder: an untyped
+ * `:hover > check` would make every element track its hover, a frame
+ * on each the pointer crosses (states are seen by structure alone).
+ */
+check {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -475,31 +484,29 @@ menu item.check > check {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-toggle.check:hover > check,
-menu item.check:hover > check {
+toggle:hover > check,
+toggle:hover > radio,
+menu item:hover > check,
+menu item:hover > radio {
   border-color: var(--accent);
 }
-toggle.check.checked > check,
-menu item.check.checked > check {
+.checked > check {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
 }
 /* The mark is an icon, the toolkit's tick: hidden until checked. */
-toggle.check > check > mark,
-menu item.check > check > mark {
+check > mark {
   width: 12px;
   height: 12px;
   opacity: 0;
   transition: opacity 120ms;
 }
-toggle.check.checked > check > mark,
-menu item.check.checked > check > mark {
+.checked > check > mark {
   opacity: 1;
 }
 
-toggle.radio > radio,
-menu item.radio > radio {
+radio {
   width: 16px;
   height: 16px;
   justify-content: center;
@@ -509,27 +516,20 @@ menu item.radio > radio {
   background: var(--bg);
   transition: background-color 120ms, border-color 120ms;
 }
-toggle.radio:hover > radio,
-menu item.radio:hover > radio {
+.checked > radio {
   border-color: var(--accent);
 }
-toggle.radio.checked > radio,
-menu item.radio.checked > radio {
-  border-color: var(--accent);
-}
-toggle.radio > radio > dot,
-menu item.radio > radio > dot {
+radio > dot {
   width: 10px;
   height: 10px;
   border-radius: 5px;
   transition: background-color 120ms;
 }
-toggle.radio.checked > radio > dot,
-menu item.radio.checked > radio > dot {
+.checked > radio > dot {
   background: var(--accent);
 }
 
-toggle.switch > switch {
+switch {
   width: 36px;
   height: 20px;
   padding: 2px;
@@ -537,17 +537,17 @@ toggle.switch > switch {
   background: var(--border);
   transition: background-color 120ms;
 }
-toggle.switch.checked > switch {
+.checked > switch {
   background: var(--accent);
 }
-toggle.switch > switch > knob {
+switch > knob {
   width: 16px;
   height: 16px;
   border-radius: 8px;
   background: var(--bg);
   transition: transform 120ms;
 }
-toggle.switch.checked > switch > knob {
+.checked > switch > knob {
   transform: translateX(16px);
 }
 
@@ -754,7 +754,7 @@ scrollbar:active > thumb {
  * a radio, an icon, a shortcut; separators; submenus unfolded in place,
  * under their item. Up and Down move the focus among the items once one
  * has it. The check box and the radio are a toggle's, drawn by the same
- * rules; a submenu's arrow is text, its `content`.
+ * rules (see Toggles); a submenu's arrow is text, its `content`.
  *
  * menu
  * ├─ item[.check|.radio][.checked][.submenu][.expanded][.<app's>]
@@ -764,9 +764,10 @@ scrollbar:active > thumb {
  * │  ├─ icon            in the same column: an item's mark, else its
  * │  │                  icon; in a column of their own only where an
  * │  │                  item of the level has both
- * │  ├─ check | icon    empty, on an item with neither where another
- * │  │                  has one, so labels line up (check where a mark
- * │  │                  is, icon otherwise)
+ * │  ├─ check.empty | icon
+ * │  │                  empty, on an item with neither where another
+ * │  │                  has one, so labels line up (a check where a
+ * │  │                  mark is, unseen; an icon otherwise)
  * │  ├─ label
  * │  ├─ shortcut
  * │  ╰─ arrow           a submenu's
@@ -792,14 +793,13 @@ menu item:focus-visible {
 menu item:disabled {
   color: var(--muted);
 }
-menu item > check,
-menu item > radio {
-  width: 16px;
-  height: 16px;
-}
-menu item:disabled > check,
-menu item:disabled > radio {
+menu item.check:disabled > check,
+menu item.radio:disabled > radio {
   opacity: 0.5;
+}
+/* The room of a mark, on an item without one: a check's size, unseen. */
+menu item > check.empty {
+  opacity: 0;
 }
 menu item > icon {
   width: 16px;

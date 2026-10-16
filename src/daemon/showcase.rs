@@ -492,7 +492,8 @@ impl AriaShell {
     /// The toolkit's widgets, each family on a line, in their states:
     /// what the gadgets' popups are made of. Their labels are what
     /// they show, the theme's names. They work, but for the disabled
-    /// ones: the slider moves the meter.
+    /// ones: the slider moves the meter and the disabled slider; Tab
+    /// moves the focus among them.
     fn widgets_view<'a>(&'a self, state: &'a Widgets, scale: f32) -> Element<'a, Shell> {
         let icons: &dyn icssed::Icons = &self.icons;
         let star = || icssed::icon((icons, "starred-symbolic"));
@@ -569,7 +570,7 @@ impl AriaShell {
                 .on_toggle(nothing)
                 .switch()
                 .disabled_if(true),
-            icssed::slider(0.0..=1.0, 0.3, nothing).disabled_if(true),
+            icssed::slider(0.0..=100.0, state.value, nothing).disabled_if(true),
             icssed::select(["select"], Some(0), nothing).disabled_if(true),
         ];
         let tabs = icssed::tabs(
@@ -580,15 +581,18 @@ impl AriaShell {
                     icssed::Tab::new(title, on(Widget::Tab(i))).active(i == state.tab)
                 }),
         );
-        icssed::column![
-            buttons.kind("line"),
-            toggles.kind("line"),
-            values.kind("line"),
-            fields.kind("line"),
-            disabled.kind("line"),
-            tabs,
-        ]
-        .at(self.theme.root("widgets", scale))
+        // Tab among them, the focus shown (`:focus-visible`).
+        icssed::focus_scope(
+            icssed::column![
+                buttons.kind("line"),
+                toggles.kind("line"),
+                values.kind("line"),
+                fields.kind("line"),
+                disabled.kind("line"),
+                tabs,
+            ]
+            .at(self.theme.root("widgets", scale)),
+        )
         .into()
     }
 

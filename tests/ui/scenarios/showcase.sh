@@ -82,3 +82,16 @@ aria showcase toggle; wait_keyboard showcase
 assert_surface showcase
 aria showcase toggle
 assert_no_surface showcase
+
+# Tab moves the focus among the widgets, shown: to the slider, past the
+# five buttons, the toggle, the check, the two radios and the switch;
+# there Page Up moves it, and the meter with it.
+aria showcase show; wait_keyboard showcase
+before=$(widget 'surface.widgets > line > meter > fill' | awk '{print $3}')
+for _ in $(seq 11); do key Tab; done
+shot_surface showcase-focus showcase
+key Page_Up
+after=$(widget 'surface.widgets > line > meter > fill' | awk '{print $3}')
+[ "$after" -gt "$before" ] || { echo "the slider didn't take Page Up: $before -> $after"; false; }
+aria showcase toggle
+assert_no_surface showcase

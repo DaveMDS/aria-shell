@@ -537,6 +537,7 @@ impl AriaShell {
         let values = icssed::row![
             icssed::slider(0.0..=100.0, state.value, move |v| on(Widget::Value(v))).step(1.0),
             icssed::meter(state.value / 100.0),
+            icssed::meter(state.value / 100.0).class("thin"),
         ];
         let fields = icssed::row![
             icssed::input("input", &state.input)

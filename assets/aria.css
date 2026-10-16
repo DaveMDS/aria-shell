@@ -561,7 +561,8 @@ notification actions {
  *
  * surface.widgets             the toolkit's widgets, under the launcher:
  * ├─ line                     a family on each: buttons, toggles, a
- * │                           slider and a meter, fields, disabled ones
+ * │                           slider, a meter and a thin one, fields,
+ * │                           disabled ones
  * ╰─ tabs
  * surface.widgets#graph       a graph, under the notifications
  * ╰─ graph
@@ -930,7 +931,7 @@ gadget.themes > column > button.picker {
  *    │  │  ├─ icon
  *    │  │  ╰─ info                         a column
  *    │  │     ├─ label                     its label, else its size
- *    │  │     ╰─ meter[.critical] > fill   how full, while mounted
+ *    │  │     ╰─ meter.thin[.critical] > fill   how full, while mounted
  *    │  ╰─ button.eject.flat > icon        ⏏, while mounted
  *    ├─ share.<kind>[.mounted][.busy]      as a device
  *    ╰─ empty > label                      "No places"
@@ -960,11 +961,6 @@ gadget.places info > label {
 }
 gadget.places info > meter {
   min-width: 0;
-  min-height: 3px;
-  border-radius: var(--radius-xs);
-}
-gadget.places info > meter > fill {
-  border-radius: var(--radius-xs);
 }
 gadget.places info > meter.critical > fill {
   background: var(--danger);
@@ -1200,7 +1196,7 @@ gadget.notifications list > notification.unseen summary {
  *    │     ├─ header > title, value
  *    │     ├─ graph > series[.second], grid, label
  *    │     ├─ cores > group     rows of per-core meters
- *    │     │  ╰─ core[.warning|.danger] > meter, label
+ *    │     │  ╰─ core[.warning|.danger] > meter.thin, label
  *    │     ├─ meter.used|.swap[.warning|.danger] > fill
  *    │     ├─ details > line    load, uptime, frequency, temperature
  *    │     ├─ line              memory figures

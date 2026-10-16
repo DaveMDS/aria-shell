@@ -287,6 +287,7 @@ impl PlacesGadget {
         if let Some(usage) = v.usage {
             parts.push(
                 icssed::meter(usage)
+                    .class("thin")
                     .class_if("critical", usage >= 0.9)
                     .into(),
             );

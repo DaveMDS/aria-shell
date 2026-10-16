@@ -576,7 +576,8 @@ fn cpu_section<'a>(locale: &Locale, s: &Sample, sysmon: &'a SysMon) -> Vec<Eleme
     )];
     let groups = s.cpu.cores.chunks(CORES_PER_ROW).map(|chunk| {
         let cells = chunk.iter().map(|v| {
-            icssed::column![icssed::meter(v / 100.0), icssed::text(format!("{v:.0}%"))]
+            let meter = icssed::meter(v / 100.0).class("thin");
+            icssed::column![meter, icssed::text(format!("{v:.0}%"))]
                 .kind("core")
                 .class_if("warning", (WARNING..CRITICAL).contains(v))
                 .class_if("danger", *v >= CRITICAL)

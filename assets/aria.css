@@ -566,6 +566,11 @@ notification actions {
  * ╰─ tabs
  * surface.widgets#graph       a graph, under the notifications
  * ╰─ graph
+ * surface.popup > gadget#showcase   a popup of no gadget, under the
+ * ╰─ column                         calendar: a menu with every kind of
+ *    ├─ menu                        item, the Themes picker under it
+ *    ╰─ button.picker > icon, label (`picker_command`, :disabled
+ *                                   without one), the showcase staying
  */
 surface.showcase {
   width: fill;
@@ -589,6 +594,12 @@ surface.widgets {
 surface.widgets > line {
   gap: 8px;
   align-items: center;
+}
+surface.popup > gadget#showcase > column {
+  padding-bottom: 4px;
+}
+surface.popup > gadget#showcase > column > button.picker {
+  margin: 0 4px;
 }
 
 /*

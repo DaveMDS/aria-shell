@@ -22,7 +22,9 @@
 //! │  ╰─ gadget.<kind> > indicator.<state>     a gadget's states, as it shows them
 //! │     ╰─ icon | label                       their selector in a tooltip
 //! ╰─ columns > column
-//!    ├─ popup > gadget.clock | gadget.themes  the calendar, a menu
+//!    ├─ popup > gadget.clock                  the calendar
+//!    ├─ popup > gadget#showcase > column      of no kind: a menu with every
+//!    │  ╰─ menu, button.picker                kind of item, the Themes picker
 //!    ├─ launcher, widgets                     the toolkit's widgets, below
 //!    ├─ exiter                                its default button focused
 //!    ├─ osd.volume
@@ -43,14 +45,16 @@ use crate::components::exiter::Exiter;
 use crate::components::launcher::Launcher;
 use crate::components::osd;
 use crate::daemon::view::dialog_surface;
+use crate::gadgets::themes::ThemesConfig;
 use crate::gadgets::{AnyGadget, Context};
 use crate::locale::Locale;
 use crate::services::notifications::{IconSource, Notification, Timeout, Urgency};
+use crate::ui::menu::{self, Item};
 use crate::ui::{popup, toast};
-use crate::{AriaShell, Message as Shell};
+use crate::{AriaShell, Message as Shell, process};
 
 /// The gadgets whose popups show, by their config section.
-const GADGETS: &[&str] = &["Clock", "Themes"];
+const GADGETS: &[&str] = &["Clock"];
 
 /// A sample button on the bar: its classes, its icon, its label. Not a
 /// gadget's view: only what the theme's rules meet, `gadget.<kind> >
@@ -131,6 +135,7 @@ const BAR: &[(&str, &[SampleGadget])] = &[
 /// The icons the widgets' box draws.
 const WIDGET_ICONS: &[&str] = &[
     "starred-symbolic",
+    "folder-symbolic",
     "system-search-symbolic",
     "view-reveal-symbolic",
 ];
@@ -223,6 +228,11 @@ pub(crate) struct Showcase {
     exiter: Exiter,
     /// Their popups show, as `popup[output=..] > gadget.<kind>`.
     gadgets: Vec<AnyGadget>,
+    /// The sample popup's menu, its first submenu unfolded.
+    menu: menu::Menu,
+    /// `[Themes]`: the picker under the menu runs its command, as the
+    /// gadget's does (the showcase stays: a zoom on the theme's work).
+    themes: ThemesConfig,
     notifications: Vec<Notification>,
     osd: osd::Content,
     widgets: Widgets,
@@ -240,6 +250,8 @@ pub(crate) enum Message {
     /// Escape, on window `Id`.
     Escape(Id),
     Widget(Widget),
+    /// The picker under the sample menu.
+    Picker,
 }
 
 impl Showcase {
@@ -258,6 +270,7 @@ impl Showcase {
             .chain(self.gadgets.iter().flat_map(AnyGadget::icon_names))
             .chain(sample_icons().map(str::to_owned))
             .chain(WIDGET_ICONS.iter().map(|&name| name.to_owned()))
+            .chain([self.themes.picker_icon.clone()])
     }
 
     /// The exit menu's default button focused, as on its own surface,
@@ -326,6 +339,47 @@ fn notifications(locale: &Locale) -> Vec<Notification> {
 }
 
 /// What a part would do, dropped.
+/// The sample menu's unfolded submenu.
+const MENU_UNFOLDED: i32 = 9;
+
+/// A menu with every kind of item the shell's menus show (an app's in
+/// the tray has them all), each labelled with its selector: an icon, a
+/// plain one, a disabled one, the toggles, separators, a submenu
+/// unfolded and one folded.
+fn menu_items() -> Vec<Item> {
+    let icon = |id, label: &str, name: &str| Item {
+        icon_name: name.to_owned(),
+        ..Item::new(id, label)
+    };
+    let submenu = |id, label: &str, children| Item {
+        submenu: true,
+        children,
+        ..Item::new(id, label)
+    };
+    vec![
+        icon(1, "item > icon", "starred-symbolic"),
+        Item::new(2, "item"),
+        Item {
+            enabled: false,
+            ..Item::new(3, "item:disabled")
+        },
+        Item::separator(4),
+        Item::new(5, "checkbox").check(true),
+        Item::new(6, "radio").radio(true),
+        Item::new(7, "radio").radio(false),
+        Item::separator(8),
+        submenu(
+            MENU_UNFOLDED,
+            "item.submenu.expanded",
+            vec![
+                icon(10, "submenu > item", "folder-symbolic"),
+                Item::new(11, "submenu > item"),
+            ],
+        ),
+        submenu(12, "item.submenu", vec![Item::new(13, "item")]),
+    ]
+}
+
 fn nothing<T>(_: T) -> Shell {
     Shell::Showcase(Message::Nothing)
 }
@@ -364,6 +418,12 @@ impl AriaShell {
             ),
             exiter: Exiter::new(self.config.section(None)),
             gadgets,
+            menu: {
+                let mut menu = menu::Menu::new();
+                menu.update(menu::Message::ToggleSubmenu(MENU_UNFOLDED));
+                menu
+            },
+            themes: self.config.section(None),
             notifications: notifications(&self.locale),
             osd: osd::Content {
                 kind: osd::Kind::Volume,
@@ -419,6 +479,10 @@ impl AriaShell {
                 showcase.widgets.update(widget);
                 Task::none()
             }
+            Message::Picker => {
+                process::run(&showcase.themes.picker_command);
+                Task::none()
+            }
             Message::PressedOutside => {
                 showcase.pressed_outside = true;
                 Task::none()
@@ -450,6 +514,23 @@ impl AriaShell {
             let content = icssed::column![content].kind("gadget").class(gadget.kind());
             inert(popup::view(popup, content))
         });
+        let menu = showcase.menu.view(menu_items(), &self.icons).map(nothing);
+        // The Themes gadget's picker, working; disabled without one.
+        let themes = &showcase.themes;
+        let button = icssed::button![
+            icssed::icon((
+                &self.icons as &dyn icssed::Icons,
+                themes.picker_icon.as_str()
+            )),
+            icssed::text(self.locale.tr("themes.picker"))
+        ]
+        .class("picker")
+        .on_press(Shell::Showcase(Message::Picker))
+        .disabled_if(themes.picker_command.is_empty());
+        let menu = icssed::column![icssed::column![menu, button]]
+            .kind("gadget")
+            .named("showcase");
+        let menu = inert(popup::view(popup, menu));
         let launcher = dialog_surface(
             theme.root("launcher", scale),
             showcase.launcher.view(shared).map(nothing),
@@ -468,7 +549,7 @@ impl AriaShell {
         });
         let column = |children: Vec<Element<'a, Shell>>| icssed::column(children).kind("column");
         let columns = icssed::row![
-            column(popups.collect()),
+            column(popups.chain([menu]).collect()),
             column(vec![
                 launcher,
                 inert(self.widgets_view(&showcase.widgets, scale))

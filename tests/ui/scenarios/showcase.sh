@@ -1,5 +1,5 @@
 # The showcase: `aria showcase show` draws every part of the UI (the
-# popups, the launcher, the toolkit's widgets, the exit menu, the OSD, two notifications, a bar
+# popups, a menu, the launcher, the toolkit's widgets, the exit menu, the OSD, two notifications, a bar
 # of the gadgets' states) on one surface between the bars of the
 # focused output, inert; it follows the scheme; Escape, a click beside
 # the parts or the command again close it.
@@ -9,8 +9,10 @@ aria showcase show; wait_keyboard showcase
 assert_surface showcase
 assert_eq "$(surfaces | tr ';' '\n' | grep -c showcase)" 1 "on one output"
 wait_for 'surface.popup gadget.clock calendar' 1 "the calendar"
-wait_for 'surface.popup gadget.themes menu > item' 4 "a menu: light, dark, base, the theme's settings"
-wait_for 'surface.popup gadget.themes button.picker' 1 "the picker under it"
+wait_for 'surface.popup gadget#showcase menu > item' 8 "a menu: every kind of item"
+wait_for 'surface.popup gadget#showcase menu > item.submenu' 2 "two submenus"
+wait_for 'surface.popup gadget#showcase menu > submenu > item' 2 "one unfolded"
+wait_for 'surface.popup gadget#showcase > column > button.picker' 1 "the picker under it"
 [ "$(count_widgets 'surface.launcher item')" -gt 0 ] || { echo "no launcher with results"; false; }
 wait_for 'surface.exiter > row > button' 6 "the exit menu"
 wait_for 'surface.widgets > line' 5 "the toolkit's widgets"
@@ -48,6 +50,16 @@ click_widget 'surface.exiter > row > button.suspend'
 click_widget 'surface.launcher item'
 assert_surface showcase
 wait_for 'surface.exiter > row > button' 6 "still the grid"
+
+# But the picker under the menu: it runs [Themes] picker_command, the
+# showcase staying (a zoom on the theme's work).
+click_widget 'surface.popup gadget#showcase button.picker'
+i=0
+while [ ! -s "$ARIA_UI_OUT/picker" ] && [ $i -lt 30 ]; do
+    settle 0.1; i=$((i + 1))
+done
+assert_eq "$(cat "$ARIA_UI_OUT/picker")" "picked" "picker_command ran"
+assert_surface showcase
 
 # The widgets' box works: a check, a radio, a tab change; the slider
 # moves the meter; a field takes what's typed.

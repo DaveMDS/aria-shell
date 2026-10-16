@@ -271,7 +271,7 @@ impl App {
             icssed::input("Search", &self.search)
                 .on_input(Message::Search)
                 .leading(icon(self.assets.star.clone())),
-            scroll(column(items).kind("entries")),
+            scroll(column(items).kind("entries")).class("flat"),
         ]
         .kind("sidebar")
         .into()

@@ -176,6 +176,10 @@ pub struct Computed {
     pub flex_direction: Option<Direction>,
     pub align_items: Align,
     pub justify_content: Justify,
+    /// Where it is in its cell, across and along (`justify-self` the
+    /// horizontal axis, `align-self` the vertical): a scroll's parts.
+    pub align_self: Align,
+    pub justify_self: Align,
     pub display: Display,
     pub background: Color,
     pub color: Color,
@@ -258,6 +262,8 @@ impl Computed {
             flex_direction: None,
             align_items: Align::Stretch,
             justify_content: Justify::Start,
+            align_self: Align::Stretch,
+            justify_self: Align::Stretch,
             display: Display::Flex,
             background: Color::TRANSPARENT,
             color: Color::BLACK,
@@ -328,6 +334,8 @@ impl Computed {
             && self.flex_direction == other.flex_direction
             && self.align_items == other.align_items
             && self.justify_content == other.justify_content
+            && self.align_self == other.align_self
+            && self.justify_self == other.justify_self
             && self.display == other.display
             && self.font == other.font
             && self.font_size == other.font_size
@@ -436,6 +444,8 @@ impl<'p> Cascade<'p> {
             Decl::FlexDirection(v) => out.flex_direction = Some(*v),
             Decl::AlignItems(v) => out.align_items = *v,
             Decl::JustifyContent(v) => out.justify_content = *v,
+            Decl::AlignSelf(v) => out.align_self = *v,
+            Decl::JustifySelf(v) => out.justify_self = *v,
             Decl::Display(v) => out.display = *v,
             Decl::Background(v) => self.background = *v,
             // `color: currentcolor` is `inherit`.
@@ -742,6 +752,8 @@ fn copy(prop: Prop, from: &Computed, to: &mut Computed) {
         Prop::FlexDirection => to.flex_direction = from.flex_direction,
         Prop::AlignItems => to.align_items = from.align_items,
         Prop::JustifyContent => to.justify_content = from.justify_content,
+        Prop::AlignSelf => to.align_self = from.align_self,
+        Prop::JustifySelf => to.justify_self = from.justify_self,
         Prop::Display => to.display = from.display,
         Prop::Background => to.background = from.background,
         Prop::Color => to.color = from.color,

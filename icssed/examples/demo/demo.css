@@ -6,7 +6,7 @@
  * surface.app                      the window
  * ├─ sidebar
  * │  ├─ input                      the search
- * │  ╰─ scroll > entries
+ * │  ╰─ scroll.flat > entries
  * │     ├─ group > label           a group's name
  * │     ╰─ entry[.active] > label  a demo, the one shown active
  * ╰─ main
@@ -102,7 +102,6 @@ main > scroll {
 scroll.info > doc {
   max-width: 680px;
   gap: 16px;
-  padding: 4px 12px 12px 0;
 }
 scroll.info > doc > list {
   gap: 8px;
@@ -127,9 +126,6 @@ scroll.listing > code > text {
 }
 
 /* Source and Style */
-scroll.listing > code {
-  padding: 4px 16px 16px 4px;
-}
 scroll.listing > code > text {
   font-size: 13px;
   line-height: 1.4;

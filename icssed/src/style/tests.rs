@@ -858,3 +858,21 @@ fn content_is_strings_or_nothing() {
     // Not inherited, as in CSS.
     assert_eq!(content("a > x"), None);
 }
+
+#[test]
+fn align_self_and_justify_self_take_css_keywords() {
+    let (sheet, warnings) = load(
+        "a { align-self: center; justify-self: right; } \
+         b { align-self: self-start; justify-self: auto; } \
+         c { align-self: diagonal; }",
+    );
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    let pair = |path: &str| {
+        let s = style(&sheet, path);
+        (s.align_self, s.justify_self)
+    };
+    assert_eq!(pair("a"), (Align::Center, Align::End));
+    assert_eq!(pair("b"), (Align::Start, Align::Stretch));
+    // Unset, a cell's item is stretched.
+    assert_eq!(pair("c"), (Align::Stretch, Align::Stretch));
+}

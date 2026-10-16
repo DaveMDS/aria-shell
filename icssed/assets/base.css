@@ -73,6 +73,13 @@
  *   flex-direction         row | column; a box's own when not set
  *   align-items            stretch | start | center | end
  *   justify-content        start | center | end
+ *   justify-self,          stretch | start | center | end (auto, normal:
+ *   align-self             stretch; justify-self also left, right): where
+ *                          an element is in its cell, horizontally and
+ *                          vertically, as a grid's item; stretched only
+ *                          where its size is auto. Read by a scroll's
+ *                          parts only: not by a flex's children (unlike
+ *                          CSS's align-self)
  *   background             layers of url() || <repeat>, the last one with
  *                          a <color> too; or none; background-color, and
  *                          the layers' longhands below, each a list (one
@@ -702,31 +709,43 @@ input > field > selection {
  * Scrolls
  * =======
  *
- * Content taller or wider than its room, scrolled (`icssed::scroll`): iced's
- * scrollable. It's no box: its sizes are its own (a list grows with its
- * items up to its `max-height`, then scrolls), its look its
- * scrollbars'. A scrollbar floats over the content, at its end: a box
- * around the content makes room for it where needed. The scroll is
- * `:hover` under the pointer; a scrollbar is `:hover` under it,
- * `:active` while its thumb is dragged. iced draws the scrollbars: their
- * colours don't transition, their sizes follow no state, the query
- * doesn't find them; keep a bar's and its thumb's widths both even or
- * both odd, or the thumb lands between device pixels.
+ * Content taller or wider than its room, scrolled (`icssed::scroll`): a
+ * box, growing with its content up to its `max-height`; its padding
+ * scrolls with the content on the axes it scrolls, as in CSS. Its bars
+ * lie in its padding box, over the content, placed by `justify-self` and
+ * `align-self` (their margins can move them out of it); a thumb is as
+ * long as the part shown, at least its min-height (min-width). A bar
+ * and its thumb are `:active` while the thumb is dragged.
  *
- * scroll
+ * scroll.vertical|.horizontal[.flat]
  * ├─ …                       the content (the app's)
- * ├─ scrollbar.vertical      its width the bar's; its margin-left on
- * │  │                       both of its sides
- * │  ╰─ thumb                its width the thumb's (the bar's if not set)
- * ╰─ scrollbar.horizontal    the same, with height and margin-top
+ * ├─ scrollbar.vertical      at the end, top to bottom
+ * │  ╰─ thumb
+ * ╰─ scrollbar.horizontal    at the bottom, side to side
  *    ╰─ thumb
  */
+scroll {
+  border: 1px solid var(--border);
+  padding: 8px;
+}
 scrollbar.vertical {
+  justify-self: end;
   width: 6px;
-  margin: 0 2px;
+  margin: 0 1px;
 }
 scrollbar.horizontal {
+  align-self: end;
   height: 6px;
+  margin: 1px 0;
+}
+scroll.flat {
+  border: none;
+  padding: 0;
+}
+scroll.flat > scrollbar.vertical {
+  margin: 0 2px;
+}
+scroll.flat > scrollbar.horizontal {
   margin: 2px 0;
 }
 scrollbar > thumb {

@@ -1073,7 +1073,7 @@ fn an_inputs_field_is_centred_on_its_letters() {
     assert_eq!((field.x, field.width), (8.0, 184.0));
 }
 
-const SCROLL: &str = "scroll { width: 100px; max-height: 100px; } \
+const SCROLL: &str = "scroll { width: 100px; max-height: 100px; border: none; padding: 0; } \
                       line { gap: 0; } line > cell { width: 20px; height: 20px; }";
 
 /// `n` cells of 20px, one under the other (or side by side), in a
@@ -1084,6 +1084,7 @@ fn cells(root: Node<'_>, n: usize, sideways: bool) -> Element<'_, Message> {
         crate::scroll(crate::row(content).kind("line")).horizontal()
     } else {
         crate::scroll(crate::column(content).kind("line"))
+            .on_scroll(|viewport| Message::Value(viewport.relative_offset().y))
     };
     crate::column![scroll].at(root).into()
 }
@@ -1153,6 +1154,87 @@ fn a_scrollbar_shows_its_states() {
         ui.pixels(Color::WHITE).at_point(thumb.x, 80.0, 1.0),
         [255, 255, 255, 255]
     );
+}
+
+/// The base's vertical bar over 10 cells in a 100px scroll: 6px wide,
+/// 1px from the end; its thumb half its height (the content is twice
+/// the room).
+const BAR_X: f32 = 96.0;
+
+#[test]
+fn a_dragged_thumb_scrolls_and_the_app_hears_it() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    assert_eq!(ui.find(&sheet, "scrollbar > thumb")[0].height, 50.0);
+    ui.move_to(Point::new(BAR_X, 10.0));
+    ui.press();
+    // Half its way: half the content's.
+    ui.move_to(Point::new(BAR_X, 35.0));
+    assert_eq!(ui.find(&sheet, "cell")[0].y, -50.0);
+    assert_eq!(ui.find(&sheet, "scrollbar > thumb")[0].y, 25.0);
+    ui.release();
+    // The scrollable tells the app on the next frame.
+    ui.frame(Instant::now());
+    assert_eq!(ui.messages, [Message::Value(0.5)]);
+}
+
+#[test]
+fn a_press_on_the_bar_brings_the_thumbs_middle_there() {
+    let sheet = sheet(SCROLL);
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    ui.move_to(Point::new(BAR_X, 60.0));
+    ui.press();
+    // Its middle at 60: its start at 35, of the 50 it travels.
+    assert_eq!(ui.find(&sheet, "scrollbar > thumb")[0].y, 35.0);
+    assert_eq!(ui.find(&sheet, "cell")[0].y, -70.0);
+}
+
+#[test]
+fn a_bar_is_placed_by_its_self_alignment_and_its_margins() {
+    let at = |css: &str| {
+        let sheet = sheet(&format!("{SCROLL} {css}"));
+        let root = sheet.root("root", 1.0);
+        let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+        ui.find(&sheet, "scrollbar.vertical")[0]
+    };
+    assert_eq!(
+        at(""),
+        Rectangle::new(Point::new(93.0, 0.0), Size::new(6.0, 100.0))
+    );
+    assert_eq!(at("scrollbar.vertical { justify-self: start; }").x, 1.0);
+    // Out of the scroll, by a negative margin.
+    assert_eq!(at("scrollbar.vertical { margin: 0 -10px 0 0; }").x, 104.0);
+    let short = at("scrollbar.vertical { align-self: center; height: 40px; }");
+    assert_eq!((short.y, short.height), (30.0, 40.0));
+}
+
+#[test]
+fn a_bars_size_follows_the_scrolls_states() {
+    let sheet = sheet(&format!(
+        "{SCROLL} scroll:hover > scrollbar.vertical {{ width: 10px; }}"
+    ));
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    assert_eq!(ui.find(&sheet, "scrollbar")[0].width, 6.0);
+    ui.move_to(Point::new(50.0, 50.0));
+    ui.rebuild(cells(root, 10, false));
+    assert_eq!(ui.find(&sheet, "scrollbar")[0].width, 10.0);
+}
+
+#[test]
+fn the_padding_scrolls_with_the_content_on_its_axis() {
+    let sheet = sheet(&format!("{SCROLL} scroll {{ padding: 8px; }}"));
+    let root = sheet.root("root", 1.0);
+    let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
+    let first = ui.find(&sheet, "cell")[0];
+    assert_eq!((first.x, first.y), (8.0, 8.0));
+    // At the end, the padding below the last cell; across, it stays.
+    ui.move_to(Point::new(50.0, 50.0));
+    ui.send(&[wheel(-10.0)]);
+    let last = ui.find(&sheet, "cell")[9];
+    assert_eq!((last.x, last.y + last.height), (8.0, 92.0));
 }
 
 const MENU: &str = "menu item { transition: none; }";

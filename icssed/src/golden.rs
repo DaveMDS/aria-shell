@@ -508,8 +508,8 @@ fn golden_scroll() {
         "scrolls { gap: 12px; align-items: start; } \
          scroll.list { width: 120px; max-height: 80px; } \
          scroll.strip { width: 150px; } \
-         rows { padding: 4px 12px 4px 4px; gap: 6px; border: 1px solid #999; } \
-         cells { gap: 4px; padding: 0 0 10px 0; } cell { padding: 4px 8px; background: #ddd; }",
+         rows { gap: 6px; } \
+         cells { gap: 4px; } cell { padding: 4px 8px; background: #ddd; }",
         None,
         Size::new(320.0, 100.0),
         |root| {

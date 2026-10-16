@@ -177,6 +177,17 @@ impl<'a> Place<'a> {
         self.extra(Step::Class(Name::new(class)));
     }
 
+    /// Without `class`, given before: a builder changing its mind (a
+    /// scroll's direction).
+    pub fn unclass(&mut self, class: &str) {
+        debug_assert!(
+            self.node.get_mut().is_none(),
+            "a class taken from a widget given its node"
+        );
+        let class = Step::Class(Name::new(class));
+        self.extras.retain(|step| *step != class);
+    }
+
     pub fn id(&mut self, id: &str) {
         self.extra(Step::Id(Name::new(id)));
     }

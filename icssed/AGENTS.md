@@ -107,7 +107,7 @@ fn theme(&self) -> icssed::Theme {
   parent hands its children: the opacity so far, the states of the
   ancestors, when they last changed. iced's own widgets work inside only
   if `icssed::Theme` has their `Catalog`: `text_input` and `scrollable` do
-  (as `icssed::input` and `icssed::scroll`). That's on purpose: an unthemed widget
+  (inside `icssed::input` and `icssed::scroll`). That's on purpose: an unthemed widget
   can't slip in.
 - Every widget has a type of its own (`text` a `label`, `icon` an
   `icon`, `row` a `row`, `button` a `button`): `.kind(k)` gives another.
@@ -159,7 +159,7 @@ to choose.
 | `slider(0.0..=100.0, v, f).step(1.0).on_release(m)` | drag, click, wheel, the arrows |
 | `meter(fraction).label(text)` | with a label, a gauge; `.class("thin")`: a line, under a text |
 | `input(placeholder, value).on_input(f).on_submit(m).secure(b).id(id).leading(e).trailing(e)` | iced's `text_input` in a box; `:focus` while its field has it |
-| `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | no box of its own; `max-height` lets it grow, then scroll |
+| `scroll(content).horizontal() / .both().id(id).on_scroll(f)` | a box around the content (`scroll > content`), its `scrollbar > thumb` boxes in its padding, placed by `justify-self` / `align-self`; a border and a padding the bars fit in, `.class("flat")` neither, the bars over the content; `max-height` lets it grow, then scroll |
 | `menu([MenuItem::new(l).on_press(m).check(b) / .radio(b).icon(s).shortcut(k).submenu(open, items).class(c), MenuItem::separator()])` | Up and Down move the focus once an item has it; a check's box and a radio are a toggle's tree (`item > checkbox > indicator > mark`, `radio`, `:checked` the item too), drawn by the toggles' rules; an icon goes in their column, two columns only for an item with both |
 | `tabs([Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
 | `calendar(Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
@@ -408,8 +408,14 @@ tests/golden/, tests/fonts/   reference images, the fonts they're drawn with
   stretched image on a grid as coarse as its stretch and doesn't round
   an image's corners: right on wgpu only.
 - Stock widgets' colours come from a style asked at draw, so they don't
-  transition; a scrollbar's sizes are set at the view, so they follow no
-  state.
+  transition.
+- `Scrollable`'s state is private, but its `operate` hands any operation
+  its bounds, its content's, its translation and the state as
+  `operation::Scrollable`: the scroll reads where it is and drags it
+  that way (`Peek`). After an operation scrolls it, iced tells
+  `on_scroll` at its next `RedrawRequested`: ask for a frame.
+  `Scrollbar::hidden()` keeps the wheel and a finger, and its bars take
+  no room and no pointer.
 
 ### Adding a widget
 

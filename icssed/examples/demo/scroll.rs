@@ -1,25 +1,23 @@
 //! A scroll shows content taller or wider than its room:
-//! `icssed::scroll(content)`, iced's scrollable, themed. Vertical
-//! unless `.horizontal()` or `.both()`.
+//! `icssed::scroll(content)`. Vertical unless `.horizontal()` or
+//! `.both()`.
 //!
 //!     icssed::scroll(icssed::column(items))
 //!         .id(LIST)
 //!         .on_scroll(Message::Scrolled)
 //!
-//! - It's no box: its sizes are its own. A list grows with its items up
-//!   to its `max-height`, then scrolls.
-//! - A scrollbar floats over the content at its end: a box around the
-//!   content makes room for it where it's needed (the rows below have
-//!   more padding on the right).
+//! - It's a box around the content: `scroll > content`. A list grows
+//!   with its items up to its `max-height`, then scrolls.
+//! - A scrollbar is in the scroll's padding box, at its end unless its
+//!   `justify-self` (`align-self`, a horizontal one's) says otherwise;
+//!   its margins move it, out of the scroll too. The base gives the
+//!   scroll a padding the bars fit in, so they cover no content.
 //! - `.id(id)` names it for iced's operations (`scroll_to`, `snap_to`);
 //!   `.on_scroll(f)` sends the viewport at every move.
 //! - Its bars are `scrollbar.vertical` and `scrollbar.horizontal`, each
-//!   with its `thumb`: `:hover` under the pointer, `:active` while the
-//!   thumb is dragged.
-//!
-//! iced draws the scrollbars: their colours don't transition, and their
-//! sizes follow no state. Keep a bar's and its thumb's widths both even
-//! or both odd, or the thumb lands between device pixels.
+//!   with its `thumb`, boxes as any other: `:hover` under the pointer,
+//!   `:active` while the thumb is dragged; their sizes may follow the
+//!   scroll's states (`scroll:hover > scrollbar { width: 10px }`).
 
 use icssed::{Element, column, row, scroll, text};
 

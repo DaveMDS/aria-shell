@@ -92,7 +92,7 @@ pub enum Direction {
     Column,
 }
 
-/// `align-items`.
+/// `align-items`, `align-self`, `justify-self`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Align {
     Stretch,
@@ -504,6 +504,8 @@ pub(crate) enum Prop {
     FlexDirection,
     AlignItems,
     JustifyContent,
+    AlignSelf,
+    JustifySelf,
     Display,
     Background,
     Color,
@@ -604,6 +606,8 @@ pub(crate) enum Decl {
     FlexDirection(Direction),
     AlignItems(Align),
     JustifyContent(Justify),
+    AlignSelf(Align),
+    JustifySelf(Align),
     Display(Display),
     Background(ColorValue),
     Color(ColorValue),
@@ -707,6 +711,8 @@ fn longhands(name: &str) -> Option<Vec<Prop>> {
         "display" => vec![Prop::Display],
         "align-items" => vec![Prop::AlignItems],
         "justify-content" => vec![Prop::JustifyContent],
+        "align-self" => vec![Prop::AlignSelf],
+        "justify-self" => vec![Prop::JustifySelf],
         "background" => vec![
             Prop::Background,
             Prop::BackgroundImage,
@@ -942,6 +948,40 @@ fn value_of(
                 ("center", Align::Center),
                 ("end", Align::End),
                 ("flex-end", Align::End),
+            ],
+        )?)],
+        "align-self" => vec![Decl::AlignSelf(keyword(
+            p,
+            "an alignment",
+            &[
+                ("auto", Align::Stretch),
+                ("normal", Align::Stretch),
+                ("stretch", Align::Stretch),
+                ("start", Align::Start),
+                ("self-start", Align::Start),
+                ("flex-start", Align::Start),
+                ("center", Align::Center),
+                ("end", Align::End),
+                ("self-end", Align::End),
+                ("flex-end", Align::End),
+            ],
+        )?)],
+        "justify-self" => vec![Decl::JustifySelf(keyword(
+            p,
+            "an alignment",
+            &[
+                ("auto", Align::Stretch),
+                ("normal", Align::Stretch),
+                ("stretch", Align::Stretch),
+                ("start", Align::Start),
+                ("self-start", Align::Start),
+                ("flex-start", Align::Start),
+                ("left", Align::Start),
+                ("center", Align::Center),
+                ("end", Align::End),
+                ("self-end", Align::End),
+                ("flex-end", Align::End),
+                ("right", Align::End),
             ],
         )?)],
         "justify-content" => vec![Decl::JustifyContent(keyword(

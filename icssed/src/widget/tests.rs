@@ -482,10 +482,10 @@ fn cell_drawn(css: &str, size: Size) -> crate::testing::Pixels {
 
 #[test]
 fn a_background_scrolled_out_of_sight_isnt_drawn() {
-    // Five cells of 20px with a picture behind, in a scroll 40px tall:
-    // the three below show nothing under the scroll.
+    // Five cells of 20px with a picture behind, in a scroller 40px tall:
+    // the three below show nothing under the scroller.
     let dir = pictures();
-    let css = "surface { background: none; } scroll { width: 40px; max-height: 40px; } \
+    let css = "surface { background: none; } scroller { width: 40px; max-height: 40px; } \
                line { gap: 0; } cell { width: 40px; height: 20px; background: url(red.png); }";
     let (sheet, warnings) = Sheet::load(
         &[Source {
@@ -499,7 +499,7 @@ fn a_background_scrolled_out_of_sight_isnt_drawn() {
     assert!(warnings.is_empty(), "{warnings:?}");
     let root = sheet.root("root", 1.0);
     let cells = (0..5).map(|_| crate::row([]).kind("cell").into());
-    let view = crate::column![crate::scroll(crate::column(cells).kind("line"))].at(root);
+    let view = crate::column![crate::scroller(crate::column(cells).kind("line"))].at(root);
     let mut ui = Harness::<Message>::new(view, Size::new(40.0, 100.0), 1.0);
     ui.frame(Instant::now());
     let pixels = ui.pixels(Color::WHITE);
@@ -1073,17 +1073,17 @@ fn an_inputs_field_is_centred_on_its_letters() {
     assert_eq!((field.x, field.width), (8.0, 184.0));
 }
 
-const SCROLL: &str = "scroll { width: 100px; max-height: 100px; border: none; padding: 0; } \
+const SCROLL: &str = "scroller { width: 100px; max-height: 100px; border: none; padding: 0; } \
                       line { gap: 0; } line > cell { width: 20px; height: 20px; }";
 
 /// `n` cells of 20px, one under the other (or side by side), in a
-/// scroll at most 100px tall (or 100px wide).
+/// scroller at most 100px tall (or 100px wide).
 fn cells(root: Node<'_>, n: usize, sideways: bool) -> Element<'_, Message> {
     let content = (0..n).map(|_| crate::row([]).kind("cell").into());
     let scroll = if sideways {
-        crate::scroll(crate::row(content).kind("line")).horizontal()
+        crate::scroller(crate::row(content).kind("line")).horizontal()
     } else {
-        crate::scroll(crate::column(content).kind("line"))
+        crate::scroller(crate::column(content).kind("line"))
             .on_scroll(|viewport| Message::Value(viewport.relative_offset().y))
     };
     crate::column![scroll].at(root).into()
@@ -1094,9 +1094,9 @@ fn a_scroll_grows_with_its_content_up_to_its_max() {
     let sheet = sheet(SCROLL);
     let root = sheet.root("root", 1.0);
     let mut ui = Harness::new(cells(root, 3, false), Size::new(200.0, 200.0), 1.0);
-    assert_eq!(ui.find(&sheet, "scroll")[0].height, 60.0);
+    assert_eq!(ui.find(&sheet, "scroller")[0].height, 60.0);
     ui.rebuild(cells(root, 10, false));
-    assert_eq!(ui.find(&sheet, "scroll")[0].height, 100.0);
+    assert_eq!(ui.find(&sheet, "scroller")[0].height, 100.0);
 }
 
 /// A turn of the wheel, `lines` up (or down, below zero).
@@ -1117,8 +1117,8 @@ fn the_wheel_scrolls_and_the_query_follows() {
     ui.send(&[wheel(-1.0)]);
     let found = ui.find(&sheet, "cell");
     assert_eq!((found[0].y, found[3].y), (-60.0, 0.0));
-    // The scroll itself stays where it is.
-    assert_eq!(ui.find(&sheet, "scroll")[0].y, 0.0);
+    // The scroller itself stays where it is.
+    assert_eq!(ui.find(&sheet, "scroller")[0].y, 0.0);
 }
 
 #[test]
@@ -1137,7 +1137,7 @@ fn a_scrollbar_shows_its_states() {
     let root = sheet.root("root", 1.0);
     let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
     let now = Instant::now();
-    // The base's bar: 6px at 2px from the scroll's end, its thumb half
+    // The base's bar: 6px at 2px from the scroller's end, its thumb half
     // its height (the content is twice the room).
     let thumb = Point::new(100.0 - 5.0, 20.0);
     let colour = |ui: &mut Harness<'_, Message>| {
@@ -1156,7 +1156,7 @@ fn a_scrollbar_shows_its_states() {
     );
 }
 
-/// The base's vertical bar over 10 cells in a 100px scroll: 6px wide,
+/// The base's vertical bar over 10 cells in a 100px scroller: 6px wide,
 /// 1px from the end; its thumb half its height (the content is twice
 /// the room).
 const BAR_X: f32 = 96.0;
@@ -1204,7 +1204,7 @@ fn a_bar_is_placed_by_its_self_alignment_and_its_margins() {
         Rectangle::new(Point::new(93.0, 0.0), Size::new(6.0, 100.0))
     );
     assert_eq!(at("scrollbar.vertical { justify-self: start; }").x, 1.0);
-    // Out of the scroll, by a negative margin.
+    // Out of the scroller, by a negative margin.
     assert_eq!(at("scrollbar.vertical { margin: 0 -10px 0 0; }").x, 104.0);
     let short = at("scrollbar.vertical { align-self: center; height: 40px; }");
     assert_eq!((short.y, short.height), (30.0, 40.0));
@@ -1213,7 +1213,7 @@ fn a_bar_is_placed_by_its_self_alignment_and_its_margins() {
 #[test]
 fn a_bars_size_follows_the_scrolls_states() {
     let sheet = sheet(&format!(
-        "{SCROLL} scroll:hover > scrollbar.vertical {{ width: 10px; }}"
+        "{SCROLL} scroller:hover > scrollbar.vertical {{ width: 10px; }}"
     ));
     let root = sheet.root("root", 1.0);
     let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
@@ -1225,7 +1225,7 @@ fn a_bars_size_follows_the_scrolls_states() {
 
 #[test]
 fn the_padding_scrolls_with_the_content_on_its_axis() {
-    let sheet = sheet(&format!("{SCROLL} scroll {{ padding: 8px; }}"));
+    let sheet = sheet(&format!("{SCROLL} scroller {{ padding: 8px; }}"));
     let root = sheet.root("root", 1.0);
     let mut ui = Harness::new(cells(root, 10, false), Size::new(200.0, 200.0), 1.0);
     let first = ui.find(&sheet, "cell")[0];

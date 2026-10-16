@@ -4,7 +4,7 @@
 //! it scrolls, the padding, which scrolls with the content as in CSS; its scrollbars in its
 //! padding box, as items in one cell of a grid, each placed by its
 //! `justify-self` and `align-self`, at the end of its axis unless said,
-//! over the content (its margins move it, out of the scroll too), shown
+//! over the content (its margins move it, out of the scroller too), shown
 //! while the content overflows; a thumb as long as the part of the
 //! content shown, where it's shown. Each is a box as any other. A scrollbar and its thumb are
 //! `:active` while the thumb is dragged; a press on the bar elsewhere
@@ -29,11 +29,11 @@ use crate::query::Reported;
 use crate::style::{Align, Ancestors, Computed, MinSize, Node, Size as Len, States, name};
 use crate::{Element, Renderer, Theme};
 
-pub struct Scroll<'a, Message> {
+pub struct Scroller<'a, Message> {
     boxed: Boxed<'a>,
     bars: Bars,
     id: Option<Id>,
-    /// What the scrollable is made of, until the scroll has its node.
+    /// What the scrollable is made of, until the scroller has its node.
     pending: Cell<Option<Pending<'a, Message>>>,
     scrollable: RefCell<Option<Scrollable<'a, Message, Theme, Renderer>>>,
     /// Its parts, made with its node.
@@ -76,12 +76,14 @@ fn part(node: Node<'_>, kind: crate::style::Name) -> Boxed<'_> {
     Boxed::placed(place)
 }
 
-/// `content` scrolled up and down: a `scroll.vertical`, its
+/// `content` scrolled up and down: a `scroller.vertical`, its
 /// `scrollbar.vertical > thumb`.
-pub fn scroll<'a, Message: 'a>(content: impl Into<Element<'a, Message>>) -> Scroll<'a, Message> {
-    let mut boxed = Boxed::of(name!("scroll"));
+pub fn scroller<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> Scroller<'a, Message> {
+    let mut boxed = Boxed::of(name!("scroller"));
     boxed.place.class("vertical");
-    Scroll {
+    Scroller {
         boxed,
         bars: Bars::Vertical,
         id: None,
@@ -159,9 +161,9 @@ impl Seen {
     }
 }
 
-/// What a scroll keeps in the widget tree.
+/// What a scroller keeps in the widget tree.
 struct State {
-    scroll: BoxState,
+    scroller: BoxState,
     /// The vertical bar's, the horizontal one's: those it scrolls by.
     bars: [Option<BarState>; 2],
     seen: Seen,
@@ -176,7 +178,7 @@ struct BarState {
     grabbed: Option<f32>,
 }
 
-/// The states of its parts: the scroll, each bar and its thumb.
+/// The states of its parts: the scroller, each bar and its thumb.
 type Snapshot = [States; 5];
 
 impl State {
@@ -187,7 +189,7 @@ impl State {
                 .map_or([States::NONE; 2], |b| [b.bar.states, b.thumb.states])
         };
         let ([v, vt], [h, ht]) = (bar(0), bar(1));
-        [self.scroll.states, v, vt, h, ht]
+        [self.scroller.states, v, vt, h, ht]
     }
 }
 
@@ -221,10 +223,10 @@ impl Operation for Peek {
     }
 }
 
-impl<'a, Message: 'a> Scroll<'a, Message> {
+impl<'a, Message: 'a> Scroller<'a, Message> {
     placed!(boxed.place);
 
-    /// Scrolled sideways instead: a `scroll.horizontal`, its
+    /// Scrolled sideways instead: a `scroller.horizontal`, its
     /// `scrollbar.horizontal`.
     pub fn horizontal(mut self) -> Self {
         self.bars = Bars::Horizontal;
@@ -234,7 +236,7 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
         self
     }
 
-    /// Scrolled both ways: a `scroll.vertical.horizontal`, both its
+    /// Scrolled both ways: a `scroller.vertical.horizontal`, both its
     /// scrollbars.
     pub fn both(mut self) -> Self {
         self.bars = Bars::Both;
@@ -251,7 +253,7 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
         self
     }
 
-    /// What a scroll sends: where it is now.
+    /// What a scroller sends: where it is now.
     pub fn on_scroll(mut self, on_scroll: impl Fn(Viewport) -> Message + 'a) -> Self {
         if let Some(pending) = self.pending.get_mut() {
             pending.on_scroll = Some(Box::new(on_scroll));
@@ -284,7 +286,7 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
     }
 
     /// iced's scrollable, made the first time: it asks its content's
-    /// size as it's made, so the content is reached under the scroll.
+    /// size as it's made, so the content is reached under the scroller.
     fn scrollable(&self) -> Ref<'_, Scrollable<'a, Message, Theme, Renderer>> {
         if let Some(Pending { content, on_scroll }) = self.pending.take() {
             let node = self.boxed.node();
@@ -303,7 +305,7 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
             let mut scrollable = place::under(node, || {
                 Scrollable::with_direction(Element::new(content), direction)
             });
-            // It fills the content box where the scroll has a size of its
+            // It fills the content box where the scroller has a size of its
             // own; else it's as iced has it: the content's, or the room's
             // when the content fills across.
             let s = self.boxed.style();
@@ -350,13 +352,13 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
     }
 
     /// Each part's style for its layout: its own states, under its
-    /// parents' in the scroll (the scroll's own ancestors reach it only
-    /// at draw). The scroll, each bar and its thumb.
+    /// parents' in the scroller (the scroller's own ancestors reach it only
+    /// at draw). The scroller, each bar and its thumb.
     fn layout_styles(&self, states: Snapshot) -> [Option<std::sync::Arc<Computed>>; 5] {
         let parts = self.parts();
-        let scroll = self.boxed.node();
+        let scroller = self.boxed.node();
         let seen = |node: Node<'_>, states: States| states & node.sensitivity().any();
-        let under = Ancestors::default().push(scroll.depth(), seen(scroll, states[0]));
+        let under = Ancestors::default().push(scroller.depth(), seen(scroller, states[0]));
         let mut out = [
             Some(self.boxed.layout_style(states[0])),
             None,
@@ -398,7 +400,7 @@ fn aligned(align: Align, room: f32, size: f32, scale: f32) -> f32 {
     }
 }
 
-/// A bar's margin box in the scroll's padding box `cell`, styled `s`:
+/// A bar's margin box in the scroller's padding box `cell`, styled `s`:
 /// along its axis as long as the cell unless it has a length of its own,
 /// across its `width` (a vertical one's) or `height`, the cell's if
 /// `stretch`ed; placed by its `justify-self` and `align-self`.
@@ -513,7 +515,7 @@ impl Placed {
     }
 }
 
-impl<'a, Message: 'a> Scroll<'a, Message> {
+impl<'a, Message: 'a> Scroller<'a, Message> {
     /// Each bar that shows (the content overflows on its axis, neither
     /// it nor its thumb is `display: none`), with its state and where
     /// it is.
@@ -540,7 +542,7 @@ impl<'a, Message: 'a> Scroll<'a, Message> {
     }
 }
 
-impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
+impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroller<'a, Message> {
     fn size(&self) -> Size<Length> {
         let own = self.boxed.size();
         if self.boxed.place.hidden() {
@@ -579,7 +581,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
             })
         };
         tree::State::new(State {
-            scroll: self.boxed.state(),
+            scroller: self.boxed.state(),
             bars: [bar(&parts.bars[0]), bar(&parts.bars[1])],
             seen: Seen::default(),
         })
@@ -597,7 +599,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
     fn diff(&self, tree: &mut Tree) {
         let parts = self.parts();
         let state = tree.state.downcast_mut::<State>();
-        state.scroll.animated.diff(self.boxed.node());
+        state.scroller.animated.diff(self.boxed.node());
         for (bar, state) in parts.bars.iter().zip(&mut state.bars) {
             if let (Some(bar), Some(state)) = (bar, state) {
                 state.bar.animated.diff(bar.bar.node());
@@ -613,7 +615,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> layout::Node {
         let styles = self.layout_styles(tree.state.downcast_ref::<State>().snapshot());
         let Some(s) = &styles[0] else {
-            unreachable!("a scroll's style")
+            unreachable!("a scroller's style")
         };
         let scale = self.boxed.node().scale();
         let sizing = Sizing::new(s, scale, limits);
@@ -638,7 +640,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
         let extra = Size::new(moving[1] + moving[3], moving[0] + moving[2]);
         let grown = |size: Size| Size::new(size.width + extra.width, size.height + extra.height);
         // The scrollable over the content box (and that padding), filling
-        // it where the scroll has a size of its own, the content at least
+        // it where the scroller has a size of its own, the content at least
         // as large.
         let mut lay = |this: &mut Self, min: Size, max: Size| {
             Widget::<Message, Theme, Renderer>::layout(
@@ -662,7 +664,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
             (inner.size().height - extra.height).max(0.0),
         );
         let (size, content) = sizing.around(shown);
-        // A scroll held larger than its content (its minimum): the
+        // A scroller held larger than its content (its minimum): the
         // scrollable fills it.
         if (content.width - shown.width).abs() > 0.01
             || (content.height - shown.height).abs() > 0.01
@@ -714,7 +716,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
         let scrollable = self.scrollable();
         let inner = layout.children().next().expect("a scrollable");
         self.boxed.draw(
-            &state.scroll,
+            &state.scroller,
             renderer,
             theme,
             layout.bounds(),
@@ -775,10 +777,10 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
         let before = tree.state.downcast_ref::<State>().snapshot();
 
         // Where the pointer is (through the transforms each part was
-        // drawn with): over the scroll, each bar and thumb; how far
+        // drawn with): over the scroller, each bar and thumb; how far
         // along a bar from its thumb's start.
         let state = tree.state.downcast_ref::<State>();
-        let cursor = state.scroll.local(cursor);
+        let cursor = state.scroller.local(cursor);
         let over = cursor.is_over(self.boxed.border_box(layout.bounds()));
         let mut pointer = [None::<Pointer>; 2];
         for (i, bar, s, at) in self.shown(state, layout) {
@@ -932,7 +934,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
             s.animated.update(event, shell);
             boxed.settle(s, before, boxed.tracked(States::NONE), over, shell);
         };
-        settle(&self.boxed, &mut state.scroll, before[0], over);
+        settle(&self.boxed, &mut state.scroller, before[0], over);
         for (i, bar) in parts.bars.iter().enumerate() {
             let (Some(bar), Some(s)) = (bar, &mut state.bars[i]) else {
                 continue;
@@ -963,7 +965,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
         renderer: &Renderer,
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
-        let cursor = state.scroll.local(cursor);
+        let cursor = state.scroller.local(cursor);
         let on_a_bar = self
             .shown(state, layout)
             .any(|(_, bar, s, at)| s.bar.local(cursor).is_over(bar.bar.border_box(at.bar)));
@@ -1041,12 +1043,12 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Scroll<'a, Message> {
     }
 }
 
-/// The content with the scroll's padding on the axes it scrolls, inside
+/// The content with the scroller's padding on the axes it scrolls, inside
 /// the scrollable: as in CSS, that padding scrolls with it. Nothing of
 /// its own besides: its tree is the content's.
 struct Padded<'a, Message> {
     content: Element<'a, Message>,
-    /// Top, right, bottom, left: the scroll's, set at its layout.
+    /// Top, right, bottom, left: the scroller's, set at its layout.
     padding: Rc<Cell<[f32; 4]>>,
 }
 
@@ -1183,8 +1185,8 @@ struct Pointer {
     length: f32,
 }
 
-impl<'a, Message: 'a> From<Scroll<'a, Message>> for Element<'a, Message> {
-    fn from(scroll: Scroll<'a, Message>) -> Self {
-        Element::new(scroll)
+impl<'a, Message: 'a> From<Scroller<'a, Message>> for Element<'a, Message> {
+    fn from(scroller: Scroller<'a, Message>) -> Self {
+        Element::new(scroller)
     }
 }

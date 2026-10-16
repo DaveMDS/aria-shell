@@ -260,8 +260,8 @@ gets no `Theme` (see Scale).
 It implements `iced::theme::Base` (all `iced_exwlshell` asks) and the
 `Catalog` traits of the stock widgets the toolkit embeds: `text_input`
 (`icssed::input`'s field: its colours from `field`, `field > placeholder`,
-`field > selection`) and `scrollable` (in `icssed::scroll`: its bars
-never drawn, the scroll draws its own). Every
+`field > selection`) and `scrollable` (in `icssed::scroller`: its bars
+never drawn, the scroller draws its own). Every
 other stock widget needs a `Catalog` impl before it can be used: that's
 deliberate, an unthemed widget can't slip in.
 
@@ -630,29 +630,29 @@ They come in a few kinds:
   texts). Their states, painting and animation are `widget/boxed.rs`'s.
 - **Boxes placing their children their own way**: a meter's fill at
   its fraction, a slider's knob on its value (its track a meter), a
-  graph's paths in its content box, a scroll's parts stacked in one
+  graph's paths in its content box, a scroller's parts stacked in one
   cell (below). Their box model is `layout::Sizing`.
 - **Stock widgets under our `Catalog`**: an input's field (iced's
-  `text_input`, in a box of ours), a scroll's content (in iced's
+  `text_input`, in a box of ours), a scroller's content (in iced's
   `scrollable`, which scrolls, its bars hidden).
 
-A scroll keeps iced's scrollable for what it does well (clipping and
+A scroller keeps iced's scrollable for what it does well (clipping and
 moving the content, the wheel, a finger, the overlays inside, the
 operations `scroll_to`/`snap_to`, `on_scroll`) and draws everything
 else as boxes: itself, around the scrollable in its content box, each
 `scrollbar` and its `thumb`, painted, animated, hovered and queried as
 any box. iced keeps the scrollable's state private; its `operate` hands
 an operation the bounds, the content's, the translation and the state
-as `operation::Scrollable`. So the scroll runs a small operation of its
+as `operation::Scrollable`. So the scroller runs a small operation of its
 own (`Peek`, which goes no deeper) after its layout, after every event
 and after any other operation: what it learns places the thumbs at
 draw, and a dragged thumb scrolls through it (`scroll_to`); the
 scrollable tells the app on its next frame, as it does after any
 operation. Its parts are stacked as a grid's items in one area, placed
 by `justify-self`/`align-self`, the CSS of grid items; a bar over the
-content (in the padding the base gives it), or moved out of the scroll by its margins (nothing in the
+content (in the padding the base gives it), or moved out of the scroller by its margins (nothing in the
 toolkit clips a box's children). Its parts' sizes may follow the states
-of the parts around them, unlike other boxes' (the scroll resolves them
+of the parts around them, unlike other boxes' (the scroller resolves them
 together).
 - **Widgets with an overlay**: a tooltip's tip, a select's options;
   the app's surface instead where an overlay can't go.
@@ -670,7 +670,7 @@ since classes are the view's.
 
 Every widget reports its node and border box through `operate`
 (`Operation::custom` with the node as state), where it's shown: the
-report moves a scroll's content as it's scrolled (iced's scrollable
+report moves a scroller's content as it's scrolled (iced's scrollable
 gives operations its translation, and lays its content out unmoved).
 `query.rs` runs a CSS selector over that, `:nth-child()` included even
 where the sheet has none (positions come from the report's tree): the
@@ -678,7 +678,7 @@ harness's `find` and `click_on`, and Aria's `debug widgets 'launcher
 item:nth-child(2)'` on top of it. `Sheet::matching` says which widgets
 match, `Found::path` names one: an operation runs on every window, and
 a widget's root is how an app tells their surfaces apart. Every widget
-is found, text and paths included, a scroll's bars and thumbs where
+is found, text and paths included, a scroller's bars and thumbs where
 they show.
 
 ## Testing
@@ -744,7 +744,7 @@ for overlays at every event and every frame.
 - A stock widget needs our `Catalog` impl before it can be used; its
   colours (an input's text, placeholder and selection) are asked at
   draw, so they don't transition.
-- `align-self` and `justify-self` place a scroll's parts only: a flex
+- `align-self` and `justify-self` place a scroller's parts only: a flex
   lays its children out by their `size()` and their layout, not their
   style, so it doesn't read a child's `align-self` as CSS's flexbox
   does.

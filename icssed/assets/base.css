@@ -77,7 +77,7 @@
  *   align-self             stretch; justify-self also left, right): where
  *                          an element is in its cell, horizontally and
  *                          vertically, as a grid's item; stretched only
- *                          where its size is auto. Read by a scroll's
+ *                          where its size is auto. Read by a scroller's
  *                          parts only: not by a flex's children (unlike
  *                          CSS's align-self)
  *   background             layers of url() || <repeat>, the last one with
@@ -706,10 +706,10 @@ input > field > selection {
 }
 
 /*
- * Scrolls
- * =======
+ * Scrollers
+ * =========
  *
- * Content taller or wider than its room, scrolled (`icssed::scroll`): a
+ * Content taller or wider than its room, scrolled (`icssed::scroller`): a
  * box, growing with its content up to its `max-height`; its padding
  * scrolls with the content on the axes it scrolls, as in CSS. Its bars
  * lie in its padding box, over the content, placed by `justify-self` and
@@ -717,46 +717,46 @@ input > field > selection {
  * long as the part shown, at least its min-height (min-width). A bar
  * and its thumb are `:active` while the thumb is dragged.
  *
- * scroll.vertical|.horizontal[.flat]
+ * scroller.vertical|.horizontal[.flat]
  * ├─ …                       the content (the app's)
  * ├─ scrollbar.vertical      at the end, top to bottom
  * │  ╰─ thumb
  * ╰─ scrollbar.horizontal    at the bottom, side to side
  *    ╰─ thumb
  */
-scroll {
+scroller {
   border: 1px solid var(--border);
   padding: 8px;
 }
-scrollbar.vertical {
+scroller > scrollbar.vertical {
   justify-self: end;
   width: 6px;
   margin: 0 1px;
 }
-scrollbar.horizontal {
+scroller > scrollbar.horizontal {
   align-self: end;
   height: 6px;
   margin: 1px 0;
 }
-scroll.flat {
-  border: none;
-  padding: 0;
-}
-scroll.flat > scrollbar.vertical {
-  margin: 0 2px;
-}
-scroll.flat > scrollbar.horizontal {
-  margin: 2px 0;
-}
-scrollbar > thumb {
+scroller > scrollbar > thumb {
   border-radius: var(--radius-sm);
   background: var(--border);
 }
-scrollbar:hover > thumb {
+scroller > scrollbar:hover > thumb {
   background: var(--muted);
 }
-scrollbar:active > thumb {
+scroller > scrollbar:active > thumb {
   background: var(--accent);
+}
+scroller.flat {
+  border: none;
+  padding: 0;
+}
+scroller.flat > scrollbar.vertical {
+  margin: 0 2px;
+}
+scroller.flat > scrollbar.horizontal {
+  margin: 2px 0;
 }
 
 /*

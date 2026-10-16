@@ -103,7 +103,7 @@ surface {
  * ├─ actions                           the exit menu's buttons ([launcher] actions)
  * │  ╰─ button.flat.<name> > icon       .lock, .reboot, ...
  * ├─ input                             the search field, the toolkit's (:focus while typing)
- * ╰─ scroll.flat                       the results, scrolling
+ * ╰─ scroller.flat                     the results, scrolling
  *    ╰─ list
  *       ╰─ item[.selected][.action]    one result, a button
  *          ├─ icon                     the app's
@@ -138,7 +138,7 @@ surface.launcher > input {
   padding: 8px 10px;
   border-radius: var(--radius-lg);
 }
-surface.launcher > scroll {
+surface.launcher > scroller {
   height: fill;
 }
 surface.launcher list {
@@ -1144,7 +1144,7 @@ gadget.brightness screen slider {
  *    ├─ icon
  *    ╰─ label                   the count not looked at (when > 0)
  * surface.popup > gadget.notifications
- * ╰─ scroll.flat                `max-height` caps it (then it scrolls)
+ * ╰─ scroller.flat              `max-height` caps it (then it scrolls)
  *    ╰─ list                    `width` sizes it
  *       ├─ header
  *       │  ├─ title
@@ -1153,7 +1153,7 @@ gadget.brightness screen slider {
  *       ├─ empty > label        "No notifications"
  *       ╰─ notification[.unseen]   one per notification kept
  */
-gadget.notifications > scroll {
+gadget.notifications > scroller {
   max-height: 480px;
 }
 gadget.notifications list {
@@ -1202,7 +1202,7 @@ gadget.notifications list > notification.unseen summary {
  * ╰─ monitor                    `width` / `height` size the popup
  *    ├─ tabs                    the toolkit's
  *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active] > label
- *    ├─ scroll.flat             the active tab's section, scrolling
+ *    ├─ scroller.flat           the active tab's section, scrolling
  *    │  ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes
  *    │     ├─ header > title, value
  *    │     ├─ graph > series[.second], grid, label
@@ -1247,7 +1247,7 @@ gadget.system-monitor monitor {
   padding: 24px;
   gap: 16px;
 }
-gadget.system-monitor monitor > scroll {
+gadget.system-monitor monitor > scroller {
   height: fill;
 }
 gadget.system-monitor section {
@@ -1417,7 +1417,7 @@ gadget.system-monitor monitor > actions.none > label {
  * │  ╰─ label                    the percent
  * ╰─ indicator.input[.muted]
  * surface.popup > gadget.audio
- * ╰─ scroll.flat                 `max-height` caps it (then it scrolls)
+ * ╰─ scroller.flat               `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
  *       ├─ channel.output|.input|.stream[.muted][.default][name="..."]
@@ -1439,7 +1439,7 @@ gadget.system-monitor monitor > actions.none > label {
  *       ├─ empty > label                   "No audio devices"
  *       ╰─ button.mixer > label            runs `mixer_command`
  */
-gadget.audio > scroll {
+gadget.audio > scroller {
   max-height: 600px;
 }
 gadget.audio section {
@@ -1550,7 +1550,7 @@ gadget.audio player > controls > button > icon {
  *    ├─ icon.vpn                                 the VPN badge (show_vpn)
  *    ╰─ label                                    the connection's name (show_label)
  * surface.popup > gadget.network
- * ╰─ scroll.flat                                 `max-height` caps it (then it scrolls)
+ * ╰─ scroller.flat                               `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ header.wifi[.off] | header.wired | header.vpn
  *       │  ├─ title                              "Wi‑Fi networks", "Ethernet network", ...
@@ -1587,7 +1587,7 @@ gadget.audio player > controls > button > icon {
  *       ├─ empty > label                         "Wi‑Fi is off", "No networks found", ...
  *       ╰─ button.settings > label               runs `settings_command`
  */
-gadget.network > scroll {
+gadget.network > scroller {
   max-height: 600px;
 }
 gadget.network ap,

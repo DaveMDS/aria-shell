@@ -551,7 +551,7 @@ impl Launcher {
             )
         });
         parts.push(
-            icssed::scroll(icssed::column(items).kind("list"))
+            icssed::scroller(icssed::column(items).kind("list"))
                 .class("flat")
                 .id(self.list.clone())
                 .on_scroll(Message::Scrolled)

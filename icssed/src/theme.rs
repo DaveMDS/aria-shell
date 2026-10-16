@@ -155,8 +155,8 @@ impl text_input::Catalog for Theme {
     }
 }
 
-/// iced's scrollable, as `icssed::scroll` embeds it: it scrolls, its
-/// bars never drawn (the scroll draws its own, boxes).
+/// iced's scrollable, as `icssed::scroller` embeds it: it scrolls, its
+/// bars never drawn (the scroller draws its own, boxes).
 impl scrollable::Catalog for Theme {
     type Class<'a> = ();
 

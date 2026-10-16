@@ -17,8 +17,8 @@ use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::{Subscription, Task, window};
 use icssed::{
-    Element, IconFile, Scheme, Sheet, Source, Tab, Theme, button, column, icon, mark, row, scroll,
-    slot, text,
+    Element, IconFile, Scheme, Sheet, Source, Tab, Theme, button, column, icon, mark, row,
+    scroller, slot, text,
 };
 
 /// Every demo, by group, in the sidebar's order: a module of this
@@ -72,7 +72,7 @@ demos! {
     "Overview" => [overview],
     "Widgets" => [
         buttons, toggle, slider, meter, input, select, menu, tabs, calendar, graph, tooltip,
-        scroll,
+        scroller,
     ],
     "Content" => [text, icon, images],
     "Layout" => [boxes, flex, surface],
@@ -271,7 +271,7 @@ impl App {
             icssed::input("Search", &self.search)
                 .on_input(Message::Search)
                 .leading(icon(self.assets.star.clone())),
-            scroll(column(items).kind("entries")).class("flat"),
+            scroller(column(items).kind("entries")).class("flat"),
         ]
         .kind("sidebar")
         .into()
@@ -308,7 +308,7 @@ impl App {
     fn pane(&self) -> Element<'_, Message> {
         let demo = &DEMOS[self.shown];
         match self.pane {
-            Pane::Info => scroll(doc(demo.source)).class("info").into(),
+            Pane::Info => scroller(doc(demo.source)).class("info").into(),
             Pane::Source => listing(demo.source),
             Pane::Style => listing(&self.styles[self.shown]),
         }
@@ -332,7 +332,7 @@ impl App {
 
 /// A file's text, lines kept, scrolled both ways.
 fn listing(text: &str) -> Element<'_, Message> {
-    scroll(column![icssed::text(text)].kind("code"))
+    scroller(column![icssed::text(text)].kind("code"))
         .class("listing")
         .both()
         .into()

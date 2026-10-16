@@ -6,18 +6,18 @@
  * surface.app                      the window
  * ├─ sidebar
  * │  ├─ input                      the search
- * │  ╰─ scroll.flat > entries
+ * │  ╰─ scroller.flat > entries
  * │     ├─ group > label           a group's name
  * │     ╰─ entry[.active] > label  a demo, the one shown active
  * ╰─ main
  *    ├─ header > title, label, toggle.switch   the demo's title; light or dark
  *    ├─ stage > demo#<name>        the demo, live
  *    ├─ tabs                       Info, Source, Style
- *    ├─ scroll.info > doc          the description:
+ *    ├─ scroller.info > doc        the description:
  *    │  ├─ para                   a paragraph
  *    │  ├─ list > bullet > mark, text   bullets in a row
  *    │  ╰─ code > text            code lines
- *    ╰─ scroll.listing > code > text   the source, or the stylesheet
+ *    ╰─ scroller.listing > code > text  the source, or the stylesheet
  */
 
 surface.app {
@@ -37,7 +37,7 @@ sidebar {
 sidebar > input {
   width: fill;
 }
-sidebar > scroll {
+sidebar > scroller {
   height: fill;
 }
 sidebar entries {
@@ -93,40 +93,40 @@ main > stage {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-main > scroll {
+main > scroller {
   width: fill;
   height: fill;
 }
 
 /* Info */
-scroll.info > doc {
+scroller.info > doc {
   max-width: 680px;
   gap: 16px;
 }
-scroll.info > doc > list {
+scroller.info > doc > list {
   gap: 8px;
 }
-scroll.info > doc > list > bullet {
+scroller.info > doc > list > bullet {
   gap: 8px;
   padding: 0 0 0 8px;
 }
-scroll.info > doc > list > bullet > mark {
+scroller.info > doc > list > bullet > mark {
   content: "•";
   color: var(--muted);
 }
-scroll.info > doc > code {
+scroller.info > doc > code {
   padding: 8px 10px;
   border-radius: 4px;
   background: var(--border);
 }
-scroll.info > doc > code > text,
-scroll.listing > code > text {
+scroller.info > doc > code > text,
+scroller.listing > code > text {
   font-family: monospace;
   white-space: nowrap;
 }
 
 /* Source and Style */
-scroll.listing > code > text {
+scroller.listing > code > text {
   font-size: 13px;
   line-height: 1.4;
 }

@@ -502,12 +502,12 @@ fn golden_inputs() {
 }
 
 #[test]
-fn golden_scroll() {
+fn golden_scroller() {
     scene(
-        "scroll",
+        "scroller",
         "scrolls { gap: 12px; align-items: start; } \
-         scroll.list { width: 120px; max-height: 80px; } \
-         scroll.strip { width: 150px; } \
+         scroller.list { width: 120px; max-height: 80px; } \
+         scroller.strip { width: 150px; } \
          rows { gap: 6px; } \
          cells { gap: 4px; } cell { padding: 4px 8px; background: #ddd; }",
         None,
@@ -524,8 +524,8 @@ fn golden_scroll() {
             .kind("cells");
             crate::column![
                 crate::row![
-                    crate::scroll(rows).class("list"),
-                    crate::scroll(cells).class("strip").horizontal(),
+                    crate::scroller(rows).class("list"),
+                    crate::scroller(cells).class("strip").horizontal(),
                 ]
                 .kind("scrolls"),
             ]

@@ -1437,7 +1437,7 @@ Two things flow between the daemon and the gadgets besides messages:
   it needs no row height but scrolls on every arrow, from the very
   first. Now it keeps the row in view the way a list should: on
   Up/Down it asks the widget tree for the selected row's box
-  (`ui::bounds`, the popups' anchor operation) and the scroll's viewport
+  (`ui::bounds`, the popups' anchor operation) and the scroller's viewport
   (`ui::scroll_bounds`), both in layout coordinates (unscrolled), so
   `row.y - list.y` is the row's offset in the content; with the current
   offset from the scroll's `on_scroll` it scrolls (`scroll_to`, absolute) only

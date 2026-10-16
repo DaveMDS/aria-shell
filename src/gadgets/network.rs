@@ -256,7 +256,7 @@ impl Gadget for NetworkGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        icssed::scroll(icssed::column(self.rows(ctx)).kind("list"))
+        icssed::scroller(icssed::column(self.rows(ctx)).kind("list"))
             .class("flat")
             .into()
     }

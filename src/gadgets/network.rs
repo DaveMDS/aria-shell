@@ -594,7 +594,8 @@ impl NetworkGadget {
     /// The password field with its eye and the Connect button.
     fn auth<'a>(&'a self, ctx: Context<'a>, busy: bool) -> Element<'a, Message> {
         let locale = ctx.locale;
-        let eye = icssed::toggle(self.peek, |_| Message::Peek)
+        let eye = icssed::toggle(self.peek)
+            .on_toggle(|_| Message::Peek)
             .class("peek")
             .icon(ctx.named(ICON_PEEK));
         let field = icssed::input(locale.tr("network.password"), &self.password)
@@ -683,7 +684,12 @@ fn wifi_header<'a>(ctx: Context<'a>) -> Element<'a, Message> {
                 .into(),
         );
     }
-    parts.push(icssed::toggle(on, Message::SetWireless).switch().into());
+    parts.push(
+        icssed::toggle(on)
+            .on_toggle(Message::SetWireless)
+            .switch()
+            .into(),
+    );
     icssed::row(parts)
         .kind("header")
         .class("wifi")
@@ -713,7 +719,8 @@ fn vpn_row<'a>(ctx: Context<'a>, p: &'a Profile) -> Element<'a, Message> {
         );
     }
     head.push(
-        icssed::toggle(on || connecting, move |v| Message::Vpn(uuid.clone(), v))
+        icssed::toggle(on || connecting)
+            .on_toggle(move |v| Message::Vpn(uuid.clone(), v))
             .switch()
             .into(),
     );

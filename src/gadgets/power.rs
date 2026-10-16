@@ -259,7 +259,9 @@ impl PowerGadget {
         icssed::row![
             ctx.icon(name.as_str()),
             icssed::text(ctx.locale.tr("power.keep_awake")).kind("title"),
-            icssed::toggle(inhibited, Message::SetIdle).switch(),
+            icssed::toggle(inhibited)
+                .on_toggle(Message::SetIdle)
+                .switch(),
         ]
         .kind("idle")
         .class_if("active", inhibited)
@@ -297,7 +299,8 @@ fn profiles<'a>(ctx: Context<'a>, available: &[String], active: &str) -> Element
         .filter_map(|p| available.iter().find(|a| a == p))
         .chain(available.iter().filter(|a| !PROFILES.contains(&a.as_str())));
     let toggles = ordered.map(|p| {
-        icssed::toggle(p == active, move |_| Message::SetProfile(p.clone()))
+        icssed::toggle(p == active)
+            .on_toggle(move |_| Message::SetProfile(p.clone()))
             .icon(ctx.named(profile_icon(p)))
             .label(profile_label(ctx.locale, p))
             .class(profile_class(p))

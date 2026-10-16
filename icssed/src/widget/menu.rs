@@ -1,14 +1,15 @@
-//! A menu: a column of items to press, each with a check box or a radio
-//! (a toggle's), an icon, a shortcut; separators; submenus unfolded in place,
+//! A menu: a column of items to press, each with a check box or a radio,
+//! an icon, a shortcut; separators; submenus unfolded in place,
 //! under their item. Up and Down move the focus among the items once one
 //! has it, Enter and Space press it.
 //!
 //! It's the app's, as a toggle or a slider is: each item carries the
 //! message its press sends, and whether a submenu is unfolded is the
 //! app's to say (`MenuItem::submenu`), so it knows when one unfolds (a tray's
-//! menu fetches its items then). A check box and a radio are the
-//! toggle's parts, `check > mark` and `radio > dot`, drawn as a toggle's
-//! are; a submenu's `arrow` is a mark, its text the theme's `content`.
+//! menu fetches its items then). A check box and a radio are toggles
+//! without `on_toggle` (a click is their item's), `checkbox > indicator
+//! > mark`, `radio > indicator > mark`, drawn by the toggles' rules; a
+//! submenu's `arrow` is a mark, its text the theme's `content`.
 
 use std::borrow::Cow;
 
@@ -17,7 +18,7 @@ use super::focus::{Keys, arrow_scope};
 use super::icon::{IconSource, icon};
 use super::place::placed;
 use super::text::{mark, text};
-use super::toggle::tick;
+use super::toggle::toggle;
 use crate::Element;
 use crate::style::name;
 
@@ -77,12 +78,12 @@ impl<'a, Message> MenuItem<'a, Message> {
         self.with(|e| e.on_press = Some(message))
     }
 
-    /// A check's mark, `.check`, `.checked` when it is.
+    /// A check box, `:checked` (the item too) when it is.
     pub fn check(self, checked: bool) -> Self {
         self.with(|e| e.mark = Mark::Check(checked))
     }
 
-    /// A radio's mark, `.radio`, `.checked` when it is.
+    /// A radio, `:checked` (the item too) when it is.
     pub fn radio(self, checked: bool) -> Self {
         self.with(|e| e.mark = Mark::Radio(checked))
     }
@@ -148,7 +149,7 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
     let marks = entries().any(|e| e.mark != Mark::None);
     let icons = entries().any(|e| e.icon.is_some());
     let both = entries().any(|e| e.mark != Mark::None && e.icon.is_some());
-    let empty_check = || row([]).kind_of(name!("check")).class("empty").into();
+    let empty_check = || toggle(false).checkbox().class("empty").into();
     let empty_icon = || row([]).kind_of(name!("icon")).into();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
@@ -156,18 +157,15 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
             out.push(row([]).kind_of(name!("separator")).into());
             continue;
         };
-        let (check, radio, checked) = match entry.mark {
-            Mark::None => (false, false, false),
-            Mark::Check(on) => (true, false, on),
-            Mark::Radio(on) => (false, true, on),
+        let disabled = entry.on_press.is_none();
+        let (lead, checked) = match entry.mark {
+            Mark::None => (None, false),
+            Mark::Check(on) => (Some(toggle(on).checkbox()), on),
+            Mark::Radio(on) => (Some(toggle(on).radio()), on),
         };
+        let lead = lead.map(|part| part.disabled_if(disabled).into());
         let expanded = matches!(entry.submenu, Some((true, _)));
         let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(5);
-        let lead = match entry.mark {
-            Mark::Check(_) => Some(check_part()),
-            Mark::Radio(_) => Some(radio_part()),
-            Mark::None => None,
-        };
         let icon = entry.icon.map(|source| icon(source).into());
         if both {
             parts.push(lead.unwrap_or_else(empty_check));
@@ -186,18 +184,17 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
         if entry.submenu.is_some() {
             parts.push(mark().kind_of(name!("arrow")).into());
         }
+        let mut item = button(parts).kind_of(name!("item"));
+        if checked {
+            item.boxed.place.checked();
+        }
         let mut pressed = entry
             .classes
             .iter()
-            .fold(button(parts).kind_of(name!("item")), |b, class| {
-                b.class(class)
-            })
-            .class_if("check", check)
-            .class_if("radio", radio)
-            .class_if("checked", checked)
+            .fold(item, |b, class| b.class(class))
             .class_if("submenu", entry.submenu.is_some())
             .class_if("expanded", expanded)
-            .disabled_if(entry.on_press.is_none());
+            .disabled_if(disabled);
         if let Some(message) = entry.on_press {
             pressed = pressed.on_press(message);
         }
@@ -207,18 +204,4 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
         }
     }
     out
-}
-
-/// A check item's part: `check > mark`, the mark the toolkit's tick.
-fn check_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
-    row([icon(tick()).kind_of(name!("mark")).into()])
-        .kind_of(name!("check"))
-        .into()
-}
-
-/// A radio item's part: `radio > dot`.
-fn radio_part<'a, Message: Clone + 'a>() -> Element<'a, Message> {
-    row([row([]).kind_of(name!("dot")).into()])
-        .kind_of(name!("radio"))
-        .into()
 }

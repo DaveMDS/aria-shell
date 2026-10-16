@@ -78,7 +78,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
                 .on_input(Message::Password)
                 .secure(!state.peek)
                 .trailing(
-                    toggle(state.peek, |_| Message::Peek)
+                    toggle(state.peek).on_toggle(|_| Message::Peek)
                         .class("peek")
                         .icon(assets.eye.clone()),
                 ),

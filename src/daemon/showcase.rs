@@ -511,16 +511,22 @@ impl AriaShell {
             icssed::tooltip(icssed::button![star()].on_press(nothing(())), "tooltip"),
         ];
         let radios = (0..2).map(|i| {
-            let radio = icssed::toggle(state.radio == i, move |_| on(Widget::Radio(i))).radio();
+            let radio = icssed::toggle(state.radio == i)
+                .on_toggle(move |_| on(Widget::Radio(i)))
+                .radio();
             if i == 0 { radio.label("radio") } else { radio }.into()
         });
-        let toggle = icssed::toggle(state.toggle, move |c| on(Widget::Toggle(c)))
+        let toggle = icssed::toggle(state.toggle)
+            .on_toggle(move |c| on(Widget::Toggle(c)))
             .icon((icons, "starred-symbolic"))
             .label("toggle");
-        let check = icssed::toggle(state.check, move |c| on(Widget::Check(c)))
+        let check = icssed::toggle(state.check)
+            .on_toggle(move |c| on(Widget::Check(c)))
             .checkbox()
             .label("check");
-        let switch = icssed::toggle(state.switch, move |c| on(Widget::Switch(c))).switch();
+        let switch = icssed::toggle(state.switch)
+            .on_toggle(move |c| on(Widget::Switch(c)))
+            .switch();
         let toggles = icssed::row(
             [toggle.into(), check.into()]
                 .into_iter()
@@ -539,7 +545,8 @@ impl AriaShell {
                 .on_input(move |t| on(Widget::Password(t)))
                 .secure(!state.peek)
                 .trailing(
-                    icssed::toggle(state.peek, move |_| on(Widget::Peek))
+                    icssed::toggle(state.peek)
+                        .on_toggle(move |_| on(Widget::Peek))
                         .class("peek")
                         .icon((icons, "view-reveal-symbolic")),
                 ),
@@ -550,9 +557,18 @@ impl AriaShell {
         ];
         let disabled = icssed::row![
             icssed::button![icssed::text("button")].disabled_if(true),
-            icssed::toggle(true, nothing).checkbox().disabled_if(true),
-            icssed::toggle(true, nothing).radio().disabled_if(true),
-            icssed::toggle(true, nothing).switch().disabled_if(true),
+            icssed::toggle(true)
+                .on_toggle(nothing)
+                .checkbox()
+                .disabled_if(true),
+            icssed::toggle(true)
+                .on_toggle(nothing)
+                .radio()
+                .disabled_if(true),
+            icssed::toggle(true)
+                .on_toggle(nothing)
+                .switch()
+                .disabled_if(true),
             icssed::slider(0.0..=1.0, 0.3, nothing).disabled_if(true),
             icssed::select(["select"], Some(0), nothing).disabled_if(true),
         ];

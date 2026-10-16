@@ -45,7 +45,7 @@ click_widget 'menu > item.submenu'
 assert_eq "$(sni_event)" "about-to-show 3"
 settle
 wait_for 'menu > item.submenu.expanded' 1
-wait_for 'menu > submenu > item.checked' 1 "Beep is checked"
+wait_for 'menu > submenu > item:checked' 1 "Beep is checked"
 set -- $(surfaces | tr ';' '\n' | grep ' popup ' | sed 's/.* \([0-9]*\)x\([0-9]*\)$/\1 \2/')
 [ "$2" -gt "$folded_h" ] || { echo "popup didn't grow: $folded_h -> $2"; exit 1; }
 shot_surface menu-unfolded popup
@@ -54,7 +54,7 @@ shot_surface menu-unfolded popup
 click_widget 'menu > item:disabled'
 sni_quiet
 assert_surface popup
-click_widget 'menu > submenu > item.checked'
+click_widget 'menu > submenu > item:checked'
 assert_eq "$(sni_event)" "menu-event 4 clicked"
 assert_no_surface popup
 

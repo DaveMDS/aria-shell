@@ -287,7 +287,8 @@ impl Locker {
         let mut fields: Vec<Element<'a, Message>> = Vec::new();
         if self.config.password_prompt {
             // The eye: the password in clear while it's on.
-            let eye = icssed::toggle(self.peek, |_| Message::TogglePeek)
+            let eye = icssed::toggle(self.peek)
+                .on_toggle(|_| Message::TogglePeek)
                 .class("peek")
                 .disabled_if(busy);
             // Words, when the icon theme has no eye.

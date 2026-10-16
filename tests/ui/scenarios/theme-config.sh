@@ -44,7 +44,7 @@ assert_contains "$(aria debug locale)" "lang=en" "the user's language kept"
 # The menu's last item: stop reading it.
 click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
-wait_for 'menu > item.checked' 3 "Dark, shelf, the theme's settings"
+wait_for 'menu > item:checked' 3 "Dark, shelf, the theme's settings"
 shot_surface menu popup
 click_widget 'menu > item:last-child'
 assert_no_surface popup

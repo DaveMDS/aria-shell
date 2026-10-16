@@ -94,7 +94,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
         ]
         .kind("line"),
         row![
-            toggle(state.lit, Message::Lit).switch(),
+            toggle(state.lit).on_toggle(Message::Lit).switch(),
             row![text("A transition: colour, shadow, scale")]
                 .kind("lamp")
                 .class_if("lit", state.lit),

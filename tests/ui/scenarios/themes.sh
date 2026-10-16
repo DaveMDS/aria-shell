@@ -42,8 +42,8 @@ open_menu
 wait_for 'menu > item' 7 "Light, Dark, Base, e17, manjaro, sway, the theme's settings"
 wait_for 'menu > separator' 2
 wait_for 'surface.popup gadget.themes > column > button.picker' 1 "the picker"
-wait_for 'menu > item.checked:nth-child(1)' 1 "Light checked"
-wait_for 'menu > item.checked:nth-child(4)' 1 "Base checked"
+wait_for 'menu > item:checked:nth-child(1)' 1 "Light checked"
+wait_for 'menu > item:checked:nth-child(4)' 1 "Base checked"
 shot_surface menu popup
 
 click_widget 'menu > item:nth-child(6)'
@@ -52,7 +52,7 @@ assert_eq "$(aria debug theme)" "theme=manjaro scheme=light" "manjaro picked"
 [ "$(sample)" != "$base_light" ] || { echo "manjaro's last gadget looks as the base's"; exit 1; }
 
 open_menu
-wait_for 'menu > item.checked:nth-child(6)' 1 "manjaro checked"
+wait_for 'menu > item:checked:nth-child(6)' 1 "manjaro checked"
 click_widget 'menu > item:nth-child(2)'
 assert_no_surface popup
 assert_eq "$(aria debug theme)" "theme=manjaro scheme=dark" "Dark from the menu"

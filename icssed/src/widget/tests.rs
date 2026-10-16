@@ -778,7 +778,11 @@ fn a_toggle_asks_for_the_other_state() {
     let root = sheet.root("root", 1.0);
     let view = |on: bool| -> Element<'_, Message> {
         crate::focus_scope(
-            crate::row([crate::toggle(on, Message::Toggled).switch().into()]).at(root),
+            crate::row([crate::toggle(on)
+                .on_toggle(Message::Toggled)
+                .switch()
+                .into()])
+            .at(root),
         )
         .into()
     };
@@ -800,12 +804,31 @@ fn a_toggle_asks_for_the_other_state() {
 }
 
 #[test]
+fn a_toggle_without_on_toggle_leaves_the_click_to_its_box() {
+    let sheet = sheet(CONTROLS);
+    let root = sheet.root("root", 1.0);
+    let view: Element<'_, Message> = crate::row([crate::button([crate::toggle(true)
+        .checkbox()
+        .label("shown")
+        .into()])
+    .on_press(Message::Pressed("item"))
+    .into()])
+    .at(root)
+    .into();
+    let mut ui = Harness::new(view, Size::new(200.0, 40.0), 1.0);
+    assert_eq!(ui.find(&sheet, "button > checkbox:checked").len(), 1);
+    ui.click_on(&sheet, "checkbox > indicator");
+    assert_eq!(ui.messages, [Message::Pressed("item")]);
+}
+
+#[test]
 fn a_radio_asks_for_itself() {
     let sheet = sheet(CONTROLS);
     let root = sheet.root("root", 1.0);
     let view = |chosen: &'static str| -> Element<'_, Message> {
         crate::row(["a", "b", "c"].map(|name| {
-            crate::toggle(name == chosen, move |_| Message::Pressed(name))
+            crate::toggle(name == chosen)
+                .on_toggle(move |_| Message::Pressed(name))
                 .radio()
                 .label(name)
                 .into()
@@ -1169,7 +1192,7 @@ fn a_menu_presses_its_items_and_unfolds_in_place() {
     // Every label in one column, the marks' and the arrow's before and
     // after it.
     assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
-    assert_eq!(ui.find(&sheet, "menu > item > check").len(), 5);
+    assert_eq!(ui.find(&sheet, "menu > item > checkbox").len(), 5);
     assert_eq!(ui.find(&sheet, "menu > item.submenu > arrow").len(), 1);
     for label in ["menu > item:nth-child(2)", "menu > item:nth-child(3)"] {
         ui.click_on(&sheet, label);
@@ -1217,7 +1240,7 @@ fn a_menus_marks_and_icons_share_a_column() {
     assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
     // The icon where the check is: one column, the plain item's room a check's.
     let icon = ui.find(&sheet, "menu > item > icon");
-    let check = ui.find(&sheet, "menu > item > check");
+    let check = ui.find(&sheet, "menu > item > checkbox");
     assert_eq!((icon.len(), check.len()), (1, 2));
     assert!(check.iter().all(|c| c.x == icon[0].x), "{icon:?} {check:?}");
     // An item with both: two columns, every item a room in each.
@@ -1225,7 +1248,7 @@ fn a_menus_marks_and_icons_share_a_column() {
     let labels = ui.find(&sheet, "menu > item > label");
     assert!(labels.iter().all(|l| l.x == labels[0].x), "{labels:?}");
     let icon = ui.find(&sheet, "menu > item > icon");
-    let check = ui.find(&sheet, "menu > item > check");
+    let check = ui.find(&sheet, "menu > item > checkbox");
     assert_eq!((icon.len(), check.len()), (3, 3));
     assert!(icon[0].x > check[0].x, "{icon:?} {check:?}");
 }
@@ -1558,7 +1581,10 @@ fn a_select_opens_its_options_and_picks_one() {
             .len(),
         1
     );
-    assert!(ui.find(&sheet, "select > menu > item > check").is_empty());
+    assert!(
+        ui.find(&sheet, "select > menu > item > checkbox")
+            .is_empty()
+    );
 }
 
 #[test]

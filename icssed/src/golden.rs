@@ -355,9 +355,12 @@ fn controls(root: Node<'_>) -> Element<'_, ()> {
     crate::focus_scope(
         crate::column![
             crate::row![
-                crate::toggle(false, |_| ()).switch(),
-                crate::toggle(true, |_| ()).switch(),
-                crate::toggle(true, |_| ()).disabled_if(true).switch(),
+                crate::toggle(false).on_toggle(|_| ()).switch(),
+                crate::toggle(true).on_toggle(|_| ()).switch(),
+                crate::toggle(true)
+                    .on_toggle(|_| ())
+                    .disabled_if(true)
+                    .switch(),
             ]
             .kind("line"),
             crate::row![
@@ -431,7 +434,13 @@ fn golden_toggles() {
                         (true, true, "Off limits"),
                     ]
                     .map(|(on, disabled, text)| {
-                        look(crate::toggle(on, |_| ()).disabled_if(disabled).label(text)).into()
+                        look(
+                            crate::toggle(on)
+                                .on_toggle(|_| ())
+                                .disabled_if(disabled)
+                                .label(text),
+                        )
+                        .into()
                     }),
                 )
                 .kind("line")
@@ -473,7 +482,12 @@ fn golden_inputs() {
                 crate::input("Password", "secret")
                     .on_input(|_| ())
                     .secure(true)
-                    .trailing(crate::toggle(false, |_| ()).class("peek").icon(star())),
+                    .trailing(
+                        crate::toggle(false)
+                            .on_toggle(|_| ())
+                            .class("peek")
+                            .icon(star())
+                    ),
                 crate::input("Disabled", "")
                     .disabled_if(true)
                     .on_input(|_| ()),
@@ -534,8 +548,7 @@ fn golden_menu() {
         // Marks the test fonts have.
         "menu { max-width: 220px; border: 1px solid #999; border-radius: 6px; \
                 box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25); background: white; } \
-         menu item, menu item > check, menu item > check > mark, menu item > radio, \
-         menu item > radio > dot { transition: none; } \
+         menu item, checkbox, radio, indicator, mark { transition: none; } \
          menu item.submenu > arrow { content: \">\"; } \
          menu item.expanded > arrow { content: \"v\"; }",
         None,

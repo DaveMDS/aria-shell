@@ -125,7 +125,8 @@ impl Gadget for NotificationsGadget {
     }
 
     fn popup_view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
-        let dnd = icssed::toggle(ctx.notifications.dnd(), |_| Message::ToggleDnd)
+        let dnd = icssed::toggle(ctx.notifications.dnd())
+            .on_toggle(|_| Message::ToggleDnd)
             .class("dnd")
             .label(ctx.locale.tr("notifications.dnd"));
         let header = icssed::row![

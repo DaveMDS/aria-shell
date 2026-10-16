@@ -1,12 +1,12 @@
-//! A toggle is a value on or off: `icssed::toggle(on, f)`. A button
+//! A toggle is a value on or off: `icssed::toggle(on).on_toggle(f)`. A button
 //! sends a message; a toggle holds a value, which the app keeps, and asks
 //! for the other one: a press sends `f(!on)`. It shows what it's given,
 //! as every widget of the toolkit does.
 //!
-//!     icssed::toggle(self.muted, Message::Mute).icon(speaker).label("Mute")
-//!     icssed::toggle(self.hidden, Message::Hidden).label("Show hidden").checkbox()
-//!     icssed::toggle(self.wifi, Message::Wifi).switch()
-//!     icssed::toggle(self.sort == By::Name, |_| Message::Sort(By::Name)).radio()
+//!     icssed::toggle(self.muted).on_toggle(Message::Mute).icon(speaker).label("Mute")
+//!     icssed::toggle(self.hidden).on_toggle(Message::Hidden).label("Show hidden").checkbox()
+//!     icssed::toggle(self.wifi).on_toggle(Message::Wifi).switch()
+//!     icssed::toggle(self.sort == By::Name).on_toggle(|_| Message::Sort(By::Name)).radio()
 //!
 //! It looks one of four ways, picked by the call, each its own name for
 //! the sheet: a `toggle` (a button that stays pressed), a `checkbox`
@@ -76,25 +76,25 @@ pub fn update(state: &mut State, message: Message) {
 pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     column![
         row![
-            toggle(state.muted, Message::Mute)
+            toggle(state.muted).on_toggle(Message::Mute)
                 .icon(assets.star.clone())
                 .label(if state.muted { "Muted" } else { "Mute" }),
-            toggle(true, Message::Mute).label("Disabled").disabled_if(true),
+            toggle(true).on_toggle(Message::Mute).label("Disabled").disabled_if(true),
         ]
         .kind("line"),
         row![
-            toggle(state.hidden, Message::Hidden)
+            toggle(state.hidden).on_toggle(Message::Hidden)
                 .label("Show hidden files")
                 .checkbox(),
-            toggle(true, Message::Hidden)
+            toggle(true).on_toggle(Message::Hidden)
                 .label("Disabled")
                 .checkbox()
                 .disabled_if(true),
         ]
         .kind("line"),
         row![
-            toggle(state.wifi, Message::Wifi).label("Wi-Fi").switch(),
-            toggle(true, Message::Wifi)
+            toggle(state.wifi).on_toggle(Message::Wifi).label("Wi-Fi").switch(),
+            toggle(true).on_toggle(Message::Wifi)
                 .label("Disabled")
                 .switch()
                 .disabled_if(true),
@@ -112,7 +112,7 @@ fn sorts<'a>(
     look: impl Fn(Toggle<'a, Message>) -> Toggle<'a, Message>,
 ) -> Element<'a, Message> {
     let toggles = SORTS.iter().enumerate().map(|(i, &by)| {
-        look(toggle(i == state.sort, move |_| Message::Sort(i)))
+        look(toggle(i == state.sort).on_toggle(move |_| Message::Sort(i)))
             .label(by)
             .into()
     });

@@ -250,13 +250,15 @@ impl AudioGadget {
     /// making a device the default) with the percent, over the slider.
     fn channel_view<'a>(&'a self, ctx: Context<'a>, c: &'a Channel) -> Element<'a, Message> {
         let (kind, index) = (c.kind, c.index);
-        let mute = icssed::toggle(c.muted, move |m| Message::Mute(kind, index, m))
+        let mute = icssed::toggle(c.muted)
+            .on_toggle(move |m| Message::Mute(kind, index, m))
             .class("mute")
             .icon(channel_icon(ctx, c));
         // A device's name is a radio: on the default, a click makes it
         // so (on the default too, a click that changes nothing).
         let label: Element<'a, Message> = if is_device(c) {
-            icssed::toggle(c.default, move |_| Message::SetDefault(kind, index))
+            icssed::toggle(c.default)
+                .on_toggle(move |_| Message::SetDefault(kind, index))
                 .radio()
                 .label(c.label.as_str())
                 .into()

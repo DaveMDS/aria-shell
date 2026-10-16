@@ -44,7 +44,7 @@ assert_eq "$(sample)" "255 0 0" "its image, beside it"
 # The menu: Light, Dark, Base, then the themes, tile (ours) among them.
 click_widget_with right 'surface.panel[output="HEADLESS-1"] gadget.themes > indicator'
 assert_surface popup
-wait_for 'menu > item.checked' 2 "Light and tile checked"
+wait_for 'menu > item:checked' 2 "Light and tile checked"
 shot_surface menu popup
 click 600 600
 assert_no_surface popup

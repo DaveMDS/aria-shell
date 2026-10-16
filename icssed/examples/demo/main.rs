@@ -284,7 +284,9 @@ impl App {
             row![
                 text(demo.title).kind("title"),
                 text("Dark"),
-                icssed::toggle(self.scheme == Scheme::Dark, Message::Dark).switch(),
+                icssed::toggle(self.scheme == Scheme::Dark)
+                    .on_toggle(Message::Dark)
+                    .switch(),
             ]
             .kind("header"),
             row![

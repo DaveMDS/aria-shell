@@ -734,20 +734,22 @@ scrollbar:active > thumb {
  * A column of items to press (`icssed::menu`), each with a check box or
  * a radio, an icon, a shortcut; separators; submenus unfolded in place,
  * under their item. Up and Down move the focus among the items once one
- * has it. A submenu's arrow is text, its `content`.
+ * has it. The check box and the radio are a toggle's tree, drawn by the
+ * same rules (see Toggles), pressed with their item; a submenu's arrow
+ * is text, its `content`.
  *
  * menu
- * ├─ item[.check|.radio][.checked][.submenu][.expanded][.<app's>]
+ * ├─ item[:checked][.submenu][.expanded][.<app's>]
  * │  │                  a button; :disabled without a message
- * │  ├─ check > mark    (.check) a check box, the mark the toolkit's tick
- * │  ├─ radio > dot     (.radio) a radio
+ * │  ├─ checkbox | radio [:checked][:disabled]
+ * │  │  ╰─ indicator > mark   a toggle's (see Toggles)
  * │  ├─ icon            in the same column: an item's mark, else its
  * │  │                  icon; in a column of their own only where an
  * │  │                  item of the level has both
- * │  ├─ check.empty | icon
+ * │  ├─ checkbox.empty | icon
  * │  │                  empty, on an item with neither where another
- * │  │                  has one, so labels line up (a check where a
- * │  │                  mark is, unseen; an icon otherwise)
+ * │  │                  has one, so labels line up (a checkbox where
+ * │  │                  a mark is, unseen; an icon otherwise)
  * │  ├─ label
  * │  ├─ shortcut
  * │  ╰─ arrow           a submenu's
@@ -773,56 +775,8 @@ menu item:focus-visible {
 menu item:disabled {
   color: var(--muted);
 }
-menu item > check,
-menu item > radio {
-  width: 16px;
-  height: 16px;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--muted);
-  background: var(--bg);
-  transition: background-color 120ms, border-color 120ms;
-}
-menu item > check {
-  border-radius: var(--radius-sm);
-}
-menu item > radio {
-  border-radius: 8px;
-}
-menu item:hover > check,
-menu item:hover > radio,
-menu item.checked > radio {
-  border-color: var(--accent);
-}
-menu item.checked > check {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-menu item > check > mark {
-  width: 12px;
-  height: 12px;
-  opacity: 0;
-  transition: opacity 120ms;
-}
-menu item.checked > check > mark {
-  opacity: 1;
-}
-menu item > radio > dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 5px;
-  transition: background-color 120ms;
-}
-menu item.checked > radio > dot {
-  background: var(--accent);
-}
-menu item.check:disabled > check,
-menu item.radio:disabled > radio {
-  opacity: 0.5;
-}
-/* The room of a mark, on an item without one: a check's size, unseen. */
-menu item > check.empty {
+/* The room of a check box, on an item without one: its size, unseen. */
+menu item > checkbox.empty {
   opacity: 0;
 }
 menu item > icon {

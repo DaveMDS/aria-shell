@@ -1,5 +1,9 @@
 //! A value on or off: a button whose press, or Enter or Space while it
 //! has the focus, asks for the other value; `:checked` while it's on.
+//! Without `on_toggle` it shows its value and nothing more, as a button
+//! without `on_press`: no press, no focus, a click going to what it's in
+//! (a menu item's checkbox).
+//!
 //! One widget, four names for the theme to tell its looks apart: a
 //! `toggle` (a button that stays pressed), a `checkbox`, a `radio`, a
 //! `switch`. Each is the same tree, the look the theme's alone:
@@ -20,7 +24,7 @@
 //! padding and the knob's.
 //!
 //! A radio is a toggle that chooses: one among a few is on, a press on
-//! any asks for it (`toggle(p == chosen, move |_| Choose(p))`), on the
+//! any asks for it (`toggle(p == chosen).on_toggle(move |_| Choose(p))`), on the
 //! chosen one too, a message that changes nothing. The pressed button
 //! does the same, the radio's group as buttons side by side.
 
@@ -60,23 +64,20 @@ pub struct Toggle<'a, Message> {
     place: Place<'a>,
     on: bool,
     /// What a press sends: the other value's message.
-    press: Message,
+    press: Option<Message>,
     look: Look,
     icon: Option<IconSource<'a>>,
     label: Option<Cow<'a, str>>,
 }
 
 /// A `toggle` on or off: a button that stays pressed, unless
-/// `checkbox`, `radio` or `switch` says otherwise. `on_toggle` makes
-/// what a press sends from the value it asks for.
-pub fn toggle<'a, Message: Clone + 'a>(
-    on: bool,
-    on_toggle: impl Fn(bool) -> Message,
-) -> Toggle<'a, Message> {
+/// `checkbox`, `radio` or `switch` says otherwise; pressed once given
+/// [`Toggle::on_toggle`].
+pub fn toggle<'a, Message: Clone + 'a>(on: bool) -> Toggle<'a, Message> {
     Toggle {
         place: Place::new(name!("toggle")),
         on,
-        press: on_toggle(!on),
+        press: None,
         look: Look::Button,
         icon: None,
         label: None,
@@ -85,6 +86,12 @@ pub fn toggle<'a, Message: Clone + 'a>(
 
 impl<'a, Message> Toggle<'a, Message> {
     placed!(place);
+
+    /// What a press sends, made from the value it asks for: the other.
+    pub fn on_toggle(mut self, on_toggle: impl Fn(bool) -> Message) -> Self {
+        self.press = Some(on_toggle(!self.on));
+        self
+    }
 
     /// A check box: a `checkbox`.
     pub fn checkbox(self) -> Self {
@@ -126,21 +133,29 @@ impl<'a, Message: Clone + 'a> From<Toggle<'a, Message>> for Element<'a, Message>
         if toggle.on {
             place.checked();
         }
-        let mark: Element<'a, Message> = match toggle.look {
-            Look::Checkbox => icon(tick()).kind_of(name!("mark")).into(),
-            _ => row([]).kind_of(name!("mark")).into(),
-        };
-        let indicator = row([mark]).kind_of(name!("indicator")).into();
         let icon = toggle.icon.map(|source| icon(source).into());
         let label = toggle.label.map(|label| text(label).into());
-        Flex::placed(
+        let flex = Flex::placed(
             place,
             Direction::Row,
-            std::iter::once(indicator).chain(icon).chain(label),
-        )
-        .on_press(toggle.press)
-        .into()
+            std::iter::once(indicator(toggle.look))
+                .chain(icon)
+                .chain(label),
+        );
+        match toggle.press {
+            Some(press) => flex.on_press(press).into(),
+            None => flex.into(),
+        }
     }
+}
+
+/// `indicator > mark`, the mark a checkbox's tick.
+fn indicator<'a, Message: Clone + 'a>(look: Look) -> Element<'a, Message> {
+    let mark: Element<'a, Message> = match look {
+        Look::Checkbox => icon(tick()).kind_of(name!("mark")).into(),
+        _ => row([]).kind_of(name!("mark")).into(),
+    };
+    row([mark]).kind_of(name!("indicator")).into()
 }
 
 /// A check box's mark: a tick, stroked in a 16 px square.
@@ -151,8 +166,8 @@ static TICK: LazyLock<svg::Handle> = LazyLock::new(|| {
     )
 });
 
-/// The toolkit's tick, a checkbox's mark or a menu item's.
-pub(super) fn tick() -> IconFile {
+/// The toolkit's tick, a checkbox's mark.
+fn tick() -> IconFile {
     IconFile::Svg {
         handle: TICK.clone(),
         symbolic: true,

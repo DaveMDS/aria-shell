@@ -6,9 +6,9 @@
 //! them from an app's menu), calls [`Menu::update`] with the menu's
 //! [`Message`] and `.map()`s [`Menu::view`].
 //!
-//! Element tree: the toolkit's (`menu > item[.check|.radio][.checked]
-//! [.submenu][.expanded] > (check > mark | radio > dot | icon | label |
-//! arrow)`,
+//! Element tree: the toolkit's (`menu > item[:checked][.submenu]
+//! [.expanded] > (checkbox > indicator > mark | radio > indicator > mark
+//! | icon | label | arrow)`,
 //! `menu > separator`, `menu > submenu > item …`).
 
 use std::collections::BTreeSet;

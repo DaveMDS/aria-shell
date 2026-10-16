@@ -49,7 +49,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let item = |content: &'static str| row![icon(assets.star.clone()), text(content)].kind("entry");
     column![
         row![
-            toggle(state.deep, Message::Deep)
+            toggle(state.deep).on_toggle(Message::Deep)
                 .label("A deeper shadow")
                 .checkbox()
         ]

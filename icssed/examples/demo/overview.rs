@@ -155,24 +155,24 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
         icssed::tooltip(button![star()].on_press(Message::Nothing), "A tip"),
     ];
     let checks = (0..2).map(|i| {
-        toggle(state.checks[i], move |on| Message::Check(i, on))
+        toggle(state.checks[i]).on_toggle(move |on| Message::Check(i, on))
             .checkbox()
             .label(["Check", "Box"][i])
             .into()
     });
     let radios = SORTS.iter().enumerate().map(|(i, &by)| {
-        toggle(i == state.sort, move |_| Message::Sort(i))
+        toggle(i == state.sort).on_toggle(move |_| Message::Sort(i))
             .radio()
             .label(by)
             .into()
     });
     let switches = (0..2).map(|i| {
-        toggle(state.switches[i], move |on| Message::Switch(i, on))
+        toggle(state.switches[i]).on_toggle(move |on| Message::Switch(i, on))
             .switch()
             .into()
     });
     let toggles = row(std::iter::once(
-        toggle(state.pressed, Message::Pressed)
+        toggle(state.pressed).on_toggle(Message::Pressed)
             .icon(assets.star.clone())
             .label("Toggle")
             .into(),
@@ -192,7 +192,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             .on_input(Message::Password)
             .secure(!state.peek)
             .trailing(
-                toggle(state.peek, |_| Message::Peek)
+                toggle(state.peek).on_toggle(|_| Message::Peek)
                     .class("peek")
                     .icon(assets.eye.clone()),
             ),
@@ -201,18 +201,18 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     ];
     let disabled = row![
         button![text("Button")].disabled_if(true),
-        toggle(true, Message::Pressed)
+        toggle(true).on_toggle(Message::Pressed)
             .label("Toggle")
             .disabled_if(true),
-        toggle(true, Message::Pressed)
+        toggle(true).on_toggle(Message::Pressed)
             .checkbox()
             .label("Check")
             .disabled_if(true),
-        toggle(true, Message::Pressed)
+        toggle(true).on_toggle(Message::Pressed)
             .radio()
             .label("Radio")
             .disabled_if(true),
-        toggle(true, Message::Pressed).switch().disabled_if(true),
+        toggle(true).on_toggle(Message::Pressed).switch().disabled_if(true),
     ];
     let disabled_fields = row![
         icssed::slider(0.0..=1.0, 0.3, Message::Volume).disabled_if(true),

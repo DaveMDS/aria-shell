@@ -45,6 +45,7 @@ impl Frame {
                         x: s.x,
                         y: s.y,
                         blur: s.blur,
+                        spread: s.spread,
                         color: resolve(&s.color),
                     })
                 }

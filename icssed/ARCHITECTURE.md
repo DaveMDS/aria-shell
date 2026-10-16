@@ -424,6 +424,17 @@ root node's, and what was measured is what the window lays out.
 - **Background, border, radius, box-shadow**: one iced `Quad` (outer
   shadow with blur and offset). Linear gradients are in iced's
   `Background` if a theme ever needs them.
+- **iced's shadow isn't CSS's**: it's drawn only outside its quad,
+  from half the colour's alpha at the edge down to none a blur away
+  (a smoothstep), where CSS's Gaussian goes on rising inside the
+  shadow's box. So a shadow offset down is no darker under the box
+  than beside it. A negative spread gives that back: the shadow is cast
+  by a quad of its own, the box shrunk, under the box, and what shows
+  is its outer part, darker and longer (a 9-patch window shadow fitted
+  11× closer than with blur and offset alone). A positive spread would
+  leave a gap (nothing is drawn inside the shadow's quad): refused.
+  Under the box, the spread shadow shows through a translucent
+  background, which CSS clips.
 - **Borders whose sides differ, with a radius**: paths through the
   `canvas` geometry renderer, from inside the widget: a ring (the outer
   rounded rectangle and the inner one inset per side, even-odd) when

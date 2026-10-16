@@ -114,6 +114,8 @@ pub(crate) struct ShadowValue {
     pub x: f32,
     pub y: f32,
     pub blur: f32,
+    /// 0 or less.
+    pub spread: f32,
     pub color: ColorValue,
 }
 
@@ -1998,7 +2000,7 @@ fn shadows(p: &mut Parser) -> Result<Shadows, Error> {
     Ok(shadows)
 }
 
-/// `inset? && <x> <y> <blur>? && <color>?`
+/// `inset? && <x> <y> <blur>? <spread>? && <color>?`
 fn shadow(p: &mut Parser) -> Result<(bool, ShadowValue), Error> {
     let mut inset = false;
     let mut color = None;
@@ -2034,11 +2036,11 @@ fn shadow(p: &mut Parser) -> Result<(bool, ShadowValue), Error> {
     if blur < 0.0 {
         return fail("a negative blur isn't allowed");
     }
-    if spread != 0.0 {
-        return fail("a shadow's spread isn't supported");
+    if spread > 0.0 {
+        return fail("a shadow's spread is 0 or less here");
     }
-    if inset && blur != 0.0 {
-        return fail("an inset shadow isn't blurred here: leave its blur out");
+    if inset && (blur != 0.0 || spread != 0.0) {
+        return fail("an inset shadow isn't blurred or spread here: leave them out");
     }
     Ok((
         inset,
@@ -2046,6 +2048,7 @@ fn shadow(p: &mut Parser) -> Result<(bool, ShadowValue), Error> {
             x,
             y,
             blur,
+            spread,
             color: color.unwrap_or(ColorValue::Current),
         },
     ))

@@ -140,6 +140,7 @@ fn golden_boxes() {
          b.radius { background: #4a7bd6; border-radius: 8px; } \
          b.shadow { background: white; border-radius: 6px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4); } \
          b.inset { background: #ddd; box-shadow: inset 0 -3px #4a7bd6; } \
+         b.spread { background: white; box-shadow: 0 4px 12px -4px black; } \
          b.sides { border-left: 4px solid #4a7bd6; border-bottom: 1px solid #555; } \
          b.four { border-style: solid; border-width: 4px 2px 6px 3px; \
                   border-color: #e05050 #50a050 #4070e0 #e0a030; border-radius: 10px; } \
@@ -149,12 +150,12 @@ fn golden_boxes() {
          b.faded { background: #4a7bd6; opacity: 0.5; } \
          b.scaled { background: #4a7bd6; transform: scale(0.75); }",
         None,
-        Size::new(560.0, 48.0),
+        Size::new(610.0, 48.0),
         |root| {
             crate::row(
                 [
-                    "fill", "border", "radius", "shadow", "inset", "sides", "four", "ring",
-                    "outline", "faded", "scaled",
+                    "fill", "border", "radius", "shadow", "inset", "spread", "sides", "four",
+                    "ring", "outline", "faded", "scaled",
                 ]
                 .map(|class| crate::row([]).kind("b").class(class).into()),
             )

@@ -39,7 +39,7 @@ impl<Message> Surface<'_, Message> {
     pub fn room(node: Node<'_>) -> Sides {
         let scale = node.scale();
         node.base().shadow.map_or(Sides::default(), |s| {
-            let side = |offset: f32| snap_up((s.blur - offset).max(0.0), scale);
+            let side = |offset: f32| snap_up((s.blur + s.spread - offset).max(0.0), scale);
             Sides {
                 top: side(s.y),
                 right: side(-s.x),

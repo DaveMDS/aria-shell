@@ -137,6 +137,8 @@ pub struct Shadow {
     pub x: f32,
     pub y: f32,
     pub blur: f32,
+    /// 0 or less: the box the shadow is cast by, shrunk.
+    pub spread: f32,
     pub color: Color,
 }
 
@@ -534,12 +536,14 @@ impl<'p> Cascade<'p> {
                         x: s.x,
                         y: s.y,
                         blur: s.blur,
+                        spread: s.spread,
                         color: ColorValue::Rgba(s.color),
                     }),
                     inset: self.parent.inset_shadow.map(|s| super::value::ShadowValue {
                         x: s.x,
                         y: s.y,
                         blur: 0.0,
+                        spread: 0.0,
                         color: ColorValue::Rgba(s.color),
                     }),
                 }
@@ -605,6 +609,7 @@ impl<'p> Cascade<'p> {
             x: s.x,
             y: s.y,
             blur: s.blur,
+            spread: s.spread,
             color: resolve(s.color),
         });
         out.inset_shadow = shadows.inset.map(|s| InsetShadow {

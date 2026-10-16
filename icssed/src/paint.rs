@@ -61,13 +61,37 @@ pub(crate) fn draw_box(
     let alike = shows.iter().all(|&i| colors[i] == colors[shows[0]]);
     let uniform =
         !shows.is_empty() && shows.len() == 4 && alike && widths.iter().all(|x| *x == widths[0]);
-    let shadow = s.shadow.map_or(Shadow::default(), |s| Shadow {
+    let mut shadow = s.shadow.map_or(Shadow::default(), |s| Shadow {
         color: fade(s.color, opacity),
         offset: Vector::new(s.x, s.y),
         blur_radius: s.blur,
     });
     let background = fade(s.background, opacity);
     let corners = s.radii(bounds.size());
+    // A spread shadow is cast by a box of its own, the box shrunk: iced
+    // draws a shadow only outside its quad, so this one goes under the
+    // box (seen through a translucent background, unlike CSS).
+    if let Some(cast) = s.shadow.filter(|c| c.spread < 0.0 && shadow.color.a > 0.0) {
+        let by = -cast.spread;
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle {
+                    x: bounds.x + by,
+                    y: bounds.y + by,
+                    width: (bounds.width - 2.0 * by).max(0.0),
+                    height: (bounds.height - 2.0 * by).max(0.0),
+                },
+                border: Border {
+                    radius: radius(corners.map(|r| (r - by).max(0.0))),
+                    ..Border::default()
+                },
+                shadow,
+                snap: true,
+            },
+            Color::TRANSPARENT,
+        );
+        shadow = Shadow::default();
+    }
     // A border image replaces the border; the background's images go
     // between the background colour and the border.
     let border_in_quad = uniform && s.border_image.is_none() && s.backgrounds.is_empty();

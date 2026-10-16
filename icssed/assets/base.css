@@ -110,9 +110,14 @@
  *                          over the children, taking no room, following
  *                          the border's corners
  *   outline-offset         <length>: the gap from the border box
- *   box-shadow             none | [inset] <x> <y> [<blur>] [<color>]: an
- *                          outer shadow and an inset one at most, no
- *                          spread; an inset one isn't blurred
+ *   box-shadow             none | [inset] <x> <y> [<blur>] [<spread>]
+ *                          [<color>]: an outer shadow and an inset one
+ *                          at most. iced's blur fades from half the
+ *                          colour at the shadow's edge, not CSS's
+ *                          Gaussian; a spread is 0 or less, and makes it
+ *                          darker by the box and longer (seen through a
+ *                          translucent background); an inset one isn't
+ *                          blurred or spread
  *   opacity                <number> | <percentage>: unlike CSS, not a
  *                          group: where children overlap inside a faded
  *                          box, the lower shows through the upper

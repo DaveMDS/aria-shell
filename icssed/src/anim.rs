@@ -118,6 +118,7 @@ pub(crate) const NO_SHADOW: Shadow = Shadow {
     x: 0.0,
     y: 0.0,
     blur: 0.0,
+    spread: 0.0,
     color: Color::TRANSPARENT,
 };
 
@@ -169,6 +170,7 @@ impl Paint {
                     x: number(a.x, b.x, t),
                     y: number(a.y, b.y, t),
                     blur: number(a.blur, b.blur, t).max(0.0),
+                    spread: number(a.spread, b.spread, t).min(0.0),
                     color: color(a.color, b.color, t),
                 };
             }

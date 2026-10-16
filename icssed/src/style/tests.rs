@@ -299,6 +299,25 @@ fn border_widths_snap_down_to_device_pixels() {
 }
 
 #[test]
+fn a_shadow_spreads_inward_only() {
+    let (sheet, warnings) = load(
+        "a { box-shadow: 0 8px 30px -12px black; } \
+         b { box-shadow: 0 1px 2px 3px black; } \
+         c { box-shadow: inset 0 1px 0 -1px black; }",
+    );
+    let a = style(&sheet, "a").shadow.expect("a shadow");
+    assert_eq!((a.y, a.blur, a.spread), (8.0, 30.0, -12.0));
+    assert!(style(&sheet, "b").shadow.is_none());
+    assert!(style(&sheet, "c").inset_shadow.is_none());
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].message.contains("0 or less"), "{warnings:?}");
+    // The room a surface keeps for it: the blur less what it's shrunk
+    // by, and the offset.
+    let room = crate::Surface::<()>::room(sheet.root("t", 1.0).child("a"));
+    assert_eq!((room.top, room.bottom, room.left), (10.0, 26.0, 18.0));
+}
+
+#[test]
 fn shorthands_expand_as_in_css() {
     let (sheet, warnings) = load(
         "a { padding: 1px 2px 3px; margin: -4px 5px; gap: 6px 7px; border-radius: 1px 2px 3px 4px; } \

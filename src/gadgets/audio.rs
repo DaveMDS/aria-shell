@@ -200,7 +200,9 @@ impl Gadget for AudioGadget {
                     .into(),
             );
         }
-        icssed::scroll(icssed::column(rows).kind("list")).into()
+        icssed::scroll(icssed::column(rows).kind("list"))
+            .class("flat")
+            .into()
     }
 }
 

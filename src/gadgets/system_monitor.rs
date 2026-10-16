@@ -358,7 +358,9 @@ impl Gadget for SystemMonitor {
         });
         let mut parts: Vec<Element<'a, Message>> = vec![
             icssed::tabs(tabs).into(),
-            icssed::scroll(icssed::column(body).kind("section").class(tab.name())).into(),
+            icssed::scroll(icssed::column(body).kind("section").class(tab.name()))
+                .class("flat")
+                .into(),
         ];
         // The action bar stays under the scrolling table.
         if tab == SectionKind::Processes {

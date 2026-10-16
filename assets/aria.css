@@ -103,7 +103,7 @@ surface {
  * ├─ actions                           the exit menu's buttons ([launcher] actions)
  * │  ╰─ button.flat.<name> > icon       .lock, .reboot, ...
  * ├─ input                             the search field, the toolkit's (:focus while typing)
- * ╰─ scroll                            the results, scrolling
+ * ╰─ scroll.flat                       the results, scrolling
  *    ╰─ list
  *       ╰─ item[.selected][.action]    one result, a button
  *          ├─ icon                     the app's
@@ -1144,7 +1144,7 @@ gadget.brightness screen slider {
  *    ├─ icon
  *    ╰─ label                   the count not looked at (when > 0)
  * surface.popup > gadget.notifications
- * ╰─ scroll                     `max-height` caps it (then it scrolls)
+ * ╰─ scroll.flat                `max-height` caps it (then it scrolls)
  *    ╰─ list                    `width` sizes it
  *       ├─ header
  *       │  ├─ title
@@ -1202,7 +1202,7 @@ gadget.notifications list > notification.unseen summary {
  * ╰─ monitor                    `width` / `height` size the popup
  *    ├─ tabs                    the toolkit's
  *    │  ╰─ tab.cpu|.mem|.disk|.net|.gpu|.processes[.active] > label
- *    ├─ scroll                  the active tab's section, scrolling
+ *    ├─ scroll.flat             the active tab's section, scrolling
  *    │  ╰─ section.cpu|.mem|.disk|.net|.gpu|.processes
  *    │     ├─ header > title, value
  *    │     ├─ graph > series[.second], grid, label
@@ -1417,7 +1417,7 @@ gadget.system-monitor monitor > actions.none > label {
  * │  ╰─ label                    the percent
  * ╰─ indicator.input[.muted]
  * surface.popup > gadget.audio
- * ╰─ scroll                      `max-height` caps it (then it scrolls)
+ * ╰─ scroll.flat                 `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ section.output|.input|.stream > title   "Output" / "Input" / "Playing"
  *       ├─ channel.output|.input|.stream[.muted][.default][name="..."]
@@ -1550,7 +1550,7 @@ gadget.audio player > controls > button > icon {
  *    ├─ icon.vpn                                 the VPN badge (show_vpn)
  *    ╰─ label                                    the connection's name (show_label)
  * surface.popup > gadget.network
- * ╰─ scroll                                      `max-height` caps it (then it scrolls)
+ * ╰─ scroll.flat                                 `max-height` caps it (then it scrolls)
  *    ╰─ list
  *       ├─ header.wifi[.off] | header.wired | header.vpn
  *       │  ├─ title                              "Wi‑Fi networks", "Ethernet network", ...

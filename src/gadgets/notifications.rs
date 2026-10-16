@@ -152,7 +152,9 @@ impl Gadget for NotificationsGadget {
             };
             rows.push(toast::view(n, ctx.notifications, ctx.icons, extras).map(Message::Toast));
         }
-        icssed::scroll(icssed::column(rows).kind("list")).into()
+        icssed::scroll(icssed::column(rows).kind("list"))
+            .class("flat")
+            .into()
     }
 
     fn popup_closed(&mut self) {

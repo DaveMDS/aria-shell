@@ -680,17 +680,14 @@ surface.panel#dock icon {
  * high as the bar, in one of four states at most, the same for every
  * gadget: .active (on, chosen, to look at),
  * .warning, .danger, .muted (off, absent, silent). In the popups, the
- * parts the gadgets share: a `list` (a column), its headers, its items
- * (buttons), the line for an empty one, a message, details.
+ * parts the gadgets share: a `list` (a column), its headers, the line
+ * for an empty one, a message, details.
  *
  * gadget.<kind> > indicator[.active|.warning|.danger|.muted]   on the bar
  * ╰─ meter > fill | graph > series   coloured by .warning / .danger
  * surface.popup > gadget.<kind>
  * ╰─ list                           a column (`gap`)
  *    ├─ header[.<section>] > title
- *    ├─ item[.<kind>]               a button
- *    │  ├─ icon
- *    │  ╰─ label
  *    ├─ empty > label               "No ..."
  *    ├─ message > label
  *    ╰─ details > line
@@ -755,22 +752,6 @@ surface.popup section > header > title {
   width: fill;
   font-weight: bold;
   color: var(--heading);
-}
-surface.popup item {
-  padding: 6px 8px;
-  gap: 8px;
-  justify-content: start;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-}
-surface.popup item:hover {
-  background: var(--border);
-}
-surface.popup item > label {
-  width: fill;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 surface.popup empty {
   padding: 12px;
@@ -947,6 +928,22 @@ gadget.themes > column > button.picker {
  *    ├─ share.<kind>[.mounted][.busy]      as a device
  *    ╰─ empty > label                      "No places"
  */
+gadget.places item {
+  padding: 6px 8px;
+  gap: 8px;
+  justify-content: start;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+gadget.places item:hover {
+  background: var(--border);
+}
+gadget.places item > label {
+  width: fill;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 gadget.places device,
 gadget.places share {
   gap: 2px;

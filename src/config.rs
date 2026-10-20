@@ -24,9 +24,12 @@ use crate::ui::theme::{self, Scheme};
 /// state; pass it by reference to whoever needs a section.
 pub struct Config {
     ini: Ini,
-    /// The file it was loaded from, if any; relative paths in values
-    /// (a theme file) are resolved against its directory.
+    /// The file it was loaded from, if any.
     path: Option<PathBuf>,
+    /// Its directory, else the user's config directory (the built-in
+    /// config): relative paths in values (a theme file) are resolved
+    /// against it, `theme-override.css` is found in it.
+    dir: Option<PathBuf>,
     /// The theme's config read over it, if any.
     theme: Option<PathBuf>,
 }
@@ -35,24 +38,38 @@ pub struct Config {
 /// one family (`panel`, `panel:2`), the user's are left out.
 const THEME_FAMILIES: [&str; 2] = ["panel", "wallpaper"];
 
+/// The config used when the user has none: the sample, built in.
+const BUILT_IN: &str = include_str!("../assets/aria.conf");
+
 impl Config {
     /// Load the first `aria-shell/aria.conf` found in `$XDG_CONFIG_HOME`
-    /// then `$XDG_CONFIG_DIRS`, falling back to the sample `assets/aria.conf`
-    /// in the source tree (dev convenience). A missing or unparsable file
-    /// yields an empty config: every section then reports its defaults.
+    /// then `$XDG_CONFIG_DIRS`; without one, a debug build reads the
+    /// sample `assets/aria.conf` in the source tree (dev convenience),
+    /// a release build its built-in copy. An unparsable file yields an
+    /// empty config: every section then reports its defaults.
     pub fn load() -> Self {
         let path = lookup_config_file().or_else(dev_fallback_config_file);
         let mut ini = new_parser();
-        match &path {
-            Some(p) => match ini.load(p) {
-                Ok(_) => log::info!("using config file {}", p.display()),
-                Err(e) => log::error!("cannot parse {}: {e}", p.display()),
-            },
-            None => log::warn!("no configuration file found, using defaults"),
-        }
+        let dir = match &path {
+            Some(p) => {
+                match ini.load(p) {
+                    Ok(_) => log::info!("using config file {}", p.display()),
+                    Err(e) => log::error!("cannot parse {}: {e}", p.display()),
+                }
+                p.parent().map(Path::to_path_buf)
+            }
+            None => {
+                if let Err(e) = ini.read(BUILT_IN.to_owned()) {
+                    log::error!("cannot parse the built-in config: {e}");
+                }
+                log::info!("no configuration file found, using the built-in one");
+                config_dirs().into_iter().next()
+            }
+        };
         Self {
             ini,
             path,
+            dir,
             theme: None,
         }
     }
@@ -102,6 +119,7 @@ impl Config {
     #[cfg(test)]
     pub fn at(mut self, path: &Path) -> Self {
         self.path = Some(path.to_path_buf());
+        self.dir = path.parent().map(Path::to_path_buf);
         self
     }
 
@@ -113,13 +131,9 @@ impl Config {
         Self {
             ini,
             path: None,
+            dir: None,
             theme: None,
         }
-    }
-
-    /// The file it was loaded from, if any.
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
     }
 
     /// This config with the theme `name`'s own read over it, when `on`
@@ -139,14 +153,14 @@ impl Config {
         self.path.iter().chain(&self.theme).map(PathBuf::as_path)
     }
 
-    /// Directory of the loaded file, if any.
+    /// Directory of the loaded file, else the user's config directory.
     pub fn dir(&self) -> Option<&Path> {
-        self.path().and_then(Path::parent)
+        self.dir.as_deref()
     }
 
     /// A file named in a value: `~` and `~/..` are the home, an
-    /// absolute path is itself, a relative one is under the config
-    /// file's directory (the working directory without a file).
+    /// absolute path is itself, a relative one is under [`Self::dir`]
+    /// (the working directory without one).
     pub fn resolve_path(&self, value: &str) -> PathBuf {
         resolve_path(value, self.dir(), env::var_os("HOME").map(PathBuf::from))
     }
@@ -413,9 +427,11 @@ fn lookup_config_file() -> Option<PathBuf> {
         .find(|f| f.exists())
 }
 
+/// The source tree's sample, in a debug build only: a release build
+/// never reads the source tree, its config is the built-in copy.
 fn dev_fallback_config_file() -> Option<PathBuf> {
     let candidate = dev_assets_dir().join("aria.conf");
-    candidate.exists().then_some(candidate)
+    (cfg!(debug_assertions) && candidate.exists()).then_some(candidate)
 }
 
 fn resolve_path(value: &str, dir: Option<&Path>, home: Option<PathBuf>) -> PathBuf {
@@ -449,6 +465,12 @@ mod tests {
         // `~user` isn't expanded.
         assert_eq!(r("~bob/a"), PathBuf::from("/etc/aria/~bob/a"));
         assert_eq!(resolve_path("a.png", None, None), PathBuf::from("./a.png"));
+    }
+
+    #[test]
+    fn built_in_config() {
+        let cfg = Config::parse(BUILT_IN);
+        assert_eq!(cfg.instances("panel"), ["panel", "panel:dock"]);
     }
 
     struct Demo {

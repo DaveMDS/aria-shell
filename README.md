@@ -429,8 +429,8 @@ service (`/etc/pam.d/aria-shell`, only when installing as root: the
 sample `aria.conf` and the compositor examples. `make uninstall` with
 the same `PREFIX` removes them. Packagers: `make DESTDIR=... PREFIX=/usr install`.
 
-Run from a checkout (`cargo run`) the shell finds its sample config and
-themes in `assets/`.
+Run from a checkout (`cargo run`, a debug build) the shell finds its
+sample config and themes in `assets/`.
 
 ### Starting it
 
@@ -468,7 +468,8 @@ examples, with the start of the shell, the terminal and the file manager
 AriaShell is configured through a single `aria.conf` file
 (`~/.config/aria-shell/aria.conf`). Each component and gadget can be enabled,
 disabled and tuned independently. Refer to the example config included in the
-repository (`assets/aria.conf`) for a full reference.
+repository (`assets/aria.conf`) for a full reference: it's built in too, the
+config used when there's none.
 
 The preferred programs are in `[general]`: `terminal` and `file_manager`,
 each `auto` (the first one installed), `none`, or a command line (`%c` the

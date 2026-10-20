@@ -6,17 +6,17 @@
  * found from this file's directory; a change to one reloads the theme).
  */
 
- :root {
-  --bg: black;
-  --fg: white;
-  --border: #4c7899;
+:root {
+  --bg: #414141;
+  --fg: #e4e4e8;
   --muted: #8d8d97;
-  --heading: #b4c7d8;
-  --accent: #9cc4e4;
-  --on-accent: #285577;
-  --accent-soft: rgba(156, 196, 228, 0.3);
+  --heading: #8d8d97;
+  --accent: #3499fe;
+  --on-accent: #12141a;
+  --border: #3d3d45;
   --danger: #f06262;
   --warning: #e5b85c;
+  --accent-soft: rgba(122, 162, 247, 0.3);
 
   --radius-xs: 0;
   --radius-sm: 0;
@@ -24,5 +24,394 @@
   --radius-lg: 0;
   --radius-xl: 0;
 
-  font-family: Roboto;
+  --font-xs: 10px;
+  --font-sm: 12px;
+  --font-md: 14px;
+  --font-lg: 16px;
+  --font-xl: 22px;
+  --font-xxl: 64px;
+}
+
+surface {
+  box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 1);
+  border: none;
+
+  background:
+    url(./shine.png) no-repeat,
+    url(./bevel_out.png) no-repeat,
+    url(./vgrad_med_lighter.png) repeat-x var(--bg);
+  background-size:
+    auto,
+    100% 100%,
+    auto auto;
+  background-position:
+    50% -2px,
+    0 0,
+    0 0;
+  -background-slice:
+    none,
+    1 1 1 1,
+    none;
+}
+
+surface.panel {
+  background:
+    url(./shine.png) no-repeat,
+    url(./bevel_out.png) no-repeat,
+    url(./vgrad_med.png) repeat-x;
+  background-size:
+    auto,
+    100% 100%,
+    auto 100%;
+  background-position:
+    50% -2px,
+    0 0,
+    0 0;
+  -background-slice:
+    none,
+    1 1 1 1,
+    none;
+}
+
+surface.wallpaper {
+  background:
+    url(./dot_pattern.png) repeat,
+    url(./bg_radgrad.png) no-repeat black;
+  background-size: auto, 100% 100%;
+  background-position: center, center;
+}
+
+/* Icssed: Button */
+button,
+button.flat:hover {
+  background: url(./button_normal.png) no-repeat;
+  background-size: 100% 100%;
+  -background-slice: 3 4 5 4 fill;
+  padding: 7px 14px 11px 14px;
+  border: none;
+}
+button:active,
+button.flat:hover:active {
+  background: url(./button_clicked.png) no-repeat;
+  background-size: 100% 100%;
+  -background-slice: 4 5 6 5 fill;
+}
+button.flat {
+  border-color: transparent;
+  background: transparent;
+}
+button.primary {
+  color: var(--accent);
+}
+button.danger {
+  color: var(--danger);
+}
+
+/* Icssed: Toggle */
+toggle {
+  background: url(./button_normal.png) no-repeat;
+  background-size: 100% 100%;
+  -background-slice: 3 4 5 4 fill;
+  padding: 7px 14px 11px 14px;
+  border: none;
+}
+toggle:checked {
+  background: url(./button_clicked.png) no-repeat;
+  background-size: 100% 100%;
+  -background-slice: 4 5 6 5 fill;
+  color: var(--accent);
+}
+toggle:checked:disabled {
+  color: var(--muted);
+}
+
+/* Icssed: Checkbox */
+checkbox > indicator {
+  width: 13px;
+  height: 13px;
+  background:
+    url(./bevel_in.png) no-repeat,
+    url(./inset_shadow_tiny.png) no-repeat #181818;
+  -background-slice: 1 1 1 1, 4 4 4 4;
+  background-size: 13px 13px;
+  border: none;
+  color: transparent;
+}
+checkbox:checked > indicator > mark {
+  width: 11px;
+  height: 11px;
+  background: url(./sym_check_alum.png) no-repeat;
+  background-size: 11px 11px;
+}
+
+/* Icssed: Radio */
+radio > indicator {
+  width: 13px;
+  height: 13px;
+  background: url(./inset_shadow_circle_tiny.png) no-repeat;
+  background-size: 13px 13px;
+  border: none;
+}
+radio > indicator > mark {
+  width: 11px;
+  height: 11px;
+  border: none;
+  background: none;
+}
+radio:checked > indicator > mark {
+  background: url(./sym_radio_alum.png) no-repeat;
+  background-size: 11px 11px;
+}
+
+/* Icssed: Switch */
+switch > indicator, switch > indicator > mark {
+  border: none;
+  border-radius: 0;
+}
+switch > indicator {
+  width: 30px;
+  height: 15px;
+  background:
+    url(./bevel_in.png) no-repeat,
+    url(./inset_shadow_tiny.png) no-repeat #181818;
+  -background-slice: 1 1 1 1, 4 4 4 4;
+  background-size: 30px 15px;
+  padding: 0;
+}
+switch:checked > indicator {
+  background-color: var(--accent);
+}
+switch > indicator > mark {
+  width: 15px;
+  height: 15px;
+  background:
+    url(./bevel_out.png) no-repeat,
+    url(./vgrad_med.png) repeat-x;
+  background-size:
+    100% 100%,
+    15px 15px;
+  background-position:
+    0 0,
+    0 0;
+  -background-slice:
+    1 1 1 1,
+    none;
+}
+switch:checked > indicator > mark {
+  transform: translateX(15px);
+}
+
+/* Icssed: Slider */
+slider, slider > track, slider > knob {
+  border: none;
+  border-radius: 0;
+}
+slider {
+  padding: 0 12px;
+}
+slider > track {
+  height: 5px;
+  background:
+    url(./slider_run_bevel_horiz.png) no-repeat,
+    url(./slider_run_base_horiz.png) no-repeat;
+  background-size:
+    100% 100%,
+    100% 5px;
+  -background-slice:
+    0 5 0 5 fill,
+    0 4 0 4 fill;
+}
+slider:disabled > track {
+  background:
+    url(./slider_run_bevel_horiz.png) no-repeat,
+    url(./slider_run_base_light_horiz.png) no-repeat;
+  background-size:
+    100% 100%,
+    100% 5px;
+  -background-slice:
+    0 5 0 5 fill,
+    0 4 0 4 fill;
+}
+slider > track > fill {
+  height: 3px;
+  background: url(./horiz_glow_run.png) no-repeat;
+  background-size: 100% 3px;
+  background-position: 0px 1px;
+  -background-slice: 0 4 0 0 fill;
+}
+slider > knob {
+  width: 24px;
+  height: 24px;
+  background: url(./knob_sz_16.png) no-repeat;
+  background-size: 24px 24px;
+  border-radius: 12px;
+}
+slider:focus-visible > knob {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Icssed: Meter */
+meter {
+  height: 24px;
+  padding: 0 0 0 4px;
+  border: none;
+  border-radius: 0;
+  background: url(./inset_bar_horiz.png) no-repeat;
+  background-size: 100% 17px;
+  background-position: 0 4px;
+  -background-slice: 0 8 0 8 fill;
+}
+meter > fill {
+  border-radius: 0;
+  background: url(./inset_bar_horiz_glow.png) no-repeat;
+  background-size: 100% 24px;
+  -background-slice: 0 18 0 0 fill;
+}
+meter.thin {
+  height: 16px;
+  background: url(./inset_bar_horiz_inside.png) no-repeat;
+  background-size: 100% 5px;
+  background-position: 0 6px;
+  -background-slice: 0 7 0 7 fill;
+}
+meter.thin > fill {
+  background-position: 0 -4px;
+}
+
+/* Icssed: Input */
+input {
+  background:
+    url(./bevel_in.png) no-repeat,
+    url(./inset_shadow_tiny.png) no-repeat #303030;
+  -background-slice:
+    1 1 1 1,
+    4 4 4 4;
+  background-size: 100% 100%;
+}
+input > toggle,
+input > toggle:checked {
+  padding: 2px;
+  background: none;
+}
+
+/* Icssed: Scroller */
+scroller {
+  border: none;
+  border-radius: 0;
+  background:
+    url(./bevel_in.png) no-repeat,
+    url(./inset_shadow.png) no-repeat #303030;
+  -background-slice:
+    1 1 1 1,
+    7 5 3 5;
+  background-size: 100% 100%;
+}
+scroller.vertical {
+  margin-right: 20px;
+}
+scroller.horizontal {
+  margin-bottom: 20px;
+}
+scroller > scrollbar.vertical {
+  width: 15px;
+  transform: translateX(20px);
+
+  background: url(./runner_vert.png) no-repeat;
+  -background-slice: 2 0 2 0 fill;
+  background-size: 3px 100%;
+  background-position: center center;
+}
+scroller > scrollbar.horizontal {
+  height: 15px;
+  transform: translateY(20px);
+
+  background: url(./runner_horiz.png) no-repeat;
+  -background-slice: 0 2 0 2 fill;
+  background-size: 100% 3px;
+  background-position: center center;
+}
+scroller > scrollbar > thumb {
+  background-repeat: no-repeat;
+  background-position:
+    center center,
+    0 0,
+    0 0;
+  -background-slice:
+    none,
+    1 1 1 1,
+    none;
+}
+scroller > scrollbar.vertical > thumb {
+  min-height: 13px;
+  background-image:
+    url(./holes_tiny_vert.png),
+    url(./bevel_out.png),
+    url(./vgrad_med_lighter.png);
+  background-size:
+    3px 13px,
+    100% 100%,
+    100% 100%;
+}
+scroller > scrollbar.horizontal > thumb {
+  min-width: 13px;
+  background-image:
+    url(./holes_tiny_horiz.png),
+    url(./bevel_out.png),
+    url(./vgrad_med_lighter.png);
+  background-size:
+    13px 3px,
+    100% 100%,
+    100% 100%;
+}
+scroller.flat {
+  margin: 0;
+  background: none;
+}
+scroller.flat > scrollbar.vertical {
+  width: 12px;
+  margin: 0;
+  transform: none;
+  background: none;
+}
+scroller.flat > scrollbar.horizontal {
+  height: 12px;
+  transform: none;
+  background: none;
+}
+
+/* Icssed: Menu */
+menu {
+  padding: 0;
+}
+menu item {
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+}
+menu item:hover,
+menu item:focus-visible {
+  color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  background:
+    url(./shine.png) no-repeat,
+    url(./bevel_horiz_out.png) no-repeat,
+    url(./vgrad_med_dark.png) no-repeat;
+  background-position:
+    50% -2px,
+    0 0,
+    0 0;
+  background-size:
+    100% 5px,
+    100% 100%,
+    100% 100%;
+  -background-slice:
+    none,
+    2 0 2 0,
+    none;
+}
+menu separator {
+  height: 2px;
+  background: url(./separator_horiz.png) repeat-x;
 }

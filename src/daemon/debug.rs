@@ -136,6 +136,16 @@ impl AriaShell {
                 list.push((window, "notification", output, rect));
             }
         }
+        if let Some((id, output, rect)) = self.tips.placed()
+            && let Some(out) = self.output_rect(output)
+        {
+            list.push((
+                id,
+                "tooltip",
+                output,
+                rect + iced::Vector::new(out.x, out.y),
+            ));
+        }
         for (output, id) in self.osd.windows() {
             if let Some(out) = self.output_rect(output) {
                 let bars = (
@@ -240,8 +250,12 @@ impl AriaShell {
                 .and_then(|(_, rest)| rest.split('"').next()?.parse::<u32>().ok())
                 .and_then(|id| self.toasts.placed().find(|(_, n, ..)| *n == id))
                 .map(|(window, ..)| window);
+            // Several bars may show on one output: theirs is `#<instance>`.
+            let instance = root
+                .split_once('#')
+                .and_then(|(_, rest)| rest.split(['.', '[', ':']).next());
             // The showcase's bar, not a real one.
-            let showcase = root.contains("#showcase");
+            let showcase = instance == Some("showcase");
             surfaces
                 .iter()
                 .find(|(w, k, out, _)| {
@@ -249,6 +263,10 @@ impl AriaShell {
                         && *k == kind
                         && output.is_none_or(|o| self.output_name(*out) == o)
                         && window.is_none_or(|id| *w == id)
+                        && self
+                            .panels
+                            .get(w)
+                            .is_none_or(|panel| panel.instance() == instance)
                 })
                 // The showcase draws every kind of root on its surface:
                 // one with no surface of its own is there.

@@ -79,6 +79,9 @@ impl AriaShell {
         if self.osd.output_of(window).is_some() {
             return self.osd.view(&self.theme, &self.icons, name, scale);
         }
+        if self.tips.output_of(window).is_some() {
+            return self.tips.view(&self.theme, name, scale);
+        }
         if let Some(panel) = self.panels.get(&window) {
             return panel.view(shared).map(move |m| Message::Panel(window, m));
         }
@@ -117,6 +120,7 @@ impl AriaShell {
         self.toasts
             .output_of(window)
             .or_else(|| self.osd.output_of(window))
+            .or_else(|| self.tips.output_of(window))
             .or_else(|| self.wallpapers.output_of(window))
             .or_else(|| self.locker.as_ref()?.output_of(window))
             .or_else(|| {

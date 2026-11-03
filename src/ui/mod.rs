@@ -2,13 +2,14 @@
 //! compiled into the toolkit's sheet), the reusable pieces a gadget or
 //! a component embeds over the toolkit's widgets (plain Elm components
 //! whose messages the host maps: the menu, the calendar), and the
-//! shapes the shell shows things in (a gadget's popup, a
+//! shapes the shell shows things in (a gadget's popup, a bar's tip, a
 //! notification's toast).
 
 pub mod calendar;
 pub mod menu;
 pub mod popup;
 pub mod theme;
+pub mod tip;
 pub mod toast;
 
 use std::cell::RefCell;

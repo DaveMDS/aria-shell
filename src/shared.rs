@@ -3,6 +3,7 @@
 //! (the launcher, the exit menu, the lock screen) as it is.
 
 use crate::locale::Locale;
+use crate::services::apps::Apps;
 use crate::services::audio::Audio;
 use crate::services::brightness::Brightness;
 use crate::services::compositor::Compositor;
@@ -33,5 +34,6 @@ pub struct Shared<'a> {
     pub power: &'a Power,
     pub brightness: &'a Brightness,
     pub places: &'a Places,
+    pub apps: &'a Apps,
     pub scripts: &'a Scripts,
 }

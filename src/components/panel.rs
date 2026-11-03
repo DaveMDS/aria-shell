@@ -22,6 +22,7 @@ use crate::services::scripts;
 use crate::shared::Shared;
 use crate::ui::popup::{self, Side};
 use crate::ui::theme::Theme;
+use crate::ui::tip;
 use crate::ui::{self, Measuring, Surfaces};
 
 /// `[panel]` section, one per bar (`[panel:2]` for a second one). Keys
@@ -322,6 +323,12 @@ impl Panel {
             .attr("align", self.config.align.name())
     }
 
+    /// The `id` of its `[panel:id]` section (`#id` in its root), `None`
+    /// for `[panel]`.
+    pub fn instance(&self) -> Option<&str> {
+        instance_id(&self.section)
+    }
+
     /// `popup[output=..]`, the root of a popup of this bar.
     fn popup_root<'a>(&self, theme: &'a Theme) -> Node<'a> {
         theme
@@ -586,9 +593,29 @@ impl Panel {
         self.gadgets.iter().flat_map(|e| e.gadget.icon_names())
     }
 
+    /// App icons the gadgets draw without a window, for the daemon to
+    /// resolve.
+    pub fn app_ids(&self) -> impl Iterator<Item = String> + '_ {
+        self.gadgets.iter().flat_map(|e| e.gadget.app_ids())
+    }
+
     /// Programs the gadgets want run, for the daemon.
     pub fn scripts(&self) -> impl Iterator<Item = scripts::Spec> + '_ {
         self.gadgets.iter().filter_map(|e| e.gadget.script())
+    }
+
+    /// Where the bar `window` (this one) is on its output `out` (a global
+    /// rectangle), for a tip off it.
+    pub fn tip_bar(&self, window: window::Id, out: Rectangle) -> tip::Bar {
+        let rect = self.rect_in(out);
+        tip::Bar {
+            window,
+            rect: Rectangle::new(
+                iced::Point::new(rect.x - out.x, rect.y - out.y),
+                rect.size(),
+            ),
+            side: self.popup_side(),
+        }
     }
 
     /// The side of its widget a popup hangs on.

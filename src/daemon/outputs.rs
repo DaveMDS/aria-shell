@@ -185,6 +185,9 @@ impl AriaShell {
                 tasks.push(surface_tasks(
                     self.osd.output_removed(OutputId::from(&output)),
                 ));
+                tasks.push(surface_tasks(
+                    self.tips.close_on(None, Some(OutputId::from(&output))),
+                ));
                 tasks.push(closing);
                 Task::batch(tasks)
             }
@@ -228,7 +231,7 @@ impl AriaShell {
                 if self.wallpapers.closed(id) {
                     return Task::none();
                 }
-                if self.osd.closed(id) {
+                if self.osd.closed(id) || self.tips.closed(id) {
                     return Task::none();
                 }
                 if self.panels.remove(&id).is_none()
@@ -357,6 +360,8 @@ impl AriaShell {
         tasks.push(self.sync_toasts());
         // The position may have changed.
         tasks.push(surface_tasks(self.osd.close()));
+        // Its bar is gone.
+        tasks.push(surface_tasks(self.tips.close()));
         if showcase {
             tasks.push(self.open_showcase());
         }

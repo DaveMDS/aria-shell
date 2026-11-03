@@ -17,6 +17,7 @@ macro_rules! shared {
             power: &$shell.power,
             brightness: &$shell.brightness,
             places: &$shell.places,
+            apps: &$shell.apps,
             scripts: &$shell.scripts,
         }
     };
@@ -60,6 +61,7 @@ use iced_exwlshell::shell::{self, ShellEvent, ShellReceiver};
 use iced_exwlshell::to_exwlshell_message;
 use iced_wayland_subscriber::{OutputId, OutputInfo};
 
+use apps::Apps;
 use audio::Audio;
 use brightness::Brightness;
 use commands::{Command, OpenCommand, Reply, ToggleCommand, WallpaperCommand};
@@ -83,13 +85,14 @@ use places::Places;
 use power::Power;
 use screenshot::Screenshot;
 use services::{
-    audio, brightness, compositor, icons, idle, network, notifications, places, power, screenshot,
-    scripts, sysmon, tray,
+    apps, audio, brightness, compositor, icons, idle, network, notifications, places, power,
+    screenshot, scripts, sysmon, tray,
 };
 use shared::Shared;
 use sysmon::SysMon;
 use tray::Tray;
 use ui::theme::{self, Theme};
+use ui::tip::Tips;
 use ui::toast::{self, Toasts};
 use ui::{Scales, Surfaces};
 use wallpaper::Wallpapers;
@@ -262,6 +265,8 @@ struct AriaShell {
     brightness: Brightness,
     screenshot: Screenshot,
     places: Places,
+    /// The apps pinned to the `Apps` gadgets.
+    apps: Apps,
     scripts: scripts::Scripts,
     /// Monitors currently present, to rebuild the panels on a config
     /// change.
@@ -284,6 +289,8 @@ struct AriaShell {
     keyboard: Option<Id>,
     /// One layer surface per notification shown.
     toasts: Toasts,
+    /// A bar's tip, while shown.
+    tips: Tips,
     /// The OSD, and its surfaces while shown.
     osd: Osd,
     /// Every part of the UI on one surface, while shown.
@@ -337,6 +344,7 @@ impl AriaShell {
             brightness,
             screenshot,
             places: Places::default(),
+            apps: Apps::load(),
             scripts: scripts::Scripts::default(),
             outputs: BTreeMap::new(),
             panels: BTreeMap::new(),
@@ -348,6 +356,7 @@ impl AriaShell {
             cursor: None,
             keyboard: None,
             toasts: Toasts::default(),
+            tips: Tips::default(),
             osd,
             showcase: None,
             measure: RefCell::new(icssed::Measure::new()),
@@ -369,6 +378,15 @@ impl AriaShell {
         }
         for w in &self.compositor.windows {
             self.icons.resolve(&w.class);
+        }
+        let apps: Vec<String> = self
+            .panels
+            .values()
+            .flat_map(Panel::app_ids)
+            .chain(self.apps.pinned().iter().cloned())
+            .collect();
+        for id in apps {
+            self.icons.resolve(&id);
         }
         if let Some((_, launcher)) = &self.launcher {
             for id in launcher.visible_ids() {
@@ -883,6 +901,27 @@ impl AriaShell {
                 } else {
                     Task::none()
                 }
+            }
+            Action::ShowTip(tip) => {
+                let Some(bar) = self.panels.get(&panel) else {
+                    return Task::none();
+                };
+                let (Some(out), Some(info)) =
+                    (self.output_rect(bar.output), self.outputs.get(&bar.output))
+                else {
+                    return Task::none();
+                };
+                let bar = bar.tip_bar(panel, out);
+                surface_tasks(self.tips.show(tip, bar, info, measuring!(self)))
+            }
+            Action::HideTip(about) => surface_tasks(self.tips.hide(panel, about)),
+            Action::Apps(cmd) => {
+                let index = self.icons.index();
+                let terminal = self.general.terminal.as_deref();
+                if self.apps.run(cmd, index.as_deref(), terminal) {
+                    self.resolve_icons();
+                }
+                Task::none()
             }
             Action::Places(cmd) => self
                 .places

@@ -208,6 +208,16 @@ impl Icons {
         self.cache.get(class).and_then(Option::as_ref)
     }
 
+    /// The desktop entry of a window class or a desktop id, as its icon
+    /// is found: the class itself, then its `[apps_class_map]` override.
+    pub fn entry(&self, class: &str) -> Option<&desktop::DesktopEntry> {
+        let apps = &self.index.as_ref()?.apps;
+        apps.for_class(class).or_else(|| {
+            let o = self.overrides.get(&class.to_ascii_lowercase())?;
+            apps.for_class(o)
+        })
+    }
+
     /// Make sure the icon called `name` has an entry: from `dir` (an
     /// app's own icon directory, searched as-is) if given, else the
     /// theme, else the generic fallback. A no-op until the index is

@@ -147,6 +147,7 @@ async fn windows() -> Option<Event> {
                 workspace_id: c.workspace.id.to_string(),
                 active: false,
                 urgent: false,
+                opened: 0,
             })
             .collect(),
     ))
@@ -302,6 +303,9 @@ pub async fn run(command: Command) {
         Command::ActivateWorkspace(id) => format!("dispatch hl.dsp.focus({{ workspace = {id} }})"),
         Command::ActivateWindow(id) => {
             format!("dispatch hl.dsp.focus({{ window = \"address:0x{id}\" }})")
+        }
+        Command::CloseWindow(id) => {
+            format!("dispatch hl.dsp.window.close({{ window = \"address:0x{id}\" }})")
         }
         Command::Exit => "dispatch hl.dsp.exit()".to_owned(),
     };

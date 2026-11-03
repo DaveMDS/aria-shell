@@ -21,7 +21,10 @@
 //!   window APP_ID [TITLE]   open a window (the compositor decides where)
 //!   title APP_ID TITLE      retitle the last window opened with that app id
 //!   close APP_ID    close the last window opened with that app id
+//!   sync            a roundtrip: the windows the compositor asked to
+//!                   close (a close button, `kill`) since are closed
 //!
+//! A window closes when the compositor asks it to, at the next command.
 //! The keymap is ours, regenerated whenever a new symbol shows up, as
 //! `wtype` does: every keysym gets its own keycode, so nothing depends
 //! on the layout the compositor would otherwise use.
@@ -47,7 +50,12 @@ const BTN_LEFT: u32 = 0x110;
 const BTN_RIGHT: u32 = 0x111;
 const BTN_MIDDLE: u32 = 0x112;
 
-struct State;
+/// What the events leave for the next command to act on.
+#[derive(Default)]
+struct State {
+    /// Toplevels the compositor asked to close.
+    closing: Vec<wayland_client::backend::ObjectId>,
+}
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     fn event(
@@ -71,7 +79,21 @@ delegate_noop!(State: ignore wl_surface::WlSurface);
 delegate_noop!(State: ignore wl_shm::WlShm);
 delegate_noop!(State: ignore wl_shm_pool::WlShmPool);
 delegate_noop!(State: ignore wl_buffer::WlBuffer);
-delegate_noop!(State: ignore xdg_toplevel::XdgToplevel);
+
+impl Dispatch<xdg_toplevel::XdgToplevel, ()> for State {
+    fn event(
+        state: &mut Self,
+        toplevel: &xdg_toplevel::XdgToplevel,
+        event: xdg_toplevel::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let xdg_toplevel::Event::Close = event {
+            state.closing.push(wayland_client::Proxy::id(toplevel));
+        }
+    }
+}
 
 impl Dispatch<xdg_wm_base::XdgWmBase, ()> for State {
     fn event(
@@ -133,6 +155,7 @@ struct Windows {
 
 struct Injector {
     queue: EventQueue<State>,
+    state: State,
     keyboard: ZwpVirtualKeyboardV1,
     pointer: ZwlrVirtualPointerV1,
     started: Instant,
@@ -163,6 +186,7 @@ impl Injector {
         let pointer = pointers.create_virtual_pointer(Some(&seat), &qh, ());
         let mut injector = Self {
             queue,
+            state: State::default(),
             keyboard,
             pointer,
             started: Instant::now(),
@@ -179,9 +203,27 @@ impl Injector {
 
     fn roundtrip(&mut self) -> Result<(), String> {
         self.queue
-            .roundtrip(&mut State)
-            .map(|_| ())
-            .map_err(|e| format!("roundtrip: {e}"))
+            .roundtrip(&mut self.state)
+            .map_err(|e| format!("roundtrip: {e}"))?;
+        let closing = std::mem::take(&mut self.state.closing);
+        if let Some(windows) = &mut self.windows
+            && !closing.is_empty()
+        {
+            let (gone, open) =
+                std::mem::take(&mut windows.open)
+                    .into_iter()
+                    .partition(|(_, toplevel, ..)| {
+                        closing.contains(&wayland_client::Proxy::id(toplevel))
+                    });
+            windows.open = open;
+            for (_, toplevel, xdg, window) in gone {
+                destroy(toplevel, xdg, window);
+            }
+            self.queue
+                .roundtrip(&mut self.state)
+                .map_err(|e| format!("roundtrip: {e}"))?;
+        }
+        Ok(())
     }
 
     fn now(&self) -> u32 {
@@ -408,11 +450,9 @@ impl Injector {
                 let i = self.last_window(rest)?;
                 let windows = self.windows()?;
                 let (_, toplevel, xdg, window) = windows.open.remove(i);
-                toplevel.destroy();
-                xdg.destroy();
-                window.surface.destroy();
-                window.buffer.destroy();
+                destroy(toplevel, xdg, window);
             }
+            "sync" => {}
             "" => return Err("empty command".to_owned()),
             other => return Err(format!("unknown command {other:?}")),
         }
@@ -464,4 +504,11 @@ fn main() {
         let _ = writeln!(out, "{reply}");
         let _ = out.flush();
     }
+}
+
+fn destroy(toplevel: xdg_toplevel::XdgToplevel, xdg: xdg_surface::XdgSurface, window: Window) {
+    toplevel.destroy();
+    xdg.destroy();
+    window.surface.destroy();
+    window.buffer.destroy();
 }

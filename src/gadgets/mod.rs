@@ -11,6 +11,7 @@
 //! through [`Context`]; a gadget that wants to change it returns an
 //! [`Action`] carrying a command, which the daemon executes.
 
+pub mod apps;
 pub mod audio;
 pub mod brightness;
 pub mod clock;
@@ -37,6 +38,7 @@ use icssed::Element;
 use crate::config::{Config, Section};
 use crate::services::compositor;
 use crate::shared::Shared;
+use apps::AppsGadget;
 use audio::AudioGadget;
 use brightness::BrightnessGadget;
 use clock::Clock;
@@ -108,6 +110,12 @@ pub enum Action<M> {
     /// be gone first.
     Screenshot(crate::services::screenshot::Command),
     Places(crate::services::places::Command),
+    Apps(crate::services::apps::Command),
+    /// Show a tip off the bar (`icssed::tooltip`'s `on_tip`), in place
+    /// of any other.
+    ShowTip(crate::ui::tip::Tip),
+    /// The tip about this rectangle goes, if it's the one shown.
+    HideTip(iced::Rectangle),
     /// Open popup surface `id` hanging off the box with id `anchor`,
     /// sized by its content. Gadgets don't build this by hand, they
     /// call [`Popup::toggle`], which mints the id.
@@ -206,7 +214,10 @@ impl<M> Action<M> {
             | Self::SysMon(_)
             | Self::Audio(_)
             | Self::Screenshot(_)
-            | Self::Places(_) => true,
+            | Self::Places(_)
+            | Self::Apps(crate::services::apps::Command::Launch { .. })
+            | Self::ShowTip(_)
+            | Self::HideTip(_) => true,
             Self::Many(actions) => actions.iter().all(Self::is_local),
             _ => false,
         }
@@ -240,6 +251,9 @@ impl<M: Send + 'static> Action<M> {
             Self::Brightness(cmd) => Action::Brightness(cmd),
             Self::Screenshot(cmd) => Action::Screenshot(cmd),
             Self::Places(cmd) => Action::Places(cmd),
+            Self::Apps(cmd) => Action::Apps(cmd),
+            Self::ShowTip(tip) => Action::ShowTip(tip),
+            Self::HideTip(about) => Action::HideTip(about),
             Self::OpenPopup { id, anchor } => Action::OpenPopup { id, anchor },
             Self::ClosePopup(id) => Action::ClosePopup(id),
             Self::Many(actions) => {
@@ -299,6 +313,13 @@ pub trait Gadget: Sized {
         Vec::new()
     }
 
+    /// Window classes or desktop ids whose app icons the gadget draws
+    /// (`ctx.icons.get`) without a window to show them for, for the
+    /// daemon to resolve.
+    fn app_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// A program the daemon should run for the gadget (`[Custom] exec`),
     /// its output read back with `ctx.scripts.output(&spec)`.
     fn script(&self) -> Option<crate::services::scripts::Spec> {
@@ -329,6 +350,7 @@ pub enum AnyGadget {
     Brightness(BrightnessGadget),
     Screenshot(ScreenshotGadget),
     Places(PlacesGadget),
+    Apps(AppsGadget),
 }
 
 #[derive(Clone, Debug)]
@@ -346,6 +368,7 @@ pub enum Message {
     Brightness(brightness::Message),
     Screenshot(screenshot::Message),
     Places(places::Message),
+    Apps(apps::Message),
 }
 
 impl AnyGadget {
@@ -428,6 +451,10 @@ impl AnyGadget {
                     output,
                 )))
             }
+            apps::AppsConfig::NAME => Some(Self::Apps(AppsGadget::new(
+                config.section(Some(name)),
+                output,
+            ))),
             _ => {
                 log::warn!("unknown gadget {name:?}");
                 None
@@ -451,6 +478,7 @@ impl AnyGadget {
             Self::Brightness(_) => "brightness",
             Self::Screenshot(_) => "screenshot",
             Self::Places(_) => "places",
+            Self::Apps(_) => "apps",
         }
     }
 
@@ -473,6 +501,7 @@ impl AnyGadget {
             (Self::Brightness(g), Message::Brightness(m)) => g.update(m).map(Message::Brightness),
             (Self::Screenshot(g), Message::Screenshot(m)) => g.update(m).map(Message::Screenshot),
             (Self::Places(g), Message::Places(m)) => g.update(m).map(Message::Places),
+            (Self::Apps(g), Message::Apps(m)) => g.update(m).map(Message::Apps),
             _ => Action::None,
         }
     }
@@ -492,6 +521,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.view(ctx).map(Message::Brightness),
             Self::Screenshot(g) => g.view(ctx).map(Message::Screenshot),
             Self::Places(g) => g.view(ctx).map(Message::Places),
+            Self::Apps(g) => g.view(ctx).map(Message::Apps),
         }
     }
 
@@ -510,6 +540,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup_view(ctx).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_view(ctx).map(Message::Screenshot),
             Self::Places(g) => g.popup_view(ctx).map(Message::Places),
+            Self::Apps(g) => g.popup_view(ctx).map(Message::Apps),
         }
     }
 
@@ -528,6 +559,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup(),
             Self::Screenshot(g) => g.popup(),
             Self::Places(g) => g.popup(),
+            Self::Apps(g) => g.popup(),
         }
     }
 
@@ -546,6 +578,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup_keyboard(),
             Self::Screenshot(g) => g.popup_keyboard(),
             Self::Places(g) => g.popup_keyboard(),
+            Self::Apps(g) => g.popup_keyboard(),
         }
     }
 
@@ -564,6 +597,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.popup_key(event).map(Message::Brightness),
             Self::Screenshot(g) => g.popup_key(event).map(Message::Screenshot),
             Self::Places(g) => g.popup_key(event).map(Message::Places),
+            Self::Apps(g) => g.popup_key(event).map(Message::Apps),
         }
     }
 
@@ -585,6 +619,7 @@ impl AnyGadget {
             Self::Brightness(g) => <BrightnessGadget as Gadget>::popup_closed(g),
             Self::Screenshot(g) => <ScreenshotGadget as Gadget>::popup_closed(g),
             Self::Places(g) => <PlacesGadget as Gadget>::popup_closed(g),
+            Self::Apps(g) => <AppsGadget as Gadget>::popup_closed(g),
         }
     }
 
@@ -603,6 +638,14 @@ impl AnyGadget {
             Self::Brightness(g) => g.icon_names(),
             Self::Screenshot(g) => g.icon_names(),
             Self::Places(g) => g.icon_names(),
+            Self::Apps(g) => g.icon_names(),
+        }
+    }
+
+    pub fn app_ids(&self) -> Vec<String> {
+        match self {
+            Self::Apps(g) => g.app_ids(),
+            _ => Vec::new(),
         }
     }
 
@@ -621,6 +664,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.script(),
             Self::Screenshot(g) => g.script(),
             Self::Places(g) => g.script(),
+            Self::Apps(g) => g.script(),
         }
     }
 
@@ -639,6 +683,7 @@ impl AnyGadget {
             Self::Brightness(g) => g.subscription().map(Message::Brightness),
             Self::Screenshot(g) => g.subscription().map(Message::Screenshot),
             Self::Places(g) => g.subscription().map(Message::Places),
+            Self::Apps(g) => g.subscription().map(Message::Apps),
         }
     }
 }

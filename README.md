@@ -49,7 +49,8 @@ bar per monitor (or per `[panel:*]` section):
 | `bluetooth`     | 🔲 | bluetooth manager                                                               |
 | `Screenshot`    | ✅ | A button: the screenshot picker, a menu for the active window, the bar's screen, every screen |
 | `Screenshot`    | 🔲 | Screen recorder                                                                 |
-| `apps`          | 🔲 | fixed list of apps to run (like a dock)                                         |
+| `Apps`          | ✅ | A dock's icons: pinned apps (per instance in the config, or from the menu on every bar), then the others with windows open; click focuses its window, or shows its windows when more, its name in a tip, a menu with windows, actions, pin/unpin, close |
+| `Apps`          | 🔲 | Reordering by drag, the windows' previews                                    |
 | `home`          | 🔲 | a menu (cinnamon style) with app categories, search, favorites and sys controls |
 | `file`          | 🔲 | file browser in a tree of menus?                                                |
 | `Places`        | ✅ | A file manager's sidebar: the home, the XDG folders, the trash, GTK's and KDE's bookmarks, opened in `[general] file_manager` |

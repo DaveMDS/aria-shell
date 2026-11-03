@@ -3,6 +3,7 @@
 //! through `gadgets::Context` and is changed by `run(Command)`, from a
 //! gadget's `Action`. No view of its own: `ui/` draws what they hold.
 
+pub mod apps;
 pub mod audio;
 pub mod brightness;
 pub mod compositor;

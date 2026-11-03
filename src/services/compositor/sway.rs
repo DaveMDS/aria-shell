@@ -260,6 +260,7 @@ async fn windows() -> Vec<Event> {
             workspace_id: (*ws).to_owned(),
             active: false,
             urgent: false,
+            opened: 0,
         })
         .collect();
     let focused = views.iter().find(|(n, _)| n.focused).map(|(n, _)| n.id);
@@ -464,6 +465,7 @@ pub async fn run(command: Command) {
             format!("workspace --no-auto-back-and-forth \"{name}\"")
         }
         Command::ActivateWindow(id) => format!("[con_id={id}] focus"),
+        Command::CloseWindow(id) => format!("[con_id={id}] kill"),
         Command::Exit => "exit".to_owned(),
     };
     let Some(results): Option<Vec<CommandResult>> =

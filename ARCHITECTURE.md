@@ -83,7 +83,7 @@ layer is a struct with its own `Message`, `update`, `view` and
   (`icssed/`, its own crate: icssed/AGENTS.md, icssed/ARCHITECTURE.md):
   the theme, the reusable pieces (menu, calendar: the state the
   toolkit's controlled widgets leave to their host), the shapes things
-  are shown in (a gadget's popup, a notification's toast), `Surfaces`
+  are shown in (a gadget's popup, a bar's tip, a notification's toast), `Surfaces`
   and the measuring (`Measuring`, `Scales`, `size`).
 - the daemon: `main.rs` (`Message`, the struct, the router `update`,
   `perform`) and `daemon/`, more `impl AriaShell` blocks by subject:
@@ -97,7 +97,7 @@ layer is a struct with its own `Message`, `update`, `view` and
 
 Gadgets and components use services and `ui/`, not each other.
 Whoever owns surfaces (a component; the panel for its popups,
-`ui::toast::Toasts` for the toasts) keeps their ids and says what to do
+`ui::toast::Toasts` for the toasts, `ui::tip::Tips` for a bar's tip) keeps their ids and says what to do
 with them as a `ui::Surfaces` (open with these settings, or a popup;
 close, resize, move, redraw, the keyboard), which the daemon turns into
 the runtime's messages (`surface_tasks`): only the daemon talks to the
@@ -156,11 +156,14 @@ Surfaces   (ui/mod.rs)      what an owner of surfaces asks after a change: keybo
                             resize / margin / reposition / redraw, turned into the runtime's messages by the
                             daemon (`surface_tasks`, daemon/surfaces.rs); `and` merges two
 
-Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags
+Compositor (compositor/)    daemon-owned desktop state: workspaces, windows, active/urgent flags; each
+                            window stamped when first seen (`opened`): a stable order, whatever the
+                            backend's
   subscription()            the single IPC stream (compositor/hyprland.rs or sway.rs), yields `Event`s
   apply(Event)              patches the state
-  run(Command) -> Task      sends a command (activate workspace/window, `Exit` = end the session:
-                            Sway `exit`, Hyprland `dispatch hl.dsp.exit()`) to the backend
+  run(Command) -> Task      sends a command (activate workspace/window, close a window: Sway `kill`,
+                            Hyprland `hl.dsp.window.close`; `Exit` = end the session: Sway `exit`,
+                            Hyprland `dispatch hl.dsp.exit()`) to the backend
 
 Tray       (tray/)         daemon-owned status notifier items: `items: Vec<Item>` (props + pixmap icons), loaded menus
   subscription()            one session-bus connection (tray/dbus.rs): the watcher we serve or defer to, the
@@ -176,6 +179,13 @@ Notifications (notifications/)  daemon-owned notification daemon: `items: Vec<No
   apply(Event) -> Task      patches the list; a `Notify` starts the expiry timer (serial-checked)
   run(Command) -> Task      Activate (the `default` action, then close) / Invoke(key) / Dismiss: emits
                             `ActionInvoked` / `NotificationClosed`
+  ui/tip.rs                 `Tips`: a bar's tip (`icssed::tooltip(..).on_tip(..)` in a gadget, passed on as
+                            `Action::ShowTip(Tip { text, about })` / `HideTip(about)`), one at a time, on an
+                            overlay layer surface of its own taking no input (an xdg popup with no click
+                            wants a grab Hyprland refuses, a bar's overlay would be cut): anchored to the
+                            bar's edge of the output past the bar, centred on `about`, the toolkit's
+                            `tip` at a root `tooltip`; a hide closes it only when it's about the same
+                            rectangle on the same bar (the next widget's show may come first)
   ui/toast.rs               view(n, .., Extras) / surface(root, n, ..) / node(root, n) (for its shadow's room):
                             the one view of a notification, on its own layer surface (`Toasts`: one per
                             notification, `sync(&Notifications, outputs, focused, ..) -> Surfaces` after every
@@ -421,6 +431,32 @@ PlacesGadget (gadgets/places.rs)  impl Gadget: an icon (+ `label`) button; the p
   Message::TogglePopup  -> Action::Places(Refresh) before the popup opens | Open(target) -> Places(Open), closed
            | Mount(path) -> Places(Mount), closed | Eject(path) -> Places(Eject), the popup stays
            | MountDir(dir) -> Places(MountDir), closed | UnmountDir(dir) -> Places(UnmountDir)
+
+Apps       (apps.rs)        daemon-owned pinned apps of the `Apps` gadgets, the same on every bar: desktop
+                            ids (lowercased, no `.desktop`) in `$XDG_STATE_HOME/aria-shell/pinned-apps`, one
+                            per line, read at start, written at every change (through a temporary)
+  run(Command, index, terminal) -> changed   Launch { id, action } (`desktop::launch`, the entry
+                            or one of its actions) | Pin(id) | Unpin(id); a change redraws every bar
+
+AppsGadget (gadgets/apps.rs)  impl Gadget: a dock. Its apps found in `view`: the instance's `apps` (config,
+                            fixed), then `Apps::pinned()`, then the windows in their `opened` order grouped
+                            by app (`Icons::entry`: the class, `StartupWMClass`, the executable, then
+                            `[apps_class_map]`; no entry: an app of its own, by class), the pinned ones
+                            first, a `separator` before the others. `update` sees no state: what a click
+                            does is decided in `view` (the window to focus, the menu to open, the entry
+                            to launch), a menu item's id is an index into the messages built with the
+                            menu. One popup,
+                            two menus (`Shown`): the right button's whole one, and the left button's on an
+                            app with more than one window, its name and its windows. Its name in a tip
+                            (`ui/tip.rs`), the pointer resting on it. No click cycling them,
+                            nor a menu on the pointer resting: Hyprland's focus warps the pointer onto the
+                            window, away from the icon, and refuses a popup's grab with the pointer's
+                            enter serial (`iced_exwlshell` grabs with it when there's no click), closing it
+  Message::Focus(window) -> Compositor(ActivateWindow) | Launch(id, action) -> Apps(Launch)
+           | Close(windows) -> Compositor(CloseWindow) each | Pin / Unpin -> Apps; these close the
+           popup | Open(key, n, shown) (the other menu of the same app: in its place) | Menu
+  app_ids()                 the config's apps, whose icons the daemon resolves with no window to show
+                            them for (the pinned ones it knows itself)
 
 Scripts    (scripts.rs)     daemon-owned programs feeding gadgets (`[Custom] exec`): `Spec` (argv, interval,
                             return_type) -> last `Output` (text, icon, classes); one run per distinct spec
@@ -1191,8 +1227,10 @@ Two things flow between the daemon and the gadgets besides messages:
   event on an empty workspace comes with no `window focus`: the active
   window is taken from the event's `current` node (its focused
   descendant, or none).
-- A `tooltip` on a 32px layer surface would be clipped to the surface, so
-  the Workspaces gadget has none (Python showed name/title tooltips).
+- A `tooltip` on a 32px layer surface would be clipped to the surface:
+  a bar's tips are the app's (`on_tip`), on a surface of their own
+  (`ui/tip.rs`). The Workspaces gadget has none yet (Python showed
+  name/title tooltips).
 - A popup's size is asked when the anchor's bounds come back from the
   widget tree (`PopupAnchor` -> `Panel::place_popup`), not at
   `OpenPopup`, since the state may have moved on in between: the

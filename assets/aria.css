@@ -671,6 +671,24 @@ surface.panel#dock icon {
  */
 
 /*
+ * Tips
+ * ====
+ *
+ * The text of what the pointer rests on in a bar (an app's name in the
+ * dock), off the bar on its own surface, centred on it, its margin away:
+ * the toolkit's tip, the surface its box (see the toolkit's `tooltip`).
+ * Its border its own, whatever every surface's is; the same on a tip
+ * drawn in a surface (the showcase's).
+ *
+ * surface.tooltip[output="<connector>"]
+ * ╰─ label
+ */
+tooltip,
+surface.tooltip {
+  border: 1px solid var(--border);
+}
+
+/*
  * Gadgets
  * =======
  *
@@ -829,6 +847,56 @@ gadget.workspaces title {
 gadget.workspaces title > label {
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/*
+ * Apps gadget
+ * ===========
+ *
+ * A dock's icons: the pinned apps, a separator, the other apps with
+ * windows open. Under each icon a dot per window (none for a pinned
+ * app not running); the app's indicator is a column here.
+ *
+ * gadget.apps
+ * ├─ indicator.app[.pinned][.running][.active][.danger][app="<desktop id>"]
+ * │  │          .active: one of its windows has the keyboard, .danger: is urgent
+ * │  ├─ icon                   the app's (a generic one until it's known)
+ * │  ╰─ windows                always there, empty when it isn't running
+ * │     ╰─ dot[.active]        one per window
+ * ├─ separator                 between the pinned apps and the others, when both
+ * ╰─ indicator.app ...
+ * surface.popup > gadget.apps
+ * ╰─ menu                      the toolkit's: the app's name (a header), its
+ *                              windows, then actions, open, pin, close (the
+ *                              right button's; the left one's stops at the windows)
+ */
+gadget.apps > indicator {
+  flex-direction: column;
+  padding: 3px 4px 1px 4px;
+  gap: 2px;
+}
+gadget.apps > indicator > windows {
+  height: 3px;
+  gap: 2px;
+  justify-content: center;
+}
+gadget.apps windows > dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+gadget.apps windows > dot.active {
+  width: 8px;
+  background: var(--accent);
+}
+gadget.apps > indicator.danger windows > dot {
+  background: var(--danger);
+}
+gadget.apps > separator {
+  width: 1px;
+  margin: 6px 3px;
+  background: var(--border);
 }
 
 /*

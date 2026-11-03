@@ -34,6 +34,9 @@ pub struct Window {
     pub workspace_id: String,
     pub active: bool,
     pub urgent: bool,
+    /// When it was first seen, a count of the windows seen before (the
+    /// stamps only order windows): a stable order, whatever the backend's.
+    pub opened: u64,
 }
 
 /// A window on screen and where it is, in the global logical space
@@ -66,6 +69,8 @@ pub enum Event {
 pub enum Command {
     ActivateWorkspace(String),
     ActivateWindow(String),
+    /// Ask the window to close, as its close button does.
+    CloseWindow(String),
     /// End the session: the compositor exits.
     Exit,
 }
@@ -84,6 +89,8 @@ pub struct Compositor {
     /// Connector name of the output with keyboard focus, where things
     /// like the launcher should appear.
     pub focused_output: Option<String>,
+    /// The last stamp given to a window's `opened`.
+    clock: u64,
 }
 
 impl Compositor {
@@ -150,6 +157,10 @@ impl Compositor {
                     if let Some(old) = self.windows.iter().find(|w| w.id == win.id) {
                         win.active = old.active;
                         win.urgent = old.urgent;
+                        win.opened = old.opened;
+                    } else {
+                        self.clock += 1;
+                        win.opened = self.clock;
                     }
                 }
                 self.windows = list;
@@ -242,6 +253,7 @@ mod tests {
             workspace_id: workspace.into(),
             active: false,
             urgent: false,
+            opened: 0,
         }
     }
 

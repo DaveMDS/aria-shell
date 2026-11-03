@@ -248,6 +248,13 @@ close_window() {
     settle
 }
 
+# The windows the compositor asked to close since (a close button, a
+# `kill`) close now.
+sync_windows() {
+    inject sync
+    settle
+}
+
 # --- tray items ------------------------------------------------------------
 # `aria-sni` (tests/ui/sni) is a status notifier item with a menu, on
 # the scenario's private session bus: two fifos, commands in

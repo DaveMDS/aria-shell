@@ -107,6 +107,13 @@ pub const CATALOGUE: Catalogue = &[
     ("screenshot.save", "Salva"),
     ("screenshot.window", "Finestra attiva"),
     ("screenshot.screen", "Questo schermo"),
+    // apps
+    ("apps.open", "Apri"),
+    ("apps.new_window", "Nuova finestra"),
+    ("apps.pin", "Blocca sulla barra"),
+    ("apps.unpin", "Sblocca dalla barra"),
+    ("apps.close", "Chiudi"),
+    ("apps.close_all", "Chiudi tutte"),
     // places
     ("places.places", "Luoghi"),
     ("places.bookmarks", "Segnalibri"),

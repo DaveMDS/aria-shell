@@ -83,13 +83,14 @@ players, ...) is owned by the daemon: the services, in `src/services/`
 (`Compositor` in `compositor/`, `Icons` in `icons/`, `Tray` in `tray/`,
 `Scripts` in `scripts.rs`, `Audio` in `audio/`, `Network` in
 `network/`, `Idle` in `idle/`, `Power` in `power/`, `Brightness` in
-`brightness/`, `Screenshot` in `screenshot/`, `Places` in `places/`).
+`brightness/`, `Screenshot` in `screenshot/`, `Places` in `places/`,
+`Apps` in `apps.rs`).
 It reaches gadgets read-only through `gadgets::Context` in `view`, and
 is changed by returning `gadgets::Action::Compositor(cmd)` /
 `Action::Tray(cmd)` / `Action::Script(cmd)` / `Action::Audio(cmd)` /
 `Action::Network(cmd)` / `Action::Idle(cmd)` / `Action::Power(cmd)` /
 `Action::Brightness(cmd)` / `Action::Screenshot(cmd)` /
-`Action::Places(cmd)` from `update`. Gadgets never open their own IPC
+`Action::Places(cmd)` / `Action::Apps(cmd)` from `update`. Gadgets never open their own IPC
 or DBus connection, and never run a periodic program themselves (a
 `Gadget::script` spec, run once by the daemon for every panel). Command
 lines from the config go through `process.rs`: split with shell-like
@@ -118,7 +119,8 @@ of these.
 - `ui/`: the building blocks of every surface: the theme
   (`ui/theme.rs`), the reusable pieces (the menu, the calendar: the
   state the toolkit's controlled widgets leave to their host), the
-  shapes things are shown in (a gadget's popup, a notification's toast)
+  shapes things are shown in (a gadget's popup, a bar's tip, a
+  notification's toast)
   and the measuring.
 - the daemon: `main.rs` (`Message`, the router `update`) and `daemon/`
   (the rest of `AriaShell`, by subject).

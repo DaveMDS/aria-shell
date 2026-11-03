@@ -23,12 +23,11 @@ use iced_wayland_subscriber::OutputInfo;
 use icssed::Element;
 
 use crate::config::{RawSection, Section};
-use crate::gadgets::{Action, Context, Gadget, Popup};
+use crate::gadgets::{Action, Context, Gadget, Popup, ShownTip};
 use crate::services::apps::{Command, desktop_id};
 use crate::services::compositor::{self, Window};
 use crate::services::icons::desktop::DesktopEntry;
 use crate::ui::menu::{self, Item, Menu};
-use crate::ui::tip::Tip;
 
 /// Shown while an app's icon isn't resolved, its room kept.
 const PLACEHOLDER: &str = "application-x-executable";
@@ -63,8 +62,8 @@ pub struct AppsGadget {
     /// Which of its menus.
     shown: Shown,
     menu: Menu,
-    /// The tip shown: the app's key, what it's about.
-    tip: Option<(String, Rectangle)>,
+    /// The tip shown, by the app's key.
+    tip: ShownTip<String>,
 }
 
 /// What the popup shows.
@@ -105,7 +104,7 @@ impl Gadget for AppsGadget {
             menu_for: None,
             shown: Shown::Menu,
             menu: Menu::new(),
-            tip: None,
+            tip: ShownTip::default(),
         }
     }
 
@@ -133,16 +132,7 @@ impl Gadget for AppsGadget {
                 self.menu.update(m);
                 return Action::None;
             }
-            Message::Tip(key, text, Some(about)) => {
-                self.tip = Some((key, about));
-                return Action::ShowTip(Tip { text, about });
-            }
-            Message::Tip(key, _, None) => {
-                return match self.tip.take_if(|(k, _)| *k == key) {
-                    Some((_, about)) => Action::HideTip(about),
-                    None => Action::None,
-                };
-            }
+            Message::Tip(key, text, about) => return self.tip.update(key, text, about),
             Message::Focus(id) => Action::Compositor(compositor::Command::ActivateWindow(id)),
             Message::Launch(id, action) => Action::Apps(Command::Launch { id, action }),
             Message::Close(ids) => Action::Many(

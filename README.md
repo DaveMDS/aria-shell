@@ -29,23 +29,22 @@ bar per monitor (or per `[panel:*]` section):
 
 | Gadget          | Status | Description                                                                |
 |-----------------|---|---------------------------------------------------------------------------------|
-| `Clock`         | ✅ | Current time with a calendar popup                                              |
+| `Clock`         | ✅ | Current time with a calendar popup, a tip in another pattern (`tooltip_format`) |
 | `SystemMonitor` | ✅ | CPU, RAM, swap, disks, network, GPU, load and temperature with a btop-like popup (process table, Terminate/Kill) |
 | `WorkSpaces`    | ✅ | Workspaces and windows overview (Hyprland & Sway)                               |
 | `Audio`         | ✅ | Volume control, multichannel mixer (PipeWire/PulseAudio) and MPRIS2 media controls |
-| `Tray`          | ✅ | System tray via (K)StatusNotifierItem + DBusMenu                                |
+| `Tray`          | ✅ | System tray via (K)StatusNotifierItem + DBusMenu, the items' tooltips in tips   |
 | `Themes`        | ✅ | Shell theme selector with light/dark mode support, and a colour picker          |
 | `Themes`        | 🔲 | Icon theme selector (icon theme is set in the config for now)                   |
 | `Notifications` | ✅ | Notification bell with unseen count, history popup and do-not-disturb           |
-| `Custom`        | ✅ | User-defined gadgets with label, icon, commands per mouse button and a periodic `exec` (text or JSON) |
+| `Custom`        | ✅ | User-defined gadgets with label, icon, tooltip, commands per mouse button and a periodic `exec` (text or JSON) |
 | `logout`        | ✅ | A `Custom` button to invoke Aria Exiter (`aria-shell exiter toggle`)            |
 | `Power`         | ✅ | Battery (charge, time left, health), peripherals' charge, power profiles, idle inhibitor; low battery notifications |
 | `Brightness`    | ✅ | Every screen's brightness: the laptop's panel (backlight, through logind) and monitors over DDC/CI (`ddcutil`); wheel, a slider per screen |
 | `Network`       | ✅ | NetworkManager: Wi‑Fi networks, wired devices, VPN toggles, Wi‑Fi on/off        |
 | `Network`       | 🔲 | Secret agent (VPN / 802.1X passwords asked in the popup), hidden networks, hotspot, mobile broadband, per-BSSID choice, editing profiles, iwd |
-| `Clock`         | 🔲 | Tooltip (`tooltip_format`)                                                      |
 | `SystemMonitor` | 🔲 | Per-process graphs and command lines, tree view, filtering, battery, more sensors, Intel GPU |
-| `Tray`          | 🔲 | Tooltips, overlay icons, menu icons and shortcuts, the `org.freedesktop` SNI name |
+| `Tray`          | 🔲 | Overlay icons, menu icons and shortcuts, the `org.freedesktop` SNI name |
 | `bluetooth`     | 🔲 | bluetooth manager                                                               |
 | `Screenshot`    | ✅ | A button: the screenshot picker, a menu for the active window, the bar's screen, every screen |
 | `Screenshot`    | 🔲 | Screen recorder                                                                 |

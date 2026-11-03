@@ -46,6 +46,8 @@ pub struct Output {
     pub icon: Option<String>,
     /// CSS classes for the gadget's button.
     pub classes: Vec<String>,
+    /// A tip replacing the gadget's.
+    pub tooltip: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -188,6 +190,7 @@ fn parse_json(raw: &str) -> Result<Output, String> {
         text: string("text").unwrap_or_default(),
         icon: string("icon").filter(|s| !s.is_empty()),
         classes,
+        tooltip: string("tooltip").filter(|s| !s.is_empty()),
     })
 }
 
@@ -212,6 +215,7 @@ mod tests {
                 text: "3".into(),
                 icon: Some("x".into()),
                 classes: vec!["warning".into(), "urgent".into()],
+                tooltip: Some("t".into()),
             }
         );
         assert_eq!(

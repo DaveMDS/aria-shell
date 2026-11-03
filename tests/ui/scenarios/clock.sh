@@ -53,3 +53,22 @@ assert_eq "$(surfaces | tr ';' '\n' | grep -c popup)" 1 "one popup at a time"
 wait_for 'surface.popup calendar' 0 "the calendar's popup is gone"
 click 600 600
 assert_no_surface popup
+
+# The pointer resting on it: the tip in `tooltip_format`, centred on
+# it; away, gone. Clock:2 has no `tooltip_format`: no tip.
+pointer 960 600
+assert_no_surface tooltip
+set -- $(widget 'surface.panel[output="HEADLESS-1"] slot.center gadget.clock > indicator')
+clock_cx=$(($1 + $3 / 2))
+pointer $clock_cx $(($2 + $4 / 2))
+assert_surface tooltip
+set -- $(widget 'surface.tooltip')
+[ $(($1 + $3 / 2 - clock_cx)) -le 1 ] && [ $((clock_cx - $1 - $3 / 2)) -le 1 ] || { echo "the tip not centred on the clock ($clock_cx): $*"; exit 1; }
+shot tip "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+pointer 960 600
+assert_no_surface tooltip
+set -- $(widget 'surface.panel[output="HEADLESS-1"] slot.end gadget.clock > indicator')
+pointer $(($1 + $3 / 2)) $(($2 + $4 / 2))
+settle 1
+assert_no_surface tooltip
+pointer 960 600

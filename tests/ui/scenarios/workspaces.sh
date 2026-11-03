@@ -22,6 +22,20 @@ wait_for "$p1 indicator.workspace.active[name=\"1\"]" 1 "workspace 1 active on t
 wait_for "$p2 indicator.workspace.active[name=\"2\"]" 1 "workspace 2 active on the second bar"
 wait_for 'gadget.workspaces > title' 0 "no active window, no title"
 
+# The pointer resting on a workspace: its name in a tip, centred on it;
+# away, gone. (Before any window: Sway's focus follows the pointer.)
+pointer 960 600
+assert_no_surface tooltip
+set -- $(widget "$p1 indicator.workspace[name=\"1\"]")
+ws_cx=$(($1 + $3 / 2))
+pointer $ws_cx $(($2 + $4 / 2))
+assert_surface tooltip
+set -- $(widget 'surface.tooltip')
+[ $(($1 + $3 / 2 - ws_cx)) -le 1 ] && [ $((ws_cx - $1 - $3 / 2)) -le 1 ] || { echo "the tip not centred on the workspace ($ws_cx): $*"; exit 1; }
+shot tip "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+pointer 960 600
+assert_no_surface tooltip
+
 # A window lands on the focused workspace, focused: its icon in the
 # workspace, its title after the row (on that output's bar only).
 open_window aria-one "Window one"

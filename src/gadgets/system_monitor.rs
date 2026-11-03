@@ -274,6 +274,10 @@ impl Gadget for SystemMonitor {
         }
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr(self.config.show.label()).to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let sample = ctx.sysmon.sample();
         let value = self.config.show;

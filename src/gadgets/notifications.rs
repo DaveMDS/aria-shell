@@ -89,6 +89,10 @@ impl Gadget for NotificationsGadget {
         vec![self.config.icon.clone(), self.config.dnd_icon.clone()]
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.notifications").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let unseen = ctx.notifications.unseen();
         let name = if ctx.notifications.dnd() {

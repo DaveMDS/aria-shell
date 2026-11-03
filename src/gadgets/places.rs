@@ -100,6 +100,10 @@ impl Gadget for PlacesGadget {
         .into()
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.places").to_owned())
+    }
+
     fn popup(&mut self) -> Option<&mut Popup> {
         Some(&mut self.popup)
     }

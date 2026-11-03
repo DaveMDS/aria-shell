@@ -151,6 +151,10 @@ impl Gadget for AudioGadget {
         .collect()
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.audio").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let mut buttons = vec![self.bar_button(ctx, Kind::Output)];
         if self.config.show_microphone {

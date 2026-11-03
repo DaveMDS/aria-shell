@@ -1,5 +1,6 @@
 //! Clock gadget: the current time, formatted with a `strftime` pattern.
-//! A click opens a month calendar in a popup.
+//! A click opens a month calendar in a popup; the pointer resting on it
+//! shows the time in another pattern in a tip, when there's one.
 
 use chrono::{DateTime, Local};
 use iced::Subscription;
@@ -17,6 +18,8 @@ pub struct ClockConfig {
     /// strftime pattern, see
     /// <https://docs.rs/chrono/latest/chrono/format/strftime/index.html>
     pub format: String,
+    /// The tip's strftime pattern; none (empty), no tip.
+    pub tooltip_format: String,
 }
 
 impl Section for ClockConfig {
@@ -25,6 +28,7 @@ impl Section for ClockConfig {
     fn from_raw(raw: &RawSection) -> Self {
         Self {
             format: raw.str_or("format", "%H:%M"),
+            tooltip_format: raw.str_or("tooltip_format", ""),
         }
     }
 }
@@ -80,6 +84,12 @@ impl Gadget for Clock {
                 .id(self.popup.anchor())
         ]
         .into()
+    }
+
+    /// The text of when it shows: it isn't followed while it's up.
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        (!self.config.tooltip_format.is_empty())
+            .then(|| ctx.locale.date(&self.now, &self.config.tooltip_format))
     }
 
     fn popup(&mut self) -> Option<&mut Popup> {

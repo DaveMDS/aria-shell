@@ -199,6 +199,35 @@ impl Popup {
     }
 }
 
+/// The tip a gadget has shown, by the key of what it's about (`()` for
+/// a gadget with one): the toolkit's end of a tip (`on_tip`'s `None`)
+/// has no rectangle, the daemon's [`Action::HideTip`] wants it. The
+/// gadget keeps one as a field and passes its `on_tip`s through
+/// [`ShownTip::update`].
+pub struct ShownTip<K>(Option<(K, iced::Rectangle)>);
+
+impl<K> Default for ShownTip<K> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<K: PartialEq> ShownTip<K> {
+    /// The tip of `key`, `text`, shown about `about`, or gone.
+    pub fn update<M>(&mut self, key: K, text: String, about: Option<iced::Rectangle>) -> Action<M> {
+        match about {
+            Some(about) => {
+                self.0 = Some((key, about));
+                Action::ShowTip(crate::ui::tip::Tip { text, about })
+            }
+            None => match self.0.take_if(|(k, _)| *k == key) {
+                Some((_, about)) => Action::HideTip(about),
+                None => Action::None,
+            },
+        }
+    }
+}
+
 impl<M> Action<M> {
     /// Whether what it changes right away is only the gadgets' own
     /// state, what their panel and its popups show: then only those
@@ -323,6 +352,14 @@ pub trait Gadget: Sized {
     /// A program the daemon should run for the gadget (`[Custom] exec`),
     /// its output read back with `ctx.scripts.output(&spec)`.
     fn script(&self) -> Option<crate::services::scripts::Spec> {
+        None
+    }
+
+    /// The gadget's tip as a whole, shown while the pointer rests on
+    /// it: its name, or what it shows in other words. The bar puts it
+    /// on the gadget's box. A gadget with a tip per element (an app,
+    /// a tray item) gives each its own instead.
+    fn tip(&self, _ctx: Context<'_>) -> Option<String> {
         None
     }
 
@@ -560,6 +597,25 @@ impl AnyGadget {
             Self::Screenshot(g) => g.popup(),
             Self::Places(g) => g.popup(),
             Self::Apps(g) => g.popup(),
+        }
+    }
+
+    pub fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        match self {
+            Self::Clock(g) => g.tip(ctx),
+            Self::Custom(g) => g.tip(ctx),
+            Self::Workspaces(g) => g.tip(ctx),
+            Self::Tray(g) => g.tip(ctx),
+            Self::Themes(g) => g.tip(ctx),
+            Self::Notifications(g) => g.tip(ctx),
+            Self::SystemMonitor(g) => g.tip(ctx),
+            Self::Audio(g) => g.tip(ctx),
+            Self::Network(g) => g.tip(ctx),
+            Self::Power(g) => g.tip(ctx),
+            Self::Brightness(g) => g.tip(ctx),
+            Self::Screenshot(g) => g.tip(ctx),
+            Self::Places(g) => g.tip(ctx),
+            Self::Apps(g) => g.tip(ctx),
         }
     }
 

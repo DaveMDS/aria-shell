@@ -148,6 +148,20 @@ impl Value {
         })
     }
 
+    /// The catalogue key of what it is, in words: the gadget's tip.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Cpu => "sysmon.value.cpu",
+            Self::Mem => "sysmon.value.mem",
+            Self::Swap => "sysmon.value.swap",
+            Self::Disk => "sysmon.value.disk",
+            Self::Net => "sysmon.value.net",
+            Self::Gpu => "sysmon.value.gpu",
+            Self::Temp => "sysmon.value.temp",
+            Self::Load => "sysmon.value.load",
+        }
+    }
+
     /// The class the bar button carries.
     pub fn name(self) -> &'static str {
         match self {

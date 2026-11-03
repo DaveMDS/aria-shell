@@ -61,6 +61,10 @@ impl Gadget for ScreenshotGadget {
         vec![self.icon.clone()]
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.screenshot").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let button = mouse_area(
             icssed::button![ctx.icon(self.icon.as_str())]

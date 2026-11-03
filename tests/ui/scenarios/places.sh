@@ -81,3 +81,17 @@ while [ "$(wc -l < "$ARIA_UI_OUT/opened" 2> /dev/null)" != 3 ] && [ $i -lt 20 ];
 done
 assert_eq "$(sort "$ARIA_UI_OUT/opened")" "$(printf '%s\n' "$HOME/Scaricati" sftp://dave@server.lan/srv trash:/// | sort)" \
     "the remote URI, the folder, the trash"
+
+# The pointer resting on it: what it is in a tip, centred on it; away,
+# gone.
+pointer 960 600
+assert_no_surface tooltip
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.places > indicator')
+cx=$(($1 + $3 / 2))
+pointer $cx $(($2 + $4 / 2))
+assert_surface tooltip
+set -- $(widget 'surface.tooltip')
+[ $(($1 + $3 / 2 - cx)) -le 1 ] && [ $((cx - $1 - $3 / 2)) -le 1 ] || { echo "the tip not centred on the gadget ($cx): $*"; exit 1; }
+shot tip "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+pointer 960 600
+assert_no_surface tooltip

@@ -17,7 +17,7 @@ use iced_wayland_subscriber::{OutputId, OutputInfo};
 use icssed::{Element, Node};
 
 use crate::config::{Config, RawSection, Section};
-use crate::gadgets::{self, AnyGadget, Context};
+use crate::gadgets::{self, AnyGadget, Context, ShownTip};
 use crate::services::scripts;
 use crate::shared::Shared;
 use crate::ui::popup::{self, Side};
@@ -207,6 +207,8 @@ pub struct Panel {
     /// Open popups, by window id. The panel mints the ids so the daemon
     /// only has to map them back to the panel.
     popups: BTreeMap<window::Id, Popup>,
+    /// The gadget tip shown (`Gadget::tip`), by the gadget's index.
+    tip: ShownTip<usize>,
     /// Whether the surface was last made keyboard-interactive, for a
     /// popup with a text field (see [`Panel::wants_keyboard`]).
     pub keyboard: bool,
@@ -254,6 +256,9 @@ pub enum Message {
     /// A key the compositor sent to the bar's surface, for the open
     /// popup that wants the keyboard (see [`Panel::wants_keyboard`]).
     Key(iced::keyboard::Event),
+    /// The tip of gadget `i` (`Gadget::tip`), this text shown about
+    /// this rectangle, or gone.
+    Tip(usize, String, Option<Rectangle>),
 }
 
 /// What `update` asks the daemon to do: a gadget's [`gadgets::Action`],
@@ -300,6 +305,7 @@ impl Panel {
             width: 1,
             gadgets,
             popups: BTreeMap::new(),
+            tip: ShownTip::default(),
             keyboard: false,
             hidden,
             pointer: false,
@@ -555,6 +561,7 @@ impl Panel {
                 let action = g.popup_key(event);
                 self.lift(i, action)
             }
+            Message::Tip(i, text, about) => self.tip.update(i, text, about),
         }
     }
 
@@ -786,11 +793,16 @@ impl Panel {
                     // Its view is the gadget's box, `gadget.<kind>[#instance]`.
                     let view = e.gadget.view(ctx).map(move |m| Message::Gadget(i, m));
                     let gadget = icssed::slot(view).kind("gadget").class(e.gadget.kind());
-                    match &e.id {
+                    let gadget = match &e.id {
                         Some(id) => gadget.named(id),
                         None => gadget,
+                    };
+                    match e.gadget.tip(ctx) {
+                        Some(text) => icssed::tooltip(gadget, text.clone())
+                            .on_tip(move |about| Message::Tip(i, text.clone(), about))
+                            .into(),
+                        None => gadget.into(),
                     }
-                    .into()
                 });
             icssed::row(gadgets)
                 .kind("slot")

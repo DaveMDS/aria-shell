@@ -1,16 +1,18 @@
 //! Workspaces gadget: one button per workspace, with the icon of each
 //! window on it (a dot until the icon is known); click to switch
 //! workspace (or focus a window). After them, the icon and title of the
-//! active window, when it's on this panel's output.
+//! active window, when it's on this panel's output. The pointer resting
+//! on a workspace shows its name in a tip.
 //!
 //! Holds no compositor state: it reads the daemon's [`Compositor`] from
 //! the view context and filters it for the output the panel is on.
 
+use iced::Rectangle;
 use iced_wayland_subscriber::OutputInfo;
 use icssed::Element;
 
 use crate::config::{RawSection, Section};
-use crate::gadgets::{Action, Context, Gadget};
+use crate::gadgets::{Action, Context, Gadget, ShownTip};
 use crate::services::compositor::{Command, Window, Workspace};
 
 /// `[WorkSpaces]` section (spelled as in the Python implementation).
@@ -46,12 +48,17 @@ pub struct Workspaces {
     /// Connector name of the panel's output; `None` if the compositor
     /// didn't tell us, in which case every workspace is shown.
     output: Option<String>,
+    /// The tip shown, by the workspace's id.
+    tip: ShownTip<String>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
     Activate(String),
     Focus(String),
+    /// The tip of the workspace with this id, this text shown about
+    /// this rectangle, or gone.
+    Tip(String, String, Option<Rectangle>),
 }
 
 impl Gadget for Workspaces {
@@ -65,6 +72,7 @@ impl Gadget for Workspaces {
         Self {
             config,
             output: output.name.clone(),
+            tip: ShownTip::default(),
         }
     }
 
@@ -72,6 +80,7 @@ impl Gadget for Workspaces {
         match message {
             Message::Activate(id) => Action::Compositor(Command::ActivateWorkspace(id)),
             Message::Focus(id) => Action::Compositor(Command::ActivateWindow(id)),
+            Message::Tip(id, text, about) => self.tip.update(id, text, about),
         }
     }
 
@@ -118,13 +127,17 @@ impl Workspaces {
                     .map(|w| self.window_view(w, ctx)),
             );
         }
-        icssed::button(children)
+        let button = icssed::button(children)
             .kind("indicator")
             .class("workspace")
             .class_if("active", ws.active)
             .class_if("danger", ws.urgent)
             .attr("name", &ws.name)
-            .on_press(Message::Activate(ws.id.clone()))
+            .on_press(Message::Activate(ws.id.clone()));
+        let text = ctx.locale.fmt("workspaces.tip", &[("name", &ws.name)]);
+        let id = ws.id.clone();
+        icssed::tooltip(button, text.clone())
+            .on_tip(move |about| Message::Tip(id.clone(), text.clone(), about))
             .into()
     }
 

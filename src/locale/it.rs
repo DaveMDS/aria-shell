@@ -5,6 +5,17 @@ use super::Catalogue;
 pub const CATALOGUE: Catalogue = &[
     // launcher
     ("launcher.search", "Cerca applicazioni…"),
+    // the gadgets' names, in their tips
+    ("gadgets.audio", "Audio"),
+    ("gadgets.brightness", "Luminosità"),
+    ("gadgets.network", "Rete"),
+    ("gadgets.notifications", "Notifiche"),
+    ("gadgets.places", "Risorse"),
+    ("gadgets.power", "Energia"),
+    ("gadgets.screenshot", "Cattura schermo"),
+    ("gadgets.themes", "Temi"),
+    // workspaces
+    ("workspaces.tip", "Workspace: {name}"),
     // locker
     ("locker.enter_password", "Inserisci la password"),
     ("locker.auth_failed", "Autenticazione fallita"),
@@ -56,6 +67,14 @@ pub const CATALOGUE: Catalogue = &[
     ("network.failed", "Impossibile connettersi"),
     ("network.gateway", "Gateway"),
     // system monitor
+    ("sysmon.value.cpu", "Processore"),
+    ("sysmon.value.mem", "Memoria"),
+    ("sysmon.value.swap", "Swap"),
+    ("sysmon.value.disk", "Disco"),
+    ("sysmon.value.net", "Traffico di rete"),
+    ("sysmon.value.gpu", "Scheda video"),
+    ("sysmon.value.temp", "Temperatura"),
+    ("sysmon.value.load", "Carico del sistema"),
     ("sysmon.tab.cpu", "CPU"),
     ("sysmon.tab.memory", "Memoria"),
     ("sysmon.tab.disks", "Dischi"),

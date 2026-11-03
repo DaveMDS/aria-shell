@@ -1,7 +1,8 @@
 # The Custom gadget: a static button running a program per mouse button
 # (the left one opens the launcher through the shell's own CLI, the
 # others write to a file), a label from a program's output, JSON output
-# with a class and an icon, and an empty output hiding the gadget.
+# with a class, an icon and a tip, and an empty output hiding the
+# gadget; the `tooltip` key's tip.
 
 # One button per bar; the static one has an icon and a text.
 wait_for 'gadget.custom#static > indicator' 2 "one static button per bar"
@@ -41,3 +42,27 @@ scroll -1
 sleep 0.3
 assert_eq "$(tr '\n' ' ' < "$ARIA_UI_OUT/clicks")" "right middle down up " "each button ran its program"
 assert_logged 'ran "sh -c'
+
+# The pointer resting on it: the `tooltip` key's tip (at the output's
+# edge: not centred, kept inside it); away, gone. JSON's `tooltip` replaces the key's (one letter: much
+# narrower); no `tooltip`, no tip.
+tip_on() {
+    pointer 960 600
+    assert_no_surface tooltip
+    set -- $(widget "surface.panel[output=\"HEADLESS-1\"] gadget.custom#$1 > indicator")
+    cx=$(($1 + $3 / 2))
+    pointer $cx $(($2 + $4 / 2))
+}
+tip_on static
+assert_surface tooltip
+set -- $(widget 'surface.tooltip')
+shot tip "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+tip_on json
+assert_surface tooltip
+set -- $(widget 'surface.tooltip > label')
+[ "$3" -gt 150 ] || { echo "the key's tip, not the output's: $*"; exit 1; }
+shot tip-json "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+tip_on echo
+settle 1
+assert_no_surface tooltip
+pointer 960 600

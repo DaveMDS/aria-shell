@@ -75,6 +75,10 @@ impl Gadget for PowerGadget {
         names
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.power").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let mut parts: Vec<Element<'a, Message>> = Vec::new();
         let battery = ctx.power.battery().filter(|_| self.config.show_battery);

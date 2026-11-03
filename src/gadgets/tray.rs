@@ -2,7 +2,8 @@
 //! activates the item (or opens its menu when it says it's a menu), a
 //! right click opens its `dbusmenu` in a popup (or asks the app for its
 //! own context menu when it has none), the middle button is the
-//! secondary activation, the wheel scrolls it.
+//! secondary activation, the wheel scrolls it. The pointer resting on
+//! it shows its tooltip (or its title, when it has none) in a tip.
 //!
 //! Holds no item state: it reads the daemon's [`Tray`](crate::services::tray::Tray)
 //! from the view context. The popup shows the menu the daemon loaded
@@ -10,13 +11,14 @@
 //! place and the popup is resized (its size is a function of the state,
 //! see [`Gadget::popup_size`]).
 
+use iced::Rectangle;
 use iced::mouse::ScrollDelta;
 use iced::widget::mouse_area;
 use iced_wayland_subscriber::OutputInfo;
 use icssed::Element;
 
 use crate::config::{RawSection, Section};
-use crate::gadgets::{Action, Axis, Context, Gadget, Popup, Wheel};
+use crate::gadgets::{Action, Axis, Context, Gadget, Popup, ShownTip, Wheel};
 use crate::services::tray::{Command, Orientation, Status};
 use crate::ui::menu::{self, Menu};
 
@@ -40,6 +42,8 @@ pub struct TrayGadget {
     menu_for: Option<String>,
     menu: Menu,
     wheel: Wheel,
+    /// The tip shown, by the item's key.
+    tip: ShownTip<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -51,6 +55,9 @@ pub enum Message {
     /// Show the menu of the item at index `n` (its anchor).
     OpenMenu(String, usize),
     Menu(menu::Message),
+    /// The tip of the item with this key, this text shown about this
+    /// rectangle, or gone.
+    Tip(String, String, Option<Rectangle>),
 }
 
 impl Gadget for TrayGadget {
@@ -63,6 +70,7 @@ impl Gadget for TrayGadget {
             menu_for: None,
             menu: Menu::new(),
             wheel: Wheel::default(),
+            tip: ShownTip::default(),
         }
     }
 
@@ -95,6 +103,7 @@ impl Gadget for TrayGadget {
                     self.popup.toggle_nth(n),
                 ])
             }
+            Message::Tip(key, text, about) => self.tip.update(key, text, about),
             Message::Menu(m) => {
                 let Some(key) = self.menu_for.clone() else {
                     return Action::None;
@@ -142,10 +151,19 @@ impl Gadget for TrayGadget {
                 .on_press(left)
                 .id(self.popup.anchor_nth(n));
             let scroll_key = key.clone();
-            mouse_area(button)
+            let area = mouse_area(button)
                 .on_right_press(right)
-                .on_middle_press(Message::SecondaryActivate(key))
-                .on_scroll(move |delta| Message::Scroll(scroll_key.clone(), delta))
+                .on_middle_press(Message::SecondaryActivate(key.clone()))
+                .on_scroll(move |delta| Message::Scroll(scroll_key.clone(), delta));
+            let text = match item.props.tooltip.as_str() {
+                "" => item.props.title.clone(),
+                tooltip => tooltip.to_owned(),
+            };
+            if text.is_empty() {
+                return area.into();
+            }
+            icssed::tooltip(area, text.clone())
+                .on_tip(move |about| Message::Tip(key.clone(), text.clone(), about))
                 .into()
         });
         icssed::row(items).into()

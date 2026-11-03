@@ -217,6 +217,10 @@ impl Gadget for NetworkGadget {
         .collect()
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.network").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let summary = ctx.network.summary();
         let running = ctx.network.running();

@@ -96,6 +96,10 @@ impl Gadget for BrightnessGadget {
             .collect()
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.brightness").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let screen = self.bar_screen(&ctx);
         let mut content: Vec<Element<'a, Message>> = vec![ctx.icon(ICON).into()];

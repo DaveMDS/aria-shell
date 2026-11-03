@@ -71,6 +71,20 @@ set -- $(surfaces | tr ';' '\n' | grep ' popup ' | sed 's/.* \([0-9]*\)x\([0-9]*
 click 600 600
 assert_no_surface popup
 
+# The pointer resting on it: its tooltip in a tip, centred on it;
+# away, gone.
+pointer 960 600
+assert_no_surface tooltip
+set -- $(widget 'surface.panel[output="HEADLESS-1"] gadget.tray > indicator')
+item_cx=$(($1 + $3 / 2))
+pointer $item_cx $(($2 + $4 / 2))
+assert_surface tooltip
+set -- $(widget 'surface.tooltip')
+[ $(($1 + $3 / 2 - item_cx)) -le 1 ] && [ $((item_cx - $1 - $3 / 2)) -le 1 ] || { echo "the tip not centred on the item ($item_cx): $*"; exit 1; }
+shot tip "$(($1 - 30)),$(($2 - 20)) $(($3 + 60))x$(($4 + 60))"
+pointer 960 600
+assert_no_surface tooltip
+
 # Property changes are followed.
 sni_send "icon 40 200 40"
 shot bar-item-green "$(($(widget 'surface.panel[output="HEADLESS-1"] gadget.tray > indicator' | cut -d' ' -f1) - 40)),0 120x32"

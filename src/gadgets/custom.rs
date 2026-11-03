@@ -2,8 +2,9 @@
 //! program per mouse button and wheel direction, and optionally a
 //! program (`exec`) whose output is the label, run every `interval`
 //! seconds and again after every click. The output is plain text or,
-//! as waybar's custom modules do, JSON with `text`, `icon` and `class`
-//! (CSS classes on the button).
+//! as waybar's custom modules do, JSON with `text`, `icon`, `class`
+//! (CSS classes on the button) and `tooltip`. The pointer resting on it
+//! shows its tooltip in a tip, when there's one.
 //!
 //! Programs are run as written, without a shell (see
 //! [`crate::process`]); `[Custom:id]` sections give several of them.
@@ -28,6 +29,9 @@ pub struct CustomConfig {
     /// Fixed text, and an icon name from the icon theme.
     pub label: String,
     pub icon: String,
+    /// The tip's text; none (empty), no tip. `exec`'s JSON `tooltip`
+    /// replaces it.
+    pub tooltip: String,
     /// Command lines run on the left, right and middle button, and on
     /// the wheel.
     pub command: String,
@@ -65,6 +69,7 @@ impl Section for CustomConfig {
         Self {
             label: raw.str_or("label", ""),
             icon: raw.str_or("icon", ""),
+            tooltip: raw.str_or("tooltip", ""),
             command: raw.str_or("command", ""),
             command_right: raw.str_or("command_right", ""),
             command_middle: raw.str_or("command_middle", ""),
@@ -167,6 +172,14 @@ impl Gadget for Custom {
             .on_middle_press(Message::Middle)
             .on_scroll(Message::Scroll);
         icssed::row![button].into()
+    }
+
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        let output = self.script.as_ref().and_then(|s| ctx.scripts.output(s));
+        let tip = output
+            .and_then(|o| o.tooltip.as_deref())
+            .unwrap_or(&self.config.tooltip);
+        (!tip.is_empty()).then(|| tip.to_owned())
     }
 }
 

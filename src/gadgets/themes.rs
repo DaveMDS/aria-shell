@@ -134,6 +134,10 @@ impl Gadget for Themes {
         ]
     }
 
+    fn tip(&self, ctx: Context<'_>) -> Option<String> {
+        Some(ctx.locale.tr("gadgets.themes").to_owned())
+    }
+
     fn view<'a>(&'a self, ctx: Context<'a>) -> Element<'a, Message> {
         let name = match ctx.theme.scheme() {
             Scheme::Light => &self.config.light_icon,

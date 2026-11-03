@@ -764,8 +764,9 @@ scroller.flat > scrollbar.horizontal {
  * =====
  *
  * A column of items to press (`icssed::menu`), each with a check box or
- * a radio, an icon, a shortcut; separators; submenus unfolded in place,
- * under their item. Up and Down move the focus among the items once one
+ * a radio, an icon, a shortcut; separators, headers over the items after
+ * them; submenus unfolded in place, under their item. As wide as its
+ * widest item up to its max-width, a longer label cut there. Up and Down move the focus among the items once one
  * has it. The check box and the radio are a toggle's tree, drawn by the
  * same rules (see Toggles), pressed with their item; a submenu's arrow
  * is text, its `content`.
@@ -786,11 +787,14 @@ scroller.flat > scrollbar.horizontal {
  * │  ├─ shortcut
  * │  ╰─ arrow           a submenu's
  * ├─ separator
+ * ├─ header             a title, never pressed nor focused
+ * │  ╰─ label
  * ╰─ submenu            an unfolded submenu's items, under its item
  *    ╰─ item …
  */
 menu {
   min-width: 160px;
+  max-width: 360px;
   padding: 4px;
 }
 menu item {
@@ -829,6 +833,17 @@ menu item.submenu > arrow {
 }
 menu item.expanded > arrow {
   content: "▾";
+}
+menu header {
+  padding: 6px 8px;
+}
+menu header > label {
+  width: fill;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: bold;
+  color: var(--muted);
 }
 menu separator {
   height: 1px;

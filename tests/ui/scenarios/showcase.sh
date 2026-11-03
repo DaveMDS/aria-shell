@@ -10,6 +10,7 @@ assert_surface showcase
 assert_eq "$(surfaces | tr ';' '\n' | grep -c showcase)" 1 "on one output"
 wait_for 'surface.popup gadget.clock calendar' 1 "the calendar"
 wait_for 'surface.popup gadget#showcase menu > item' 8 "a menu: every kind of item"
+wait_for 'surface.popup gadget#showcase menu > header' 1 "its header"
 wait_for 'surface.popup gadget#showcase menu > item.submenu' 2 "two submenus"
 wait_for 'surface.popup gadget#showcase menu > submenu > item' 2 "one unfolded"
 wait_for 'surface.popup gadget#showcase > column > button.picker' 1 "the picker under it"

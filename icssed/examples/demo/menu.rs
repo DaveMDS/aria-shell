@@ -20,6 +20,9 @@
 //!   checks and the radios: an item has one or the other, and the
 //!   labels line up. Only where an item has both are they two columns.
 //! - `.class(c)` styles one item (`.danger` below).
+//! - `MenuItem::header(label)` is a title over the items after it: never
+//!   pressed, never focused.
+//! - A label longer than the menu's `max-width` is cut there.
 //! - Up and Down move the focus round the items once one has it; Enter
 //!   picks.
 //!
@@ -69,6 +72,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
     let item = |label: &'static str| MenuItem::new(label).on_press(Message::Picked(label));
     column![
         menu([
+            MenuItem::header("File"),
             item("Open").icon(assets.star.clone()).shortcut("Ctrl+O"),
             item("A label far too long for its menu, cut short").shortcut("Ctrl+L"),
             MenuItem::new("Paste, disabled").shortcut("Ctrl+V"),

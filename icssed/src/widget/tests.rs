@@ -1336,6 +1336,55 @@ fn a_menus_marks_and_icons_share_a_column() {
 }
 
 #[test]
+fn a_menus_header_is_never_pressed_nor_focused() {
+    use crate::MenuItem;
+    let sheet = sheet(MENU);
+    let root = sheet.root("root", 1.0);
+    let menu = crate::focus_scope(
+        crate::column([crate::menu([
+            MenuItem::header("Title"),
+            MenuItem::new("Open").on_press(Message::Pressed("open")),
+            MenuItem::header("More"),
+            MenuItem::new("Save").on_press(Message::Pressed("save")),
+        ])
+        .into()])
+        .at(root),
+    );
+    let mut ui = Harness::new(menu, Size::new(300.0, 300.0), 1.0);
+    assert_eq!(ui.find(&sheet, "menu > header > label").len(), 2);
+    ui.click_on(&sheet, "menu > header");
+    assert!(ui.messages.is_empty());
+    // Tab to the first item, Down past the second header.
+    ui.key(Named::Tab);
+    ui.key(Named::Enter);
+    ui.key(Named::ArrowDown);
+    ui.key(Named::Enter);
+    assert_eq!(
+        ui.messages,
+        [Message::Pressed("open"), Message::Pressed("save")]
+    );
+}
+
+#[test]
+fn a_long_label_is_cut_where_the_menus_max_width_ends() {
+    use crate::MenuItem;
+    let sheet = sheet(MENU);
+    let root = sheet.root("root", 1.0);
+    let long = "A label far too long for any menu ".repeat(8);
+    let menu = crate::column([crate::menu([
+        MenuItem::new(long).on_press(Message::Pressed("long")),
+        MenuItem::new("Short").on_press(Message::Pressed("short")),
+    ])
+    .into()])
+    .at(root);
+    let mut ui = Harness::new(menu, Size::new(1000.0, 300.0), 1.0);
+    let menu = ui.find(&sheet, "menu");
+    assert_eq!(menu[0].width, 360.0, "{menu:?}");
+    let items = ui.find(&sheet, "menu > item");
+    assert_eq!(items[0].height, items[1].height, "one line: {items:?}");
+}
+
+#[test]
 fn up_and_down_move_the_focus_among_a_menus_items() {
     let sheet = sheet(MENU);
     let root = sheet.root("root", 1.0);

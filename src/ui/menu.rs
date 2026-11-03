@@ -9,7 +9,7 @@
 //! Element tree: the toolkit's (`menu > item[:checked][.submenu]
 //! [.expanded] > (checkbox > indicator > mark | radio > indicator > mark
 //! | icon | label | arrow)`,
-//! `menu > separator`, `menu > submenu > item …`).
+//! `menu > separator`, `menu > header > label`, `menu > submenu > item …`).
 
 use std::collections::BTreeSet;
 
@@ -29,6 +29,8 @@ pub struct Item {
     pub label: String,
     pub enabled: bool,
     pub separator: bool,
+    /// A title over the items after it, never pressed.
+    pub header: bool,
     pub toggle: Option<Toggle>,
     /// The toggle state; `None` for "indeterminate" (or no toggle).
     pub checked: Option<bool>,
@@ -55,6 +57,16 @@ impl Item {
         Self {
             id,
             separator: true,
+            ..Self::default()
+        }
+    }
+
+    /// A title over the items after it (the menu's, first).
+    pub fn header(id: i32, label: impl Into<String>) -> Self {
+        Self {
+            id,
+            label: label.into(),
+            header: true,
             ..Self::default()
         }
     }
@@ -139,6 +151,9 @@ impl Menu {
             .map(|item| {
                 if item.separator {
                     return MenuItem::separator();
+                }
+                if item.header {
+                    return MenuItem::header(item.label);
                 }
                 let mut entry = MenuItem::new(item.label);
                 entry = match (item.toggle, item.checked) {

@@ -343,9 +343,9 @@ fn notifications(locale: &Locale) -> Vec<Notification> {
 const MENU_UNFOLDED: i32 = 9;
 
 /// A menu with every kind of item the shell's menus show (an app's in
-/// the tray has them all), each labelled with its selector: an icon, a
-/// plain one, a disabled one, the toggles, separators, a submenu
-/// unfolded and one folded.
+/// the tray has them all), each labelled with its selector: a header,
+/// an icon, a plain one, a disabled one, the toggles, separators, a
+/// submenu unfolded and one folded.
 fn menu_items() -> Vec<Item> {
     let icon = |id, label: &str, name: &str| Item {
         icon_name: name.to_owned(),
@@ -357,6 +357,7 @@ fn menu_items() -> Vec<Item> {
         ..Item::new(id, label)
     };
     vec![
+        Item::header(0, "header"),
         icon(1, "item > icon", "starred-symbolic"),
         Item::new(2, "item"),
         Item {

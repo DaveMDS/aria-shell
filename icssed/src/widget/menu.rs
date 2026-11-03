@@ -1,6 +1,6 @@
 //! A menu: a column of items to press, each with a check box or a radio,
-//! an icon, a shortcut; separators; submenus unfolded in place,
-//! under their item. Up and Down move the focus among the items once one
+//! an icon, a shortcut; separators, headers over the items after them;
+//! submenus unfolded in place, under their item. Up and Down move the focus among the items once one
 //! has it, Enter and Space press it.
 //!
 //! It's the app's, as a toggle or a slider is: each item carries the
@@ -24,7 +24,13 @@ use crate::style::name;
 
 /// One entry of a menu.
 pub struct MenuItem<'a, Message> {
-    entry: Option<Entry<'a, Message>>,
+    line: Line<'a, Message>,
+}
+
+enum Line<'a, Message> {
+    Entry(Entry<'a, Message>),
+    Separator,
+    Header(Cow<'a, str>),
 }
 
 struct Entry<'a, Message> {
@@ -49,7 +55,7 @@ impl<'a, Message> MenuItem<'a, Message> {
     /// An item showing `label`, disabled until given [`MenuItem::on_press`].
     pub fn new(label: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            entry: Some(Entry {
+            line: Line::Entry(Entry {
                 label: label.into(),
                 on_press: None,
                 mark: Mark::None,
@@ -63,11 +69,22 @@ impl<'a, Message> MenuItem<'a, Message> {
 
     /// A line between items.
     pub fn separator() -> Self {
-        Self { entry: None }
+        Self {
+            line: Line::Separator,
+        }
+    }
+
+    /// A title over the items after it (the menu's, first): `header >
+    /// label`, never pressed nor focused. The other calls leave it as
+    /// it is.
+    pub fn header(label: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            line: Line::Header(label.into()),
+        }
     }
 
     fn with(mut self, change: impl FnOnce(&mut Entry<'a, Message>)) -> Self {
-        if let Some(entry) = &mut self.entry {
+        if let Line::Entry(entry) = &mut self.line {
             change(entry);
         }
         self
@@ -139,10 +156,15 @@ impl<'a, Message: Clone + 'a> From<Menu<'a, Message>> for Element<'a, Message> {
     }
 }
 
-/// A level's elements: its items and separators, its unfolded submenus
-/// under their items.
+/// A level's elements: its items, separators and headers, its unfolded
+/// submenus under their items.
 fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Element<'a, Message>> {
-    let entries = || items.iter().filter_map(|item| item.entry.as_ref());
+    let entries = || {
+        items.iter().filter_map(|item| match &item.line {
+            Line::Entry(entry) => Some(entry),
+            _ => None,
+        })
+    };
     // One column before the labels when an item has a mark or an icon:
     // its mark, else its icon, else an empty room, so the labels line
     // up. Two only when an item has both: the marks', the icons'.
@@ -153,9 +175,16 @@ fn level<'a, Message: Clone + 'a>(items: Vec<MenuItem<'a, Message>>) -> Vec<Elem
     let empty_icon = || row([]).kind_of(name!("icon")).into();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
-        let Some(entry) = item.entry else {
-            out.push(row([]).kind_of(name!("separator")).into());
-            continue;
+        let entry = match item.line {
+            Line::Entry(entry) => entry,
+            Line::Separator => {
+                out.push(row([]).kind_of(name!("separator")).into());
+                continue;
+            }
+            Line::Header(label) => {
+                out.push(row([text(label).into()]).kind_of(name!("header")).into());
+                continue;
+            }
         };
         let disabled = entry.on_press.is_none();
         let (lead, checked) = match entry.mark {

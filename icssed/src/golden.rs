@@ -559,6 +559,7 @@ fn golden_menu() {
             use crate::MenuItem;
             crate::focus_scope(
                 crate::column![crate::menu([
+                    MenuItem::header("File"),
                     MenuItem::new("Open")
                         .icon(star())
                         .shortcut("Ctrl+O")

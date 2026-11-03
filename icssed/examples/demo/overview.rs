@@ -229,6 +229,7 @@ pub fn view<'a>(state: &'a State, assets: &'a Assets) -> Element<'a, Message> {
             .map(|(i, &title)| Tab::new(title, Message::Tab(i)).active(i == state.tab)),
     );
     let menu = icssed::menu([
+        MenuItem::header("File"),
         MenuItem::new("Open")
             .icon(assets.star.clone())
             .shortcut("Ctrl+O")

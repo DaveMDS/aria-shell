@@ -111,6 +111,7 @@ fn parse(layout: Layout) -> Item {
         label: strip_mnemonics(str_prop("label")),
         enabled: bool_prop("enabled", true),
         separator: str_prop("type") == "separator",
+        header: false,
         toggle: match str_prop("toggle-type") {
             "checkmark" => Some(Toggle::Check),
             "radio" => Some(Toggle::Radio),

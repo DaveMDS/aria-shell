@@ -60,7 +60,9 @@ fn tip_box<'a, Message: Clone + 'a>(label: impl Into<Cow<'a, str>>) -> Element<'
 
 /// A tip as a surface's content, for an app showing it in a surface of
 /// its own: its box and its `label`, with the room its shadow needs; at
-/// a root `tooltip` the app gives (`at`).
+/// a root `tooltip` the app gives (`at`), which the base styles as the
+/// tip's box. Its margin, the distance from what it's about, is the
+/// app's to keep.
 pub fn tip<'a, Message: Clone + 'a>(label: impl Into<Cow<'a, str>>) -> Surface<'a, Message> {
     surface(tip_box(label))
 }

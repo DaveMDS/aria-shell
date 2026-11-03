@@ -1024,10 +1024,12 @@ graph > label {
  * delay: under it, or over it where there's no room under, centred on
  * it; hidden when the pointer leaves or presses. In a window it's drawn
  * over everything; an app with surfaces of its own shows `icssed::tip` in
- * one instead. Its margins are its distance from what it's about; it's
- * made anew each time it shows, so its animation runs each time.
+ * one instead, at a root `tooltip`: the surface is the tip's box, styled
+ * the same. Its margins are its distance from what it's about (the app's
+ * to keep, for its own surface); it's made anew each time it shows, so
+ * its animation runs each time.
  *
- * tooltip
+ * tooltip | surface.tooltip
  * ╰─ label
  */
 @keyframes tooltip-in {
@@ -1035,7 +1037,8 @@ graph > label {
     opacity: 0;
   }
 }
-tooltip {
+tooltip,
+surface.tooltip {
   max-width: 320px;
   margin: 6px 0;
   padding: 5px 8px;

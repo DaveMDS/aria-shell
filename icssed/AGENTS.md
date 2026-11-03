@@ -164,7 +164,7 @@ to choose.
 | `tabs([Tab::new(label, m).active(b).class(c)])` | Left and Right move the focus |
 | `calendar(Month::new(y, m), title, [names from Monday]).first_weekday(n).today(y, m, d).selected(y, m, d).on_previous(m).on_next(m).on_select(f)` | no locale in the toolkit: the app gives the words |
 | `graph(capacity).series(values).series_class(c, values).max(v).label(text)` | a sparkline is a graph styled by the app |
-| `tooltip(content, text).delay(d).on_tip(f)`, `tip(text).at(root)` | the tip a `tooltip` beside the children of the element the tooltip is in; an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own |
+| `tooltip(content, text).delay(d).on_tip(f)`, `tip(text).at(root)` | the tip a `tooltip` beside the children of the element the tooltip is in; an iced overlay in a window; `on_tip` for an app that shows tips in surfaces of its own, `tip` in them at a root `tooltip` (`surface.tooltip`, styled as the tip; its margin the app's to keep) |
 | `select(options, selected, f).placeholder(t).on_open(open, f)` | its options as a menu in an overlay; `on_open` as for tips |
 
 `icssed::Measure::new().size(key, element, max)` lays an element out with no

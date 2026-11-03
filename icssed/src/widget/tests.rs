@@ -1661,6 +1661,19 @@ fn an_app_can_show_a_tip_itself() {
     );
 }
 
+#[test]
+fn an_apps_tip_is_the_base_tooltip_box() {
+    let sheet = sheet("surface.tooltip { animation: none; }");
+    let root = sheet.root("tooltip", 1.0);
+    let tip = crate::tip::<Message>("A tip").at(root);
+    let mut ui = Harness::new(tip, Size::new(300.0, 100.0), 1.0);
+    let tip = ui.find(&sheet, "surface.tooltip")[0];
+    let label = ui.find(&sheet, "surface.tooltip > label")[0];
+    // The tip's padding around its label.
+    assert_eq!(label.x - tip.x, 8.0, "{tip:?} {label:?}");
+    assert_eq!(tip.width - label.width, 16.0, "{tip:?} {label:?}");
+}
+
 /// A select of three in a focus scope, `chosen` if any.
 fn chooser(root: Node<'_>, chosen: Option<usize>, disabled: bool) -> Element<'_, Message> {
     crate::focus_scope(

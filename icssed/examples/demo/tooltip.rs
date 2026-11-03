@@ -16,7 +16,8 @@
 //! In a window the tip is an iced overlay, drawn over everything. A bar
 //! is a surface as tall as itself, and would cut it: there the app gives
 //! `.on_tip(f)`, is told the rectangle to show the tip by, and opens a
-//! surface of its own with `icssed::tip(root, text)` in it.
+//! surface of its own with `icssed::tip(text).at(root)` in it, its root
+//! `sheet.root("tooltip", scale)`: the base styles it as the tip.
 
 use std::time::Duration;
 
